@@ -1,0 +1,57 @@
+# ──────────────────────────────────────────
+# sangplusbot — Root .gitignore
+# 각 서브프로젝트(idt/, idt_front/)의 .gitignore와 병용됨
+# ──────────────────────────────────────────
+
+# OS artifacts
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+desktop.ini
+ehthumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*.suo
+
+# Environment variables (절대 커밋 금지)
+.env
+.env.*
+!.env.example
+!.env.local.example
+
+# bkit / PDCA 상태 (로컬 전용, 자동 생성)
+.bkit/runtime/
+.bkit/snapshots/
+.bkit/state/
+
+# Claude Code 로컬 설정 (개인 전용)
+.claude/settings.local.json
+.claude/agent-memory/
+
+# Python (서브프로젝트가 루트에서 실행될 경우 대비)
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+
+# Node (서브프로젝트가 루트에서 실행될 경우 대비)
+node_modules/
+
+# Logs
+logs/
+*.log
+
+# 임시/업로드 파일
+tmp/
+temp/
+uploads/
+
+# 빌드 산출물
+dist/
+build/

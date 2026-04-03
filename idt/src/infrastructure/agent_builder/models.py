@@ -1,0 +1,53 @@
+"""SQLAlchemy ORM 모델: agent_definition, agent_tool."""
+from datetime import datetime
+
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from src.infrastructure.persistence.models.base import Base
+
+
+class AgentDefinitionModel(Base):
+    __tablename__ = "agent_definition"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    system_prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    flow_hint: Mapped[str | None] = mapped_column(Text)
+    model_name: Mapped[str] = mapped_column(
+        String(100), nullable=False, default="gpt-4o-mini"
+    )
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+    tools: Mapped[list["AgentToolModel"]] = relationship(
+        "AgentToolModel",
+        back_populates="agent",
+        cascade="all, delete-orphan",
+        order_by="AgentToolModel.sort_order",
+    )
+
+
+class AgentToolModel(Base):
+    __tablename__ = "agent_tool"
+    __table_args__ = (
+        UniqueConstraint("agent_id", "tool_id", name="uq_agent_tool"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    agent_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("agent_definition.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    tool_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    worker_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    agent: Mapped["AgentDefinitionModel"] = relationship(
+        "AgentDefinitionModel", back_populates="tools"
+    )

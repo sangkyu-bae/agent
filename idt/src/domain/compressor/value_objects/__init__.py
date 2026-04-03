@@ -1,0 +1,1 @@
+# Compressor Domain Value Objects

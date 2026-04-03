@@ -1,0 +1,755 @@
+{
+  "timestamp": "2026-03-16T14:13:44.430Z",
+  "reason": "compaction",
+  "status": {
+    "version": "2.0",
+    "lastUpdated": "2026-03-16T14:04:30.516Z",
+    "activeFeatures": [
+      "api",
+      "routes",
+      "retrieval",
+      "redis",
+      "config",
+      "mcp",
+      "elasticsearch",
+      "hybrid_search",
+      "idt",
+      "keyword",
+      "chunk_and_index"
+    ],
+    "primaryFeature": "api",
+    "features": {
+      "api": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-03-04T10:53:02.380Z",
+          "lastUpdated": "2026-03-16T14:04:30.515Z"
+        },
+        "lastFile": "C:\\sangplus\\idt\\src\\api\\main.py"
+      },
+      "routes": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-03-04T10:57:06.857Z",
+          "lastUpdated": "2026-03-16T14:02:59.357Z"
+        },
+        "lastFile": "C:\\sangplus\\idt\\src\\api\\routes\\chunk_index_router.py"
+      },
+      "retrieval": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-03-04T11:07:11.850Z",
+          "lastUpdated": "2026-03-04T11:08:51.435Z"
+        },
+        "lastFile": "/c/sangplus/idt/src/application/retrieval/retrieval_use_case.py"
+      },
+      "redis": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-03-13T14:38:09.454Z",
+          "lastUpdated": "2026-03-13T14:41:26.153Z"
+        },
+        "lastFile": "C:\\sangplus\\idt\\tests\\infrastructure\\redis\\test_redis_client.py"
+      },
+      "config": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-03-13T14:39:35.909Z",
+          "lastUpdated": "2026-03-16T12:33:25.326Z"
+        },
+        "lastFile": "C:\\sangplus\\idt\\src\\infrastructure\\config\\elasticsearch_config.py"
+      },
+      "mcp": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-03-14T08:49:05.368Z",
+          "lastUpdated": "2026-03-14T08:52:11.783Z"
+        },
+        "lastFile": "C:\\sangplus\\idt\\src\\application\\mcp\\use_case.py"
+      },
+      "elasticsearch": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-03-16T12:31:15.127Z",
+          "lastUpdated": "2026-03-16T12:33:57.095Z"
+        },
+        "lastFile": "C:\\sangplus\\idt\\src\\infrastructure\\elasticsearch\\es_repository.py"
+      },
+      "hybrid_search": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-03-16T13:11:01.522Z",
+          "lastUpdated": "2026-03-16T13:14:36.190Z"
+        },
+        "lastFile": "C:\\sangplus\\idt\\src\\application\\hybrid_search\\use_case.py"
+      },
+      "idt": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-03-16T13:14:48.990Z",
+          "lastUpdated": "2026-03-16T13:14:48.990Z"
+        },
+        "lastFile": "C:\\sangplus\\idt\\src\\config.py"
+      },
+      "keyword": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-03-16T14:00:15.411Z",
+          "lastUpdated": "2026-03-16T14:02:07.817Z"
+        },
+        "lastFile": "C:\\sangplus\\idt\\src\\infrastructure\\keyword\\simple_keyword_extractor.py"
+      },
+      "chunk_and_index": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-03-16T14:01:02.414Z",
+          "lastUpdated": "2026-03-16T14:02:38.884Z"
+        },
+        "lastFile": "C:\\sangplus\\idt\\src\\application\\chunk_and_index\\use_case.py"
+      }
+    },
+    "pipeline": {
+      "currentPhase": 1,
+      "level": "Dynamic",
+      "phaseHistory": []
+    },
+    "session": {
+      "startedAt": "2026-03-04T10:49:14.367Z",
+      "onboardingCompleted": false,
+      "lastActivity": "2026-03-16T14:04:30.516Z"
+    },
+    "history": [
+      {
+        "timestamp": "2026-03-04T10:53:02.380Z",
+        "feature": "api",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-04T10:55:41.536Z",
+        "feature": "api",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-04T10:56:05.255Z",
+        "feature": "api",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-04T10:57:06.857Z",
+        "feature": "routes",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-04T10:57:13.864Z",
+        "feature": "routes",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-04T11:07:11.850Z",
+        "feature": "retrieval",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-04T11:07:12.557Z",
+        "feature": "retrieval",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-04T11:07:12.956Z",
+        "feature": "retrieval",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-04T11:07:18.721Z",
+        "feature": "retrieval",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-04T11:07:34.003Z",
+        "feature": "retrieval",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-04T11:08:02.786Z",
+        "feature": "retrieval",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-04T11:08:16.211Z",
+        "feature": "api",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-04T11:08:51.435Z",
+        "feature": "retrieval",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-04T11:09:18.906Z",
+        "feature": "routes",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-04T11:09:32.781Z",
+        "feature": "api",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-04T11:09:37.245Z",
+        "feature": "api",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-04T11:09:41.253Z",
+        "feature": "api",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-04T11:09:50.175Z",
+        "feature": "api",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-04T11:09:54.522Z",
+        "feature": "api",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-04T11:09:58.251Z",
+        "feature": "api",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-04T11:10:02.875Z",
+        "feature": "api",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-13T14:38:09.454Z",
+        "feature": "redis",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-13T14:38:17.707Z",
+        "feature": "redis",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-13T14:38:18.933Z",
+        "feature": "redis",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-13T14:38:32.435Z",
+        "feature": "redis",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-13T14:38:47.780Z",
+        "feature": "redis",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-13T14:39:06.910Z",
+        "feature": "redis",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-13T14:39:35.909Z",
+        "feature": "config",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-13T14:39:46.172Z",
+        "feature": "redis",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-13T14:39:58.258Z",
+        "feature": "redis",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-13T14:41:26.153Z",
+        "feature": "redis",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-14T08:49:05.368Z",
+        "feature": "mcp",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-14T08:49:15.181Z",
+        "feature": "mcp",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-14T08:49:37.577Z",
+        "feature": "mcp",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-14T08:49:45.872Z",
+        "feature": "mcp",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-14T08:50:10.953Z",
+        "feature": "mcp",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-14T08:50:29.408Z",
+        "feature": "mcp",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-14T08:50:40.937Z",
+        "feature": "mcp",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-14T08:51:03.334Z",
+        "feature": "mcp",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-14T08:51:15.907Z",
+        "feature": "mcp",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-14T08:51:29.917Z",
+        "feature": "mcp",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-14T08:51:54.805Z",
+        "feature": "mcp",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-14T08:52:11.783Z",
+        "feature": "mcp",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T12:31:15.127Z",
+        "feature": "elasticsearch",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T12:31:16.131Z",
+        "feature": "elasticsearch",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T12:31:16.968Z",
+        "feature": "elasticsearch",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T12:31:17.651Z",
+        "feature": "elasticsearch",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T12:31:38.224Z",
+        "feature": "elasticsearch",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T12:31:54.298Z",
+        "feature": "elasticsearch",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T12:32:44.379Z",
+        "feature": "elasticsearch",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T12:33:04.706Z",
+        "feature": "elasticsearch",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T12:33:17.903Z",
+        "feature": "elasticsearch",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T12:33:25.326Z",
+        "feature": "config",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T12:33:34.774Z",
+        "feature": "elasticsearch",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T12:33:57.095Z",
+        "feature": "elasticsearch",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T13:11:01.522Z",
+        "feature": "hybrid_search",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T13:11:02.258Z",
+        "feature": "hybrid_search",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T13:11:02.787Z",
+        "feature": "hybrid_search",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T13:11:03.282Z",
+        "feature": "hybrid_search",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T13:11:19.689Z",
+        "feature": "hybrid_search",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T13:11:47.462Z",
+        "feature": "hybrid_search",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T13:12:11.268Z",
+        "feature": "hybrid_search",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T13:12:26.071Z",
+        "feature": "api",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T13:12:42.609Z",
+        "feature": "hybrid_search",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T13:12:57.694Z",
+        "feature": "hybrid_search",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T13:13:14.482Z",
+        "feature": "hybrid_search",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T13:13:30.095Z",
+        "feature": "routes",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T13:14:30.901Z",
+        "feature": "hybrid_search",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T13:14:36.190Z",
+        "feature": "hybrid_search",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T13:14:48.990Z",
+        "feature": "idt",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T13:14:54.241Z",
+        "feature": "api",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T13:15:00.594Z",
+        "feature": "api",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T13:15:11.723Z",
+        "feature": "api",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T13:15:16.738Z",
+        "feature": "api",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T13:15:30.367Z",
+        "feature": "api",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T13:15:41.215Z",
+        "feature": "api",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T13:15:47.151Z",
+        "feature": "api",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T13:15:54.507Z",
+        "feature": "api",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T14:00:15.411Z",
+        "feature": "keyword",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T14:00:33.971Z",
+        "feature": "keyword",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T14:01:02.414Z",
+        "feature": "chunk_and_index",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T14:01:18.951Z",
+        "feature": "api",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T14:01:38.954Z",
+        "feature": "keyword",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T14:01:49.920Z",
+        "feature": "keyword",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T14:02:07.817Z",
+        "feature": "keyword",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T14:02:19.700Z",
+        "feature": "chunk_and_index",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T14:02:38.884Z",
+        "feature": "chunk_and_index",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T14:02:59.357Z",
+        "feature": "routes",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T14:03:30.570Z",
+        "feature": "api",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T14:03:38.194Z",
+        "feature": "api",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T14:03:45.611Z",
+        "feature": "api",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T14:03:57.063Z",
+        "feature": "api",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T14:04:05.987Z",
+        "feature": "api",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T14:04:16.354Z",
+        "feature": "api",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T14:04:22.350Z",
+        "feature": "api",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-16T14:04:30.515Z",
+        "feature": "api",
+        "phase": "do",
+        "action": "updated"
+      }
+    ]
+  }
+}

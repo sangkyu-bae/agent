@@ -1,0 +1,1689 @@
+openapi: "3.0.3"
+info:
+  title: IDT API
+  version: "1.0.0"
+  description: |
+    FastAPI + LangGraph/LangChain 기반 RAG & Agent 시스템 API
+
+    **아키텍처**: Thin DDD (Domain → Application → Infrastructure)
+
+    **주요 기능**:
+    - PDF/Excel 문서 업로드 및 벡터 색인
+    - BM25 + Vector 하이브리드 검색
+    - ReAct RAG Agent 기반 질의응답
+    - Multi-Turn 대화 메모리 관리
+    - Agent Builder (Custom / Middleware / Auto)
+    - MCP 서버 동적 등록 관리
+
+servers:
+  - url: http://localhost:8000
+    description: Local Development
+
+tags:
+  - name: documents
+    description: PDF 문서 업로드 및 처리 (LangGraph 워크플로우)
+  - name: ingest
+    description: PDF 파싱 + 청킹 + Qdrant 저장 통합 API
+  - name: doc-chunk
+    description: 파일 청킹 결과 미리보기 (벡터 저장 없음)
+  - name: excel
+    description: Excel 파일 업로드 및 내보내기
+  - name: Excel Analysis
+    description: Excel 파일 AI 분석 (Claude + 할루시네이션 검증)
+  - name: Excel Export
+    description: 테이블 데이터 → Excel 파일 변환
+  - name: PDF Export
+    description: HTML → PDF 변환
+  - name: retrieval
+    description: 벡터 유사도 기반 문서 검색 (RAG 파이프라인)
+  - name: hybrid-search
+    description: BM25(ES) + Vector(Qdrant) 하이브리드 검색 (RRF)
+  - name: chunk-index
+    description: 텍스트 청킹 + 키워드 추출 + ES 색인
+  - name: morph-index
+    description: Kiwi 형태소 분석 + Qdrant + ES 이중 색인
+  - name: rag-agent
+    description: LangGraph ReAct 에이전트 기반 내부 문서 질의응답
+  - name: conversation
+    description: Multi-Turn 대화 메모리 관리 (6턴 초과 시 자동 요약)
+  - name: Agent Builder
+    description: Custom Agent 생성/조회/수정/실행 (AGENT-004)
+  - name: middleware-agent
+    description: LangChain Middleware 기반 에이전트 빌더 (AGENT-005)
+  - name: auto-agent-builder
+    description: 자연어 기반 자동 에이전트 빌더 with Redis 멀티턴 (AGENT-006)
+  - name: MCP Registry
+    description: MCP 서버 동적 등록/조회/수정/삭제
+
+paths:
+
+  # ── Documents ─────────────────────────────────────────────────────────
+  /api/v1/documents/upload:
+    post:
+      tags: [documents]
+      summary: PDF 문서 업로드
+      description: |
+        PDF를 LangGraph 워크플로우로 처리합니다.
+        파싱 → 카테고리 분류 → Parent/Child 청킹 → Qdrant 벡터 저장
+      parameters:
+        - name: user_id
+          in: query
+          required: true
+          schema:
+            type: string
+          description: 문서 소유자 ID
+        - name: child_chunk_size
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 500
+            minimum: 100
+            maximum: 4000
+          description: Child 청크 크기 (토큰, 100–4000)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: 업로드할 PDF 파일
+      responses:
+        "200":
+          description: 처리 성공
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentUploadResponse"
+              example:
+                document_id: "doc-uuid-1234"
+                filename: "policy.pdf"
+                category: "finance"
+                category_confidence: 0.92
+                total_pages: 10
+                chunk_count: 42
+                stored_ids: ["id1", "id2"]
+                status: "success"
+                errors: []
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/documents/upload/async:
+    post:
+      tags: [documents]
+      summary: PDF 비동기 업로드 (큐 등록)
+      parameters:
+        - name: user_id
+          in: query
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: 큐 등록 성공
+          content:
+            application/json:
+              example:
+                task_id: "task-uuid-5678"
+                status: "pending"
+                message: "Document queued for processing"
+
+  /api/v1/documents/upload/status/{task_id}:
+    get:
+      tags: [documents]
+      summary: 비동기 업로드 상태 조회
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 작업 상태
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AsyncTaskStatus"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Ingest ─────────────────────────────────────────────────────────────
+  /api/v1/ingest/pdf:
+    post:
+      tags: [ingest]
+      summary: PDF 파싱 + 청킹 + 벡터 저장
+      description: |
+        파서 선택(pymupdf/llamaparser)과 청킹 전략을 지정하여
+        PDF를 파싱하고 Qdrant에 임베딩 저장합니다.
+      parameters:
+        - name: user_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: parser_type
+          in: query
+          schema:
+            type: string
+            default: pymupdf
+            enum: [pymupdf, llamaparser]
+        - name: chunking_strategy
+          in: query
+          schema:
+            type: string
+            default: full_token
+            enum: [full_token, parent_child, semantic]
+        - name: chunk_size
+          in: query
+          schema:
+            type: integer
+            default: 1000
+            minimum: 100
+            maximum: 8000
+        - name: chunk_overlap
+          in: query
+          schema:
+            type: integer
+            default: 100
+            minimum: 0
+            maximum: 500
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: 업로드할 PDF 파일
+      responses:
+        "200":
+          description: 색인 성공
+          content:
+            application/json:
+              example:
+                document_id: "doc-uuid-1234"
+                filename: "report.pdf"
+                chunk_count: 35
+                status: "success"
+
+  # ── Doc Chunk ──────────────────────────────────────────────────────────
+  /api/v1/doc-chunk/upload:
+    post:
+      tags: [doc-chunk]
+      summary: 파일 청킹 결과 미리보기
+      description: |
+        PDF/Excel/TXT/MD 파일을 업로드하고 청킹 결과만 반환합니다.
+        벡터 저장 없이 청크를 확인할 때 사용합니다.
+      parameters:
+        - name: user_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: strategy_type
+          in: query
+          schema:
+            type: string
+            default: parent_child
+            enum: [full_token, parent_child, semantic]
+        - name: chunk_size
+          in: query
+          schema:
+            type: integer
+            default: 500
+            minimum: 100
+            maximum: 8000
+        - name: chunk_overlap
+          in: query
+          schema:
+            type: integer
+            default: 50
+            minimum: 0
+            maximum: 500
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: ".pdf/.xlsx/.xls/.txt/.md"
+      responses:
+        "200":
+          description: 청킹 결과
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  # ── Excel Upload ───────────────────────────────────────────────────────
+  /api/v1/excel/upload:
+    post:
+      tags: [excel]
+      summary: Excel 파일 업로드 및 벡터 저장
+      parameters:
+        - name: user_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: strategy_type
+          in: query
+          schema:
+            type: string
+            default: full_token
+            enum: [full_token, parent_child, semantic]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: ".xlsx 또는 .xls 파일"
+      responses:
+        "200":
+          description: 처리 성공
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # ── Excel Export ───────────────────────────────────────────────────────
+  /api/v1/excel/export:
+    post:
+      tags: [Excel Export]
+      summary: 테이블 데이터 → Excel 파일 다운로드
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExcelExportRequestBody"
+            example:
+              filename: "result.xlsx"
+              user_id: "user-001"
+              sheets:
+                - sheet_name: "Sales"
+                  columns: ["Name", "Amount", "Date"]
+                  rows:
+                    - ["Alice", 1000, "2026-01-01"]
+                    - ["Bob", 2000, "2026-01-02"]
+      responses:
+        "200":
+          description: Excel 파일 다운로드
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+
+  # ── Excel Analysis ─────────────────────────────────────────────────────
+  /api/v1/analysis/excel:
+    post:
+      tags: [Excel Analysis]
+      summary: Excel 파일 AI 분석
+      description: |
+        엑셀 파싱 → Claude AI 분석 → 할루시네이션 검증 →
+        필요 시 웹 검색 및 코드 실행 → 최대 3회 재시도
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, query]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                query:
+                  type: string
+                  description: 분석 질문
+                user_id:
+                  type: string
+                  default: anonymous
+      responses:
+        "200":
+          description: 분석 결과
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalysisResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # ── PDF Export ─────────────────────────────────────────────────────────
+  /api/v1/pdf/export:
+    post:
+      tags: [PDF Export]
+      summary: HTML → PDF 변환 다운로드
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PdfExportRequestBody"
+            example:
+              html_content: "<h1>Report</h1><p>Content here</p>"
+              filename: "report.pdf"
+              user_id: "user-001"
+              css_content: "h1 { color: navy; }"
+      responses:
+        "200":
+          description: PDF 파일 다운로드
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+
+  # ── Retrieval ──────────────────────────────────────────────────────────
+  /api/v1/retrieval/search:
+    post:
+      tags: [retrieval]
+      summary: 벡터 유사도 기반 문서 검색
+      description: |
+        RAG 파이프라인으로 문서를 검색합니다.
+        옵션: 쿼리 재작성, LLM 압축, Parent 문서 컨텍스트 보강
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SearchRequest"
+            example:
+              query: "금융 규정 위반 시 제재 기준은?"
+              user_id: "user-001"
+              top_k: 10
+              use_query_rewrite: false
+              use_compression: true
+              use_parent_context: true
+      responses:
+        "200":
+          description: 검색 결과
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResponse"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  # ── Hybrid Search ──────────────────────────────────────────────────────
+  /api/v1/hybrid-search/search:
+    post:
+      tags: [hybrid-search]
+      summary: BM25 + Vector 하이브리드 검색 (RRF)
+      description: |
+        Elasticsearch BM25와 Qdrant 벡터 검색 결과를
+        RRF(Reciprocal Rank Fusion)로 병합하여 최종 순위를 반환합니다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HybridSearchAPIRequest"
+            example:
+              query: "연금 수령 조건"
+              top_k: 10
+              bm25_top_k: 20
+              vector_top_k: 20
+              rrf_k: 60
+      responses:
+        "200":
+          description: RRF 병합 검색 결과
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HybridSearchAPIResponse"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  # ── Chunk Index ────────────────────────────────────────────────────────
+  /api/v1/chunk-index/upload:
+    post:
+      tags: [chunk-index]
+      summary: 텍스트 청킹 + 키워드 추출 + ES 색인
+      description: |
+        텍스트를 청킹하고 빈도 기반 키워드를 추출하여
+        Elasticsearch에 색인합니다. BM25 하이브리드 검색 품질 향상용.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChunkIndexAPIRequest"
+            example:
+              document_id: "doc-001"
+              content: "금융투자업자는 투자자의 이익을 최우선으로..."
+              user_id: "user-001"
+              strategy_type: "parent_child"
+              chunk_size: 500
+              chunk_overlap: 50
+              top_keywords: 10
+      responses:
+        "200":
+          description: 색인된 청크 목록
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChunkIndexAPIResponse"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  # ── Morph Index ────────────────────────────────────────────────────────
+  /api/v1/morph-index/upload:
+    post:
+      tags: [morph-index]
+      summary: Kiwi 형태소 분석 + Qdrant + ES 이중 색인
+      description: |
+        Kiwi 형태소 분석(NNG/NNP/VV원형/VA원형)으로 키워드를 추출하고
+        Qdrant(벡터)와 Elasticsearch(BM25)에 동시 색인합니다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MorphIndexAPIRequest"
+            example:
+              document_id: "doc-001"
+              content: "한국 금융시장에서 투자자 보호를 위한 규정..."
+              user_id: "user-001"
+              strategy_type: "parent_child"
+              chunk_size: 500
+              chunk_overlap: 50
+              source: "financial_policy.pdf"
+      responses:
+        "200":
+          description: 이중 색인 결과
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MorphIndexAPIResponse"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  # ── RAG Agent ──────────────────────────────────────────────────────────
+  /api/v1/rag-agent/query:
+    post:
+      tags: [rag-agent]
+      summary: ReAct RAG Agent 내부 문서 질의응답
+      description: |
+        BM25(ES) + Vector(Qdrant) 5:5 하이브리드 검색으로 관련 문서를 찾고,
+        LangChain ChatOpenAI ReAct 에이전트가 답변을 생성합니다.
+        - 내부 문서 필요: internal_document_search 도구 호출
+        - 내부 문서 불필요: 직접 답변 생성
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RAGAgentAPIRequest"
+            example:
+              query: "투자자 보호를 위한 주요 규정은 무엇인가요?"
+              user_id: "user-001"
+              top_k: 5
+      responses:
+        "200":
+          description: LLM 답변 + 출처 문서
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RAGAgentAPIResponse"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  # ── Conversation ───────────────────────────────────────────────────────
+  /api/v1/conversation/chat:
+    post:
+      tags: [conversation]
+      summary: Multi-Turn 대화 (6턴 초과 시 자동 요약)
+      description: |
+        user_id + session_id 기준으로 대화 히스토리를 MySQL에 저장합니다.
+        6턴 초과 시 오래된 히스토리를 LLM으로 요약하고,
+        (요약본 + 최근 3턴)만 컨텍스트로 사용합니다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConversationAPIRequest"
+            example:
+              user_id: "user-001"
+              session_id: "session-abc"
+              message: "금리 인상이 채권 가격에 미치는 영향을 설명해주세요."
+      responses:
+        "200":
+          description: LLM 답변
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationAPIResponse"
+
+  # ── Agent Builder (v1) ─────────────────────────────────────────────────
+  /api/v1/agents/tools:
+    get:
+      tags: [Agent Builder]
+      summary: 사용 가능한 도구 목록 조회
+      description: 내부 도구(TOOL_REGISTRY) + DB 등록 MCP 도구 메타 반환
+      responses:
+        "200":
+          description: 도구 목록
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AvailableToolsResponse"
+
+  /api/v1/agents:
+    post:
+      tags: [Agent Builder]
+      summary: 에이전트 생성
+      description: LLM이 도구 자동 선택 + 시스템 프롬프트 자동 생성
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAgentRequest"
+      responses:
+        "201":
+          description: 에이전트 생성 성공
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateAgentResponse"
+
+  /api/v1/agents/{agent_id}:
+    get:
+      tags: [Agent Builder]
+      summary: 에이전트 조회
+      parameters:
+        - name: agent_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 에이전트 정의
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Agent Builder]
+      summary: 에이전트 시스템 프롬프트/이름 수정
+      parameters:
+        - name: agent_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAgentRequest"
+      responses:
+        "200":
+          description: 수정 성공
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /api/v1/agents/{agent_id}/run:
+    post:
+      tags: [Agent Builder]
+      summary: 에이전트 실행
+      description: DB에서 워크플로우 로드 → LangGraph 동적 컴파일 → 응답
+      parameters:
+        - name: agent_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RunAgentRequest"
+      responses:
+        "200":
+          description: 실행 결과
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/agents/interview:
+    post:
+      tags: [Agent Builder]
+      summary: 인터뷰 시작 (Human-in-the-Loop)
+      description: LLM이 에이전트 설계를 위한 명확화 질문 생성
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InterviewStartRequest"
+      responses:
+        "201":
+          description: 인터뷰 세션 시작
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InterviewStartResponse"
+
+  /api/v1/agents/interview/{session_id}/answer:
+    post:
+      tags: [Agent Builder]
+      summary: 인터뷰 질문 답변 제출
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InterviewAnswerRequest"
+      responses:
+        "200":
+          description: 추가 질문 또는 에이전트 초안 반환
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/agents/interview/{session_id}/finalize:
+    post:
+      tags: [Agent Builder]
+      summary: 에이전트 초안 확정 및 DB 저장
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InterviewFinalizeRequest"
+      responses:
+        "201":
+          description: 에이전트 생성 완료
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  # ── Middleware Agent (v2) ──────────────────────────────────────────────
+  /api/v2/agents/tools:
+    get:
+      tags: [middleware-agent]
+      summary: 사용 가능한 도구 목록 (tool_registry)
+      responses:
+        "200":
+          description: 도구 목록
+
+  /api/v2/agents:
+    post:
+      tags: [middleware-agent]
+      summary: 미들웨어 에이전트 생성
+      description: |
+        LangChain Middleware 기반 에이전트를 생성합니다.
+        지원 미들웨어: SummarizationMiddleware, PIIMiddleware,
+        ToolRetryMiddleware, ModelCallLimitMiddleware, ModelFallbackMiddleware
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMiddlewareAgentRequest"
+      responses:
+        "201":
+          description: 에이전트 생성 성공
+
+  /api/v2/agents/{agent_id}:
+    get:
+      tags: [middleware-agent]
+      summary: 미들웨어 에이전트 조회
+      parameters:
+        - name: agent_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: request_id
+          in: query
+          schema:
+            type: string
+            default: no-request-id
+      responses:
+        "200":
+          description: 에이전트 정의
+    patch:
+      tags: [middleware-agent]
+      summary: 미들웨어 에이전트 수정
+      parameters:
+        - name: agent_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMiddlewareAgentRequest"
+      responses:
+        "200":
+          description: 수정 성공
+
+  /api/v2/agents/{agent_id}/run:
+    post:
+      tags: [middleware-agent]
+      summary: 미들웨어 에이전트 실행
+      parameters:
+        - name: agent_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RunMiddlewareAgentRequest"
+      responses:
+        "200":
+          description: 실행 결과
+
+  # ── Auto Agent Builder (v3) ────────────────────────────────────────────
+  /api/v3/agents/auto:
+    post:
+      tags: [auto-agent-builder]
+      summary: 자연어 기반 자동 에이전트 빌드 시작
+      description: |
+        자연어 요청으로 에이전트를 자동 생성합니다.
+        LLM이 도구+미들웨어를 자동 추론하고,
+        보충 질문이 필요하면 세션 ID를 반환합니다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AutoBuildRequest"
+            example:
+              user_request: "금융 문서를 검색하고 할루시네이션을 검증하는 에이전트를 만들어줘"
+              user_id: "user-001"
+      responses:
+        "202":
+          description: 에이전트 생성 또는 보충 질문 요청
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutoBuildResponse"
+
+  /api/v3/agents/auto/{session_id}/reply:
+    post:
+      tags: [auto-agent-builder]
+      summary: 보충 질문 답변 제출 → 재추론 → 에이전트 생성
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AutoBuildReplyRequest"
+      responses:
+        "200":
+          description: 에이전트 생성 결과
+
+  /api/v3/agents/auto/{session_id}:
+    get:
+      tags: [auto-agent-builder]
+      summary: 빌드 세션 상태 조회
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 세션 상태
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutoBuildSessionStatusResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── MCP Registry ───────────────────────────────────────────────────────
+  /api/v1/mcp-registry:
+    post:
+      tags: [MCP Registry]
+      summary: MCP 서버 등록
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterMCPServerRequest"
+            example:
+              name: "my-mcp-server"
+              description: "Custom MCP tool server"
+              transport: "stdio"
+              command: "python"
+              args: ["-m", "my_mcp_server"]
+              user_id: "user-001"
+      responses:
+        "201":
+          description: 등록 성공
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MCPServerResponse"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+    get:
+      tags: [MCP Registry]
+      summary: MCP 서버 목록 조회
+      parameters:
+        - name: user_id
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 필터 (없으면 전체 조회)
+      responses:
+        "200":
+          description: MCP 서버 목록
+
+  /api/v1/mcp-registry/{id}:
+    get:
+      tags: [MCP Registry]
+      summary: 특정 MCP 서버 조회
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: MCP 서버 정보
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [MCP Registry]
+      summary: MCP 서버 정보 수정
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMCPServerRequest"
+      responses:
+        "200":
+          description: 수정 성공
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [MCP Registry]
+      summary: MCP 서버 삭제
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: 삭제 성공
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+# ── Components ──────────────────────────────────────────────────────────────
+components:
+  responses:
+    NotFound:
+      description: 리소스를 찾을 수 없음
+      content:
+        application/json:
+          example:
+            detail: "Not found"
+    ValidationError:
+      description: 유효성 검사 실패
+      content:
+        application/json:
+          example:
+            detail: "strategy_type must be one of: ['full_token', 'parent_child', 'semantic']"
+    InternalError:
+      description: 서버 내부 오류
+      content:
+        application/json:
+          example:
+            detail: "Internal server error"
+
+  schemas:
+    DocumentUploadResponse:
+      type: object
+      properties:
+        document_id:
+          type: string
+        filename:
+          type: string
+        category:
+          type: string
+          nullable: true
+        category_confidence:
+          type: number
+          format: float
+        total_pages:
+          type: integer
+        chunk_count:
+          type: integer
+        stored_ids:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum: [success, failed]
+        errors:
+          type: array
+          items:
+            type: string
+
+    AsyncTaskStatus:
+      type: object
+      properties:
+        task_id:
+          type: string
+        status:
+          type: string
+          enum: [pending, processing, success, failed]
+        result:
+          $ref: "#/components/schemas/DocumentUploadResponse"
+          nullable: true
+        error:
+          type: string
+          nullable: true
+
+    SearchRequest:
+      type: object
+      required: [query, user_id]
+      properties:
+        query:
+          type: string
+        user_id:
+          type: string
+        top_k:
+          type: integer
+          default: 10
+          minimum: 1
+          maximum: 50
+        document_id:
+          type: string
+          nullable: true
+        use_query_rewrite:
+          type: boolean
+          default: false
+        use_compression:
+          type: boolean
+          default: true
+        use_parent_context:
+          type: boolean
+          default: true
+
+    SearchResponse:
+      type: object
+      properties:
+        query:
+          type: string
+        rewritten_query:
+          type: string
+          nullable: true
+        documents:
+          type: array
+          items:
+            $ref: "#/components/schemas/DocumentItem"
+        total_found:
+          type: integer
+        request_id:
+          type: string
+
+    DocumentItem:
+      type: object
+      properties:
+        id:
+          type: string
+        content:
+          type: string
+        score:
+          type: number
+          format: float
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+        parent_content:
+          type: string
+          nullable: true
+
+    HybridSearchAPIRequest:
+      type: object
+      required: [query]
+      properties:
+        query:
+          type: string
+        top_k:
+          type: integer
+          default: 10
+          minimum: 1
+          maximum: 50
+        bm25_top_k:
+          type: integer
+          default: 20
+          minimum: 1
+          maximum: 100
+        vector_top_k:
+          type: integer
+          default: 20
+          minimum: 1
+          maximum: 100
+        rrf_k:
+          type: integer
+          default: 60
+          minimum: 1
+
+    HybridSearchAPIResponse:
+      type: object
+      properties:
+        query:
+          type: string
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/HybridSearchResultItem"
+        total_found:
+          type: integer
+        request_id:
+          type: string
+
+    HybridSearchResultItem:
+      type: object
+      properties:
+        id:
+          type: string
+        content:
+          type: string
+        score:
+          type: number
+        bm25_rank:
+          type: integer
+          nullable: true
+        bm25_score:
+          type: number
+          nullable: true
+        vector_rank:
+          type: integer
+          nullable: true
+        vector_score:
+          type: number
+          nullable: true
+        source:
+          type: string
+        metadata:
+          type: object
+
+    ChunkIndexAPIRequest:
+      type: object
+      required: [document_id, content, user_id]
+      properties:
+        document_id:
+          type: string
+        content:
+          type: string
+        user_id:
+          type: string
+        strategy_type:
+          type: string
+          default: parent_child
+          enum: [full_token, parent_child, semantic]
+        metadata:
+          type: object
+        chunk_size:
+          type: integer
+          default: 500
+          minimum: 100
+        chunk_overlap:
+          type: integer
+          default: 50
+          minimum: 0
+        top_keywords:
+          type: integer
+          default: 10
+          minimum: 1
+          maximum: 50
+
+    ChunkIndexAPIResponse:
+      type: object
+      properties:
+        document_id:
+          type: string
+        user_id:
+          type: string
+        total_chunks:
+          type: integer
+        indexed_chunks:
+          type: array
+          items:
+            type: object
+            properties:
+              chunk_id:
+                type: string
+              chunk_type:
+                type: string
+              keywords:
+                type: array
+                items:
+                  type: string
+              content:
+                type: string
+        request_id:
+          type: string
+
+    MorphIndexAPIRequest:
+      type: object
+      required: [document_id, content, user_id]
+      properties:
+        document_id:
+          type: string
+        content:
+          type: string
+        user_id:
+          type: string
+        strategy_type:
+          type: string
+          default: parent_child
+          enum: [full_token, parent_child, semantic]
+        chunk_size:
+          type: integer
+          default: 500
+          minimum: 100
+        chunk_overlap:
+          type: integer
+          default: 50
+          minimum: 0
+        source:
+          type: string
+          default: ""
+        metadata:
+          type: object
+
+    MorphIndexAPIResponse:
+      type: object
+      properties:
+        document_id:
+          type: string
+        user_id:
+          type: string
+        total_chunks:
+          type: integer
+        qdrant_indexed:
+          type: integer
+        es_indexed:
+          type: integer
+        indexed_chunks:
+          type: array
+          items:
+            type: object
+            properties:
+              chunk_id:
+                type: string
+              chunk_type:
+                type: string
+              morph_keywords:
+                type: array
+                items:
+                  type: string
+              content:
+                type: string
+              char_start:
+                type: integer
+              char_end:
+                type: integer
+              chunk_index:
+                type: integer
+        request_id:
+          type: string
+
+    RAGAgentAPIRequest:
+      type: object
+      required: [query, user_id]
+      properties:
+        query:
+          type: string
+          minLength: 1
+        user_id:
+          type: string
+        top_k:
+          type: integer
+          default: 5
+          minimum: 1
+          maximum: 20
+
+    RAGAgentAPIResponse:
+      type: object
+      properties:
+        query:
+          type: string
+        answer:
+          type: string
+        sources:
+          type: array
+          items:
+            type: object
+            properties:
+              content:
+                type: string
+              source:
+                type: string
+              chunk_id:
+                type: string
+              score:
+                type: number
+        used_internal_docs:
+          type: boolean
+        request_id:
+          type: string
+
+    ConversationAPIRequest:
+      type: object
+      required: [user_id, session_id, message]
+      properties:
+        user_id:
+          type: string
+        session_id:
+          type: string
+        message:
+          type: string
+
+    ConversationAPIResponse:
+      type: object
+      properties:
+        user_id:
+          type: string
+        session_id:
+          type: string
+        answer:
+          type: string
+        was_summarized:
+          type: boolean
+          description: 이번 응답에서 히스토리 요약이 발생했는지 여부
+        request_id:
+          type: string
+
+    AnalysisResponse:
+      type: object
+      properties:
+        request_id:
+          type: string
+        query:
+          type: string
+        final_answer:
+          type: string
+        is_successful:
+          type: boolean
+        total_attempts:
+          type: integer
+        attempts:
+          type: array
+          items:
+            type: object
+            properties:
+              attempt_number:
+                type: integer
+              confidence_score:
+                type: number
+              hallucination_score:
+                type: number
+              used_web_search:
+                type: boolean
+              timestamp:
+                type: string
+                format: date-time
+        executed_code:
+          type: string
+          nullable: true
+        code_output:
+          type: object
+          nullable: true
+
+    PdfExportRequestBody:
+      type: object
+      required: [html_content, user_id]
+      properties:
+        html_content:
+          type: string
+        filename:
+          type: string
+          default: output.pdf
+        user_id:
+          type: string
+        css_content:
+          type: string
+          nullable: true
+        base_url:
+          type: string
+          nullable: true
+
+    ExcelExportRequestBody:
+      type: object
+      required: [user_id, sheets]
+      properties:
+        filename:
+          type: string
+          default: output.xlsx
+        user_id:
+          type: string
+        sheets:
+          type: array
+          items:
+            type: object
+            required: [columns]
+            properties:
+              sheet_name:
+                type: string
+                default: Sheet1
+              columns:
+                type: array
+                items:
+                  type: string
+              rows:
+                type: array
+                items:
+                  type: array
+
+    AvailableToolsResponse:
+      type: object
+      properties:
+        tools:
+          type: array
+          items:
+            type: object
+            properties:
+              tool_id:
+                type: string
+              name:
+                type: string
+              description:
+                type: string
+
+    CreateAgentRequest:
+      type: object
+      required: [name, goal]
+      properties:
+        name:
+          type: string
+        goal:
+          type: string
+        tool_ids:
+          type: array
+          items:
+            type: string
+
+    CreateAgentResponse:
+      type: object
+      properties:
+        agent_id:
+          type: string
+        name:
+          type: string
+        system_prompt:
+          type: string
+        tool_ids:
+          type: array
+          items:
+            type: string
+
+    UpdateAgentRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          nullable: true
+        system_prompt:
+          type: string
+          nullable: true
+
+    RunAgentRequest:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+        session_id:
+          type: string
+          nullable: true
+
+    InterviewStartRequest:
+      type: object
+      required: [goal]
+      properties:
+        goal:
+          type: string
+
+    InterviewStartResponse:
+      type: object
+      properties:
+        session_id:
+          type: string
+        question:
+          type: string
+
+    InterviewAnswerRequest:
+      type: object
+      required: [answer]
+      properties:
+        answer:
+          type: string
+
+    InterviewFinalizeRequest:
+      type: object
+      properties:
+        system_prompt_override:
+          type: string
+          nullable: true
+
+    CreateMiddlewareAgentRequest:
+      type: object
+      required: [name, goal]
+      properties:
+        name:
+          type: string
+        goal:
+          type: string
+        tool_ids:
+          type: array
+          items:
+            type: string
+        middlewares:
+          type: array
+          items:
+            type: string
+          description: "SummarizationMiddleware, PIIMiddleware, ToolRetryMiddleware, ModelCallLimitMiddleware, ModelFallbackMiddleware"
+
+    UpdateMiddlewareAgentRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          nullable: true
+        system_prompt:
+          type: string
+          nullable: true
+        middlewares:
+          type: array
+          items:
+            type: string
+
+    RunMiddlewareAgentRequest:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+        session_id:
+          type: string
+          nullable: true
+
+    AutoBuildRequest:
+      type: object
+      required: [user_request, user_id]
+      properties:
+        user_request:
+          type: string
+          description: 자연어로 에이전트 요구사항 설명
+        user_id:
+          type: string
+
+    AutoBuildReplyRequest:
+      type: object
+      required: [answer]
+      properties:
+        answer:
+          type: string
+
+    AutoBuildResponse:
+      type: object
+      properties:
+        session_id:
+          type: string
+        status:
+          type: string
+          enum: [created, needs_clarification]
+        agent_id:
+          type: string
+          nullable: true
+        clarification_question:
+          type: string
+          nullable: true
+
+    AutoBuildSessionStatusResponse:
+      type: object
+      properties:
+        session_id:
+          type: string
+        status:
+          type: string
+        attempt_count:
+          type: integer
+        user_request:
+          type: string
+        created_agent_id:
+          type: string
+          nullable: true
+
+    RegisterMCPServerRequest:
+      type: object
+      required: [name, transport, command, user_id]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        transport:
+          type: string
+          enum: [stdio, sse, websocket]
+        command:
+          type: string
+        args:
+          type: array
+          items:
+            type: string
+        user_id:
+          type: string
+
+    UpdateMCPServerRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        command:
+          type: string
+          nullable: true
+        args:
+          type: array
+          items:
+            type: string
+
+    MCPServerResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        transport:
+          type: string
+        command:
+          type: string
+        args:
+          type: array
+          items:
+            type: string
+        user_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
