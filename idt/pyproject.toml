@@ -6,7 +6,7 @@ requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.109.0",
     "uvicorn[standard]>=0.27.0",
-    "pydantic>=2.5.0",
+    "pydantic[email]>=2.5.0",
     "pydantic-settings>=2.1.0",
     # LangChain / LangGraph
     "langchain-core>=0.3.0",
@@ -39,6 +39,18 @@ dependencies = [
     "kiwipiepy>=0.17.0",
     # HTML to PDF
     "xhtml2pdf>=0.2.17",
+    # Excel
+    "pandas>=2.0.0",
+    "openpyxl>=3.1.0",
+    # Web Search
+    "tavily-python>=0.3.0",
+    # Redis
+    "redis>=5.0.0",
+    # Auth
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+    "bcrypt>=4.0,<5.0",
+    "python-multipart>=0.0.9",
 ]
 
 [project.optional-dependencies]
