@@ -1,4 +1,8 @@
 """FastAPI application entry point."""
+# import sys
+# import asyncio
+# if sys.platform == "win32":
+#     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -6,10 +10,12 @@ from typing import Optional
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from qdrant_client import AsyncQdrantClient
 
 # Load .env file into environment variables (for LangChain/OpenAI)
 load_dotenv()
+
 
 from src.config import settings
 from src.api.routes.document_upload import (
@@ -139,6 +145,34 @@ from src.infrastructure.auto_agent_builder.auto_build_session_repository import 
 from src.infrastructure.middleware_agent.middleware_agent_repository import MiddlewareAgentRepository
 from src.infrastructure.redis.redis_client import RedisClient
 from src.infrastructure.redis.redis_repository import RedisRepository
+
+# Auth
+from src.api.routes.auth_router import (
+    router as auth_router,
+    get_register_use_case,
+    get_login_use_case,
+    get_refresh_use_case,
+    get_logout_use_case,
+)
+from src.api.routes.admin_router import (
+    router as admin_router,
+    get_pending_users_use_case,
+    get_approve_use_case,
+    get_reject_use_case,
+)
+from src.interfaces.dependencies.auth import get_jwt_adapter, get_user_repository
+from src.application.auth.register_use_case import RegisterUseCase
+from src.application.auth.login_use_case import LoginUseCase
+from src.application.auth.refresh_token_use_case import RefreshTokenUseCase
+from src.application.auth.logout_use_case import LogoutUseCase
+from src.application.auth.get_pending_users_use_case import GetPendingUsersUseCase
+from src.application.auth.approve_user_use_case import ApproveUserUseCase
+from src.application.auth.reject_user_use_case import RejectUserUseCase
+from src.infrastructure.auth.jwt_adapter import JWTAdapter
+from src.infrastructure.auth.password_hasher import BcryptPasswordHasher
+from src.infrastructure.auth.user_repository import UserRepository
+from src.infrastructure.auth.refresh_token_repository import RefreshTokenRepository
+from src.infrastructure.config.auth_config import AuthConfig
 
 
 # Global processor instance (initialized on startup)
@@ -729,6 +763,105 @@ def get_configured_auto_build_session_repository() -> AutoBuildSessionRepository
     return _auto_build_session_repository
 
 
+def create_auth_factories():
+    """Auth use case per-request DI factories.
+
+    JWTAdapter / BcryptPasswordHasher: 상태 없음 → 앱 전체 공유
+    UserRepository / RefreshTokenRepository: MySQL session → 요청마다 생성
+
+    Note: AuthConfig는 JWT_SECRET_KEY 환경변수가 없으면 RuntimeError 발생.
+    개발 환경에서는 .env에 JWT_SECRET_KEY를 반드시 설정할 것.
+    """
+    app_logger = get_app_logger()
+    try:
+        auth_config = AuthConfig()
+    except Exception as e:
+        app_logger.warning(
+            "AuthConfig init failed — auth endpoints disabled",
+            error=str(e),
+        )
+        # JWT_SECRET_KEY 미설정 시 auth 기능 비활성화 (서버는 기동)
+        _noop = lambda: (_ for _ in ()).throw(RuntimeError("JWT_SECRET_KEY not configured"))  # noqa: E731
+        return (_noop,) * 9
+
+    jwt_adapter = JWTAdapter(config=auth_config)
+    password_hasher = BcryptPasswordHasher()
+
+    def _make_user_repo():
+        session = get_session_factory()()
+        return UserRepository(session=session, logger=app_logger)
+
+    def _make_rt_repo():
+        session = get_session_factory()()
+        return RefreshTokenRepository(session=session, logger=app_logger)
+
+    def register_factory():
+        return RegisterUseCase(
+            user_repo=_make_user_repo(),
+            password_hasher=password_hasher,
+            logger=app_logger,
+        )
+
+    def login_factory():
+        return LoginUseCase(
+            user_repo=_make_user_repo(),
+            refresh_token_repo=_make_rt_repo(),
+            password_hasher=password_hasher,
+            jwt_adapter=jwt_adapter,
+            logger=app_logger,
+        )
+
+    def refresh_factory():
+        return RefreshTokenUseCase(
+            rt_repo=_make_rt_repo(),
+            jwt_adapter=jwt_adapter,
+            logger=app_logger,
+        )
+
+    def logout_factory():
+        return LogoutUseCase(
+            rt_repo=_make_rt_repo(),
+            jwt_adapter=jwt_adapter,
+            logger=app_logger,
+        )
+
+    def pending_users_factory():
+        return GetPendingUsersUseCase(
+            user_repo=_make_user_repo(),
+            logger=app_logger,
+        )
+
+    def approve_factory():
+        return ApproveUserUseCase(
+            user_repo=_make_user_repo(),
+            logger=app_logger,
+        )
+
+    def reject_factory():
+        return RejectUserUseCase(
+            user_repo=_make_user_repo(),
+            logger=app_logger,
+        )
+
+    def jwt_adapter_factory():
+        return jwt_adapter
+
+    def user_repo_factory():
+        return _make_user_repo()
+
+    return (
+        register_factory,
+        login_factory,
+        refresh_factory,
+        logout_factory,
+        pending_users_factory,
+        approve_factory,
+        reject_factory,
+        jwt_adapter_factory,
+        user_repo_factory,
+    )
+
+
 def create_agent_builder_factories():
     """Return per-request DI factories for Agent Builder use cases."""
     from langchain_openai import ChatOpenAI
@@ -851,8 +984,16 @@ def create_app() -> FastAPI:
     logger = get_app_logger()
 
     # Register middleware (order matters: last added = first executed)
-    # 1. RequestLoggingMiddleware - generates request_id and logs requests
-    # 2. ExceptionHandlerMiddleware - handles unhandled exceptions
+    # 1. CORSMiddleware - must be outermost to handle preflight OPTIONS
+    # 2. RequestLoggingMiddleware - generates request_id and logs requests
+    # 3. ExceptionHandlerMiddleware - handles unhandled exceptions
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     app.add_middleware(RequestLoggingMiddleware, logger=logger)
     app.add_middleware(ExceptionHandlerMiddleware, logger=logger, debug=settings.debug)
 
@@ -882,6 +1023,22 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_auto_build_reply_use_case] = get_configured_auto_build_reply_use_case
     app.dependency_overrides[get_auto_build_session_repository] = get_configured_auto_build_session_repository
 
+    # Auth DI
+    (
+        _register_f, _login_f, _refresh_f, _logout_f,
+        _pending_f, _approve_f, _reject_f,
+        _jwt_f, _user_repo_f,
+    ) = create_auth_factories()
+    app.dependency_overrides[get_register_use_case] = _register_f
+    app.dependency_overrides[get_login_use_case] = _login_f
+    app.dependency_overrides[get_refresh_use_case] = _refresh_f
+    app.dependency_overrides[get_logout_use_case] = _logout_f
+    app.dependency_overrides[get_pending_users_use_case] = _pending_f
+    app.dependency_overrides[get_approve_use_case] = _approve_f
+    app.dependency_overrides[get_reject_use_case] = _reject_f
+    app.dependency_overrides[get_jwt_adapter] = _jwt_f
+    app.dependency_overrides[get_user_repository] = _user_repo_f
+
     # Include routers
     app.include_router(document_router)
     app.include_router(analysis_router)
@@ -896,6 +1053,8 @@ def create_app() -> FastAPI:
     app.include_router(doc_chunk_router)
     app.include_router(agent_builder_router)
     app.include_router(auto_agent_builder_router)
+    app.include_router(auth_router)
+    app.include_router(admin_router)
 
     # Health check endpoint
     @app.get("/health")
