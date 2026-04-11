@@ -443,6 +443,7 @@ npm run coverage     # 커버리지 리포트 생성
 | WORKFLOW-001 | src/claude/task/task-workflow-designer.md | 워크플로우 설계 페이지 (Mock 완료 / API 연동 예정) |
 | AGENT-001 | src/claude/task/task-agent-builder.md | 에이전트 만들기 페이지 (Mock 완료 / API 연동 예정) |
 | TOOL-ADMIN-001 | src/claude/task/task-tool-admin.md | 도구 관리 어드민 페이지 (Mock 완료 / API 연동 예정) |
+| AUTH-001 | docs/01-plan/features/auth.plan.md | JWT 인증 + 관리자 승인 흐름 (Design 완료 / 구현 예정) |
 
 ### 완료된 주요 파일 참조
 
@@ -454,7 +455,8 @@ npm run coverage     # 커버리지 리포트 생성
 | **타입** | `src/types/api.ts` | ApiResponse, StreamEvent |
 | **상수** | `src/constants/api.ts` | API_ENDPOINTS 전체 목록 |
 | **상수** | `src/constants/agent.ts` | Agent 상태 레이블 |
-| **서비스** | `src/services/api/client.ts` | axios 인스턴스 (interceptor 포함) |
+| **서비스** | `src/services/api/client.ts` | axios 인스턴스 — 공개 엔드포인트 전용 (인터셉터 없음) |
+| **서비스** | `src/services/api/authClient.ts` | axios 인스턴스 — 인증 전용 (Bearer 토큰 주입 + 자동 갱신) |
 | **서비스** | `src/services/chatService.ts` | 채팅 API 호출 |
 | **서비스** | `src/services/agentService.ts` | Agent API 호출 |
 | **서비스** | `src/services/ragService.ts` | 문서 업로드/검색 API |
@@ -492,3 +494,8 @@ npm run coverage     # 커버리지 리포트 생성
 | **타입** | `src/types/toolAdmin.ts` | AdminTool, ToolSchemaParam, ToolEndpoint, ToolParamType, HttpMethod, CRUD Request/Response |
 | **서비스** | `src/services/toolAdminService.ts` | 도구 관리 CRUD API (getTools, createTool, updateTool, deleteTool) |
 | **UI** | `src/pages/ToolAdminPage/index.tsx` | 도구 관리 어드민 페이지 (테이블 + 추가/수정 모달 + 삭제 확인) |
+| **타입** | `src/types/auth.ts` | User, UserStatus, UserRole, AuthTokenResponse, PendingUser |
+| **스토어** | `src/store/authStore.ts` | 인증 전역 상태 (accessToken 메모리 / refreshToken persist) |
+| **훅** | `src/hooks/useAuth.ts` | useLogin, useLogout, useRegister, useMe, useInitAuth |
+| **컴포넌트** | `src/components/common/ProtectedRoute.tsx` | 비인증 시 /login 리다이렉트 |
+| **컴포넌트** | `src/components/common/AdminRoute.tsx` | 비admin 시 / 리다이렉트 |
