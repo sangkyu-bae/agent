@@ -23,6 +23,7 @@ class RefreshTokenRepository(RefreshTokenRepositoryInterface):
         )
         self._session.add(model)
         await self._session.flush()
+        await self._session.commit()
         self._logger.info("RefreshToken saved", user_id=user_id)
 
     async def find_valid(self, token_hash: str) -> Optional[dict]:
@@ -54,4 +55,5 @@ class RefreshTokenRepository(RefreshTokenRepositoryInterface):
             )
             .values(revoked_at=now)
         )
+        await self._session.commit()
         self._logger.info("RefreshToken revoked", token_hash=token_hash[:8] + "...")

@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useAuthStore } from '@/store/authStore';
+import { useLogout } from '@/hooks/useAuth';
 
 interface DropdownItem {
   label: string;
@@ -55,12 +57,16 @@ const TopNav = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const navRef = useRef<HTMLDivElement>(null);
+  const { user } = useAuthStore();
+  const { mutate: logout, isPending: isLoggingOut } = useLogout();
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (navRef.current && !navRef.current.contains(e.target as Node)) {
         setOpenMenu(null);
+        setUserMenuOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -96,7 +102,7 @@ const TopNav = () => {
         <span className="text-[13.5px] font-semibold text-zinc-900">IDT Platform</span>
       </button>
 
-      {/* 메뉴 */}
+      {/* 메뉴 + 사용자 영역 */}
       <div className="flex items-center gap-1">
         {NAV_MENUS.map((menu) => {
           const isOpen = openMenu === menu.label;
@@ -175,6 +181,43 @@ const TopNav = () => {
             </div>
           );
         })}
+
+        {/* 사용자 아바타 + 드롭다운 */}
+        {user && (
+          <div className="relative ml-2">
+            <button
+              onClick={() => setUserMenuOpen(!userMenuOpen)}
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-600 text-[12px] font-semibold text-white transition-all hover:bg-violet-700 active:scale-95"
+            >
+              {user.email[0].toUpperCase()}
+            </button>
+
+            {userMenuOpen && (
+              <div className="absolute right-0 top-full mt-1.5 w-52 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-xl shadow-zinc-200/60">
+                {/* 사용자 정보 */}
+                <div className="border-b border-zinc-100 px-4 py-3">
+                  <p className="text-[11.5px] font-semibold uppercase tracking-widest text-violet-500">
+                    로그인 계정
+                  </p>
+                  <p className="mt-0.5 truncate text-[13px] text-zinc-700">{user.email}</p>
+                </div>
+                {/* 로그아웃 */}
+                <div className="p-1.5">
+                  <button
+                    onClick={() => { logout(); setUserMenuOpen(false); }}
+                    disabled={isLoggingOut}
+                    className="flex w-full items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-left text-[13.5px] font-medium text-zinc-600 transition-all hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" />
+                    </svg>
+                    {isLoggingOut ? '로그아웃 중...' : '로그아웃'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </nav>
   );

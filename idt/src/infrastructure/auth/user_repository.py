@@ -37,6 +37,7 @@ class UserRepository(UserRepositoryInterface):
         self._session.add(model)
         await self._session.flush()
         await self._session.refresh(model)
+        await self._session.commit()
         self._logger.info("User saved", user_id=model.id)
         return _to_entity(model)
 
@@ -66,4 +67,5 @@ class UserRepository(UserRepositoryInterface):
             .where(UserModel.id == user_id)
             .values(status=status.value)
         )
+        await self._session.commit()
         self._logger.info("User status updated", user_id=user_id, status=status.value)

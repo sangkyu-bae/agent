@@ -31,4 +31,16 @@ export const API_ENDPOINTS = {
   // Admin Tools (도구 관리)
   ADMIN_TOOLS: '/api/admin/tools',
   ADMIN_TOOL_DETAIL: (toolId: string) => `/api/admin/tools/${toolId}`,
+
+  // Auth
+  AUTH_REGISTER: '/api/v1/auth/register',
+  AUTH_LOGIN: '/api/v1/auth/login',
+  AUTH_REFRESH: '/api/v1/auth/refresh',
+  AUTH_LOGOUT: '/api/v1/auth/logout',
+  AUTH_ME: '/api/v1/auth/me',
+
+  // Admin — User approval
+  ADMIN_USERS_PENDING: '/api/v1/admin/users/pending',
+  ADMIN_USER_APPROVE: (userId: number) => `/api/v1/admin/users/${userId}/approve`,
+  ADMIN_USER_REJECT: (userId: number) => `/api/v1/admin/users/${userId}/reject`,
 } as const;

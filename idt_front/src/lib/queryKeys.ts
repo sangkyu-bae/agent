@@ -46,4 +46,22 @@ export const queryKeys = {
     run: (runId: string) =>
       [...queryKeys.agent.all, 'run', runId] as const,
   },
+
+  // ── Auth ───────────────────────────────────────────────
+  auth: {
+    /** 인증 도메인 전체 키 */
+    all: ['auth'] as const,
+    /** 현재 사용자 정보 */
+    me: () => [...queryKeys.auth.all, 'me'] as const,
+    /** 앱 초기 토큰 복원 */
+    init: () => [...queryKeys.auth.all, 'init'] as const,
+  },
+
+  // ── Admin ──────────────────────────────────────────────
+  admin: {
+    /** 관리자 도메인 전체 키 */
+    all: ['admin'] as const,
+    /** 승인 대기 사용자 목록 */
+    pendingUsers: () => [...queryKeys.admin.all, 'pendingUsers'] as const,
+  },
 } as const;
