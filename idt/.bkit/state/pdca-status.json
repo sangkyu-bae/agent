@@ -1,6 +1,6 @@
 {
   "version": "2.0",
-  "lastUpdated": "2026-04-01T11:14:28.393Z",
+  "lastUpdated": "2026-04-12T07:02:41.372Z",
   "activeFeatures": [
     "api",
     "routes",
@@ -32,7 +32,9 @@
     "planner",
     "constants",
     "idt_front",
-    "ChatPage"
+    "ChatPage",
+    "general_chat",
+    "general-chat-api"
   ],
   "primaryFeature": "auto-agent-builder",
   "archivedFeatures": {
@@ -55,9 +57,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-04T10:53:02.380Z",
-        "lastUpdated": "2026-03-24T14:52:03.045Z"
+        "lastUpdated": "2026-04-12T06:38:18.799Z"
       },
-      "lastFile": "C:\\sangplus\\idt\\src\\api\\main.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\api\\test_general_chat_router.py"
     },
     "routes": {
       "phase": "do",
@@ -68,9 +70,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-04T10:57:06.857Z",
-        "lastUpdated": "2026-03-24T05:14:09.534Z"
+        "lastUpdated": "2026-04-12T06:38:03.059Z"
       },
-      "lastFile": "C:\\sangplus\\idt\\src\\api\\routes\\middleware_agent_router.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\api\\routes\\general_chat_router.py"
     },
     "retrieval": {
       "phase": "do",
@@ -457,6 +459,33 @@
         "lastUpdated": "2026-04-01T11:14:28.392Z"
       },
       "lastFile": "C:\\sangplus\\idt\\idt_front\\src\\pages\\ChatPage\\index.tsx"
+    },
+    "general_chat": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-04-12T06:31:25.528Z",
+        "lastUpdated": "2026-04-12T06:38:11.176Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\application\\general_chat\\use_case.py"
+    },
+    "general-chat-api": {
+      "phase": "archived",
+      "phaseNumber": 7,
+      "matchRate": 93,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-04-12T07:02:41.371Z",
+        "lastUpdated": "2026-04-12T07:02:41.372Z"
+      },
+      "archivedAt": "2026-04-12T00:00:00.000Z",
+      "archivedTo": "docs/archive/2026-04/general-chat-api/"
     }
   },
   "pipeline": {
@@ -467,7 +496,7 @@
   "session": {
     "startedAt": "2026-03-04T10:49:14.367Z",
     "onboardingCompleted": false,
-    "lastActivity": "2026-04-01T11:14:28.393Z"
+    "lastActivity": "2026-04-12T07:02:41.372Z"
   },
   "history": [
     {
@@ -2436,6 +2465,156 @@
       "timestamp": "2026-04-01T11:14:28.392Z",
       "feature": "ChatPage",
       "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T06:31:25.528Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T06:31:35.136Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T06:31:42.048Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T06:31:47.931Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T06:31:52.280Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T06:31:58.432Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T06:32:11.227Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T06:32:35.494Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T06:32:43.743Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T06:32:56.797Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T06:33:51.838Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T06:34:29.849Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T06:34:44.691Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T06:35:12.187Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T06:35:22.568Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T06:36:53.873Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T06:37:05.757Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T06:37:12.605Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T06:37:15.894Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T06:37:59.654Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T06:38:03.059Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T06:38:06.977Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T06:38:11.176Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T06:38:18.799Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T07:02:41.372Z",
+      "feature": "general-chat-api",
+      "phase": "act",
       "action": "updated"
     }
   ]

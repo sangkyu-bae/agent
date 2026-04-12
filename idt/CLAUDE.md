@@ -348,6 +348,7 @@ AI 응답은 항상 다음 순서를 따른다:
 | **AGENT-006** | **src/claude/task/task-auto-agent-builder.md** | **자연어 기반 자동 에이전트 빌더 (LLM 자동 도구+미들웨어 추론, Redis 멀티턴 보충 질문, AGENT-005 CreateMiddlewareAgentUseCase 재사용, POST /api/v3/agents/auto)** |
 | **AGENT-007** | **src/claude/task/task-planner-agent.md** | **공통 Planner Agent (질문 분석 → 단계별 실행 계획 생성, PlanResult/PlanStep, LangGraph StateGraph replan 루프, PlannerInterface 추상화, 타 Agent 재사용 공통 모듈)** |
 | **AUTH-001** | **src/claude/task/task-auth.md** | **인증/인가 시스템 (이메일+비밀번호 회원가입→관리자 승인 흐름, Access+Refresh JWT, RBAC role 기반 Dependency, UserStatus(pending/approved/rejected), users+refresh_tokens MySQL 저장, POST /api/v1/auth/* + POST /api/v1/admin/users/{id}/approve|reject)** |
+| **CHAT-001** | **src/claude/task/task-general-chat-api.md** | **General Chat API (LangGraph ReAct 에이전트 + Tavily 웹검색 + 내부문서 BM25+Vector 검색 + MCP 도구 동적 로드 + 멀티턴 6턴 압축 + LangSmith 추적, POST /api/v1/chat)** |
 **모든 새 task.md는 LOG-001을 의존성으로 참조해야 한다.**
 ```
 

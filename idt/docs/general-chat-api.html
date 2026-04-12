@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>General Chat API Docs</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --border: #2d3148;
+      --accent: #7c6ff7;
+      --green: #22c55e;
+      --red: #ef4444;
+      --yellow: #f59e0b;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --code-bg: #0d1117;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; display: flex; min-height: 100vh; }
+    aside { width: 240px; background: var(--surface); border-right: 1px solid var(--border); padding: 24px 16px; position: fixed; top: 0; left: 0; height: 100vh; overflow-y: auto; }
+    aside h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 16px; }
+    aside a { display: block; padding: 8px 12px; border-radius: 6px; color: var(--muted); text-decoration: none; font-size: 14px; margin-bottom: 4px; }
+    aside a:hover { background: var(--border); color: var(--text); }
+    main { margin-left: 240px; padding: 48px; max-width: 900px; width: 100%; }
+    h1 { font-size: 28px; margin-bottom: 8px; }
+    .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 40px; }
+    .section { margin-bottom: 48px; }
+    h2 { font-size: 20px; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+    h3 { font-size: 16px; margin-bottom: 12px; color: var(--muted); }
+    .endpoint-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 32px; }
+    .endpoint-header { display: flex; align-items: center; gap: 12px; padding: 20px 24px; border-bottom: 1px solid var(--border); }
+    .method { padding: 4px 12px; border-radius: 6px; font-size: 13px; font-weight: 700; }
+    .post { background: #1d4ed8; color: #fff; }
+    .path { font-size: 18px; font-weight: 600; font-family: monospace; }
+    .badge { padding: 3px 10px; border-radius: 20px; font-size: 12px; background: rgba(124,111,247,0.2); color: var(--accent); border: 1px solid var(--accent); margin-left: auto; }
+    .endpoint-body { padding: 24px; }
+    .description { color: var(--muted); font-size: 14px; line-height: 1.7; margin-bottom: 20px; }
+    .policy-box { background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.3); border-radius: 8px; padding: 16px; margin-bottom: 20px; }
+    .policy-box h4 { color: var(--yellow); font-size: 13px; margin-bottom: 8px; }
+    .policy-box ul { list-style: none; }
+    .policy-box li { font-size: 13px; color: var(--text); padding: 3px 0; }
+    .policy-box li::before { content: "→ "; color: var(--yellow); }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 20px; }
+    th { background: rgba(45,49,72,0.6); padding: 10px 14px; text-align: left; font-weight: 600; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+    td { padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    .required { color: var(--red); font-size: 12px; }
+    .optional { color: var(--muted); font-size: 12px; }
+    code { background: var(--code-bg); border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 13px; color: #a78bfa; }
+    pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 20px; overflow-x: auto; font-size: 13px; line-height: 1.6; margin-bottom: 20px; }
+    pre code { background: none; border: none; padding: 0; color: #e2e8f0; }
+    .tab-group { margin-bottom: 20px; }
+    .tabs { display: flex; gap: 4px; margin-bottom: -1px; }
+    .tab { padding: 8px 16px; font-size: 13px; cursor: pointer; border-radius: 6px 6px 0 0; border: 1px solid var(--border); border-bottom: none; color: var(--muted); background: var(--bg); }
+    .tab.active { background: var(--surface); color: var(--text); border-bottom: 1px solid var(--surface); }
+    .tab-content { border: 1px solid var(--border); border-radius: 0 8px 8px 8px; }
+    .response-200 { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+    .status { font-family: monospace; font-weight: 700; font-size: 14px; }
+    .s200 { color: var(--green); }
+    .s401 { color: var(--red); }
+    .s422 { color: var(--yellow); }
+    .tool-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+    .tool-card { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+    .tool-name { font-family: monospace; font-size: 13px; color: var(--accent); margin-bottom: 4px; }
+    .tool-desc { font-size: 13px; color: var(--muted); }
+    .auth-box { background: rgba(124,111,247,0.08); border: 1px solid rgba(124,111,247,0.3); border-radius: 8px; padding: 16px; margin-bottom: 32px; }
+    .auth-box h3 { color: var(--accent); font-size: 14px; margin-bottom: 8px; }
+    .auth-box p { font-size: 13px; color: var(--muted); }
+    .generated { font-size: 12px; color: var(--muted); margin-bottom: 32px; }
+  </style>
+</head>
+<body>
+  <aside>
+    <h2>SangplusBot</h2>
+    <a href="#overview">개요</a>
+    <a href="#auth">인증</a>
+    <a href="#chat">Chat</a>
+    <a href="#schemas">스키마</a>
+    <a href="#errors">에러 코드</a>
+    <a href="#examples">curl 예시</a>
+  </aside>
+
+  <main>
+    <h1>General Chat API</h1>
+    <p class="subtitle">LangGraph ReAct 에이전트 기반 범용 채팅 API</p>
+    <p class="generated">자동 생성: 2026-04-12 | <code>src/api/routes/general_chat_router.py</code></p>
+
+    <!-- 인증 -->
+    <div class="section" id="auth">
+      <h2>인증</h2>
+      <div class="auth-box">
+        <h3>Bearer Token (JWT)</h3>
+        <p>모든 요청에 <code>Authorization: Bearer &lt;access_token&gt;</code> 헤더가 필요합니다.</p>
+        <p style="margin-top:8px;">토큰 발급: <code>POST /api/v1/auth/login</code></p>
+      </div>
+    </div>
+
+    <!-- Chat 엔드포인트 -->
+    <div class="section" id="chat">
+      <h2>Chat</h2>
+      <div class="endpoint-card">
+        <div class="endpoint-header">
+          <span class="method post">POST</span>
+          <span class="path">/api/v1/chat</span>
+          <span class="badge">JWT 필요</span>
+        </div>
+        <div class="endpoint-body">
+          <p class="description">
+            LangGraph ReAct 에이전트가 질문을 분석하고, 아래 도구를 자율적으로 선택·조합하여 응답합니다.
+          </p>
+
+          <h3>사용 가능한 도구</h3>
+          <div class="tool-grid">
+            <div class="tool-card">
+              <div class="tool-name">tavily_search</div>
+              <div class="tool-desc">실시간 웹 검색</div>
+            </div>
+            <div class="tool-card">
+              <div class="tool-name">hybrid_document_search</div>
+              <div class="tool-desc">내부 문서 BM25 + Vector 하이브리드 검색</div>
+            </div>
+            <div class="tool-card" style="grid-column: span 2;">
+              <div class="tool-name">MCP 등록 도구</div>
+              <div class="tool-desc">DB에 등록된 MCP 서버 도구 동적 로드</div>
+            </div>
+          </div>
+
+          <div class="policy-box">
+            <h4>대화 메모리 정책</h4>
+            <ul>
+              <li>user_id + session_id 단위로 멀티턴 대화 유지</li>
+              <li>대화 턴 6개 초과 시 이전 턴을 자동 요약</li>
+              <li>요약 이후: 요약본 + 최근 3턴만 컨텍스트 사용</li>
+            </ul>
+          </div>
+
+          <h3>Request Body</h3>
+          <table>
+            <thead><tr><th>필드</th><th>타입</th><th>필수</th><th>기본값</th><th>설명</th></tr></thead>
+            <tbody>
+              <tr><td><code>user_id</code></td><td>string</td><td><span class="required">필수</span></td><td>—</td><td>요청 사용자 ID</td></tr>
+              <tr><td><code>session_id</code></td><td>string | null</td><td><span class="optional">선택</span></td><td>null</td><td>대화 세션 ID. 생략 시 서버에서 UUID 신규 발급</td></tr>
+              <tr><td><code>message</code></td><td>string</td><td><span class="required">필수</span></td><td>—</td><td>사용자 질문 메시지</td></tr>
+              <tr><td><code>top_k</code></td><td>integer</td><td><span class="optional">선택</span></td><td>5</td><td>내부 문서 검색 결과 수</td></tr>
+            </tbody>
+          </table>
+
+          <pre><code>{
+  "user_id": "user-abc123",
+  "session_id": "550e8400-e29b-41d4-a716-446655440000",
+  "message": "2024년 금융 정책 변경사항을 알려줘",
+  "top_k": 5
+}</code></pre>
+
+          <h3>Response</h3>
+
+          <div class="response-200">
+            <span class="status s200">200</span>
+            <span style="font-size:14px; color: var(--muted);">성공</span>
+          </div>
+          <table>
+            <thead><tr><th>필드</th><th>타입</th><th>설명</th></tr></thead>
+            <tbody>
+              <tr><td><code>user_id</code></td><td>string</td><td>요청 사용자 ID</td></tr>
+              <tr><td><code>session_id</code></td><td>string</td><td>대화 세션 ID (신규 발급 또는 요청 값 그대로 반환)</td></tr>
+              <tr><td><code>answer</code></td><td>string</td><td>에이전트 생성 답변</td></tr>
+              <tr><td><code>tools_used</code></td><td>string[]</td><td>이번 응답에서 사용한 도구 목록</td></tr>
+              <tr><td><code>sources</code></td><td>DocumentSource[]</td><td>내부 문서 검색 출처 목록</td></tr>
+              <tr><td><code>was_summarized</code></td><td>boolean</td><td>이번 응답에서 대화 히스토리 요약 수행 여부</td></tr>
+              <tr><td><code>request_id</code></td><td>string</td><td>요청 추적용 UUID</td></tr>
+            </tbody>
+          </table>
+
+          <pre><code>{
+  "user_id": "user-abc123",
+  "session_id": "550e8400-e29b-41d4-a716-446655440000",
+  "answer": "2024년 금융 정책 주요 변경사항은 다음과 같습니다...",
+  "tools_used": ["tavily_search", "hybrid_document_search"],
+  "sources": [
+    {
+      "content": "2024년 1월부터 금융위원회는...",
+      "source": "financial_policy_2024.pdf",
+      "chunk_id": "chunk-001-page-3",
+      "score": 0.87
+    }
+  ],
+  "was_summarized": false,
+  "request_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+}</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- 스키마 -->
+    <div class="section" id="schemas">
+      <h2>스키마</h2>
+      <h3>DocumentSource</h3>
+      <table>
+        <thead><tr><th>필드</th><th>타입</th><th>설명</th></tr></thead>
+        <tbody>
+          <tr><td><code>content</code></td><td>string</td><td>검색된 문서 청크 내용</td></tr>
+          <tr><td><code>source</code></td><td>string</td><td>출처 파일명 또는 URL</td></tr>
+          <tr><td><code>chunk_id</code></td><td>string</td><td>문서 청크 고유 ID</td></tr>
+          <tr><td><code>score</code></td><td>float</td><td>검색 관련도 점수 (0.0 ~ 1.0)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 에러 -->
+    <div class="section" id="errors">
+      <h2>에러 코드</h2>
+      <table>
+        <thead><tr><th>코드</th><th>설명</th><th>예시</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="status s200">200</span></td>
+            <td>성공</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td><span class="status s401">401</span></td>
+            <td>인증 실패 — 토큰 없음 또는 만료</td>
+            <td><code>{"detail": "Not authenticated"}</code></td>
+          </tr>
+          <tr>
+            <td><span class="status s422">422</span></td>
+            <td>요청 유효성 검사 실패</td>
+            <td><code>{"detail": "field required"}</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- curl 예시 -->
+    <div class="section" id="examples">
+      <h2>curl 예시</h2>
+      <h3>새 세션 시작</h3>
+      <pre><code>curl -X POST http://localhost:8000/api/v1/chat \
+  -H "Authorization: Bearer &lt;access_token&gt;" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "user-abc123",
+    "message": "2024년 금융 정책 변경사항을 알려줘",
+    "top_k": 5
+  }'</code></pre>
+
+      <h3>기존 세션 이어서 대화</h3>
+      <pre><code>curl -X POST http://localhost:8000/api/v1/chat \
+  -H "Authorization: Bearer &lt;access_token&gt;" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "user-abc123",
+    "session_id": "550e8400-e29b-41d4-a716-446655440000",
+    "message": "방금 말한 내용 중 가계대출 부분을 더 자세히 설명해줘"
+  }'</code></pre>
+    </div>
+  </main>
+</body>
+</html>
