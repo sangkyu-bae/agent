@@ -147,6 +147,16 @@ from src.infrastructure.redis.redis_client import RedisClient
 from src.infrastructure.redis.redis_repository import RedisRepository
 
 # Auth
+from src.api.routes.general_chat_router import (
+    router as general_chat_router,
+    get_general_chat_use_case,
+)
+from src.application.general_chat.tools import ChatToolBuilder, MCPToolCache
+from src.application.general_chat.use_case import GeneralChatUseCase
+from src.application.mcp_registry.load_mcp_tools_use_case import LoadMCPToolsUseCase
+from src.application.rag_agent.tools import InternalDocumentSearchTool
+from src.infrastructure.mcp_registry.mcp_server_repository import MCPServerRepository
+from src.infrastructure.mcp_registry.mcp_tool_loader import MCPToolLoader
 from src.api.routes.auth_router import (
     router as auth_router,
     get_register_use_case,
@@ -862,6 +872,65 @@ def create_auth_factories():
     )
 
 
+def create_general_chat_use_case_factory():
+    """Return a per-request factory for GeneralChatUseCase."""
+    app_logger = get_app_logger()
+
+    async def _factory() -> GeneralChatUseCase:
+        session_factory = get_session_factory()
+        message_repo = SQLAlchemyConversationMessageRepository(session_factory())
+        summary_repo = SQLAlchemyConversationSummaryRepository(session_factory())
+        summarizer = LangChainSummarizer(
+            model_name=settings.openai_llm_model,
+            api_key=settings.openai_api_key,
+            logger=app_logger,
+        )
+        policy = SummarizationPolicy()
+
+        # 도구: TavilySearchTool
+        tavily_tool = TavilySearchTool()
+
+        # 도구: InternalDocumentSearchTool (HybridSearch 재사용)
+        hybrid_search_uc = get_configured_hybrid_search_use_case()
+        internal_doc_tool = InternalDocumentSearchTool(
+            hybrid_search_use_case=hybrid_search_uc,
+            top_k=5,
+            request_id="",
+        )
+
+        # 도구: MCP Tools (LoadMCPToolsUseCase via DB)
+        mcp_repo = MCPServerRepository(
+            session=session_factory(), logger=app_logger
+        )
+        mcp_loader = MCPToolLoader(logger=app_logger)
+        load_mcp_uc = LoadMCPToolsUseCase(
+            repository=mcp_repo,
+            mcp_tool_loader=mcp_loader,
+            logger=app_logger,
+        )
+
+        tool_builder = ChatToolBuilder(
+            tavily_tool=tavily_tool,
+            internal_doc_tool=internal_doc_tool,
+            mcp_cache=MCPToolCache,
+            load_mcp_use_case=load_mcp_uc,
+            logger=app_logger,
+        )
+
+        return GeneralChatUseCase(
+            chat_tool_builder=tool_builder,
+            message_repo=message_repo,
+            summary_repo=summary_repo,
+            summarizer=summarizer,
+            summarization_policy=policy,
+            logger=app_logger,
+            openai_api_key=settings.openai_api_key,
+            model_name=settings.openai_llm_model,
+        )
+
+    return _factory
+
+
 def create_agent_builder_factories():
     """Return per-request DI factories for Agent Builder use cases."""
     from langchain_openai import ChatOpenAI
@@ -1012,6 +1081,7 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_morph_index_use_case] = get_configured_morph_index_use_case
     app.dependency_overrides[get_rag_agent_use_case] = get_configured_rag_agent_use_case
     app.dependency_overrides[get_conversation_use_case] = create_conversation_use_case_factory()
+    app.dependency_overrides[get_general_chat_use_case] = create_general_chat_use_case_factory()
     app.dependency_overrides[get_ingest_use_case] = get_configured_ingest_use_case
     app.dependency_overrides[get_doc_chunk_use_case] = get_configured_doc_chunk_use_case
 
@@ -1058,6 +1128,7 @@ def create_app() -> FastAPI:
     app.include_router(doc_chunk_router)
     app.include_router(agent_builder_router)
     app.include_router(auto_agent_builder_router)
+    app.include_router(general_chat_router)
     app.include_router(auth_router)
     app.include_router(admin_router)
 
