@@ -12,9 +12,11 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from src.config import settings
+from src.infrastructure.logging.db_query_listener import DBQueryListener
 
 # Module-level engine instance (lazy initialization)
 _engine: AsyncEngine | None = None
+_db_query_listener = DBQueryListener()
 
 
 def get_engine() -> AsyncEngine:
@@ -27,11 +29,12 @@ def get_engine() -> AsyncEngine:
     if _engine is None:
         _engine = create_async_engine(
             settings.database_url,
-            echo=False,
+            echo=False,          # SQLAlchemy 기본 출력 비활성 유지 (커스텀 리스너로 통일)
             pool_pre_ping=True,
             pool_size=5,
             max_overflow=10,
         )
+        _db_query_listener.register(_engine)
     return _engine
 
 

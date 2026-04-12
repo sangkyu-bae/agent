@@ -801,6 +801,11 @@ async def lifespan(app: FastAPI):
     global _doc_chunk_use_case
     global _auto_build_use_case, _auto_build_reply_use_case, _auto_build_session_repository
 
+    # uvicorn access log 억제 (RequestLoggingMiddleware가 중복 로깅하므로)
+    uvicorn_access = logging.getLogger("uvicorn.access")
+    uvicorn_access.handlers.clear()
+    uvicorn_access.propagate = False
+
     # Startup: Initialize processor
     _document_processor = await create_processor()
     _analyze_excel_use_case = create_analyze_excel_use_case()

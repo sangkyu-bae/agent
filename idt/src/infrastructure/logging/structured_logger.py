@@ -4,11 +4,21 @@ LoggerInterface를 구현하는 구조화된 JSON 로거입니다.
 """
 
 import logging
+import os
 import sys
 from typing import Any
 
 from src.domain.logging.interfaces import LoggerInterface
-from src.infrastructure.logging.formatters import StructuredFormatter
+from src.infrastructure.logging.formatters import get_formatter
+
+
+def _resolve_log_level() -> int:
+    """LOG_LEVEL 환경변수를 읽어 logging 레벨 정수로 반환한다.
+
+    유효하지 않은 값이면 INFO로 fallback.
+    """
+    level_str = os.getenv("LOG_LEVEL", "INFO").upper().strip()
+    return getattr(logging, level_str, logging.INFO)
 
 
 class StructuredLogger(LoggerInterface):
@@ -36,7 +46,7 @@ class StructuredLogger(LoggerInterface):
         if not self._logger.handlers:
             handler = logging.StreamHandler(sys.stdout)
             handler.setLevel(level)
-            handler.setFormatter(StructuredFormatter())
+            handler.setFormatter(get_formatter())
             self._logger.addHandler(handler)
 
     def debug(self, message: str, **kwargs: Any) -> None:
@@ -138,5 +148,5 @@ def get_logger(name: str = "app") -> StructuredLogger:
         logger.info("Processing started", count=10)
     """
     if name not in _loggers:
-        _loggers[name] = StructuredLogger(name=name)
+        _loggers[name] = StructuredLogger(name=name, level=_resolve_log_level())
     return _loggers[name]
