@@ -1,23 +1,17 @@
-import { useState, useRef, useEffect } from 'react';
+import { useMemo, useState } from 'react';
 import Sidebar from '@/components/layout/Sidebar';
 import ChatHeader from '@/components/layout/ChatHeader';
 import MessageList from '@/components/chat/MessageList';
 import ChatInput from '@/components/chat/ChatInput';
-import { useConversationChat } from '@/hooks/useChat';
+import {
+  useGeneralChat,
+  useConversationSessions,
+  useSessionMessages,
+} from '@/hooks/useChat';
+import { useAuthStore } from '@/store/authStore';
 import type { Message, ChatSession } from '@/types/chat';
 
-/** 브라우저 세션 동안 유지되는 익명 user_id */
-const getUserId = (): string => {
-  const key = 'idt_user_id';
-  let id = localStorage.getItem(key);
-  if (!id) {
-    id = crypto.randomUUID();
-    localStorage.setItem(key, id);
-  }
-  return id;
-};
-
-const createSession = (): ChatSession => ({
+const createDraftSession = (): ChatSession => ({
   id: crypto.randomUUID(),
   title: '새 대화',
   messages: [],
@@ -26,25 +20,45 @@ const createSession = (): ChatSession => ({
 });
 
 const ChatPage = () => {
-  const userId = useRef(getUserId()).current;
+  const user = useAuthStore((s) => s.user);
+  const userId = user?.id != null ? String(user.id) : undefined;
 
-  const [sessions, setSessions] = useState<ChatSession[]>(() => [createSession()]);
-  const [activeSessionId, setActiveSessionId] = useState<string>(() => {
-    const first = createSession();
-    return first.id;
-  });
+  const initialDraft = useState(() => createDraftSession())[0];
+  const [draftSessions, setDraftSessions] = useState<ChatSession[]>([initialDraft]);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(initialDraft.id);
   const [messagesBySession, setMessagesBySession] = useState<Record<string, Message[]>>({});
   const [useRag, setUseRag] = useState(true);
 
-  // 첫 세션 id를 sessions 초기값과 동기화
-  useEffect(() => {
-    setActiveSessionId(sessions[0].id);
-  }, []);
+  const {
+    data: serverSessions = [],
+    isLoading: sessionsLoading,
+    isError: sessionsError,
+    refetch: refetchSessions,
+  } = useConversationSessions(userId);
 
-  const { mutate: sendChat, isPending } = useConversationChat();
+  const sessions = useMemo<ChatSession[]>(() => {
+    const serverIds = new Set(serverSessions.map((s) => s.id));
+    const drafts = draftSessions.filter((s) => !serverIds.has(s.id));
+    return [...drafts, ...serverSessions];
+  }, [draftSessions, serverSessions]);
+
+  const isDraftSession = draftSessions.some((s) => s.id === activeSessionId);
+
+  const { data: serverMessages } = useSessionMessages(
+    activeSessionId,
+    userId,
+    { enabled: !!activeSessionId && !isDraftSession },
+  );
+
+  const messages = useMemo<Message[]>(() => {
+    const local = messagesBySession[activeSessionId ?? ''] ?? [];
+    if (local.length > 0) return local;
+    return serverMessages ?? [];
+  }, [activeSessionId, messagesBySession, serverMessages]);
 
   const activeSession = sessions.find((s) => s.id === activeSessionId);
-  const messages = messagesBySession[activeSessionId] ?? [];
+
+  const { mutate: sendChat, isPending } = useGeneralChat();
 
   const addMessage = (sessionId: string, message: Message) => {
     setMessagesBySession((prev) => ({
@@ -53,13 +67,23 @@ const ChatPage = () => {
     }));
   };
 
-  const updateSessionTitle = (sessionId: string, title: string) => {
-    setSessions((prev) =>
-      prev.map((s) => (s.id === sessionId ? { ...s, title } : s)),
-    );
+  const syncSessionId = (clientId: string, serverId: string) => {
+    if (clientId === serverId) return;
+    setDraftSessions((prev) => prev.filter((s) => s.id !== clientId));
+    setMessagesBySession((prev) => {
+      const msgs = prev[clientId];
+      if (!msgs) return prev;
+      const next = { ...prev };
+      delete next[clientId];
+      next[serverId] = msgs;
+      return next;
+    });
+    setActiveSessionId(serverId);
   };
 
   const handleSend = (content: string) => {
+    if (!activeSessionId) return;
+
     const userMessage: Message = {
       id: crypto.randomUUID(),
       role: 'user',
@@ -68,22 +92,26 @@ const ChatPage = () => {
     };
     addMessage(activeSessionId, userMessage);
 
-    // 첫 메시지로 세션 제목 설정
-    if ((messagesBySession[activeSessionId] ?? []).length === 0) {
-      updateSessionTitle(activeSessionId, content.slice(0, 30));
-    }
-
+    const currentSessionId = activeSessionId;
     sendChat(
-      { user_id: userId, session_id: activeSessionId, message: content },
+      {
+        user_id: userId ?? '',
+        session_id: currentSessionId,
+        message: content,
+        top_k: useRag ? 5 : undefined,
+      },
       {
         onSuccess: (data) => {
+          syncSessionId(currentSessionId, data.session_id);
+
           const assistantMessage: Message = {
             id: data.request_id,
             role: 'assistant',
             content: data.answer,
             createdAt: new Date().toISOString(),
+            sources: data.sources,
           };
-          addMessage(activeSessionId, assistantMessage);
+          addMessage(data.session_id, assistantMessage);
         },
         onError: () => {
           const errorMessage: Message = {
@@ -92,16 +120,20 @@ const ChatPage = () => {
             content: '죄송합니다. 응답을 받지 못했습니다. 잠시 후 다시 시도해주세요.',
             createdAt: new Date().toISOString(),
           };
-          addMessage(activeSessionId, errorMessage);
+          addMessage(currentSessionId, errorMessage);
         },
       },
     );
   };
 
   const handleNewChat = () => {
-    const newSession = createSession();
-    setSessions((prev) => [newSession, ...prev]);
+    const newSession = createDraftSession();
+    setDraftSessions((prev) => [newSession, ...prev]);
     setActiveSessionId(newSession.id);
+  };
+
+  const handleSelectSession = (id: string) => {
+    setActiveSessionId(id);
   };
 
   return (
@@ -109,8 +141,11 @@ const ChatPage = () => {
       <Sidebar
         sessions={sessions}
         activeSessionId={activeSessionId}
-        onSelectSession={setActiveSessionId}
+        onSelectSession={handleSelectSession}
         onNewChat={handleNewChat}
+        isLoading={sessionsLoading}
+        isError={sessionsError}
+        onRetry={() => refetchSessions()}
       />
 
       <main style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', background: '#fff' }}>

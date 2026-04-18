@@ -56,6 +56,11 @@ from src.api.routes.conversation_router import (
     router as conversation_router,
     get_conversation_use_case,
 )
+from src.api.routes.conversation_history_router import (
+    router as conversation_history_router,
+    get_history_use_case,
+)
+from src.application.conversation.history_use_case import ConversationHistoryUseCase
 from src.api.routes.ingest_router import (
     router as ingest_router,
     get_ingest_use_case,
@@ -872,6 +877,18 @@ def create_auth_factories():
     )
 
 
+def create_history_use_case_factory():
+    """Return a per-request factory for ConversationHistoryUseCase."""
+    app_logger = get_app_logger()
+
+    def _factory() -> ConversationHistoryUseCase:
+        session = get_session_factory()()
+        repo = SQLAlchemyConversationMessageRepository(session)
+        return ConversationHistoryUseCase(repo=repo, logger=app_logger)
+
+    return _factory
+
+
 def create_general_chat_use_case_factory():
     """Return a per-request factory for GeneralChatUseCase."""
     app_logger = get_app_logger()
@@ -1081,6 +1098,7 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_morph_index_use_case] = get_configured_morph_index_use_case
     app.dependency_overrides[get_rag_agent_use_case] = get_configured_rag_agent_use_case
     app.dependency_overrides[get_conversation_use_case] = create_conversation_use_case_factory()
+    app.dependency_overrides[get_history_use_case] = create_history_use_case_factory()
     app.dependency_overrides[get_general_chat_use_case] = create_general_chat_use_case_factory()
     app.dependency_overrides[get_ingest_use_case] = get_configured_ingest_use_case
     app.dependency_overrides[get_doc_chunk_use_case] = get_configured_doc_chunk_use_case
@@ -1124,6 +1142,7 @@ def create_app() -> FastAPI:
     app.include_router(morph_index_router)
     app.include_router(rag_agent_router)
     app.include_router(conversation_router)
+    app.include_router(conversation_history_router)
     app.include_router(ingest_router)
     app.include_router(doc_chunk_router)
     app.include_router(agent_builder_router)

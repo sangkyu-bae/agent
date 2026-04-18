@@ -261,3 +261,57 @@ async def test_agent_exception_logs_error_and_reraises():
     with pytest.raises(RuntimeError):
         await uc.execute(req, request_id="req-1")
     mocks["logger"].error.assert_called_once()
+
+
+def test_system_prompt_contains_context_instruction():
+    """TC-15: _SYSTEM_PROMPT에 '이전 대화' 지시가 포함된다."""
+    from src.application.general_chat.use_case import _SYSTEM_PROMPT
+    assert "이전 대화" in _SYSTEM_PROMPT
+
+
+@pytest.mark.asyncio
+async def test_second_message_includes_history_in_context():
+    """TC-14: 히스토리 2개(USER+ASSISTANT)가 있을 때 에이전트 입력에 포함된다."""
+    history = [
+        _make_msg(MessageRole.USER, "첫 질문", 1),
+        _make_msg(MessageRole.ASSISTANT, "첫 답변", 2),
+    ]
+    uc, mocks = _make_use_case(history=history)
+    mocks["policy"].needs_summarization = MagicMock(return_value=False)
+
+    captured = []
+
+    async def capture(input_dict):
+        captured.extend(input_dict["messages"])
+        return {"messages": [AIMessage(content="두 번째 답변")]}
+
+    mocks["agent"].ainvoke.side_effect = capture
+
+    req = GeneralChatRequest(user_id="u1", session_id="s1", message="두 번째 질문")
+    await uc.execute(req, request_id="req-1")
+
+    # HumanMessage("첫 질문") + AIMessage("첫 답변") + HumanMessage("두 번째 질문") = 3개
+    assert len(captured) == 3
+    assert isinstance(captured[0], HumanMessage)
+    assert captured[0].content == "첫 질문"
+
+
+def test_create_agent_passes_system_prompt():
+    """TC-13: _create_agent()가 create_react_agent에 prompt=_SYSTEM_PROMPT를 전달한다."""
+    from src.application.general_chat.use_case import _SYSTEM_PROMPT
+
+    with patch("src.application.general_chat.use_case.create_react_agent") as mock_create:
+        mock_create.return_value = MagicMock()
+        uc = GeneralChatUseCase(
+            chat_tool_builder=MagicMock(),
+            message_repo=AsyncMock(),
+            summary_repo=AsyncMock(),
+            summarizer=AsyncMock(),
+            summarization_policy=MagicMock(),
+            logger=MagicMock(),
+        )
+        with patch("src.application.general_chat.use_case.ChatOpenAI"):
+            uc._create_agent(tools=[])
+        mock_create.assert_called_once()
+        _, kwargs = mock_create.call_args
+        assert kwargs.get("prompt") == _SYSTEM_PROMPT

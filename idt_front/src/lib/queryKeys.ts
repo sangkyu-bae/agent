@@ -19,6 +19,12 @@ export const queryKeys = {
     /** 특정 세션 상세 */
     session: (sessionId: string) =>
       [...queryKeys.chat.sessions(), sessionId] as const,
+    /** CHAT-HIST-001: 사용자별 대화 세션 목록 */
+    history: (userId: string) =>
+      [...queryKeys.chat.all, 'history', userId] as const,
+    /** CHAT-HIST-001: 세션별 메시지 */
+    sessionMessages: (sessionId: string, userId: string) =>
+      [...queryKeys.chat.all, 'sessionMessages', sessionId, userId] as const,
   },
 
   // ── Documents ──────────────────────────────────────────
