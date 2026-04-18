@@ -23,6 +23,7 @@ from src.infrastructure.langsmith.langsmith import langsmith
 
 _SYSTEM_PROMPT = (
     "당신은 사용자의 일반 질문에 답하는 AI 어시스턴트입니다.\n"
+    "이전 대화 내용이 있다면 반드시 참고하여 문맥에 맞게 답변하세요.\n"
     "필요에 따라 다음 도구를 사용하세요:\n"
     "- tavily_search: 최신 웹 정보 검색\n"
     "- internal_document_search: 내부 문서(금융/정책 등) 검색\n"
@@ -70,7 +71,7 @@ class GeneralChatUseCase:
             api_key=self._api_key or None,
             temperature=0,
         )
-        return create_react_agent(llm, tools=tools)
+        return create_react_agent(llm, tools=tools, prompt=_SYSTEM_PROMPT)
 
     async def execute(
         self, request: GeneralChatRequest, request_id: str

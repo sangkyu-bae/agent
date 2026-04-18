@@ -1,6 +1,9 @@
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
 
 export const API_ENDPOINTS = {
+  // General Chat (CHAT-001: POST /api/v1/chat)
+  GENERAL_CHAT: '/api/v1/chat',
+
   // Conversation (CONV-001: POST /api/v1/conversation/chat)
   CONVERSATION_CHAT: '/api/v1/conversation/chat',
 
@@ -8,6 +11,11 @@ export const API_ENDPOINTS = {
   CHAT_SESSIONS: '/api/chat/sessions',
   CHAT_MESSAGE: '/api/chat/message',
   CHAT_STREAM: '/api/chat/stream',
+
+  // Conversation History (CHAT-HIST-001)
+  CONVERSATION_SESSIONS: '/api/v1/conversations/sessions',
+  CONVERSATION_SESSION_MESSAGES: (sessionId: string) =>
+    `/api/v1/conversations/sessions/${sessionId}/messages`,
 
   // Agent
   AGENT_RUN: '/api/agent/run',

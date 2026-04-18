@@ -1,7 +1,8 @@
 {
   "version": "2.0",
-  "lastUpdated": "2026-03-24T06:17:54.768Z",
+  "lastUpdated": "2026-04-17T08:03:16.746Z",
   "activeFeatures": [
+    "chat-history-api",
     "chat",
     "layout",
     "ChatPage",
@@ -16,10 +17,28 @@
     "ToolConnectionPage",
     "WorkflowDesignerPage",
     "ToolAdminPage",
-    "WorkflowBuilderPage"
+    "WorkflowBuilderPage",
+    "__tests__"
   ],
-  "primaryFeature": "chat",
+  "primaryFeature": "chat-history-api",
   "features": {
+    "chat-history-api": {
+      "phase": "check",
+      "phaseNumber": 4,
+      "matchRate": 82,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {
+        "plan": "docs/01-plan/features/chat-history-api.plan.md",
+        "design": "docs/02-design/features/chat-history-api.design.md",
+        "analysis": "docs/03-analysis/features/chat-history-api.analysis.md"
+      },
+      "timestamps": {
+        "started": "2026-04-17T00:00:00.000Z",
+        "lastUpdated": "2026-04-17T08:00:00.000Z"
+      },
+      "lastFile": "src/pages/ChatPage/index.tsx"
+    },
     "chat": {
       "phase": "do",
       "phaseNumber": 3,
@@ -29,9 +48,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-16T14:41:16.262Z",
-        "lastUpdated": "2026-03-17T04:23:20.291Z"
+        "lastUpdated": "2026-04-12T07:59:43.072Z"
       },
-      "lastFile": "C:\\sangplus\\idt_front\\src\\components\\chat\\ChatInput.tsx"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\components\\chat\\SourceCitation.tsx"
     },
     "layout": {
       "phase": "do",
@@ -42,9 +61,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-16T14:42:54.427Z",
-        "lastUpdated": "2026-03-24T05:09:38.100Z"
+        "lastUpdated": "2026-04-17T07:36:50.066Z"
       },
-      "lastFile": "C:\\sangplus\\idt_front\\src\\components\\layout\\TopNav.tsx"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\components\\layout\\Sidebar.tsx"
     },
     "ChatPage": {
       "phase": "do",
@@ -55,9 +74,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-17T01:54:47.749Z",
-        "lastUpdated": "2026-03-17T02:39:56.307Z"
+        "lastUpdated": "2026-04-17T07:37:15.027Z"
       },
-      "lastFile": "C:\\sangplus\\idt_front\\src\\pages\\ChatPage\\index.tsx"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\ChatPage\\index.tsx"
     },
     "idt_front": {
       "phase": "do",
@@ -68,9 +87,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-17T02:00:46.710Z",
-        "lastUpdated": "2026-03-24T06:15:30.482Z"
+        "lastUpdated": "2026-04-17T08:02:52.000Z"
       },
-      "lastFile": "C:\\sangplus\\idt_front\\src\\hooks\\useDocuments.ts"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\hooks\\useChat.ts"
     },
     "store": {
       "phase": "do",
@@ -94,9 +113,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-17T14:39:41.105Z",
-        "lastUpdated": "2026-03-21T06:05:31.140Z"
+        "lastUpdated": "2026-04-17T07:33:46.653Z"
       },
-      "lastFile": "C:\\sangplus\\idt_front\\src\\constants\\api.ts"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\constants\\api.ts"
     },
     "mocks": {
       "phase": "do",
@@ -107,9 +126,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-17T14:40:33.713Z",
-        "lastUpdated": "2026-03-24T06:15:05.799Z"
+        "lastUpdated": "2026-04-17T07:34:21.448Z"
       },
-      "lastFile": "C:\\sangplus\\idt_front\\src\\mocks\\documentMocks.ts"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\__tests__\\mocks\\handlers.ts"
     },
     "rag": {
       "phase": "do",
@@ -214,6 +233,19 @@
         "lastUpdated": "2026-03-24T05:17:30.336Z"
       },
       "lastFile": "C:\\sangplus\\idt_front\\src\\pages\\WorkflowBuilderPage\\index.tsx"
+    },
+    "__tests__": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-04-12T07:57:56.857Z",
+        "lastUpdated": "2026-04-17T08:03:16.746Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\__tests__\\components\\ChatPageIntegration.test.tsx"
     }
   },
   "pipeline": {
@@ -224,7 +256,7 @@
   "session": {
     "startedAt": "2026-03-16T14:41:16.262Z",
     "onboardingCompleted": false,
-    "lastActivity": "2026-03-24T06:17:54.768Z"
+    "lastActivity": "2026-04-17T08:03:16.746Z"
   },
   "history": [
     {
@@ -1034,6 +1066,252 @@
     {
       "timestamp": "2026-03-24T06:17:54.767Z",
       "feature": "DocumentPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T07:55:02.652Z",
+      "feature": "mocks",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T07:55:05.449Z",
+      "feature": "mocks",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T07:55:10.548Z",
+      "feature": "mocks",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T07:55:20.187Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T07:55:30.971Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T07:55:37.546Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T07:55:42.085Z",
+      "feature": "constants",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T07:55:50.625Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T07:55:56.185Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T07:56:01.306Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T07:57:54.240Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T07:57:56.857Z",
+      "feature": "__tests__",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T07:59:34.214Z",
+      "feature": "chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T07:59:43.072Z",
+      "feature": "chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T07:59:50.569Z",
+      "feature": "ChatPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T07:59:58.058Z",
+      "feature": "ChatPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T08:00:18.210Z",
+      "feature": "ChatPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-12T08:01:03.511Z",
+      "feature": "ChatPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-17T07:33:46.653Z",
+      "feature": "constants",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-17T07:33:53.110Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-17T07:33:58.239Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-17T07:34:12.110Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-17T07:34:21.449Z",
+      "feature": "mocks",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-17T07:34:29.339Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-17T07:34:41.537Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-17T07:34:56.789Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-17T07:36:32.716Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-17T07:36:34.222Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-17T07:36:50.066Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-17T07:37:15.027Z",
+      "feature": "ChatPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-17T07:55:02.087Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-17T07:55:15.138Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-17T07:55:38.853Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-17T07:55:43.962Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-17T07:56:20.661Z",
+      "feature": "__tests__",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-17T07:59:30.759Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-17T07:59:58.939Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-17T08:02:52.000Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-17T08:02:59.866Z",
+      "feature": "__tests__",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-17T08:03:04.165Z",
+      "feature": "__tests__",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-17T08:03:16.746Z",
+      "feature": "__tests__",
       "phase": "do",
       "action": "updated"
     }

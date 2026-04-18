@@ -65,6 +65,8 @@ export const useLogout = () => {
     mutationFn: () => authService.logout(refreshToken ?? ''),
     onSettled: () => {
       logout();
+      // Design §4.5 / §7: chat cache isolation — remove chat queries before full clear
+      queryClient.removeQueries({ queryKey: queryKeys.chat.all });
       queryClient.clear();
       navigate('/login');
     },

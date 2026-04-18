@@ -7,6 +7,9 @@ interface SidebarProps {
   activeSessionId: string | null;
   onSelectSession: (id: string) => void;
   onNewChat: () => void;
+  isLoading?: boolean;
+  isError?: boolean;
+  onRetry?: () => void;
 }
 
 const NAV_ITEMS = [
@@ -42,7 +45,15 @@ const NAV_ITEMS = [
   },
 ];
 
-const Sidebar = ({ sessions, activeSessionId, onSelectSession, onNewChat }: SidebarProps) => {
+const Sidebar = ({
+  sessions,
+  activeSessionId,
+  onSelectSession,
+  onNewChat,
+  isLoading = false,
+  isError = false,
+  onRetry,
+}: SidebarProps) => {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -78,7 +89,36 @@ const Sidebar = ({ sessions, activeSessionId, onSelectSession, onNewChat }: Side
 
       {/* 세션 목록 */}
       <div className="flex-1 overflow-y-auto px-3 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {sessions.length > 0 ? (
+        {isError ? (
+          <div className="mt-6 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-center">
+            <p className="text-[12.5px] text-red-300">⚠ 대화 내역을 불러오지 못했습니다</p>
+            {onRetry && (
+              <button
+                onClick={onRetry}
+                className="mt-2 rounded-lg border border-white/15 px-3 py-1 text-[11.5px] text-white/70 hover:bg-white/[0.08] hover:text-white"
+              >
+                다시 시도
+              </button>
+            )}
+          </div>
+        ) : isLoading && sessions.length === 0 ? (
+          <div>
+            <p className="mb-2 px-2 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-white/20">
+              최근 대화
+            </p>
+            <div className="space-y-1" aria-label="불러오는 중" role="status">
+              {[0, 1, 2].map((i) => (
+                <div
+                  key={i}
+                  className="flex w-full flex-col items-start rounded-xl px-4 py-3"
+                >
+                  <span className="h-3 w-3/4 animate-pulse rounded bg-white/10" />
+                  <span className="mt-2 h-2 w-1/3 animate-pulse rounded bg-white/5" />
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : sessions.length > 0 ? (
           <div>
             <p className="mb-2 px-2 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-white/20">
               최근 대화
@@ -88,6 +128,7 @@ const Sidebar = ({ sessions, activeSessionId, onSelectSession, onNewChat }: Side
                 <button
                   key={session.id}
                   onClick={() => onSelectSession(session.id)}
+                  aria-current={activeSessionId === session.id ? 'true' : undefined}
                   className={`group relative flex w-full flex-col items-start rounded-xl px-4 py-3 text-left transition-all duration-150 ${
                     activeSessionId === session.id
                       ? 'bg-white/[0.12] text-white'
