@@ -9,6 +9,9 @@ from src.application.auto_agent_builder.schemas import (
     AutoBuildResponse,
     AutoBuildSessionStatusResponse,
 )
+from src.application.middleware_agent.create_middleware_agent_use_case import (
+    CreateMiddlewareAgentUseCase,
+)
 
 router = APIRouter(prefix="/api/v3/agents/auto", tags=["auto-agent-builder"])
 
@@ -25,13 +28,21 @@ def get_session_repository():
     raise NotImplementedError
 
 
+def get_create_middleware_agent_use_case() -> CreateMiddlewareAgentUseCase:
+    # DB-001 §10.4: 요청 스코프로 Depends(get_session) 체인 주입 (main.py 에서 override).
+    raise NotImplementedError
+
+
 @router.post("", response_model=AutoBuildResponse, status_code=202)
 async def auto_build(
     request: AutoBuildRequest,
     use_case: AutoBuildUseCase = Depends(get_auto_build_use_case),
+    create_agent_uc: CreateMiddlewareAgentUseCase = Depends(
+        get_create_middleware_agent_use_case
+    ),
 ):
     """자연어 요청 → 자동 에이전트 빌드 시작."""
-    return await use_case.execute(request)
+    return await use_case.execute(request, create_agent_use_case=create_agent_uc)
 
 
 @router.post("/{session_id}/reply", response_model=AutoBuildResponse)
@@ -39,9 +50,14 @@ async def auto_build_reply(
     session_id: str,
     request: AutoBuildReplyRequest,
     use_case: AutoBuildReplyUseCase = Depends(get_auto_build_reply_use_case),
+    create_agent_uc: CreateMiddlewareAgentUseCase = Depends(
+        get_create_middleware_agent_use_case
+    ),
 ):
     """보충 질문 답변 제출 → 재추론 → 에이전트 생성."""
-    return await use_case.execute(session_id, request)
+    return await use_case.execute(
+        session_id, request, create_agent_use_case=create_agent_uc
+    )
 
 
 @router.get("/{session_id}", response_model=AutoBuildSessionStatusResponse)

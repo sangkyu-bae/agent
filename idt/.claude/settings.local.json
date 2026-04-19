@@ -53,7 +53,8 @@
       "Bash(mkdir -p C:/sangplus/idt/tests/infrastructure/excel_export)",
       "Bash(mkdir -p \"C:/sangplus/idt/.claude/skills/langchain-middleware\")",
       "Bash(cp \"C:/sangplus/idt/.claude/langchain-middleware/SKILL.md\" \"C:/sangplus/idt/.claude/skills/langchain-middleware/SKILL.md\")",
-      "Skill(pdca)"
+      "Skill(pdca)",
+      "Bash(git stash *)"
     ]
   }
 }

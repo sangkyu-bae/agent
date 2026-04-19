@@ -9,6 +9,7 @@ from src.api.routes.auto_agent_builder_router import (
     get_auto_build_use_case,
     get_auto_build_reply_use_case,
     get_session_repository,
+    get_create_middleware_agent_use_case,
 )
 from src.application.auto_agent_builder.schemas import AutoBuildResponse, AutoBuildSessionStatusResponse
 from src.domain.auto_agent_builder.schemas import AutoBuildSession
@@ -24,6 +25,8 @@ def _make_app(build_uc=None, reply_uc=None, session_repo=None) -> FastAPI:
         app.dependency_overrides[get_auto_build_reply_use_case] = lambda: reply_uc
     if session_repo:
         app.dependency_overrides[get_session_repository] = lambda: session_repo
+    # DB-001 §10.4: auto_build/reply routes now also depend on this
+    app.dependency_overrides[get_create_middleware_agent_use_case] = lambda: AsyncMock()
     return app
 
 

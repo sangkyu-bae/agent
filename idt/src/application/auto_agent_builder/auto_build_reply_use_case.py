@@ -15,16 +15,19 @@ class AutoBuildReplyUseCase:
         self,
         inference_service: AgentSpecInferenceService,
         session_repository: AutoBuildSessionRepositoryInterface,
-        create_agent_use_case,
         logger: LoggerInterface,
     ) -> None:
+        # DB-001 §10.4: lifespan singleton UC 는 DB 세션 보유 UC 를 생성자에서 받지 않는다.
         self._inference = inference_service
         self._session_repo = session_repository
-        self._create_agent = create_agent_use_case
         self._logger = logger
 
     async def execute(
-        self, session_id: str, request: AutoBuildReplyRequest
+        self,
+        session_id: str,
+        request: AutoBuildReplyRequest,
+        *,
+        create_agent_use_case,
     ) -> AutoBuildResponse:
         self._logger.info(
             "AutoBuildReplyUseCase start",
@@ -55,7 +58,10 @@ class AutoBuildReplyUseCase:
                 )
                 AutoAgentBuilderPolicy.validate_tool_ids(spec.tool_ids, available_ids)
                 forced = replace(spec, clarifying_questions=[])
-                return await self._do_create(forced, session, request.request_id)
+                return await self._do_create(
+                    forced, session, request.request_id,
+                    create_agent_use_case=create_agent_use_case,
+                )
 
             spec = await self._inference.infer(
                 session.user_request,
@@ -66,7 +72,10 @@ class AutoBuildReplyUseCase:
             AutoAgentBuilderPolicy.validate_tool_ids(spec.tool_ids, available_ids)
 
             if AutoAgentBuilderPolicy.is_confident_enough(spec):
-                return await self._do_create(spec, session, request.request_id)
+                return await self._do_create(
+                    spec, session, request.request_id,
+                    create_agent_use_case=create_agent_use_case,
+                )
 
             session.add_questions(spec.clarifying_questions)
             await self._session_repo.save(session)
@@ -92,7 +101,11 @@ class AutoBuildReplyUseCase:
             )
             raise
 
-    async def _do_create(self, spec, session, request_id: str) -> AutoBuildResponse:
+    async def _do_create(
+        self, spec, session, request_id: str,
+        *,
+        create_agent_use_case,
+    ) -> AutoBuildResponse:
         from src.application.middleware_agent.schemas import (
             CreateMiddlewareAgentRequest,
             MiddlewareConfigRequest,
@@ -110,7 +123,7 @@ class AutoBuildReplyUseCase:
             ],
             request_id=request_id,
         )
-        created = await self._create_agent.execute(create_request)
+        created = await create_agent_use_case.execute(create_request)
         session.status = "created"
         session.created_agent_id = created.agent_id
         await self._session_repo.save(session)

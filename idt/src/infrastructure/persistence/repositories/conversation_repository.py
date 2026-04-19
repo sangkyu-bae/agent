@@ -32,17 +32,18 @@ class SQLAlchemyConversationMessageRepository(ConversationMessageRepository):
     async def save(self, message: ConversationMessage) -> ConversationMessage:
         """Save a conversation message.
 
+        DB-001 §10.3: 트랜잭션 경계는 `get_session` dependency 가 책임진다.
+        Repository 는 flush 까지만 수행하고 commit 하지 않는다.
+
         Args:
             message: The message to save
 
         Returns:
-            The saved message with its assigned ID
+            The saved message with its assigned ID (flush 후 auto-assigned)
         """
         model = ConversationMessageMapper.to_model(message)
         self._session.add(model)
         await self._session.flush()
-        await self._session.commit()
-        await self._session.refresh(model)
         return ConversationMessageMapper.to_entity(model)
 
     async def find_by_id(
