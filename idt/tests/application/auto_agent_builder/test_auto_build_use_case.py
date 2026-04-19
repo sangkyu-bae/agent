@@ -47,7 +47,6 @@ def _make_use_case(spec: AgentSpecResult):
     uc = AutoBuildUseCase(
         inference_service=inference,
         session_repository=session_repo,
-        create_agent_use_case=create_agent_uc,
         logger=logger,
     )
     return uc, inference, session_repo, create_agent_uc
@@ -58,9 +57,9 @@ class TestExecuteConfident:
     @pytest.mark.asyncio
     async def test_returns_created_status_when_confident(self):
         spec = _make_spec(confident=True)
-        uc, _, _, _ = _make_use_case(spec)
+        uc, _, _, create_agent_uc = _make_use_case(spec)
 
-        result = await uc.execute(_make_request())
+        result = await uc.execute(_make_request(), create_agent_use_case=create_agent_uc)
 
         assert result.status == "created"
         assert result.agent_id == "agent-uuid"
@@ -70,16 +69,16 @@ class TestExecuteConfident:
         spec = _make_spec(confident=True)
         uc, _, _, create_agent_uc = _make_use_case(spec)
 
-        await uc.execute(_make_request())
+        await uc.execute(_make_request(), create_agent_use_case=create_agent_uc)
 
         create_agent_uc.execute.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_saves_session_with_created_status(self):
         spec = _make_spec(confident=True)
-        uc, _, session_repo, _ = _make_use_case(spec)
+        uc, _, session_repo, create_agent_uc = _make_use_case(spec)
 
-        await uc.execute(_make_request())
+        await uc.execute(_make_request(), create_agent_use_case=create_agent_uc)
 
         session_repo.save.assert_awaited_once()
         saved: AutoBuildSession = session_repo.save.call_args[0][0]
@@ -89,9 +88,9 @@ class TestExecuteConfident:
     @pytest.mark.asyncio
     async def test_response_includes_tool_ids_and_middlewares(self):
         spec = _make_spec(confident=True)
-        uc, _, _, _ = _make_use_case(spec)
+        uc, _, _, create_agent_uc = _make_use_case(spec)
 
-        result = await uc.execute(_make_request())
+        result = await uc.execute(_make_request(), create_agent_use_case=create_agent_uc)
 
         assert result.tool_ids == ["excel_export"]
         assert result.middlewares_applied == ["summarization"]
@@ -102,9 +101,9 @@ class TestExecuteNeedsClarity:
     @pytest.mark.asyncio
     async def test_returns_needs_clarification_when_uncertain(self):
         spec = _make_spec(confident=False)
-        uc, _, _, _ = _make_use_case(spec)
+        uc, _, _, create_agent_uc = _make_use_case(spec)
 
-        result = await uc.execute(_make_request())
+        result = await uc.execute(_make_request(), create_agent_use_case=create_agent_uc)
 
         assert result.status == "needs_clarification"
         assert result.questions == ["데이터 소스는 어디인가요?"]
@@ -112,9 +111,9 @@ class TestExecuteNeedsClarity:
     @pytest.mark.asyncio
     async def test_saves_session_pending_when_uncertain(self):
         spec = _make_spec(confident=False)
-        uc, _, session_repo, _ = _make_use_case(spec)
+        uc, _, session_repo, create_agent_uc = _make_use_case(spec)
 
-        await uc.execute(_make_request())
+        await uc.execute(_make_request(), create_agent_use_case=create_agent_uc)
 
         session_repo.save.assert_awaited_once()
         saved: AutoBuildSession = session_repo.save.call_args[0][0]
@@ -126,7 +125,7 @@ class TestExecuteNeedsClarity:
         spec = _make_spec(confident=False)
         uc, _, _, create_agent_uc = _make_use_case(spec)
 
-        await uc.execute(_make_request())
+        await uc.execute(_make_request(), create_agent_use_case=create_agent_uc)
 
         create_agent_uc.execute.assert_not_awaited()
 
@@ -136,10 +135,10 @@ class TestExecuteErrorHandling:
     @pytest.mark.asyncio
     async def test_logs_error_and_reraises_on_exception(self):
         spec = _make_spec(confident=True)
-        uc, inference, _, _ = _make_use_case(spec)
+        uc, inference, _, create_agent_uc = _make_use_case(spec)
         inference.infer = AsyncMock(side_effect=RuntimeError("LLM down"))
 
         with pytest.raises(RuntimeError, match="LLM down"):
-            await uc.execute(_make_request())
+            await uc.execute(_make_request(), create_agent_use_case=create_agent_uc)
 
         uc._logger.error.assert_called_once()

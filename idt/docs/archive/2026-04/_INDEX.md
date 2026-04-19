@@ -5,3 +5,4 @@
 | 피처 | 완료일 | Match Rate | 테스트 | 경로 |
 |------|--------|-----------|--------|------|
 | chat-history-api | 2026-04-17 | 98% | 18 passing | [→](./chat-history-api/) |
+| db-session-leak-fix | 2026-04-19 | 100% | — | [→](./db-session-leak-fix/) |

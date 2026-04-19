@@ -53,14 +53,18 @@ def get_session_factory() -> async_sessionmaker[AsyncSession]:
 
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
-    """Dependency for getting database sessions.
+    """Per-request AsyncSession with automatic commit/rollback (DB-001 §10.2).
+
+    요청 1건 = AsyncSession 1개 = 트랜잭션 1건 원칙.
+
+    - 정상 종료: `session.begin()` 블록 종료 시 자동 commit
+    - 예외 전파: `session.begin()` 블록이 자동 rollback
+    - 어느 경우든 `async with factory()` 가 세션을 close → 풀 반환
 
     Yields:
-        AsyncSession instance that is automatically closed after use
+        AsyncSession 인스턴스 (요청 스코프, 자동 트랜잭션 경계)
     """
     factory = get_session_factory()
     async with factory() as session:
-        try:
+        async with session.begin():
             yield session
-        finally:
-            await session.close()

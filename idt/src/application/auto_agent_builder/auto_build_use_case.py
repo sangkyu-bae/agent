@@ -17,15 +17,20 @@ class AutoBuildUseCase:
         self,
         inference_service: AgentSpecInferenceService,
         session_repository: AutoBuildSessionRepositoryInterface,
-        create_agent_use_case,
         logger: LoggerInterface,
     ) -> None:
+        # DB-001 §10.4: lifespan singleton UC 는 DB 세션 보유 UC 를 생성자에서 받지 않는다.
+        # create_agent_use_case 는 execute() 호출 시 요청 스코프로 주입받는다.
         self._inference = inference_service
         self._session_repo = session_repository
-        self._create_agent = create_agent_use_case
         self._logger = logger
 
-    async def execute(self, request: AutoBuildRequest) -> AutoBuildResponse:
+    async def execute(
+        self,
+        request: AutoBuildRequest,
+        *,
+        create_agent_use_case,
+    ) -> AutoBuildResponse:
         self._logger.info(
             "AutoBuildUseCase start",
             request_id=request.request_id,
@@ -43,7 +48,10 @@ class AutoBuildUseCase:
             expires = now + timedelta(seconds=AutoAgentBuilderPolicy.SESSION_TTL_SECONDS)
 
             if AutoAgentBuilderPolicy.is_confident_enough(spec):
-                return await self._create_and_respond(spec, request, session_id, now, expires)
+                return await self._create_and_respond(
+                    spec, request, session_id, now, expires,
+                    create_agent_use_case=create_agent_use_case,
+                )
 
             session = AutoBuildSession(
                 session_id=session_id,
@@ -84,6 +92,8 @@ class AutoBuildUseCase:
     async def _create_and_respond(
         self, spec, request: AutoBuildRequest, session_id: str,
         now: datetime, expires: datetime,
+        *,
+        create_agent_use_case,
     ) -> AutoBuildResponse:
         from src.application.middleware_agent.schemas import (
             CreateMiddlewareAgentRequest,
@@ -106,7 +116,7 @@ class AutoBuildUseCase:
             ],
             request_id=request.request_id,
         )
-        created = await self._create_agent.execute(create_request)
+        created = await create_agent_use_case.execute(create_request)
 
         session = AutoBuildSession(
             session_id=session_id,

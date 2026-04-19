@@ -28,6 +28,7 @@ class UserRepository(UserRepositoryInterface):
         self._logger = logger
 
     async def save(self, user: User) -> User:
+        # DB-001 §10.3: commit 은 dependency 가 담당. flush 까지만.
         model = UserModel(
             email=user.email,
             password_hash=user.password_hash,
@@ -37,7 +38,6 @@ class UserRepository(UserRepositoryInterface):
         self._session.add(model)
         await self._session.flush()
         await self._session.refresh(model)
-        await self._session.commit()
         self._logger.info("User saved", user_id=model.id)
         return _to_entity(model)
 
@@ -62,10 +62,10 @@ class UserRepository(UserRepositoryInterface):
         return [_to_entity(m) for m in result.scalars().all()]
 
     async def update_status(self, user_id: int, status: UserStatus) -> None:
+        # DB-001 §10.3: commit 은 dependency 가 담당.
         await self._session.execute(
             update(UserModel)
             .where(UserModel.id == user_id)
             .values(status=status.value)
         )
-        await self._session.commit()
         self._logger.info("User status updated", user_id=user_id, status=status.value)

@@ -1,6 +1,6 @@
 {
   "version": "2.0",
-  "lastUpdated": "2026-04-17T07:00:00.000Z",
+  "lastUpdated": "2026-04-18T08:36:28.857Z",
   "activeFeatures": [
     "api",
     "routes",
@@ -36,7 +36,8 @@
     "general_chat",
     "general-chat-api",
     "__tests__",
-    "repositories"
+    "repositories",
+    "auth"
   ],
   "primaryFeature": "auto-agent-builder",
   "archivedFeatures": {
@@ -55,6 +56,14 @@
       "startedAt": "2026-04-17T00:00:00.000Z",
       "archivedAt": "2026-04-17T00:00:00.000Z",
       "archivedTo": "docs/archive/2026-04/chat-history-api/"
+    },
+    "db-session-leak-fix": {
+      "phase": "archived",
+      "matchRate": 100,
+      "iterationCount": 0,
+      "startedAt": "2026-04-18T00:00:00.000Z",
+      "archivedAt": "2026-04-19T00:00:00.000Z",
+      "archivedTo": "docs/archive/2026-04/db-session-leak-fix/"
     }
   },
   "features": {
@@ -67,7 +76,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-04T10:53:02.380Z",
-        "lastUpdated": "2026-04-17T06:42:25.841Z"
+        "lastUpdated": "2026-04-18T08:36:28.856Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\api\\main.py"
     },
@@ -262,9 +271,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-17T02:48:38.247Z",
-        "lastUpdated": "2026-03-17T02:49:38.120Z"
+        "lastUpdated": "2026-04-18T08:30:44.598Z"
       },
-      "lastFile": "C:\\sangplus\\idt\\src\\infrastructure\\persistence\\mysql_base_repository.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\infrastructure\\persistence\\database.py"
     },
     "conversation": {
       "phase": "do",
@@ -519,9 +528,22 @@
       "documents": {},
       "timestamps": {
         "started": "2026-04-17T06:40:30.209Z",
-        "lastUpdated": "2026-04-17T06:41:06.405Z"
+        "lastUpdated": "2026-04-18T08:30:51.012Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\infrastructure\\persistence\\repositories\\conversation_repository.py"
+    },
+    "auth": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-04-18T08:30:58.476Z",
+        "lastUpdated": "2026-04-18T08:31:14.483Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\infrastructure\\auth\\refresh_token_repository.py"
     }
   },
   "pipeline": {
@@ -532,7 +554,7 @@
   "session": {
     "startedAt": "2026-03-04T10:49:14.367Z",
     "onboardingCompleted": false,
-    "lastActivity": "2026-04-17T06:42:25.841Z"
+    "lastActivity": "2026-04-18T08:36:28.857Z"
   },
   "history": [
     {
@@ -2817,6 +2839,102 @@
     },
     {
       "timestamp": "2026-04-17T06:42:25.841Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-18T08:30:06.479Z",
+      "feature": "persistence",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-18T08:30:44.598Z",
+      "feature": "persistence",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-18T08:30:51.012Z",
+      "feature": "repositories",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-18T08:30:58.476Z",
+      "feature": "auth",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-18T08:31:02.999Z",
+      "feature": "auth",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-18T08:31:07.855Z",
+      "feature": "auth",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-18T08:31:14.483Z",
+      "feature": "auth",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-18T08:32:53.649Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-18T08:32:57.649Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-18T08:33:08.371Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-18T08:33:24.473Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-18T08:33:38.295Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-18T08:33:53.006Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-18T08:34:04.381Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-18T08:34:38.365Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-18T08:36:28.856Z",
       "feature": "api",
       "phase": "do",
       "action": "updated"

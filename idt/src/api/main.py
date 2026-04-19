@@ -9,9 +9,10 @@ from contextlib import asynccontextmanager
 from typing import Optional
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from qdrant_client import AsyncQdrantClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
 # Load .env file into environment variables (for LangChain/OpenAI)
 load_dotenv()
@@ -82,6 +83,7 @@ from src.api.routes.auto_agent_builder_router import (
     get_auto_build_use_case,
     get_auto_build_reply_use_case,
     get_session_repository as get_auto_build_session_repository,
+    get_create_middleware_agent_use_case as get_auto_build_create_agent_uc,
 )
 from src.application.doc_chunk.use_case import DocChunkUseCase
 from src.application.hybrid_search.use_case import HybridSearchUseCase
@@ -132,7 +134,7 @@ from src.infrastructure.web_search.tavily_tool import TavilySearchTool
 from src.application.hallucination.use_case import HallucinationEvaluatorUseCase
 from src.infrastructure.hallucination.adapter import HallucinationEvaluatorAdapter
 from src.infrastructure.tools.sandbox_executor import SandboxExecutor
-from src.infrastructure.persistence.database import get_session_factory
+from src.infrastructure.persistence.database import get_session, get_session_factory
 from src.infrastructure.persistence.repositories.conversation_repository import (
     SQLAlchemyConversationMessageRepository,
 )
@@ -393,12 +395,15 @@ def get_configured_rag_agent_use_case() -> RAGAgentUseCase:
 
 
 def create_conversation_use_case_factory():
-    """Return a per-request factory for ConversationUseCase."""
+    """Return a per-request factory for ConversationUseCase.
+
+    DB-001 §10.2: 세션은 `get_session` dependency 로 주입받아 repository 가 공유한다.
+    """
     app_logger = get_app_logger()
 
-    async def _factory() -> ConversationUseCase:
-        factory = get_session_factory()
-        session = factory()
+    async def _factory(
+        session: AsyncSession = Depends(get_session),
+    ) -> ConversationUseCase:
         message_repo = SQLAlchemyConversationMessageRepository(session)
         summary_repo = SQLAlchemyConversationSummaryRepository(session)
         summarizer = LangChainSummarizer(
@@ -713,7 +718,11 @@ def get_configured_doc_chunk_use_case() -> DocChunkUseCase:
 
 
 def create_auto_build_components():
-    """Create AutoBuildUseCase, AutoBuildReplyUseCase, AutoBuildSessionRepository."""
+    """Create AutoBuildUseCase, AutoBuildReplyUseCase, AutoBuildSessionRepository.
+
+    DB-001 §10.4: AutoBuild*UseCase 는 lifespan singleton 으로 유지하되,
+    DB session 을 가진 CreateMiddlewareAgentUseCase 는 execute() 호출 시점에 주입받는다.
+    """
     import redis
     app_logger = get_app_logger()
 
@@ -730,15 +739,6 @@ def create_auto_build_components():
     redis_repo = RedisRepository(client=redis_client)
     session_repo = AutoBuildSessionRepository(redis=redis_repo)
 
-    # CreateMiddlewareAgentUseCase (AGENT-005 재사용, per-request MySQL session)
-    def _make_create_middleware_agent_uc():
-        session = get_session_factory()()
-        middleware_agent_repo = MiddlewareAgentRepository(session=session)
-        return CreateMiddlewareAgentUseCase(
-            repository=middleware_agent_repo,
-            logger=app_logger,
-        )
-
     inference_service = AgentSpecInferenceService(
         model_name=settings.openai_llm_model,
         logger=app_logger,
@@ -747,17 +747,34 @@ def create_auto_build_components():
     auto_build_uc = AutoBuildUseCase(
         inference_service=inference_service,
         session_repository=session_repo,
-        create_agent_use_case=_make_create_middleware_agent_uc(),
         logger=app_logger,
     )
     auto_build_reply_uc = AutoBuildReplyUseCase(
         inference_service=inference_service,
         session_repository=session_repo,
-        create_agent_use_case=_make_create_middleware_agent_uc(),
         logger=app_logger,
     )
 
     return auto_build_uc, auto_build_reply_uc, session_repo
+
+
+def create_middleware_agent_use_case_factory():
+    """요청 스코프 CreateMiddlewareAgentUseCase 팩토리 (DB-001 §10.4).
+
+    AutoBuild*UseCase.execute() 에서 kwarg 로 주입된다.
+    """
+    app_logger = get_app_logger()
+
+    def _factory(
+        session: AsyncSession = Depends(get_session),
+    ) -> CreateMiddlewareAgentUseCase:
+        middleware_agent_repo = MiddlewareAgentRepository(session=session)
+        return CreateMiddlewareAgentUseCase(
+            repository=middleware_agent_repo,
+            logger=app_logger,
+        )
+
+    return _factory
 
 
 def get_configured_auto_build_use_case() -> AutoBuildUseCase:
@@ -802,67 +819,66 @@ def create_auth_factories():
     jwt_adapter = JWTAdapter(config=auth_config)
     password_hasher = BcryptPasswordHasher()
 
-    def _make_user_repo():
-        session = get_session_factory()()
+    # DB-001 §10.2: session 은 Depends(get_session) 으로 주입, repo 간 공유.
+    def _make_user_repo(session: AsyncSession):
         return UserRepository(session=session, logger=app_logger)
 
-    def _make_rt_repo():
-        session = get_session_factory()()
+    def _make_rt_repo(session: AsyncSession):
         return RefreshTokenRepository(session=session, logger=app_logger)
 
-    def register_factory():
+    def register_factory(session: AsyncSession = Depends(get_session)):
         return RegisterUseCase(
-            user_repo=_make_user_repo(),
+            user_repo=_make_user_repo(session),
             password_hasher=password_hasher,
             logger=app_logger,
         )
 
-    def login_factory():
+    def login_factory(session: AsyncSession = Depends(get_session)):
         return LoginUseCase(
-            user_repo=_make_user_repo(),
-            refresh_token_repo=_make_rt_repo(),
+            user_repo=_make_user_repo(session),
+            refresh_token_repo=_make_rt_repo(session),
             password_hasher=password_hasher,
             jwt_adapter=jwt_adapter,
             logger=app_logger,
         )
 
-    def refresh_factory():
+    def refresh_factory(session: AsyncSession = Depends(get_session)):
         return RefreshTokenUseCase(
-            rt_repo=_make_rt_repo(),
+            rt_repo=_make_rt_repo(session),
             jwt_adapter=jwt_adapter,
             logger=app_logger,
         )
 
-    def logout_factory():
+    def logout_factory(session: AsyncSession = Depends(get_session)):
         return LogoutUseCase(
-            rt_repo=_make_rt_repo(),
+            rt_repo=_make_rt_repo(session),
             jwt_adapter=jwt_adapter,
             logger=app_logger,
         )
 
-    def pending_users_factory():
+    def pending_users_factory(session: AsyncSession = Depends(get_session)):
         return GetPendingUsersUseCase(
-            user_repo=_make_user_repo(),
+            user_repo=_make_user_repo(session),
             logger=app_logger,
         )
 
-    def approve_factory():
+    def approve_factory(session: AsyncSession = Depends(get_session)):
         return ApproveUserUseCase(
-            user_repo=_make_user_repo(),
+            user_repo=_make_user_repo(session),
             logger=app_logger,
         )
 
-    def reject_factory():
+    def reject_factory(session: AsyncSession = Depends(get_session)):
         return RejectUserUseCase(
-            user_repo=_make_user_repo(),
+            user_repo=_make_user_repo(session),
             logger=app_logger,
         )
 
     def jwt_adapter_factory():
         return jwt_adapter
 
-    def user_repo_factory():
-        return _make_user_repo()
+    def user_repo_factory(session: AsyncSession = Depends(get_session)):
+        return _make_user_repo(session)
 
     return (
         register_factory,
@@ -878,11 +894,15 @@ def create_auth_factories():
 
 
 def create_history_use_case_factory():
-    """Return a per-request factory for ConversationHistoryUseCase."""
+    """Return a per-request factory for ConversationHistoryUseCase.
+
+    DB-001 §10.2: 세션은 Depends(get_session) 주입.
+    """
     app_logger = get_app_logger()
 
-    def _factory() -> ConversationHistoryUseCase:
-        session = get_session_factory()()
+    def _factory(
+        session: AsyncSession = Depends(get_session),
+    ) -> ConversationHistoryUseCase:
         repo = SQLAlchemyConversationMessageRepository(session)
         return ConversationHistoryUseCase(repo=repo, logger=app_logger)
 
@@ -890,13 +910,17 @@ def create_history_use_case_factory():
 
 
 def create_general_chat_use_case_factory():
-    """Return a per-request factory for GeneralChatUseCase."""
+    """Return a per-request factory for GeneralChatUseCase.
+
+    DB-001 §10.1/§10.2: message/summary/mcp 는 동일 세션 공유, Depends(get_session) 주입.
+    """
     app_logger = get_app_logger()
 
-    async def _factory() -> GeneralChatUseCase:
-        session_factory = get_session_factory()
-        message_repo = SQLAlchemyConversationMessageRepository(session_factory())
-        summary_repo = SQLAlchemyConversationSummaryRepository(session_factory())
+    async def _factory(
+        session: AsyncSession = Depends(get_session),
+    ) -> GeneralChatUseCase:
+        message_repo = SQLAlchemyConversationMessageRepository(session)
+        summary_repo = SQLAlchemyConversationSummaryRepository(session)
         summarizer = LangChainSummarizer(
             model_name=settings.openai_llm_model,
             api_key=settings.openai_api_key,
@@ -915,9 +939,9 @@ def create_general_chat_use_case_factory():
             request_id="",
         )
 
-        # 도구: MCP Tools (LoadMCPToolsUseCase via DB)
+        # 도구: MCP Tools (LoadMCPToolsUseCase via DB) — 동일 세션 공유
         mcp_repo = MCPServerRepository(
-            session=session_factory(), logger=app_logger
+            session=session, logger=app_logger
         )
         mcp_loader = MCPToolLoader(logger=app_logger)
         load_mcp_uc = LoadMCPToolsUseCase(
@@ -972,38 +996,38 @@ def create_agent_builder_factories():
     # 인터뷰 세션 스토어는 앱 전체에서 공유 (싱글턴)
     interview_session_store = InMemoryInterviewSessionStore()
 
-    def _make_repo():
-        session = get_session_factory()()
+    # DB-001 §10.2: session 은 Depends(get_session) 으로 주입.
+    def _make_repo(session: AsyncSession):
         return AgentDefinitionRepository(session=session, logger=app_logger)
 
-    def create_uc_factory():
+    def create_uc_factory(session: AsyncSession = Depends(get_session)):
         return CreateAgentUseCase(
             tool_selector=tool_selector,
             prompt_generator=prompt_generator,
-            repository=_make_repo(),
+            repository=_make_repo(session),
             logger=app_logger,
         )
 
-    def update_uc_factory():
-        return UpdateAgentUseCase(repository=_make_repo(), logger=app_logger)
+    def update_uc_factory(session: AsyncSession = Depends(get_session)):
+        return UpdateAgentUseCase(repository=_make_repo(session), logger=app_logger)
 
-    def run_uc_factory():
+    def run_uc_factory(session: AsyncSession = Depends(get_session)):
         return RunAgentUseCase(
-            repository=_make_repo(),
+            repository=_make_repo(session),
             compiler=workflow_compiler,
             openai_api_key=settings.openai_api_key,
             logger=app_logger,
         )
 
-    def get_uc_factory():
-        return GetAgentUseCase(repository=_make_repo(), logger=app_logger)
+    def get_uc_factory(session: AsyncSession = Depends(get_session)):
+        return GetAgentUseCase(repository=_make_repo(session), logger=app_logger)
 
-    def interview_uc_factory():
+    def interview_uc_factory(session: AsyncSession = Depends(get_session)):
         return InterviewUseCase(
             interviewer=interviewer,
             tool_selector=tool_selector,
             prompt_generator=prompt_generator,
-            repository=_make_repo(),
+            repository=_make_repo(session),
             session_store=interview_session_store,
             logger=app_logger,
         )
@@ -1115,6 +1139,7 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_auto_build_use_case] = get_configured_auto_build_use_case
     app.dependency_overrides[get_auto_build_reply_use_case] = get_configured_auto_build_reply_use_case
     app.dependency_overrides[get_auto_build_session_repository] = get_configured_auto_build_session_repository
+    app.dependency_overrides[get_auto_build_create_agent_uc] = create_middleware_agent_use_case_factory()
 
     # Auth DI
     (

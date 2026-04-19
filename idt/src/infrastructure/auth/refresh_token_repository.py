@@ -16,6 +16,7 @@ class RefreshTokenRepository(RefreshTokenRepositoryInterface):
         self._logger = logger
 
     async def save(self, user_id: int, token_hash: str, expires_at: datetime) -> None:
+        # DB-001 §10.3: commit 은 dependency 가 담당. flush 까지만.
         model = RefreshTokenModel(
             user_id=user_id,
             token_hash=token_hash,
@@ -23,7 +24,6 @@ class RefreshTokenRepository(RefreshTokenRepositoryInterface):
         )
         self._session.add(model)
         await self._session.flush()
-        await self._session.commit()
         self._logger.info("RefreshToken saved", user_id=user_id)
 
     async def find_valid(self, token_hash: str) -> Optional[dict]:
@@ -46,6 +46,7 @@ class RefreshTokenRepository(RefreshTokenRepositoryInterface):
         }
 
     async def revoke(self, token_hash: str) -> None:
+        # DB-001 §10.3: commit 은 dependency 가 담당.
         now = datetime.now(timezone.utc)
         await self._session.execute(
             update(RefreshTokenModel)
@@ -55,5 +56,4 @@ class RefreshTokenRepository(RefreshTokenRepositoryInterface):
             )
             .values(revoked_at=now)
         )
-        await self._session.commit()
         self._logger.info("RefreshToken revoked", token_hash=token_hash[:8] + "...")
