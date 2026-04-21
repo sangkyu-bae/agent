@@ -7,3 +7,4 @@
 | chat-history-api | 2026-04-17 | 98% | 18 passing | [→](./chat-history-api/) |
 | db-session-leak-fix | 2026-04-19 | 100% | — | [→](./db-session-leak-fix/) |
 | shared-custom-agent | 2026-04-20 | 100% | passing | [→](./shared-custom-agent/) |
+| missing-di-wiring | 2026-04-21 | 100% | — | [→](./missing-di-wiring/) |
