@@ -2,7 +2,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -29,8 +29,11 @@ class AgentDefinitionRepository(AgentDefinitionRepositoryInterface):
                 description=agent.description,
                 system_prompt=agent.system_prompt,
                 flow_hint=agent.flow_hint,
-                model_name=agent.model_name,
+                llm_model_id=agent.llm_model_id,
                 status=agent.status,
+                visibility=agent.visibility,
+                department_id=agent.department_id,
+                temperature=agent.temperature,
                 created_at=agent.created_at,
                 updated_at=agent.updated_at,
                 tools=[
@@ -92,6 +95,9 @@ class AgentDefinitionRepository(AgentDefinitionRepositoryInterface):
             model = result.scalar_one()
             model.system_prompt = agent.system_prompt
             model.name = agent.name
+            model.visibility = agent.visibility
+            model.department_id = agent.department_id
+            model.temperature = agent.temperature
             model.updated_at = datetime.now(timezone.utc)
             await self._session.flush()
             self._logger.info(
@@ -125,6 +131,98 @@ class AgentDefinitionRepository(AgentDefinitionRepositoryInterface):
             )
             raise
 
+    async def list_accessible(
+        self,
+        viewer_user_id: str,
+        viewer_department_ids: list[str],
+        scope: str,
+        search: str | None,
+        page: int,
+        size: int,
+        request_id: str,
+    ) -> tuple[list[AgentDefinition], int]:
+        self._logger.info(
+            "AgentDefinition list_accessible",
+            request_id=request_id,
+            scope=scope,
+        )
+        try:
+            base = select(AgentDefinitionModel).where(
+                AgentDefinitionModel.status != "deleted"
+            )
+
+            if scope == "mine":
+                base = base.where(AgentDefinitionModel.user_id == viewer_user_id)
+            elif scope == "department":
+                base = base.where(
+                    AgentDefinitionModel.visibility == "department",
+                    AgentDefinitionModel.department_id.in_(viewer_department_ids),
+                )
+            elif scope == "public":
+                base = base.where(AgentDefinitionModel.visibility == "public")
+            else:
+                base = base.where(
+                    or_(
+                        AgentDefinitionModel.user_id == viewer_user_id,
+                        AgentDefinitionModel.visibility == "public",
+                        and_(
+                            AgentDefinitionModel.visibility == "department",
+                            AgentDefinitionModel.department_id.in_(
+                                viewer_department_ids if viewer_department_ids else [""]
+                            ),
+                        ),
+                    )
+                )
+
+            if search:
+                like_pattern = f"%{search}%"
+                base = base.where(
+                    or_(
+                        AgentDefinitionModel.name.ilike(like_pattern),
+                        AgentDefinitionModel.description.ilike(like_pattern),
+                    )
+                )
+
+            count_stmt = select(func.count()).select_from(base.subquery())
+            total = (await self._session.execute(count_stmt)).scalar_one()
+
+            offset = (page - 1) * size
+            data_stmt = (
+                base.options(selectinload(AgentDefinitionModel.tools))
+                .order_by(AgentDefinitionModel.created_at.desc())
+                .offset(offset)
+                .limit(size)
+            )
+            result = await self._session.execute(data_stmt)
+            agents = [self._to_domain(m) for m in result.scalars().all()]
+
+            return agents, total
+        except Exception as e:
+            self._logger.error(
+                "AgentDefinition list_accessible failed",
+                exception=e, request_id=request_id,
+            )
+            raise
+
+    async def soft_delete(self, agent_id: str, request_id: str) -> None:
+        self._logger.info(
+            "AgentDefinition soft_delete", request_id=request_id, agent_id=agent_id
+        )
+        try:
+            stmt = (
+                update(AgentDefinitionModel)
+                .where(AgentDefinitionModel.id == agent_id)
+                .values(status="deleted", updated_at=datetime.now(timezone.utc))
+            )
+            await self._session.execute(stmt)
+            await self._session.flush()
+        except Exception as e:
+            self._logger.error(
+                "AgentDefinition soft_delete failed",
+                exception=e, request_id=request_id,
+            )
+            raise
+
     def _to_domain(self, model: AgentDefinitionModel) -> AgentDefinition:
         return AgentDefinition(
             id=model.id,
@@ -142,8 +240,11 @@ class AgentDefinitionRepository(AgentDefinitionRepositoryInterface):
                 )
                 for t in sorted(model.tools, key=lambda x: x.sort_order)
             ],
-            model_name=model.model_name,
+            llm_model_id=model.llm_model_id,
             status=model.status,
+            visibility=model.visibility,
+            department_id=model.department_id,
+            temperature=model.temperature,
             created_at=model.created_at,
             updated_at=model.updated_at,
         )

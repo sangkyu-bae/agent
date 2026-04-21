@@ -5,6 +5,7 @@
 #     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 import logging
 import os
+import uuid
 from contextlib import asynccontextmanager
 from typing import Optional
 
@@ -77,6 +78,22 @@ from src.api.routes.agent_builder_router import (
     get_run_agent_use_case,
     get_get_agent_use_case,
     get_interview_use_case,
+    get_list_agents_use_case,
+    get_delete_agent_use_case,
+)
+from src.api.routes.department_router import (
+    router as department_router,
+    get_list_departments_use_case,
+    get_create_department_use_case,
+    get_update_department_use_case,
+    get_delete_department_use_case,
+    get_assign_user_department_use_case,
+    get_remove_user_department_use_case,
+)
+from src.api.routes.tool_catalog_router import (
+    router as tool_catalog_router,
+    get_list_tool_catalog_use_case,
+    get_sync_mcp_tools_use_case,
 )
 from src.api.routes.auto_agent_builder_router import (
     router as auto_agent_builder_router,
@@ -104,7 +121,19 @@ from src.application.agent_builder.get_agent_use_case import GetAgentUseCase
 from src.application.agent_builder.interview_use_case import InterviewUseCase
 from src.application.agent_builder.interviewer import Interviewer
 from src.application.agent_builder.interview_session_store import InMemoryInterviewSessionStore
+from src.application.agent_builder.list_agents_use_case import ListAgentsUseCase
+from src.application.agent_builder.delete_agent_use_case import DeleteAgentUseCase
+from src.application.department.create_department_use_case import CreateDepartmentUseCase
+from src.application.department.list_departments_use_case import ListDepartmentsUseCase
+from src.application.department.update_department_use_case import UpdateDepartmentUseCase
+from src.application.department.delete_department_use_case import DeleteDepartmentUseCase
+from src.application.department.assign_user_department_use_case import AssignUserDepartmentUseCase
+from src.application.department.remove_user_department_use_case import RemoveUserDepartmentUseCase
+from src.application.tool_catalog.list_tool_catalog_use_case import ListToolCatalogUseCase
+from src.application.tool_catalog.sync_mcp_tools_use_case import SyncMcpToolsUseCase
 from src.infrastructure.agent_builder.agent_definition_repository import AgentDefinitionRepository
+from src.infrastructure.department.department_repository import DepartmentRepository
+from src.infrastructure.tool_catalog.tool_catalog_repository import ToolCatalogRepository
 from src.infrastructure.agent_builder.tool_factory import ToolFactory
 from src.infrastructure.elasticsearch.es_client import ElasticsearchClient
 from src.infrastructure.elasticsearch.es_repository import ElasticsearchRepository
@@ -177,6 +206,21 @@ from src.api.routes.admin_router import (
     get_approve_use_case,
     get_reject_use_case,
 )
+from src.api.routes.llm_model_router import (
+    router as llm_model_router,
+    get_create_llm_model_use_case,
+    get_update_llm_model_use_case,
+    get_deactivate_llm_model_use_case,
+    get_get_llm_model_use_case,
+    get_list_llm_models_use_case,
+)
+from src.application.llm_model.create_llm_model_use_case import CreateLlmModelUseCase
+from src.application.llm_model.update_llm_model_use_case import UpdateLlmModelUseCase
+from src.application.llm_model.deactivate_llm_model_use_case import DeactivateLlmModelUseCase
+from src.application.llm_model.get_llm_model_use_case import GetLlmModelUseCase
+from src.application.llm_model.list_llm_models_use_case import ListLlmModelsUseCase
+from src.infrastructure.llm_model.llm_model_repository import LlmModelRepository
+from src.infrastructure.llm_model.seed import seed_default_models
 from src.interfaces.dependencies.auth import get_jwt_adapter, get_user_repository
 from src.application.auth.register_use_case import RegisterUseCase
 from src.application.auth.login_use_case import LoginUseCase
@@ -893,6 +937,55 @@ def create_auth_factories():
     )
 
 
+def create_llm_model_factories():
+    """Return per-request DI factories for LLM Model registry (LLM-MODEL-REG-001).
+
+    DB-001 §10.2: session 은 Depends(get_session) 으로 주입. repo 는 동일 세션 공유.
+    """
+    app_logger = get_app_logger()
+
+    def _make_repo(session: AsyncSession) -> LlmModelRepository:
+        return LlmModelRepository(session=session, logger=app_logger)
+
+    def create_factory(session: AsyncSession = Depends(get_session)) -> CreateLlmModelUseCase:
+        return CreateLlmModelUseCase(repository=_make_repo(session), logger=app_logger)
+
+    def update_factory(session: AsyncSession = Depends(get_session)) -> UpdateLlmModelUseCase:
+        return UpdateLlmModelUseCase(repository=_make_repo(session), logger=app_logger)
+
+    def deactivate_factory(session: AsyncSession = Depends(get_session)) -> DeactivateLlmModelUseCase:
+        return DeactivateLlmModelUseCase(repository=_make_repo(session), logger=app_logger)
+
+    def get_factory(session: AsyncSession = Depends(get_session)) -> GetLlmModelUseCase:
+        return GetLlmModelUseCase(repository=_make_repo(session), logger=app_logger)
+
+    def list_factory(session: AsyncSession = Depends(get_session)) -> ListLlmModelsUseCase:
+        return ListLlmModelsUseCase(repository=_make_repo(session), logger=app_logger)
+
+    return create_factory, update_factory, deactivate_factory, get_factory, list_factory
+
+
+async def seed_llm_models_on_startup() -> None:
+    """서비스 기동 시 기본 LLM 모델 3개 등록 (중복 스킵).
+
+    DB-001 §10.2: get_session_factory()로 단발성 세션 획득 (lifespan 1회만 실행).
+    """
+    app_logger = get_app_logger()
+    request_id = str(uuid.uuid4())
+    factory = get_session_factory()
+    try:
+        async with factory() as session:
+            async with session.begin():
+                repo = LlmModelRepository(session=session, logger=app_logger)
+                await seed_default_models(repo, app_logger, request_id)
+    except Exception as e:
+        app_logger.warning(
+            "LLM model seeding skipped",
+            request_id=request_id,
+            error=str(e),
+        )
+
+
 def create_history_use_case_factory():
     """Return a per-request factory for ConversationHistoryUseCase.
 
@@ -1000,11 +1093,15 @@ def create_agent_builder_factories():
     def _make_repo(session: AsyncSession):
         return AgentDefinitionRepository(session=session, logger=app_logger)
 
+    def _make_llm_model_repo(session: AsyncSession):
+        return LlmModelRepository(session=session, logger=app_logger)
+
     def create_uc_factory(session: AsyncSession = Depends(get_session)):
         return CreateAgentUseCase(
             tool_selector=tool_selector,
             prompt_generator=prompt_generator,
             repository=_make_repo(session),
+            llm_model_repository=_make_llm_model_repo(session),
             logger=app_logger,
         )
 
@@ -1014,13 +1111,19 @@ def create_agent_builder_factories():
     def run_uc_factory(session: AsyncSession = Depends(get_session)):
         return RunAgentUseCase(
             repository=_make_repo(session),
+            llm_model_repository=_make_llm_model_repo(session),
             compiler=workflow_compiler,
-            openai_api_key=settings.openai_api_key,
             logger=app_logger,
         )
 
     def get_uc_factory(session: AsyncSession = Depends(get_session)):
-        return GetAgentUseCase(repository=_make_repo(session), logger=app_logger)
+        from src.infrastructure.department.department_repository import DepartmentRepository as DeptRepo
+        dept_repo = DeptRepo(session=session, logger=app_logger)
+        return GetAgentUseCase(
+            repository=_make_repo(session),
+            dept_repository=dept_repo,
+            logger=app_logger,
+        )
 
     def interview_uc_factory(session: AsyncSession = Depends(get_session)):
         return InterviewUseCase(
@@ -1028,11 +1131,77 @@ def create_agent_builder_factories():
             tool_selector=tool_selector,
             prompt_generator=prompt_generator,
             repository=_make_repo(session),
+            llm_model_repository=_make_llm_model_repo(session),
             session_store=interview_session_store,
             logger=app_logger,
         )
 
-    return create_uc_factory, update_uc_factory, run_uc_factory, get_uc_factory, interview_uc_factory
+    def list_uc_factory(session: AsyncSession = Depends(get_session)):
+        dept_repo = DepartmentRepository(session=session, logger=app_logger)
+        return ListAgentsUseCase(
+            agent_repo=_make_repo(session),
+            dept_repo=dept_repo,
+            logger=app_logger,
+        )
+
+    def delete_uc_factory(session: AsyncSession = Depends(get_session)):
+        return DeleteAgentUseCase(repository=_make_repo(session), logger=app_logger)
+
+    return (
+        create_uc_factory, update_uc_factory, run_uc_factory,
+        get_uc_factory, interview_uc_factory,
+        list_uc_factory, delete_uc_factory,
+    )
+
+
+def create_department_factories():
+    """Return per-request DI factories for Department use cases."""
+    app_logger = get_app_logger()
+
+    def _make_repo(session: AsyncSession):
+        return DepartmentRepository(session=session, logger=app_logger)
+
+    def list_factory(session: AsyncSession = Depends(get_session)):
+        return ListDepartmentsUseCase(repository=_make_repo(session), logger=app_logger)
+
+    def create_factory(session: AsyncSession = Depends(get_session)):
+        return CreateDepartmentUseCase(repository=_make_repo(session), logger=app_logger)
+
+    def update_factory(session: AsyncSession = Depends(get_session)):
+        return UpdateDepartmentUseCase(repository=_make_repo(session), logger=app_logger)
+
+    def delete_factory(session: AsyncSession = Depends(get_session)):
+        return DeleteDepartmentUseCase(repository=_make_repo(session), logger=app_logger)
+
+    def assign_factory(session: AsyncSession = Depends(get_session)):
+        return AssignUserDepartmentUseCase(repository=_make_repo(session), logger=app_logger)
+
+    def remove_factory(session: AsyncSession = Depends(get_session)):
+        return RemoveUserDepartmentUseCase(repository=_make_repo(session), logger=app_logger)
+
+    return list_factory, create_factory, update_factory, delete_factory, assign_factory, remove_factory
+
+
+def create_tool_catalog_factories():
+    """Return per-request DI factories for Tool Catalog use cases."""
+    app_logger = get_app_logger()
+
+    def list_factory(session: AsyncSession = Depends(get_session)):
+        repo = ToolCatalogRepository(session=session, logger=app_logger)
+        return ListToolCatalogUseCase(repository=repo, logger=app_logger)
+
+    def sync_factory(session: AsyncSession = Depends(get_session)):
+        tool_catalog_repo = ToolCatalogRepository(session=session, logger=app_logger)
+        mcp_repo = MCPServerRepository(session=session, logger=app_logger)
+        mcp_loader = MCPToolLoader(logger=app_logger)
+        return SyncMcpToolsUseCase(
+            tool_catalog_repo=tool_catalog_repo,
+            mcp_server_repo=mcp_repo,
+            mcp_tool_loader=mcp_loader,
+            logger=app_logger,
+        )
+
+    return list_factory, sync_factory
 
 
 @asynccontextmanager
@@ -1063,6 +1232,9 @@ async def lifespan(app: FastAPI):
     _auto_build_use_case, _auto_build_reply_use_case, _auto_build_session_repository = (
         create_auto_build_components()
     )
+
+    # LLM Model Registry: 기본 모델 시드 등록 (중복 스킵, 실패 시 경고)
+    await seed_llm_models_on_startup()
 
     yield
 
@@ -1128,12 +1300,34 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_doc_chunk_use_case] = get_configured_doc_chunk_use_case
 
     # Agent Builder DI
-    _create_uc, _update_uc, _run_uc, _get_uc, _interview_uc = create_agent_builder_factories()
+    (
+        _create_uc, _update_uc, _run_uc, _get_uc, _interview_uc,
+        _list_agents_uc, _delete_agent_uc,
+    ) = create_agent_builder_factories()
     app.dependency_overrides[get_create_agent_use_case] = _create_uc
     app.dependency_overrides[get_update_agent_use_case] = _update_uc
     app.dependency_overrides[get_run_agent_use_case] = _run_uc
     app.dependency_overrides[get_get_agent_use_case] = _get_uc
     app.dependency_overrides[get_interview_use_case] = _interview_uc
+    app.dependency_overrides[get_list_agents_use_case] = _list_agents_uc
+    app.dependency_overrides[get_delete_agent_use_case] = _delete_agent_uc
+
+    # Department DI
+    (
+        _dept_list_f, _dept_create_f, _dept_update_f,
+        _dept_delete_f, _dept_assign_f, _dept_remove_f,
+    ) = create_department_factories()
+    app.dependency_overrides[get_list_departments_use_case] = _dept_list_f
+    app.dependency_overrides[get_create_department_use_case] = _dept_create_f
+    app.dependency_overrides[get_update_department_use_case] = _dept_update_f
+    app.dependency_overrides[get_delete_department_use_case] = _dept_delete_f
+    app.dependency_overrides[get_assign_user_department_use_case] = _dept_assign_f
+    app.dependency_overrides[get_remove_user_department_use_case] = _dept_remove_f
+
+    # Tool Catalog DI
+    _tc_list_f, _tc_sync_f = create_tool_catalog_factories()
+    app.dependency_overrides[get_list_tool_catalog_use_case] = _tc_list_f
+    app.dependency_overrides[get_sync_mcp_tools_use_case] = _tc_sync_f
 
     # Auto Agent Builder DI
     app.dependency_overrides[get_auto_build_use_case] = get_configured_auto_build_use_case
@@ -1157,6 +1351,20 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_jwt_adapter] = _jwt_f
     app.dependency_overrides[get_user_repository] = _user_repo_f
 
+    # LLM Model Registry DI
+    (
+        _llm_create_f,
+        _llm_update_f,
+        _llm_deactivate_f,
+        _llm_get_f,
+        _llm_list_f,
+    ) = create_llm_model_factories()
+    app.dependency_overrides[get_create_llm_model_use_case] = _llm_create_f
+    app.dependency_overrides[get_update_llm_model_use_case] = _llm_update_f
+    app.dependency_overrides[get_deactivate_llm_model_use_case] = _llm_deactivate_f
+    app.dependency_overrides[get_get_llm_model_use_case] = _llm_get_f
+    app.dependency_overrides[get_list_llm_models_use_case] = _llm_list_f
+
     # Include routers
     app.include_router(document_router)
     app.include_router(analysis_router)
@@ -1171,10 +1379,13 @@ def create_app() -> FastAPI:
     app.include_router(ingest_router)
     app.include_router(doc_chunk_router)
     app.include_router(agent_builder_router)
+    app.include_router(department_router)
+    app.include_router(tool_catalog_router)
     app.include_router(auto_agent_builder_router)
     app.include_router(general_chat_router)
     app.include_router(auth_router)
     app.include_router(admin_router)
+    app.include_router(llm_model_router)
 
     # Health check endpoint
     @app.get("/health")

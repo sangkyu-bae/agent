@@ -8,6 +8,7 @@ import pytest
 from src.application.agent_builder.schemas import CreateAgentRequest, CreateAgentResponse
 from src.application.agent_builder.create_agent_use_case import CreateAgentUseCase
 from src.domain.agent_builder.schemas import AgentDefinition, WorkerDefinition, WorkflowSkeleton
+from src.domain.llm_model.entity import LlmModel
 
 
 def _make_worker(tool_id: str, sort_order: int = 0) -> WorkerDefinition:
@@ -19,10 +20,28 @@ def _make_worker(tool_id: str, sort_order: int = 0) -> WorkerDefinition:
     )
 
 
+def _make_default_llm_model() -> LlmModel:
+    now = datetime.now(timezone.utc)
+    return LlmModel(
+        id="model-default",
+        provider="openai",
+        model_name="gpt-4o",
+        display_name="GPT-4o",
+        description=None,
+        api_key_env="OPENAI_API_KEY",
+        max_tokens=128000,
+        is_active=True,
+        is_default=True,
+        created_at=now,
+        updated_at=now,
+    )
+
+
 def _make_use_case():
     tool_selector = MagicMock()
     prompt_generator = MagicMock()
     repository = MagicMock()
+    llm_model_repository = MagicMock()
     logger = MagicMock()
 
     skeleton = WorkflowSkeleton(
@@ -31,6 +50,10 @@ def _make_use_case():
     )
     tool_selector.select = AsyncMock(return_value=skeleton)
     prompt_generator.generate = AsyncMock(return_value="자동 생성된 시스템 프롬프트")
+
+    default_model = _make_default_llm_model()
+    llm_model_repository.find_by_id = AsyncMock(return_value=default_model)
+    llm_model_repository.find_default = AsyncMock(return_value=default_model)
 
     now = datetime.now(timezone.utc)
     saved_agent = AgentDefinition(
@@ -41,7 +64,7 @@ def _make_use_case():
         system_prompt="자동 생성된 시스템 프롬프트",
         flow_hint="search 후 export",
         workers=skeleton.workers,
-        model_name="gpt-4o-mini",
+        llm_model_id=default_model.id,
         status="active",
         created_at=now,
         updated_at=now,
@@ -52,6 +75,7 @@ def _make_use_case():
         tool_selector=tool_selector,
         prompt_generator=prompt_generator,
         repository=repository,
+        llm_model_repository=llm_model_repository,
         logger=logger,
     )
     return use_case, tool_selector, prompt_generator, repository

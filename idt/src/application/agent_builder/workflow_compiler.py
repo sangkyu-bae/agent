@@ -1,9 +1,15 @@
 """WorkflowCompiler: WorkflowDefinition → LangGraph CompiledGraph 동적 컴파일."""
+import os
+
+from langchain_anthropic import ChatAnthropic
+from langchain_core.language_models import BaseChatModel
+from langchain_ollama import ChatOllama
 from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
 from langgraph_supervisor import create_supervisor
 
 from src.domain.agent_builder.schemas import WorkflowDefinition
+from src.domain.llm_model.entity import LlmModel
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.infrastructure.agent_builder.tool_factory import ToolFactory
 
@@ -18,18 +24,20 @@ class WorkflowCompiler:
     def compile(
         self,
         workflow: WorkflowDefinition,
-        model_name: str,
-        api_key: str,
+        llm_model: LlmModel,
         request_id: str,
+        temperature: float = 0.0,
     ):
         """동적 컴파일: WorkerDefinition 목록 → Supervisor + Worker 그래프."""
         self._logger.info(
             "WorkflowCompiler compile start",
             request_id=request_id,
             worker_count=len(workflow.workers),
+            provider=llm_model.provider,
+            model_name=llm_model.model_name,
         )
         try:
-            llm = ChatOpenAI(model=model_name, api_key=api_key, temperature=0)
+            llm = self._build_llm(llm_model, temperature)
 
             worker_agents = []
             for worker_def in workflow.workers:
@@ -55,3 +63,20 @@ class WorkflowCompiler:
                 "WorkflowCompiler compile failed", exception=e, request_id=request_id
             )
             raise
+
+    def _build_llm(self, llm_model: LlmModel, temperature: float = 0.0) -> BaseChatModel:
+        """provider 분기로 LLM 인스턴스 생성."""
+        provider = llm_model.provider
+        if provider == "openai":
+            api_key = os.environ.get(llm_model.api_key_env)
+            return ChatOpenAI(
+                model=llm_model.model_name, api_key=api_key, temperature=temperature
+            )
+        if provider == "anthropic":
+            api_key = os.environ.get(llm_model.api_key_env)
+            return ChatAnthropic(
+                model=llm_model.model_name, api_key=api_key, temperature=temperature
+            )
+        if provider == "ollama":
+            return ChatOllama(model=llm_model.model_name, temperature=temperature)
+        raise ValueError(f"지원하지 않는 provider: {provider}")

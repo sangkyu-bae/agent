@@ -20,7 +20,7 @@ def _make_agent() -> AgentDefinition:
         system_prompt="당신은 AI 뉴스 수집 에이전트입니다.",
         flow_hint="search 후 export",
         workers=[WorkerDefinition("tavily_search", "search_worker", "검색", 0)],
-        model_name="gpt-4o-mini",
+        llm_model_id="model-1",
         status="active",
         created_at=now,
         updated_at=now,
@@ -29,10 +29,16 @@ def _make_agent() -> AgentDefinition:
 
 def _make_use_case() -> tuple[GetAgentUseCase, MagicMock]:
     repository = MagicMock()
+    dept_repository = MagicMock()
+    dept_repository.find_by_id = AsyncMock(return_value=None)
     logger = MagicMock()
     agent = _make_agent()
     repository.find_by_id = AsyncMock(return_value=agent)
-    use_case = GetAgentUseCase(repository=repository, logger=logger)
+    use_case = GetAgentUseCase(
+        repository=repository,
+        dept_repository=dept_repository,
+        logger=logger,
+    )
     return use_case, repository
 
 
@@ -71,3 +77,26 @@ class TestGetAgentUseCase:
         repository.find_by_id = AsyncMock(side_effect=RuntimeError("DB error"))
         with pytest.raises(RuntimeError, match="DB error"):
             await use_case.execute("some-id", "req-1")
+
+    @pytest.mark.asyncio
+    async def test_execute_populates_department_name(self):
+        from src.domain.department.entity import Department
+        now = datetime.now(timezone.utc)
+        dept = Department(id="dept-1", name="개발팀", description=None, created_at=now, updated_at=now)
+
+        repository = MagicMock()
+        dept_repository = MagicMock()
+        dept_repository.find_by_id = AsyncMock(return_value=dept)
+        logger = MagicMock()
+
+        agent = _make_agent()
+        object.__setattr__(agent, "department_id", "dept-1")
+        repository.find_by_id = AsyncMock(return_value=agent)
+
+        use_case = GetAgentUseCase(
+            repository=repository,
+            dept_repository=dept_repository,
+            logger=logger,
+        )
+        result = await use_case.execute(agent.id, "req-1")
+        assert result.department_name == "개발팀"

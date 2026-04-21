@@ -19,7 +19,7 @@ class InterviewSession:
     user_request: str
     name: str
     user_id: str
-    model_name: str
+    llm_model_id: str
     status: str  # "questioning" | "reviewing" | "confirmed"
     current_questions: list[str] = field(default_factory=list)
     qa_pairs: list[QAPair] = field(default_factory=list)

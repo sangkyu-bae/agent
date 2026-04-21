@@ -13,7 +13,10 @@ class CreateAgentRequest(BaseModel):
     user_request: str = Field(..., max_length=1000)
     name: str = Field(..., max_length=200)
     user_id: str
-    model_name: str = "gpt-4o-mini"
+    llm_model_id: str | None = None
+    visibility: str = Field("private", pattern="^(private|department|public)$")
+    department_id: str | None = None
+    temperature: float = Field(0.70, ge=0.0, le=2.0)
 
 
 class CreateAgentResponse(BaseModel):
@@ -23,13 +26,19 @@ class CreateAgentResponse(BaseModel):
     tool_ids: list[str]
     workers: list[WorkerInfo]
     flow_hint: str
-    model_name: str
+    llm_model_id: str
+    visibility: str
+    department_id: str | None = None
+    temperature: float
     created_at: str
 
 
 class UpdateAgentRequest(BaseModel):
     system_prompt: str | None = Field(None, max_length=4000)
     name: str | None = Field(None, max_length=200)
+    visibility: str | None = Field(None, pattern="^(private|department|public)$")
+    department_id: str | None = None
+    temperature: float | None = Field(None, ge=0.0, le=2.0)
 
 
 class UpdateAgentResponse(BaseModel):
@@ -47,8 +56,15 @@ class GetAgentResponse(BaseModel):
     tool_ids: list[str]
     workers: list[WorkerInfo]
     flow_hint: str
-    model_name: str
+    llm_model_id: str
     status: str
+    visibility: str
+    department_id: str | None = None
+    department_name: str | None = None
+    temperature: float
+    owner_user_id: str
+    can_edit: bool
+    can_delete: bool
     created_at: str
     updated_at: str
 
@@ -82,7 +98,7 @@ class InterviewStartRequest(BaseModel):
     user_request: str = Field(..., max_length=1000)
     name: str = Field(..., max_length=200)
     user_id: str
-    model_name: str = "gpt-4o-mini"
+    llm_model_id: str | None = None
 
 
 class InterviewStartResponse(BaseModel):
@@ -111,3 +127,34 @@ class InterviewAnswerResponse(BaseModel):
 
 class InterviewFinalizeRequest(BaseModel):
     system_prompt: str | None = Field(None, max_length=4000, description="None이면 자동 생성된 프롬프트 사용")
+
+
+# ── List / Delete ─────────────────────────────────────────────────
+
+
+class ListAgentsRequest(BaseModel):
+    scope: str = Field("all", pattern="^(mine|department|public|all)$")
+    search: str | None = None
+    page: int = Field(1, ge=1)
+    size: int = Field(20, ge=1, le=100)
+
+
+class AgentSummary(BaseModel):
+    agent_id: str
+    name: str
+    description: str
+    visibility: str
+    department_name: str | None = None
+    owner_user_id: str
+    owner_email: str | None = None
+    temperature: float
+    can_edit: bool
+    can_delete: bool
+    created_at: str
+
+
+class ListAgentsResponse(BaseModel):
+    agents: list[AgentSummary]
+    total: int
+    page: int
+    size: int

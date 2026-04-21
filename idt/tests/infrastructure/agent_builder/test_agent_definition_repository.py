@@ -30,7 +30,7 @@ def _make_agent() -> AgentDefinition:
         system_prompt="테스트 프롬프트",
         flow_hint="힌트",
         workers=[_make_worker("tavily_search", 0), _make_worker("excel_export", 1)],
-        model_name="gpt-4o-mini",
+        llm_model_id="model-1",
         status="active",
         created_at=now,
         updated_at=now,
@@ -96,8 +96,11 @@ class TestAgentDefinitionRepositoryFindById:
         mock_model.description = "설명"
         mock_model.system_prompt = "프롬프트"
         mock_model.flow_hint = "힌트"
-        mock_model.model_name = "gpt-4o-mini"
+        mock_model.llm_model_id = "model-1"
         mock_model.status = "active"
+        mock_model.visibility = "private"
+        mock_model.department_id = None
+        mock_model.temperature = 0.70
         mock_model.created_at = now
         mock_model.updated_at = now
         mock_model.tools = [mock_tool]

@@ -14,10 +14,14 @@ from src.api.routes.agent_builder_router import (
     get_get_agent_use_case,
     get_interview_use_case,
     get_load_mcp_tools_use_case,
+    get_list_agents_use_case,
+    get_delete_agent_use_case,
 )
 from src.application.agent_builder.schemas import (
     AgentDraftPreview,
+    AgentSummary,
     CreateAgentResponse,
+    ListAgentsResponse,
     GetAgentResponse,
     InterviewAnswerResponse,
     InterviewStartResponse,
@@ -42,7 +46,10 @@ def _make_create_response() -> CreateAgentResponse:
                        description="검색", sort_order=0),
         ],
         flow_hint="search 후 export",
-        model_name="gpt-4o-mini",
+        llm_model_id="model-1",
+        visibility="private",
+        department_id=None,
+        temperature=0.70,
         created_at=_now_iso(),
     )
 
@@ -57,8 +64,14 @@ def _make_get_response(agent_id: str) -> GetAgentResponse:
         workers=[WorkerInfo(tool_id="tavily_search", worker_id="search_worker",
                             description="검색", sort_order=0)],
         flow_hint="힌트",
-        model_name="gpt-4o-mini",
+        llm_model_id="model-1",
         status="active",
+        visibility="private",
+        department_id=None,
+        temperature=0.70,
+        owner_user_id="user-1",
+        can_edit=True,
+        can_delete=True,
         created_at=_now_iso(),
         updated_at=_now_iso(),
     )
@@ -83,10 +96,24 @@ def _make_run_response(agent_id: str) -> RunAgentResponse:
     )
 
 
+def _make_fake_user():
+    from src.domain.auth.entities import User, UserRole, UserStatus
+    return User(
+        email="test@test.com",
+        password_hash="hashed",
+        role=UserRole.ADMIN,
+        status=UserStatus.APPROVED,
+        id=1,
+    )
+
+
 def _make_client(overrides: dict) -> TestClient:
     from fastapi import FastAPI
+    from src.interfaces.dependencies.auth import get_current_user
+
     app = FastAPI()
     app.include_router(router)
+    app.dependency_overrides[get_current_user] = _make_fake_user
     for dep, override in overrides.items():
         app.dependency_overrides[dep] = override
     return TestClient(app)
@@ -378,3 +405,79 @@ class TestFinalizeInterview:
 
         resp = client.post("/api/v1/agents/interview/sess-1/finalize", json={})
         assert resp.status_code == 422
+
+
+# ── GET /agents (list) ────────────────────────────────────────────
+
+
+def _make_list_response() -> ListAgentsResponse:
+    return ListAgentsResponse(
+        agents=[
+            AgentSummary(
+                agent_id="a-1",
+                name="테스트 에이전트",
+                description="설명",
+                visibility="public",
+                owner_user_id="1",
+                temperature=0.70,
+                can_edit=True,
+                can_delete=True,
+                created_at=_now_iso(),
+            )
+        ],
+        total=1,
+        page=1,
+        size=20,
+    )
+
+
+class TestListAgents:
+    def test_list_agents_returns_200(self):
+        mock_uc = MagicMock()
+        mock_uc.execute = AsyncMock(return_value=_make_list_response())
+        client = _make_client({get_list_agents_use_case: lambda: mock_uc})
+        resp = client.get("/api/v1/agents?scope=all")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert len(data["agents"]) == 1
+
+    def test_list_agents_with_search(self):
+        mock_uc = MagicMock()
+        mock_uc.execute = AsyncMock(
+            return_value=ListAgentsResponse(agents=[], total=0, page=1, size=20)
+        )
+        client = _make_client({get_list_agents_use_case: lambda: mock_uc})
+        resp = client.get("/api/v1/agents?search=뉴스&scope=mine")
+        assert resp.status_code == 200
+        assert resp.json()["total"] == 0
+
+
+# ── DELETE /agents/{id} ──────────────────────────────────────────
+
+
+class TestDeleteAgent:
+    def test_delete_agent_returns_204(self):
+        mock_uc = MagicMock()
+        mock_uc.execute = AsyncMock(return_value=None)
+        client = _make_client({get_delete_agent_use_case: lambda: mock_uc})
+        resp = client.delete("/api/v1/agents/agent-1")
+        assert resp.status_code == 204
+
+    def test_delete_agent_not_found_returns_404(self):
+        mock_uc = MagicMock()
+        mock_uc.execute = AsyncMock(
+            side_effect=ValueError("에이전트를 찾을 수 없습니다: agent-99")
+        )
+        client = _make_client({get_delete_agent_use_case: lambda: mock_uc})
+        resp = client.delete("/api/v1/agents/agent-99")
+        assert resp.status_code == 404
+
+    def test_delete_agent_forbidden_returns_403(self):
+        mock_uc = MagicMock()
+        mock_uc.execute = AsyncMock(
+            side_effect=PermissionError("삭제 권한이 없습니다")
+        )
+        client = _make_client({get_delete_agent_use_case: lambda: mock_uc})
+        resp = client.delete("/api/v1/agents/agent-1")
+        assert resp.status_code == 403
