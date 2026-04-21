@@ -426,4 +426,65 @@ Optional:
 
 ---
 
-Last Updated: 2026-03-21
+## [2026-04-21] missing-di-wiring (DI-WIRING-001) v1.0 — Bug Fix
+
+### Fixed
+- Missing 4 routers in `create_app()`: mcp_registry, middleware_agent, excel_export, pdf_export
+- Missing 11 DI overrides across MCP Registry (4), Middleware Agent (4), Excel Export (1), PDF Export (1), Agent Builder tools (1)
+- NotImplementedError runtime errors on API endpoint invocation
+- Verified DB-001 §10.2 pattern compliance (Depends(get_session), shared session across repos)
+- Verified LOG-001 compliance (StructuredLogger injection in all factories)
+
+### Architecture
+- Single file change: `src/api/main.py` (main.py factory/router registration)
+- 5 factory functions created following DB-001 §10.2 per-request pattern
+- 4 routers registered in `create_app()` (lines 1535-1538)
+- 11 dependency_overrides wired for placeholder injection
+
+### Key Improvements
+- All 4 missing routers now accessible (no 404 on endpoints)
+- All DI placeholders resolved (no NotImplementedError)
+- Complete DB session management per request (DB-001 §10.2)
+- Full logging coverage via StructuredLogger (LOG-001)
+
+### PDCA Status
+- Plan: ✅ (2026-04-21, clear requirement 4 routers + 14 DI items)
+- Design: N/A (bug fix, no design document needed)
+- Do: ✅ (2026-04-21, 1 file changed, 5 factory functions, 4 routers)
+- Check: ✅ (2026-04-21, 92% match rate — Plan arithmetic error: "14" should be "11")
+- Act: ✅ (2026-04-21, completion report + plan corrections)
+
+### Related Documents
+- Plan: `docs/01-plan/features/missing-di-wiring.plan.md` (arithmetic error noted)
+- Analysis: `docs/03-analysis/missing-di-wiring.analysis.md` (92% match)
+- Report: `docs/04-report/features/missing-di-wiring.report.md`
+
+### Quality Metrics
+- Match Rate: 92% (PASS — only plan document errors, code 100% complete)
+- Files Changed: 1 (src/api/main.py)
+- Routers Added: 4
+- DI Overrides: 11
+- Factories Created: 5
+- DB-001 Compliance: 100%
+- LOG-001 Compliance: 100%
+
+### Files Modified
+**Infrastructure (1)**: `src/api/main.py` (factory registration, router inclusion)
+
+### Breaking Changes
+✅ None — Pure bug fix, improves from NotImplementedError → working endpoints
+
+### Deployment Notes
+- No database changes
+- No new dependencies
+- No environment variable changes
+- Existing tests unaffected (DI wiring is integration level)
+- All 4 routers and 11 overrides follow established patterns
+
+### Plan Document Corrections Needed
+- Line 31, 140, 149: Change "14 dependency_overrides" to "11 dependency_overrides"
+- Line 99: Change `WeasyPrintConverter` to `WeasyprintConverter` (actual class name)
+
+---
+
+Last Updated: 2026-04-21
