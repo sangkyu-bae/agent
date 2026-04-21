@@ -80,6 +80,7 @@ from src.api.routes.agent_builder_router import (
     get_interview_use_case,
     get_list_agents_use_case,
     get_delete_agent_use_case,
+    get_load_mcp_tools_use_case,
 )
 from src.api.routes.department_router import (
     router as department_router,
@@ -101,6 +102,28 @@ from src.api.routes.auto_agent_builder_router import (
     get_auto_build_reply_use_case,
     get_session_repository as get_auto_build_session_repository,
     get_create_middleware_agent_use_case as get_auto_build_create_agent_uc,
+)
+from src.api.routes.mcp_registry_router import (
+    router as mcp_registry_router,
+    get_register_use_case as get_mcp_register_use_case,
+    get_list_use_case as get_mcp_list_use_case,
+    get_update_use_case as get_mcp_update_use_case,
+    get_delete_use_case as get_mcp_delete_use_case,
+)
+from src.api.routes.middleware_agent_router import (
+    router as middleware_agent_router,
+    get_create_use_case as get_mw_create_use_case,
+    get_get_use_case as get_mw_get_use_case,
+    get_run_use_case as get_mw_run_use_case,
+    get_update_use_case as get_mw_update_use_case,
+)
+from src.api.routes.excel_export_router import (
+    router as excel_export_router,
+    get_excel_export_use_case as get_excel_export_uc,
+)
+from src.api.routes.pdf_export_router import (
+    router as pdf_export_router,
+    get_html_to_pdf_use_case as get_html_to_pdf_uc,
 )
 from src.application.doc_chunk.use_case import DocChunkUseCase
 from src.application.hybrid_search.use_case import HybridSearchUseCase
@@ -181,6 +204,18 @@ from src.infrastructure.auto_agent_builder.auto_build_session_repository import 
 from src.infrastructure.middleware_agent.middleware_agent_repository import MiddlewareAgentRepository
 from src.infrastructure.redis.redis_client import RedisClient
 from src.infrastructure.redis.redis_repository import RedisRepository
+from src.application.mcp_registry.register_mcp_server_use_case import RegisterMCPServerUseCase
+from src.application.mcp_registry.list_mcp_servers_use_case import ListMCPServersUseCase
+from src.application.mcp_registry.update_mcp_server_use_case import UpdateMCPServerUseCase
+from src.application.mcp_registry.delete_mcp_server_use_case import DeleteMCPServerUseCase
+from src.application.middleware_agent.get_middleware_agent_use_case import GetMiddlewareAgentUseCase
+from src.application.middleware_agent.run_middleware_agent_use_case import RunMiddlewareAgentUseCase
+from src.application.middleware_agent.update_middleware_agent_use_case import UpdateMiddlewareAgentUseCase
+from src.application.middleware_agent.middleware_builder import MiddlewareBuilder
+from src.application.use_cases.excel_export_use_case import ExcelExportUseCase
+from src.infrastructure.excel_export.pandas_excel_exporter import PandasExcelExporter
+from src.application.use_cases.html_to_pdf_use_case import HtmlToPdfUseCase
+from src.infrastructure.pdf_export.weasyprint_converter import WeasyprintConverter
 
 # Auth
 from src.api.routes.general_chat_router import (
@@ -1204,6 +1239,90 @@ def create_tool_catalog_factories():
     return list_factory, sync_factory
 
 
+def create_mcp_registry_factories():
+    """Return per-request DI factories for MCP Registry use cases (MCP-REG-001)."""
+    app_logger = get_app_logger()
+
+    def _make_repo(session: AsyncSession):
+        return MCPServerRepository(session=session, logger=app_logger)
+
+    def register_factory(session: AsyncSession = Depends(get_session)):
+        return RegisterMCPServerUseCase(repository=_make_repo(session), logger=app_logger)
+
+    def list_factory(session: AsyncSession = Depends(get_session)):
+        return ListMCPServersUseCase(repository=_make_repo(session), logger=app_logger)
+
+    def update_factory(session: AsyncSession = Depends(get_session)):
+        return UpdateMCPServerUseCase(repository=_make_repo(session), logger=app_logger)
+
+    def delete_factory(session: AsyncSession = Depends(get_session)):
+        return DeleteMCPServerUseCase(repository=_make_repo(session), logger=app_logger)
+
+    return register_factory, list_factory, update_factory, delete_factory
+
+
+def create_middleware_agent_factories():
+    """Return per-request DI factories for Middleware Agent use cases (AGENT-005)."""
+    app_logger = get_app_logger()
+    tool_factory = ToolFactory(
+        logger=app_logger,
+        tavily_api_key=os.environ.get("TAVILY_API_KEY"),
+    )
+    middleware_builder = MiddlewareBuilder(logger=app_logger)
+
+    def _make_repo(session: AsyncSession):
+        return MiddlewareAgentRepository(session=session)
+
+    def create_factory(session: AsyncSession = Depends(get_session)):
+        return CreateMiddlewareAgentUseCase(repository=_make_repo(session), logger=app_logger)
+
+    def get_factory(session: AsyncSession = Depends(get_session)):
+        return GetMiddlewareAgentUseCase(repository=_make_repo(session), logger=app_logger)
+
+    def run_factory(session: AsyncSession = Depends(get_session)):
+        return RunMiddlewareAgentUseCase(
+            repository=_make_repo(session),
+            tool_factory=tool_factory,
+            middleware_builder=middleware_builder,
+            logger=app_logger,
+        )
+
+    def update_factory(session: AsyncSession = Depends(get_session)):
+        return UpdateMiddlewareAgentUseCase(repository=_make_repo(session), logger=app_logger)
+
+    return create_factory, get_factory, run_factory, update_factory
+
+
+def create_excel_export_use_case() -> ExcelExportUseCase:
+    """Create singleton ExcelExportUseCase (stateless)."""
+    app_logger = get_app_logger()
+    exporter = PandasExcelExporter()
+    return ExcelExportUseCase(exporter=exporter, logger=app_logger)
+
+
+def create_html_to_pdf_use_case() -> HtmlToPdfUseCase:
+    """Create singleton HtmlToPdfUseCase (stateless)."""
+    app_logger = get_app_logger()
+    converter = WeasyprintConverter()
+    return HtmlToPdfUseCase(converter=converter, logger=app_logger)
+
+
+def create_load_mcp_tools_factory():
+    """Return per-request factory for LoadMCPToolsUseCase (agent_builder /tools)."""
+    app_logger = get_app_logger()
+
+    def _factory(session: AsyncSession = Depends(get_session)):
+        mcp_repo = MCPServerRepository(session=session, logger=app_logger)
+        mcp_loader = MCPToolLoader(logger=app_logger)
+        return LoadMCPToolsUseCase(
+            repository=mcp_repo,
+            mcp_tool_loader=mcp_loader,
+            logger=app_logger,
+        )
+
+    return _factory
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler for startup/shutdown."""
@@ -1311,6 +1430,7 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_interview_use_case] = _interview_uc
     app.dependency_overrides[get_list_agents_use_case] = _list_agents_uc
     app.dependency_overrides[get_delete_agent_use_case] = _delete_agent_uc
+    app.dependency_overrides[get_load_mcp_tools_use_case] = create_load_mcp_tools_factory()
 
     # Department DI
     (
@@ -1365,6 +1485,32 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_get_llm_model_use_case] = _llm_get_f
     app.dependency_overrides[get_list_llm_models_use_case] = _llm_list_f
 
+    # MCP Registry DI
+    (
+        _mcp_register_f, _mcp_list_f, _mcp_update_f, _mcp_delete_f,
+    ) = create_mcp_registry_factories()
+    app.dependency_overrides[get_mcp_register_use_case] = _mcp_register_f
+    app.dependency_overrides[get_mcp_list_use_case] = _mcp_list_f
+    app.dependency_overrides[get_mcp_update_use_case] = _mcp_update_f
+    app.dependency_overrides[get_mcp_delete_use_case] = _mcp_delete_f
+
+    # Middleware Agent DI
+    (
+        _mw_create_f, _mw_get_f, _mw_run_f, _mw_update_f,
+    ) = create_middleware_agent_factories()
+    app.dependency_overrides[get_mw_create_use_case] = _mw_create_f
+    app.dependency_overrides[get_mw_get_use_case] = _mw_get_f
+    app.dependency_overrides[get_mw_run_use_case] = _mw_run_f
+    app.dependency_overrides[get_mw_update_use_case] = _mw_update_f
+
+    # Excel Export DI (singleton)
+    _excel_export_uc = create_excel_export_use_case()
+    app.dependency_overrides[get_excel_export_uc] = lambda: _excel_export_uc
+
+    # PDF Export DI (singleton)
+    _html_to_pdf_uc = create_html_to_pdf_use_case()
+    app.dependency_overrides[get_html_to_pdf_uc] = lambda: _html_to_pdf_uc
+
     # Include routers
     app.include_router(document_router)
     app.include_router(analysis_router)
@@ -1386,6 +1532,10 @@ def create_app() -> FastAPI:
     app.include_router(auth_router)
     app.include_router(admin_router)
     app.include_router(llm_model_router)
+    app.include_router(mcp_registry_router)
+    app.include_router(middleware_agent_router)
+    app.include_router(excel_export_router)
+    app.include_router(pdf_export_router)
 
     # Health check endpoint
     @app.get("/health")

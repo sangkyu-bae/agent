@@ -50,3 +50,4 @@
 | CHAT-HIST-001 | src/claude/task/task-chat-history-api.md | 대화 히스토리 조회 API |
 | LLM-MODEL-REG-001 | docs/02-design/features/llm-model-registry.design.md | LLM 모델 레지스트리 (llm_model 테이블 CRUD, provider/model_name/api_key_env 관리, 시드 데이터) |
 | AGENT-SHARE-001 | docs/archive/2026-04/shared-custom-agent/shared-custom-agent.plan.md | 사용자 커스텀 에이전트 공유 빌더 (visibility/temperature/department_id, 부서 관리, 도구 카탈로그 통합) |
+| DI-WIRING-001 | docs/01-plan/features/missing-di-wiring.plan.md | main.py 누락 DI 배선 일괄 수정 (MCP Registry/Middleware Agent/Excel Export/PDF Export 라우터 + load_mcp_tools) |
