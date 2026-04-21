@@ -20,6 +20,24 @@ from src.application.agent_builder.interview_session_store import (
     QAPair,
 )
 from src.domain.agent_builder.schemas import WorkerDefinition, WorkflowSkeleton
+from src.domain.llm_model.entity import LlmModel
+
+
+def _make_default_llm_model() -> LlmModel:
+    now = datetime.now(timezone.utc)
+    return LlmModel(
+        id="model-default",
+        provider="openai",
+        model_name="gpt-4o",
+        display_name="GPT-4o",
+        description=None,
+        api_key_env="OPENAI_API_KEY",
+        max_tokens=128000,
+        is_active=True,
+        is_default=True,
+        created_at=now,
+        updated_at=now,
+    )
 
 
 def _make_use_case():
@@ -27,8 +45,13 @@ def _make_use_case():
     tool_selector = MagicMock()
     prompt_generator = MagicMock()
     repository = MagicMock()
+    llm_model_repository = MagicMock()
     session_store = InMemoryInterviewSessionStore()
     logger = MagicMock()
+
+    default_model = _make_default_llm_model()
+    llm_model_repository.find_by_id = AsyncMock(return_value=default_model)
+    llm_model_repository.find_default = AsyncMock(return_value=default_model)
 
     interviewer.generate_initial_questions = AsyncMock(
         return_value=["어떤 주제?", "저장 경로?", "몇 개?"]
@@ -43,21 +66,6 @@ def _make_use_case():
     tool_selector.select = AsyncMock(return_value=skeleton)
     prompt_generator.generate = AsyncMock(return_value="당신은 AI 뉴스 수집 에이전트입니다.")
 
-    now = datetime.now(timezone.utc)
-    from src.domain.agent_builder.schemas import AgentDefinition
-    saved_agent = AgentDefinition(
-        id=str(uuid.uuid4()),
-        user_id="user-1",
-        name="AI 뉴스 수집기",
-        description="AI 관련 뉴스 수집",
-        system_prompt="당신은 AI 뉴스 수집 에이전트입니다.",
-        flow_hint="search 후 export",
-        workers=[WorkerDefinition("tavily_search", "search_worker", "웹 검색", 0)],
-        model_name="gpt-4o-mini",
-        status="active",
-        created_at=now,
-        updated_at=now,
-    )
     async def _save_agent(agent, request_id):
         return agent
     repository.save = _save_agent
@@ -67,6 +75,7 @@ def _make_use_case():
         tool_selector=tool_selector,
         prompt_generator=prompt_generator,
         repository=repository,
+        llm_model_repository=llm_model_repository,
         session_store=session_store,
         logger=logger,
     )

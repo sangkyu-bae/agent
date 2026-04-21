@@ -8,6 +8,24 @@ import pytest
 from src.application.agent_builder.schemas import RunAgentRequest, RunAgentResponse
 from src.application.agent_builder.run_agent_use_case import RunAgentUseCase
 from src.domain.agent_builder.schemas import AgentDefinition, WorkerDefinition
+from src.domain.llm_model.entity import LlmModel
+
+
+def _make_llm_model() -> LlmModel:
+    now = datetime.now(timezone.utc)
+    return LlmModel(
+        id="model-1",
+        provider="openai",
+        model_name="gpt-4o-mini",
+        display_name="GPT-4o Mini",
+        description=None,
+        api_key_env="OPENAI_API_KEY",
+        max_tokens=128000,
+        is_active=True,
+        is_default=True,
+        created_at=now,
+        updated_at=now,
+    )
 
 
 def _make_agent() -> AgentDefinition:
@@ -20,7 +38,7 @@ def _make_agent() -> AgentDefinition:
         system_prompt="시스템 프롬프트",
         flow_hint="힌트",
         workers=[WorkerDefinition("tavily_search", "search_worker", "검색", 0)],
-        model_name="gpt-4o-mini",
+        llm_model_id="model-1",
         status="active",
         created_at=now,
         updated_at=now,
@@ -29,10 +47,12 @@ def _make_agent() -> AgentDefinition:
 
 def _make_use_case():
     repository = MagicMock()
+    llm_model_repository = MagicMock()
     compiler = MagicMock()
     logger = MagicMock()
     agent = _make_agent()
     repository.find_by_id = AsyncMock(return_value=agent)
+    llm_model_repository.find_by_id = AsyncMock(return_value=_make_llm_model())
 
     mock_graph = MagicMock()
     last_msg = MagicMock()
@@ -45,8 +65,8 @@ def _make_use_case():
 
     use_case = RunAgentUseCase(
         repository=repository,
+        llm_model_repository=llm_model_repository,
         compiler=compiler,
-        openai_api_key="test-key",
         logger=logger,
     )
     return use_case, repository, compiler, agent
@@ -77,6 +97,15 @@ class TestRunAgentUseCase:
         request = RunAgentRequest(query="쿼리", user_id="user-1")
         await use_case.execute(agent.id, request, "req-1")
         compiler.compile.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_execute_passes_llm_model_to_compiler(self):
+        use_case, _, compiler, agent = _make_use_case()
+        request = RunAgentRequest(query="쿼리", user_id="user-1")
+        await use_case.execute(agent.id, request, "req-1")
+        _, kwargs = compiler.compile.call_args
+        assert kwargs["llm_model"].provider == "openai"
+        assert kwargs["llm_model"].model_name == "gpt-4o-mini"
 
     @pytest.mark.asyncio
     async def test_execute_includes_request_id_in_response(self):

@@ -31,7 +31,7 @@ def _make_agent(workers: list[WorkerDefinition] | None = None) -> AgentDefinitio
         system_prompt="당신은 테스트 에이전트입니다.",
         flow_hint="search 후 export",
         workers=workers or [_make_worker()],
-        model_name="gpt-4o-mini",
+        llm_model_id="model-1",
         status="active",
         created_at=now,
         updated_at=now,
@@ -122,3 +122,57 @@ class TestAgentDefinition:
         agent.apply_update(system_prompt="새 프롬프트", name="새 이름")
         assert agent.system_prompt == "새 프롬프트"
         assert agent.name == "새 이름"
+
+    def test_temperature_default_value(self):
+        agent = _make_agent()
+        assert agent.temperature == 0.70
+
+    def test_temperature_valid_range(self):
+        agent = _make_agent()
+        agent.temperature = 1.5
+        agent.__post_init__()
+
+    def test_temperature_below_zero_raises(self):
+        with pytest.raises(ValueError, match="temperature"):
+            now = datetime.now(timezone.utc)
+            AgentDefinition(
+                id="x", user_id="u", name="n", description="d",
+                system_prompt="p", flow_hint="f", workers=[_make_worker()],
+                llm_model_id="m", status="active",
+                created_at=now, updated_at=now,
+                temperature=-0.1,
+            )
+
+    def test_temperature_above_two_raises(self):
+        with pytest.raises(ValueError, match="temperature"):
+            now = datetime.now(timezone.utc)
+            AgentDefinition(
+                id="x", user_id="u", name="n", description="d",
+                system_prompt="p", flow_hint="f", workers=[_make_worker()],
+                llm_model_id="m", status="active",
+                created_at=now, updated_at=now,
+                temperature=2.1,
+            )
+
+    def test_department_visibility_requires_department_id(self):
+        with pytest.raises(ValueError, match="department"):
+            now = datetime.now(timezone.utc)
+            AgentDefinition(
+                id="x", user_id="u", name="n", description="d",
+                system_prompt="p", flow_hint="f", workers=[_make_worker()],
+                llm_model_id="m", status="active",
+                created_at=now, updated_at=now,
+                visibility="department", department_id=None,
+            )
+
+    def test_department_visibility_with_dept_id_ok(self):
+        now = datetime.now(timezone.utc)
+        agent = AgentDefinition(
+            id="x", user_id="u", name="n", description="d",
+            system_prompt="p", flow_hint="f", workers=[_make_worker()],
+            llm_model_id="m", status="active",
+            created_at=now, updated_at=now,
+            visibility="department", department_id="dept-1",
+        )
+        assert agent.visibility == "department"
+        assert agent.department_id == "dept-1"

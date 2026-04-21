@@ -24,6 +24,7 @@ from src.domain.agent_builder.interfaces import AgentDefinitionRepositoryInterfa
 from src.domain.agent_builder.policies import AgentBuilderPolicy
 from src.domain.agent_builder.schemas import AgentDefinition
 from src.domain.agent_builder.tool_registry import get_tool_meta
+from src.domain.llm_model.interfaces import LlmModelRepositoryInterface
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 
 
@@ -36,6 +37,7 @@ class InterviewUseCase:
         tool_selector: ToolSelector,
         prompt_generator: PromptGenerator,
         repository: AgentDefinitionRepositoryInterface,
+        llm_model_repository: LlmModelRepositoryInterface,
         session_store: InMemoryInterviewSessionStore,
         logger: LoggerInterface,
     ) -> None:
@@ -43,6 +45,7 @@ class InterviewUseCase:
         self._selector = tool_selector
         self._generator = prompt_generator
         self._repository = repository
+        self._llm_model_repository = llm_model_repository
         self._store = session_store
         self._logger = logger
 
@@ -52,6 +55,9 @@ class InterviewUseCase:
         """인터뷰 시작: 초기 명확화 질문 생성 + 세션 저장."""
         self._logger.info("InterviewUseCase start", request_id=request_id, user_id=request.user_id)
         try:
+            llm_model_id = await self._resolve_llm_model_id(
+                request.llm_model_id, request_id
+            )
             questions = await self._interviewer.generate_initial_questions(
                 request.user_request, request_id
             )
@@ -60,7 +66,7 @@ class InterviewUseCase:
                 user_request=request.user_request,
                 name=request.name,
                 user_id=request.user_id,
-                model_name=request.model_name,
+                llm_model_id=llm_model_id,
                 status="questioning",
                 current_questions=questions,
             )
@@ -182,7 +188,7 @@ class InterviewUseCase:
                 system_prompt=final_prompt,
                 flow_hint=session.draft_skeleton.flow_hint,
                 workers=session.draft_skeleton.workers,
-                model_name=session.model_name,
+                llm_model_id=session.llm_model_id,
                 status="active",
                 created_at=now,
                 updated_at=now,
@@ -210,7 +216,10 @@ class InterviewUseCase:
                     for w in saved.workers
                 ],
                 flow_hint=saved.flow_hint,
-                model_name=saved.model_name,
+                llm_model_id=saved.llm_model_id,
+                visibility=saved.visibility,
+                department_id=saved.department_id,
+                temperature=saved.temperature,
                 created_at=saved.created_at.isoformat(),
             )
         except Exception as e:
@@ -218,3 +227,20 @@ class InterviewUseCase:
                 "InterviewUseCase finalize failed", exception=e, request_id=request_id
             )
             raise
+
+    async def _resolve_llm_model_id(
+        self, llm_model_id: str | None, request_id: str
+    ) -> str:
+        """요청에 model_id가 없으면 기본 모델 사용."""
+        if llm_model_id:
+            found = await self._llm_model_repository.find_by_id(
+                llm_model_id, request_id
+            )
+            if found is None:
+                raise ValueError(f"LLM 모델을 찾을 수 없습니다: {llm_model_id}")
+            return found.id
+
+        default = await self._llm_model_repository.find_default(request_id)
+        if default is None:
+            raise ValueError("기본 LLM 모델이 설정되지 않았습니다.")
+        return default.id

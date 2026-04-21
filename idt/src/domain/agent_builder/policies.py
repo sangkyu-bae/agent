@@ -1,4 +1,48 @@
-"""AgentBuilderPolicy, UpdateAgentPolicy: 에이전트 빌더 도메인 규칙."""
+"""AgentBuilderPolicy, UpdateAgentPolicy, VisibilityPolicy: 에이전트 빌더 도메인 규칙."""
+from dataclasses import dataclass
+from enum import Enum
+
+
+class Visibility(str, Enum):
+    PRIVATE = "private"
+    DEPARTMENT = "department"
+    PUBLIC = "public"
+
+
+@dataclass(frozen=True)
+class AccessCheckInput:
+    agent_owner_id: str
+    agent_visibility: str
+    agent_department_id: str | None
+    viewer_user_id: str
+    viewer_department_ids: list[str]
+    viewer_role: str
+
+
+class VisibilityPolicy:
+    @staticmethod
+    def can_access(ctx: AccessCheckInput) -> bool:
+        if ctx.agent_owner_id == ctx.viewer_user_id:
+            return True
+        if ctx.agent_visibility == Visibility.PUBLIC:
+            return True
+        if ctx.agent_visibility == Visibility.DEPARTMENT:
+            return (
+                ctx.agent_department_id is not None
+                and ctx.agent_department_id in ctx.viewer_department_ids
+            )
+        return False
+
+    @staticmethod
+    def can_edit(ctx: AccessCheckInput) -> bool:
+        return ctx.agent_owner_id == ctx.viewer_user_id
+
+    @staticmethod
+    def can_delete(ctx: AccessCheckInput) -> bool:
+        return (
+            ctx.agent_owner_id == ctx.viewer_user_id
+            or ctx.viewer_role == "admin"
+        )
 
 
 class AgentBuilderPolicy:

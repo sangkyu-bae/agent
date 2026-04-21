@@ -16,10 +16,21 @@ class AgentDefinitionModel(Base):
     description: Mapped[str | None] = mapped_column(Text)
     system_prompt: Mapped[str] = mapped_column(Text, nullable=False)
     flow_hint: Mapped[str | None] = mapped_column(Text)
-    model_name: Mapped[str] = mapped_column(
-        String(100), nullable=False, default="gpt-4o-mini"
+    llm_model_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("llm_model.id", ondelete="RESTRICT", onupdate="CASCADE"),
+        nullable=False,
     )
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
+    visibility: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="private", index=True
+    )
+    department_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("departments.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    temperature: Mapped[float] = mapped_column(nullable=False, default=0.70)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 

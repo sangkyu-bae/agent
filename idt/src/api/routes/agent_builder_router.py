@@ -1,7 +1,10 @@
 """Agent Builder Router: 에이전트 생성/조회/수정/실행 API."""
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+
+from src.domain.auth.entities import User
+from src.interfaces.dependencies.auth import get_current_user, require_role
 
 from src.application.agent_builder.schemas import (
     AvailableToolsResponse,
@@ -13,6 +16,8 @@ from src.application.agent_builder.schemas import (
     InterviewFinalizeRequest,
     InterviewStartRequest,
     InterviewStartResponse,
+    ListAgentsRequest,
+    ListAgentsResponse,
     RunAgentRequest,
     RunAgentResponse,
     ToolMetaResponse,
@@ -50,6 +55,14 @@ def get_load_mcp_tools_use_case():
     raise NotImplementedError
 
 
+def get_list_agents_use_case():
+    raise NotImplementedError
+
+
+def get_delete_agent_use_case():
+    raise NotImplementedError
+
+
 # ── 엔드포인트 ────────────────────────────────────────────────────
 
 
@@ -81,6 +94,26 @@ async def list_tools(
     return AvailableToolsResponse(tools=internal + mcp)
 
 
+@router.get("", response_model=ListAgentsResponse)
+async def list_agents(
+    scope: str = Query("all", pattern="^(mine|department|public|all)$"),
+    search: str | None = Query(None),
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
+    use_case=Depends(get_list_agents_use_case),
+):
+    """에이전트 목록 조회 (scope 기반 필터링)."""
+    request_id = str(uuid.uuid4())
+    request = ListAgentsRequest(scope=scope, search=search, page=page, size=size)
+    return await use_case.execute(
+        viewer_user_id=str(current_user.id),
+        viewer_role=current_user.role.value,
+        request=request,
+        request_id=request_id,
+    )
+
+
 @router.post("", response_model=CreateAgentResponse, status_code=201)
 async def create_agent(
     body: CreateAgentRequest,
@@ -94,11 +127,17 @@ async def create_agent(
 @router.get("/{agent_id}", response_model=GetAgentResponse)
 async def get_agent(
     agent_id: str,
+    current_user: User = Depends(get_current_user),
     use_case=Depends(get_get_agent_use_case),
 ):
     """에이전트 정의 조회."""
     request_id = str(uuid.uuid4())
-    result = await use_case.execute(agent_id, request_id)
+    result = await use_case.execute(
+        agent_id,
+        request_id,
+        viewer_user_id=str(current_user.id),
+        viewer_role=current_user.role.value,
+    )
     if result is None:
         raise HTTPException(status_code=404, detail="Agent not found")
     return result
@@ -108,12 +147,20 @@ async def get_agent(
 async def update_agent(
     agent_id: str,
     body: UpdateAgentRequest,
+    current_user: User = Depends(get_current_user),
     use_case=Depends(get_update_agent_use_case),
 ):
     """에이전트 시스템 프롬프트 / 이름 수정."""
     request_id = str(uuid.uuid4())
     try:
-        return await use_case.execute(agent_id, body, request_id)
+        return await use_case.execute(
+            agent_id, body, request_id,
+            viewer_user_id=str(current_user.id),
+        )
+    except PermissionError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="수정 권한 없음"
+        )
     except ValueError as e:
         msg = str(e)
         if "찾을 수 없" in msg:
@@ -125,14 +172,49 @@ async def update_agent(
 async def run_agent(
     agent_id: str,
     body: RunAgentRequest,
+    current_user: User = Depends(get_current_user),
     use_case=Depends(get_run_agent_use_case),
 ):
     """에이전트 실행 (DB에서 워크플로우 로드 → LangGraph 동적 컴파일 → 응답)."""
     request_id = str(uuid.uuid4())
     try:
-        return await use_case.execute(agent_id, body, request_id)
+        return await use_case.execute(
+            agent_id,
+            body,
+            request_id,
+            viewer_user_id=str(current_user.id),
+        )
+    except PermissionError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="실행 권한 없음"
+        )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.delete("/{agent_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_agent(
+    agent_id: str,
+    current_user: User = Depends(get_current_user),
+    use_case=Depends(get_delete_agent_use_case),
+):
+    """에이전트 소프트 삭제."""
+    request_id = str(uuid.uuid4())
+    try:
+        await use_case.execute(
+            agent_id=agent_id,
+            viewer_user_id=str(current_user.id),
+            viewer_role=current_user.role.value,
+            request_id=request_id,
+        )
+    except PermissionError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="삭제 권한 없음"
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(e)
+        )
 
 
 # ── Human-in-the-Loop 인터뷰 엔드포인트 ──────────────────────────
