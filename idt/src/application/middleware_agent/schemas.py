@@ -15,6 +15,7 @@ class CreateMiddlewareAgentRequest(BaseModel):
     system_prompt: str
     model_name: str = "gpt-4o"
     tool_ids: list[str]
+    tool_configs: dict[str, dict] = Field(default_factory=dict)
     middleware: list[MiddlewareConfigRequest] = Field(default_factory=list)
     request_id: str
 

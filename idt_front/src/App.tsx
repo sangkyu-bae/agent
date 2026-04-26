@@ -10,6 +10,8 @@ import ToolConnectionPage from '@/pages/ToolConnectionPage';
 import ToolAdminPage from '@/pages/ToolAdminPage';
 import WorkflowDesignerPage from '@/pages/WorkflowDesignerPage';
 import WorkflowBuilderPage from '@/pages/WorkflowBuilderPage';
+import CollectionPage from '@/pages/CollectionPage';
+import CollectionDocumentsPage from '@/pages/CollectionDocumentsPage';
 import LoginPage from '@/pages/LoginPage';
 import RegisterPage from '@/pages/RegisterPage';
 import AdminUsersPage from '@/pages/AdminUsersPage';
@@ -25,7 +27,7 @@ const AuthInitializer = ({ children }: { children: React.ReactNode }) => {
 const AuthenticatedLayout = () => (
   <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
     <TopNav />
-    <div style={{ flex: 1, overflow: 'hidden' }}>
+    <div style={{ flex: 1, overflow: 'auto' }}>
       <Outlet />
     </div>
   </div>
@@ -44,13 +46,15 @@ const App = () => (
         <Route element={<AuthenticatedLayout />}>
           <Route path="/" element={<Navigate to="/chatpage" replace />} />
           <Route path="/chatpage" element={<ChatPage />} />
-          <Route path="/documents" element={<DocumentPage />} />
+          <Route path="/documents" element={<Navigate to="/collections" replace />} />
           <Route path="/eval-dataset" element={<EvalDatasetPage />} />
           <Route path="/agent-builder" element={<AgentBuilderPage />} />
           <Route path="/tool-connection" element={<ToolConnectionPage />} />
           <Route path="/tool-admin" element={<ToolAdminPage />} />
           <Route path="/workflow-designer" element={<WorkflowDesignerPage />} />
           <Route path="/workflow-builder" element={<WorkflowBuilderPage />} />
+          <Route path="/collections" element={<CollectionPage />} />
+          <Route path="/collections/:collectionName/documents" element={<CollectionDocumentsPage />} />
         </Route>
       </Route>
 

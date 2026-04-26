@@ -66,6 +66,7 @@ class GetAgentUseCase:
                         worker_id=w.worker_id,
                         description=w.description,
                         sort_order=w.sort_order,
+                        tool_config=w.tool_config,
                     )
                     for w in agent.workers
                 ],

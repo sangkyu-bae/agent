@@ -1,6 +1,7 @@
 import axios, { type AxiosInstance, type InternalAxiosRequestConfig } from 'axios';
 import { API_BASE_URL, API_ENDPOINTS } from '@/constants/api';
 import { useAuthStore } from '@/store/authStore';
+import { ApiError } from './ApiError';
 
 interface RetryConfig extends InternalAxiosRequestConfig {
   _retry?: boolean;
@@ -53,7 +54,8 @@ authApiClient.interceptors.response.use(
     }
 
     const message = error.response?.data?.message ?? '알 수 없는 오류가 발생했습니다.';
-    return Promise.reject(new Error(message));
+    const status = error.response?.status ?? 0;
+    return Promise.reject(new ApiError(message, status));
   }
 );
 

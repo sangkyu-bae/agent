@@ -2,10 +2,11 @@
 
 Orchestrates: query rewriting → vector retrieval → compression → result mapping.
 """
-from typing import Optional
+from typing import Callable, Optional
 
 from langchain_core.documents import Document as LangChainDocument
 
+from src.domain.collection.schemas import ActionType
 from src.domain.retrieval.schemas import (
     RetrievalRequest,
     RetrievalResult,
@@ -33,19 +34,15 @@ class RetrievalUseCase:
         compressor=None,
         query_rewriter=None,
         logger: Optional[LoggerInterface] = None,
+        activity_log_factory: Optional[Callable] = None,
+        collection_name: str = "documents",
     ) -> None:
-        """Initialize RetrievalUseCase.
-
-        Args:
-            retriever: ParentChildRetriever instance for vector search.
-            compressor: Optional DocumentCompressorInterface for relevance filtering.
-            query_rewriter: Optional QueryRewriterUseCase for query improvement.
-            logger: LoggerInterface for structured logging.
-        """
         self._retriever = retriever
         self._compressor = compressor
         self._query_rewriter = query_rewriter
         self._logger = logger
+        self._activity_log_factory = activity_log_factory
+        self._collection_name = collection_name
 
     async def execute(self, request: RetrievalRequest) -> RetrievalResult:
         """Execute document retrieval for the given request.
@@ -170,6 +167,17 @@ class RetrievalUseCase:
                     total_found=result.total_found,
                 )
 
+            await self._log_activity(
+                action=ActionType.SEARCH,
+                request_id=request.request_id,
+                user_id=request.user_id,
+                detail={
+                    "query": request.query[:200],
+                    "top_k": top_k,
+                    "results_count": result.total_found,
+                },
+            )
+
             return result
 
         except ValueError:
@@ -182,3 +190,24 @@ class RetrievalUseCase:
                     request_id=request.request_id,
                 )
             raise
+
+    async def _log_activity(
+        self,
+        action: ActionType,
+        request_id: str,
+        user_id: str | None = None,
+        detail: dict | None = None,
+    ) -> None:
+        if self._activity_log_factory is None:
+            return
+        try:
+            service = self._activity_log_factory()
+            await service.log(
+                collection_name=self._collection_name,
+                action=action,
+                request_id=request_id,
+                user_id=user_id,
+                detail=detail,
+            )
+        except Exception:
+            pass

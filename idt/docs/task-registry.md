@@ -48,6 +48,9 @@
 | AUTH-001 | src/claude/task/task-auth.md | 인증/인가 시스템 (JWT, RBAC) |
 | CHAT-001 | src/claude/task/task-general-chat-api.md | General Chat API (ReAct + 검색 + MCP + 멀티턴) |
 | CHAT-HIST-001 | src/claude/task/task-chat-history-api.md | 대화 히스토리 조회 API |
-| LLM-MODEL-REG-001 | docs/02-design/features/llm-model-registry.design.md | LLM 모델 레지스트리 (llm_model 테이블 CRUD, provider/model_name/api_key_env 관리, 시드 데이터) |
-| AGENT-SHARE-001 | docs/archive/2026-04/shared-custom-agent/shared-custom-agent.plan.md | 사용자 커스텀 에이전트 공유 빌더 (visibility/temperature/department_id, 부서 관리, 도구 카탈로그 통합) |
-| DI-WIRING-001 | docs/01-plan/features/missing-di-wiring.plan.md | main.py 누락 DI 배선 일괄 수정 (MCP Registry/Middleware Agent/Excel Export/PDF Export 라우터 + load_mcp_tools) |
+| LLM-MODEL-REG-001 | docs/archive/2026-04/llm-model-registry/ | LLM 모델 레지스트리 (llm_model 테이블 CRUD) |
+| AGENT-SHARE-001 | docs/archive/2026-04/shared-custom-agent/ | 사용자 커스텀 에이전트 공유 빌더 |
+| DI-WIRING-001 | docs/archive/2026-04/missing-di-wiring/ | main.py 누락 DI 배선 일괄 수정 |
+| CUSTOM-RAG-TOOL-001 | docs/archive/2026-04/custom-rag-tool/ | 커스텀 RAG 도구 (에이전트별 검색 범위/파라미터 설정) |
+| EMB-REG-001 | docs/archive/2026-04/embedding-model-registry/ | 임베딩 모델 레지스트리 (embedding_model 테이블 + 컬렉션 자동 차원 결정) |
+| DOC-BROWSE-001 | docs/01-plan/features/collection-document-chunks.plan.md | 컬렉션별 임베딩 문서 및 청크 조회 API (문서 목록 + 청크 상세) |

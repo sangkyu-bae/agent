@@ -109,7 +109,7 @@ class TestHybridSearchUseCaseExecute:
         await use_case.execute(req, REQUEST_ID)
 
         mock_vector_store.search_by_vector.assert_called_once_with(
-            vector=[0.1, 0.2, 0.3], top_k=15
+            vector=[0.1, 0.2, 0.3], top_k=15, filter=None
         )
 
     @pytest.mark.asyncio
@@ -173,3 +173,47 @@ class TestHybridSearchUseCaseExecute:
         call_args = mock_es_repo.search.call_args
         es_query = call_args[0][0]
         assert es_query.size == 30
+
+    @pytest.mark.asyncio
+    async def test_metadata_filter_applied_to_es_query(self, use_case, mock_es_repo):
+        from src.domain.hybrid_search.schemas import HybridSearchRequest
+
+        req = HybridSearchRequest(
+            query="q", metadata_filter={"department": "finance"}
+        )
+        await use_case.execute(req, REQUEST_ID)
+
+        call_args = mock_es_repo.search.call_args
+        es_query = call_args[0][0]
+        assert "bool" in es_query.query
+        assert es_query.query["bool"]["filter"] == [
+            {"term": {"department": "finance"}}
+        ]
+
+    @pytest.mark.asyncio
+    async def test_metadata_filter_applied_to_vector_search(
+        self, use_case, mock_vector_store
+    ):
+        from src.domain.hybrid_search.schemas import HybridSearchRequest
+
+        req = HybridSearchRequest(
+            query="q", metadata_filter={"category": "policy"}
+        )
+        await use_case.execute(req, REQUEST_ID)
+
+        call_args = mock_vector_store.search_by_vector.call_args
+        assert call_args.kwargs["filter"] is not None
+
+    @pytest.mark.asyncio
+    async def test_no_metadata_filter_uses_simple_match_query(
+        self, use_case, mock_es_repo
+    ):
+        from src.domain.hybrid_search.schemas import HybridSearchRequest
+
+        req = HybridSearchRequest(query="test")
+        await use_case.execute(req, REQUEST_ID)
+
+        call_args = mock_es_repo.search.call_args
+        es_query = call_args[0][0]
+        assert "match" in es_query.query
+        assert "bool" not in es_query.query

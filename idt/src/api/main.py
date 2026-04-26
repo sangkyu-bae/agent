@@ -82,6 +82,12 @@ from src.api.routes.agent_builder_router import (
     get_delete_agent_use_case,
     get_load_mcp_tools_use_case,
 )
+from src.api.routes.rag_tool_router import (
+    router as rag_tool_router,
+    get_qdrant_client as rag_tool_get_qdrant_client,
+    get_collection_aliases as rag_tool_get_aliases,
+    get_collection_permission_service as rag_tool_get_perm_service,
+)
 from src.api.routes.department_router import (
     router as department_router,
     get_list_departments_use_case,
@@ -117,6 +123,18 @@ from src.api.routes.middleware_agent_router import (
     get_run_use_case as get_mw_run_use_case,
     get_update_use_case as get_mw_update_use_case,
 )
+from src.api.routes.collection_router import (
+    router as collection_router,
+    get_collection_use_case,
+    get_activity_log_service as get_collection_activity_log_service,
+)
+from src.api.routes.doc_browse_router import (
+    router as doc_browse_router,
+    get_list_documents_use_case,
+    get_chunks_use_case,
+)
+from src.application.doc_browse.list_documents_use_case import ListDocumentsUseCase
+from src.application.doc_browse.get_chunks_use_case import GetChunksUseCase
 from src.api.routes.excel_export_router import (
     router as excel_export_router,
     get_excel_export_use_case as get_excel_export_uc,
@@ -240,6 +258,19 @@ from src.api.routes.admin_router import (
     get_pending_users_use_case,
     get_approve_use_case,
     get_reject_use_case,
+)
+from src.api.routes.embedding_model_router import (
+    router as embedding_model_router,
+    get_list_embedding_models_use_case,
+)
+from src.application.embedding_model.list_embedding_models_use_case import (
+    ListEmbeddingModelsUseCase,
+)
+from src.infrastructure.embedding_model.repository import (
+    EmbeddingModelRepository,
+)
+from src.infrastructure.embedding_model.seed import (
+    seed_default_embedding_models,
 )
 from src.api.routes.llm_model_router import (
     router as llm_model_router,
@@ -695,11 +726,20 @@ def create_retrieval_use_case() -> RetrievalUseCase:
         config=compressor_config,
     )
 
+    from src.application.collection.fire_and_forget_activity_logger import FireAndForgetActivityLogger
+
+    activity_logger = FireAndForgetActivityLogger(
+        session_factory=get_session_factory(),
+        logger=app_logger,
+    )
+
     return RetrievalUseCase(
         retriever=retriever,
         compressor=compressor,
         query_rewriter=None,
         logger=app_logger,
+        activity_log_factory=lambda: activity_logger,
+        collection_name=settings.qdrant_collection_name,
     )
 
 
@@ -760,11 +800,27 @@ def create_ingest_use_case() -> IngestDocumentUseCase:
             "llamaparser", api_key=settings.llama_parse_api_key
         ),
     }
+    from src.application.collection.fire_and_forget_activity_logger import FireAndForgetActivityLogger
+
+    activity_logger = FireAndForgetActivityLogger(
+        session_factory=get_session_factory(),
+        logger=app_logger,
+    )
+
+    from src.infrastructure.doc_browse.session_scoped_metadata_repository import SessionScopedDocumentMetadataRepository
+    doc_metadata_repo = SessionScopedDocumentMetadataRepository(
+        session_factory=get_session_factory(),
+        logger=app_logger,
+    )
+
     return IngestDocumentUseCase(
         parsers=parsers,
         embedding=embedding,
         vectorstore=vectorstore,
         logger=app_logger,
+        activity_log_factory=lambda: activity_logger,
+        collection_name=settings.qdrant_collection_name,
+        document_metadata_repo=doc_metadata_repo,
     )
 
 
@@ -1000,6 +1056,44 @@ def create_llm_model_factories():
     return create_factory, update_factory, deactivate_factory, get_factory, list_factory
 
 
+def create_embedding_model_factories():
+    """Return per-request DI factories for Embedding Model Registry."""
+    app_logger = get_app_logger()
+
+    def _make_repo(session: AsyncSession):
+        return EmbeddingModelRepository(session=session, logger=app_logger)
+
+    def list_factory(
+        session: AsyncSession = Depends(get_session),
+    ) -> ListEmbeddingModelsUseCase:
+        return ListEmbeddingModelsUseCase(
+            repository=_make_repo(session), logger=app_logger
+        )
+
+    return (list_factory,)
+
+
+async def seed_embedding_models_on_startup() -> None:
+    app_logger = get_app_logger()
+    request_id = str(uuid.uuid4())
+    factory = get_session_factory()
+    try:
+        async with factory() as session:
+            async with session.begin():
+                repo = EmbeddingModelRepository(
+                    session=session, logger=app_logger
+                )
+                await seed_default_embedding_models(
+                    repo, app_logger, request_id
+                )
+    except Exception as e:
+        app_logger.warning(
+            "Embedding model seeding skipped",
+            request_id=request_id,
+            error=str(e),
+        )
+
+
 async def seed_llm_models_on_startup() -> None:
     """서비스 기동 시 기본 LLM 모델 3개 등록 (중복 스킵).
 
@@ -1131,17 +1225,26 @@ def create_agent_builder_factories():
     def _make_llm_model_repo(session: AsyncSession):
         return LlmModelRepository(session=session, logger=app_logger)
 
+    def _make_perm_repo(session: AsyncSession):
+        from src.infrastructure.collection.permission_repository import CollectionPermissionRepository
+        return CollectionPermissionRepository(session, app_logger)
+
     def create_uc_factory(session: AsyncSession = Depends(get_session)):
         return CreateAgentUseCase(
             tool_selector=tool_selector,
             prompt_generator=prompt_generator,
             repository=_make_repo(session),
             llm_model_repository=_make_llm_model_repo(session),
+            perm_repo=_make_perm_repo(session),
             logger=app_logger,
         )
 
     def update_uc_factory(session: AsyncSession = Depends(get_session)):
-        return UpdateAgentUseCase(repository=_make_repo(session), logger=app_logger)
+        return UpdateAgentUseCase(
+            repository=_make_repo(session),
+            perm_repo=_make_perm_repo(session),
+            logger=app_logger,
+        )
 
     def run_uc_factory(session: AsyncSession = Depends(get_session)):
         return RunAgentUseCase(
@@ -1215,6 +1318,56 @@ def create_department_factories():
         return RemoveUserDepartmentUseCase(repository=_make_repo(session), logger=app_logger)
 
     return list_factory, create_factory, update_factory, delete_factory, assign_factory, remove_factory
+
+
+def create_collection_factories():
+    """Return per-request DI factories for Collection Management."""
+    app_logger = get_app_logger()
+
+    qdrant_client = AsyncQdrantClient(
+        host=settings.qdrant_host,
+        port=settings.qdrant_port,
+    )
+    from src.infrastructure.collection.qdrant_collection_repository import QdrantCollectionRepository
+    from src.infrastructure.collection.activity_log_repository import ActivityLogRepository
+    from src.application.collection.activity_log_service import ActivityLogService
+    from src.application.collection.use_case import CollectionManagementUseCase
+    from src.domain.collection.policy import CollectionPolicy
+    from src.infrastructure.collection.permission_repository import CollectionPermissionRepository
+    from src.application.collection.permission_service import CollectionPermissionService
+    from src.domain.collection.permission_policy import CollectionPermissionPolicy
+    from src.infrastructure.department.department_repository import DepartmentRepository
+
+    collection_repo = QdrantCollectionRepository(qdrant_client)
+
+    def use_case_factory(session: AsyncSession = Depends(get_session)):
+        log_repo = ActivityLogRepository(session, app_logger)
+        log_service = ActivityLogService(log_repo, app_logger)
+        embedding_model_repo = EmbeddingModelRepository(
+            session=session, logger=app_logger
+        )
+        perm_repo = CollectionPermissionRepository(session, app_logger)
+        dept_repo = DepartmentRepository(session, app_logger)
+        perm_service = CollectionPermissionService(
+            perm_repo=perm_repo,
+            dept_repo=dept_repo,
+            policy=CollectionPermissionPolicy(),
+            logger=app_logger,
+        )
+        return CollectionManagementUseCase(
+            repository=collection_repo,
+            policy=CollectionPolicy(),
+            activity_log=log_service,
+            default_collection=settings.qdrant_collection_name,
+            permission_service=perm_service,
+            embedding_model_repo=embedding_model_repo,
+        )
+
+    def activity_log_factory(session: AsyncSession = Depends(get_session)):
+        log_repo = ActivityLogRepository(session, app_logger)
+        return ActivityLogService(log_repo, app_logger)
+
+    return use_case_factory, activity_log_factory
 
 
 def create_tool_catalog_factories():
@@ -1354,6 +1507,7 @@ async def lifespan(app: FastAPI):
 
     # LLM Model Registry: 기본 모델 시드 등록 (중복 스킵, 실패 시 경고)
     await seed_llm_models_on_startup()
+    await seed_embedding_models_on_startup()
 
     yield
 
@@ -1485,6 +1639,10 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_get_llm_model_use_case] = _llm_get_f
     app.dependency_overrides[get_list_llm_models_use_case] = _llm_list_f
 
+    # Embedding Model Registry DI
+    (_emb_list_f,) = create_embedding_model_factories()
+    app.dependency_overrides[get_list_embedding_models_use_case] = _emb_list_f
+
     # MCP Registry DI
     (
         _mcp_register_f, _mcp_list_f, _mcp_update_f, _mcp_delete_f,
@@ -1503,6 +1661,11 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_mw_run_use_case] = _mw_run_f
     app.dependency_overrides[get_mw_update_use_case] = _mw_update_f
 
+    # Collection Management DI (per-request — session 필요)
+    _collection_uc_factory, _activity_log_service_factory = create_collection_factories()
+    app.dependency_overrides[get_collection_use_case] = _collection_uc_factory
+    app.dependency_overrides[get_collection_activity_log_service] = _activity_log_service_factory
+
     # Excel Export DI (singleton)
     _excel_export_uc = create_excel_export_use_case()
     app.dependency_overrides[get_excel_export_uc] = lambda: _excel_export_uc
@@ -1510,6 +1673,54 @@ def create_app() -> FastAPI:
     # PDF Export DI (singleton)
     _html_to_pdf_uc = create_html_to_pdf_use_case()
     app.dependency_overrides[get_html_to_pdf_uc] = lambda: _html_to_pdf_uc
+
+    # RAG Tool Router DI
+    app.dependency_overrides[rag_tool_get_qdrant_client] = lambda: qdrant_client
+    app.dependency_overrides[rag_tool_get_aliases] = lambda: getattr(settings, "collection_aliases", {})
+
+    def _rag_tool_perm_service_factory(
+        session: AsyncSession = Depends(get_session),
+    ):
+        from src.infrastructure.collection.permission_repository import CollectionPermissionRepository
+        from src.application.collection.permission_service import CollectionPermissionService
+        from src.domain.collection.permission_policy import CollectionPermissionPolicy
+        from src.infrastructure.department.department_repository import DepartmentRepository
+        perm_repo = CollectionPermissionRepository(session, app_logger)
+        dept_repo = DepartmentRepository(session, app_logger)
+        return CollectionPermissionService(
+            perm_repo=perm_repo,
+            dept_repo=dept_repo,
+            policy=CollectionPermissionPolicy(),
+            logger=app_logger,
+        )
+
+    app.dependency_overrides[rag_tool_get_perm_service] = _rag_tool_perm_service_factory
+
+    # Doc Browse DI (per-request, MySQL-based)
+    def _list_documents_uc_factory(
+        session: AsyncSession = Depends(get_session),
+    ):
+        from src.infrastructure.doc_browse.document_metadata_repository import DocumentMetadataRepository
+        repo = DocumentMetadataRepository(
+            session=session,
+            logger=StructuredLogger("doc_browse.metadata_repo"),
+        )
+        return ListDocumentsUseCase(
+            document_metadata_repo=repo,
+            logger=StructuredLogger("doc_browse.list"),
+        )
+
+    def _get_chunks_uc_factory():
+        return GetChunksUseCase(
+            qdrant_client=AsyncQdrantClient(
+                host=settings.qdrant_host,
+                port=settings.qdrant_port,
+            ),
+            logger=StructuredLogger("doc_browse.chunks"),
+        )
+
+    app.dependency_overrides[get_list_documents_use_case] = _list_documents_uc_factory
+    app.dependency_overrides[get_chunks_use_case] = _get_chunks_uc_factory
 
     # Include routers
     app.include_router(document_router)
@@ -1525,6 +1736,7 @@ def create_app() -> FastAPI:
     app.include_router(ingest_router)
     app.include_router(doc_chunk_router)
     app.include_router(agent_builder_router)
+    app.include_router(rag_tool_router)
     app.include_router(department_router)
     app.include_router(tool_catalog_router)
     app.include_router(auto_agent_builder_router)
@@ -1532,8 +1744,11 @@ def create_app() -> FastAPI:
     app.include_router(auth_router)
     app.include_router(admin_router)
     app.include_router(llm_model_router)
+    app.include_router(embedding_model_router)
     app.include_router(mcp_registry_router)
     app.include_router(middleware_agent_router)
+    app.include_router(collection_router)
+    app.include_router(doc_browse_router)
     app.include_router(excel_export_router)
     app.include_router(pdf_export_router)
 

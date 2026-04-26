@@ -77,8 +77,25 @@ async def list_tools(
     request_id = str(uuid.uuid4())
 
     # 1. 내부 도구 (TOOL_REGISTRY)
+    configurable_tools = {"internal_document_search"}
+    rag_config_schema = {
+        "collection_name": {"type": "string", "nullable": True},
+        "es_index": {"type": "string", "nullable": True},
+        "metadata_filter": {"type": "object", "additionalProperties": {"type": "string"}},
+        "top_k": {"type": "integer", "minimum": 1, "maximum": 20, "default": 5},
+        "search_mode": {"type": "string", "enum": ["hybrid", "vector_only", "bm25_only"], "default": "hybrid"},
+        "rrf_k": {"type": "integer", "minimum": 1, "default": 60},
+        "tool_name": {"type": "string", "maxLength": 100},
+        "tool_description": {"type": "string", "maxLength": 500},
+    }
     internal = [
-        ToolMetaResponse(tool_id=t.tool_id, name=t.name, description=t.description)
+        ToolMetaResponse(
+            tool_id=t.tool_id,
+            name=t.name,
+            description=t.description,
+            configurable=t.tool_id in configurable_tools,
+            config_schema=rag_config_schema if t.tool_id in configurable_tools else None,
+        )
         for t in get_all_tools()
     ]
 

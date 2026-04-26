@@ -41,7 +41,9 @@ class WorkflowCompiler:
 
             worker_agents = []
             for worker_def in workflow.workers:
-                tool = self._tool_factory.create(worker_def.tool_id, request_id)
+                tool = self._tool_factory.create(
+                    worker_def.tool_id, request_id, tool_config=worker_def.tool_config
+                )
                 worker_agent = create_react_agent(
                     llm,
                     tools=[tool],

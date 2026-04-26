@@ -23,6 +23,7 @@ class WorkerDefinition:
     worker_id: str
     description: str
     sort_order: int = 0
+    tool_config: dict | None = None
 
 
 @dataclass

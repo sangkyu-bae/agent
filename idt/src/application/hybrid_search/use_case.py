@@ -80,9 +80,20 @@ class HybridSearchUseCase:
     ) -> tuple[list[SearchHit], list[SearchHit]]:
         """BM25와 벡터 검색을 순차적으로 실행하고 SearchHit 목록으로 변환."""
         # BM25
+        es_query_body: dict = {"match": {"content": request.query}}
+        if request.metadata_filter:
+            filter_clauses = [
+                {"term": {k: v}} for k, v in request.metadata_filter.items()
+            ]
+            es_query_body = {
+                "bool": {
+                    "must": [{"match": {"content": request.query}}],
+                    "filter": filter_clauses,
+                },
+            }
         es_query = ESSearchQuery(
             index=self._es_index,
-            query={"match": {"content": request.query}},
+            query=es_query_body,
             size=request.bm25_top_k,
         )
         es_results = await self._es_repo.search(es_query, request_id)
@@ -100,8 +111,14 @@ class HybridSearchUseCase:
 
         # Vector
         query_vector = await self._embedding.embed_text(request.query)
+        vector_filter = None
+        if request.metadata_filter:
+            from src.domain.vector.value_objects import SearchFilter
+            vector_filter = SearchFilter(metadata=request.metadata_filter)
         vector_docs = await self._vector_store.search_by_vector(
-            vector=query_vector, top_k=request.vector_top_k
+            vector=query_vector,
+            top_k=request.vector_top_k,
+            filter=vector_filter,
         )
         vector_hits = [
             SearchHit(

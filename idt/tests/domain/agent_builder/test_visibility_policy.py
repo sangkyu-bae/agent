@@ -89,3 +89,61 @@ class TestCanDelete:
     def test_non_owner_non_admin_cannot_delete(self):
         ctx = _ctx(owner_id="user-1", viewer_id="user-2", viewer_role="user")
         assert VisibilityPolicy.can_delete(ctx) is False
+
+
+class TestMaxVisibilityForScopes:
+    def test_single_personal_returns_private(self):
+        assert VisibilityPolicy.max_visibility_for_scopes(["PERSONAL"]) == "private"
+
+    def test_single_department_returns_department(self):
+        assert VisibilityPolicy.max_visibility_for_scopes(["DEPARTMENT"]) == "department"
+
+    def test_single_public_returns_public(self):
+        assert VisibilityPolicy.max_visibility_for_scopes(["PUBLIC"]) == "public"
+
+    def test_mixed_takes_most_restrictive(self):
+        assert VisibilityPolicy.max_visibility_for_scopes(["PUBLIC", "DEPARTMENT"]) == "department"
+
+    def test_mixed_personal_wins(self):
+        assert VisibilityPolicy.max_visibility_for_scopes(["PUBLIC", "PERSONAL"]) == "private"
+
+    def test_all_three_personal_wins(self):
+        assert VisibilityPolicy.max_visibility_for_scopes(
+            ["PUBLIC", "DEPARTMENT", "PERSONAL"]
+        ) == "private"
+
+    def test_empty_scopes_raises(self):
+        with pytest.raises(ValueError):
+            VisibilityPolicy.max_visibility_for_scopes([])
+
+    def test_unknown_scope_raises(self):
+        with pytest.raises(ValueError):
+            VisibilityPolicy.max_visibility_for_scopes(["UNKNOWN"])
+
+
+class TestClampVisibility:
+    def test_public_clamped_by_personal(self):
+        assert VisibilityPolicy.clamp_visibility("public", ["PERSONAL"]) == "private"
+
+    def test_public_clamped_by_department(self):
+        assert VisibilityPolicy.clamp_visibility("public", ["DEPARTMENT"]) == "department"
+
+    def test_public_not_clamped_by_public(self):
+        assert VisibilityPolicy.clamp_visibility("public", ["PUBLIC"]) == "public"
+
+    def test_department_clamped_by_personal(self):
+        assert VisibilityPolicy.clamp_visibility("department", ["PERSONAL"]) == "private"
+
+    def test_department_not_clamped_by_department(self):
+        assert VisibilityPolicy.clamp_visibility("department", ["DEPARTMENT"]) == "department"
+
+    def test_private_never_clamped(self):
+        assert VisibilityPolicy.clamp_visibility("private", ["PUBLIC"]) == "private"
+
+    def test_empty_scopes_returns_requested(self):
+        assert VisibilityPolicy.clamp_visibility("public", []) == "public"
+
+    def test_multi_collection_takes_most_restrictive(self):
+        assert VisibilityPolicy.clamp_visibility(
+            "public", ["PUBLIC", "DEPARTMENT"]
+        ) == "department"

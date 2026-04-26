@@ -1,0 +1,10 @@
+# Archive Index — 2026-04
+
+| Feature | Match Rate | Iterations | Archived | Documents |
+|---------|:----------:|:----------:|----------|-----------|
+| tools | 100% | 1 | 2026-04-21 | [plan](tools/tools.plan.md), [design](tools/tools.design.md), [analysis](tools/tools.analysis.md), [report](tools/tools.report.md) |
+| llm-model | 100% | 0 | 2026-04-21 | [plan](llm-model/llm-model.plan.md), [design](llm-model/llm-model.design.md), [analysis](llm-model/llm-model.analysis.md), [report](llm-model/llm-model.report.md) |
+| custom-rag-tool-frontend | 100% | 1 | 2026-04-21 | [plan](custom-rag-tool-frontend/custom-rag-tool-frontend.plan.md), [design](custom-rag-tool-frontend/custom-rag-tool-frontend.design.md), [report](custom-rag-tool-frontend/custom-rag-tool-frontend.report.md) |
+| embedding-model-registry | 100% | 0 | 2026-04-23 | [plan](embedding-model-registry/embedding-model-registry.plan.md), [design](embedding-model-registry/embedding-model-registry.design.md), [analysis](embedding-model-registry/embedding-model-registry.analysis.md), [report](embedding-model-registry/embedding-model-registry.report.md) |
+| collection-permission-management | 100% | 1 | 2026-04-23 | [plan](collection-permission-management/collection-permission-management.plan.md), [design](collection-permission-management/collection-permission-management.design.md), [analysis](collection-permission-management/collection-permission-management.analysis.md), [report](collection-permission-management/collection-permission-management.report.md) |
+| collection-document-chunks | 97% | 0 | 2026-04-23 | [plan](collection-document-chunks/collection-document-chunks.plan.md), [design](collection-document-chunks/collection-document-chunks.design.md), [analysis](collection-document-chunks/collection-document-chunks.analysis.md), [report](collection-document-chunks/collection-document-chunks.report.md) |

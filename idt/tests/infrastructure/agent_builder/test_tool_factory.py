@@ -41,12 +41,63 @@ class TestToolFactory:
         factory = _make_factory()
         tool = factory.create("internal_document_search")
         assert isinstance(tool, BaseTool)
-        assert tool.name == "internal_document_search"
+        assert tool.name == "내부 문서 검색"
 
     def test_create_unknown_tool_raises(self):
         factory = _make_factory()
         with pytest.raises(ValueError, match="Unknown tool_id"):
             factory.create("unknown_tool")
+
+
+class TestToolFactoryRagConfig:
+    def test_create_with_rag_config_applies_settings(self):
+        factory = _make_factory()
+        config = {
+            "top_k": 10,
+            "search_mode": "vector_only",
+            "metadata_filter": {"department": "finance"},
+            "tool_name": "금융 문서 검색",
+            "tool_description": "금융 관련 내부 문서를 검색합니다.",
+        }
+        tool = factory.create("internal_document_search", tool_config=config)
+        assert tool.name == "금융 문서 검색"
+        assert tool.description == "금융 관련 내부 문서를 검색합니다."
+        assert tool.top_k == 10
+        assert tool.search_mode == "vector_only"
+        assert tool.metadata_filter == {"department": "finance"}
+
+    def test_create_without_config_uses_defaults(self):
+        factory = _make_factory()
+        tool = factory.create("internal_document_search")
+        assert tool.top_k == 5
+        assert tool.search_mode == "hybrid"
+        assert tool.metadata_filter == {}
+
+    def test_create_with_none_config_uses_defaults(self):
+        factory = _make_factory()
+        tool = factory.create("internal_document_search", tool_config=None)
+        assert tool.top_k == 5
+
+    def test_create_with_partial_config_merges_defaults(self):
+        factory = _make_factory()
+        tool = factory.create(
+            "internal_document_search", tool_config={"top_k": 15}
+        )
+        assert tool.top_k == 15
+        assert tool.search_mode == "hybrid"
+
+    def test_parse_rag_config_invalid_raises(self):
+        factory = _make_factory()
+        with pytest.raises(ValueError):
+            factory.create(
+                "internal_document_search",
+                tool_config={"top_k": 999},
+            )
+
+    def test_non_rag_tool_ignores_config(self):
+        factory = _make_factory()
+        tool = factory.create("excel_export", tool_config={"top_k": 10})
+        assert tool.name == "excel_export"
 
 
 class TestToolFactoryMCPRouting:

@@ -106,6 +106,7 @@ class AutoBuildUseCase:
             system_prompt=spec.system_prompt,
             model_name=request.model_name,
             tool_ids=spec.tool_ids,
+            tool_configs=spec.tool_configs,
             middleware=[
                 MiddlewareConfigRequest(
                     type=m["type"],

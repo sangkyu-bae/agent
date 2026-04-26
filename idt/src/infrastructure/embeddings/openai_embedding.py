@@ -11,7 +11,7 @@ from src.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 
-MODEL_DIMENSIONS = {
+_FALLBACK_DIMENSIONS = {
     "text-embedding-3-small": 1536,
     "text-embedding-3-large": 3072,
     "text-embedding-ada-002": 1536,
@@ -47,6 +47,6 @@ class OpenAIEmbedding(EmbeddingInterface):
             raise
 
     def get_dimension(self) -> int:
-        if self._model_name not in MODEL_DIMENSIONS:
+        if self._model_name not in _FALLBACK_DIMENSIONS:
             raise ValueError(f"Unknown model dimension for: {self._model_name}")
-        return MODEL_DIMENSIONS[self._model_name]
+        return _FALLBACK_DIMENSIONS[self._model_name]

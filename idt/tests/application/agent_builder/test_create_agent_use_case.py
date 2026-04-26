@@ -5,9 +5,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.application.agent_builder.schemas import CreateAgentRequest, CreateAgentResponse
+from src.application.agent_builder.schemas import CreateAgentRequest, CreateAgentResponse, RagToolConfigRequest
 from src.application.agent_builder.create_agent_use_case import CreateAgentUseCase
 from src.domain.agent_builder.schemas import AgentDefinition, WorkerDefinition, WorkflowSkeleton
+from src.domain.collection.permission_schemas import CollectionPermission, CollectionScope
 from src.domain.llm_model.entity import LlmModel
 
 
@@ -37,23 +38,51 @@ def _make_default_llm_model() -> LlmModel:
     )
 
 
-def _make_use_case():
+def _make_perm(scope: CollectionScope, collection_name: str = "docs") -> CollectionPermission:
+    return CollectionPermission(
+        collection_name=collection_name,
+        owner_id=1,
+        scope=scope,
+    )
+
+
+def _make_use_case(
+    perm_by_name: dict[str, CollectionPermission] | None = None,
+    rag_collection: str | None = None,
+    requested_visibility: str = "private",
+):
     tool_selector = MagicMock()
     prompt_generator = MagicMock()
     repository = MagicMock()
     llm_model_repository = MagicMock()
+    perm_repo = MagicMock()
     logger = MagicMock()
 
-    skeleton = WorkflowSkeleton(
-        workers=[_make_worker("tavily_search", 0), _make_worker("excel_export", 1)],
-        flow_hint="search 후 export",
-    )
+    workers = [_make_worker("tavily_search", 0), _make_worker("excel_export", 1)]
+    if rag_collection:
+        rag_worker = WorkerDefinition(
+            tool_id="internal_document_search",
+            worker_id="rag_worker",
+            description="RAG",
+            sort_order=2,
+            tool_config={"collection_name": rag_collection},
+        )
+        workers.append(rag_worker)
+
+    skeleton = WorkflowSkeleton(workers=workers, flow_hint="search 후 export")
     tool_selector.select = AsyncMock(return_value=skeleton)
     prompt_generator.generate = AsyncMock(return_value="자동 생성된 시스템 프롬프트")
 
     default_model = _make_default_llm_model()
     llm_model_repository.find_by_id = AsyncMock(return_value=default_model)
     llm_model_repository.find_default = AsyncMock(return_value=default_model)
+
+    async def _find_perm(name, req_id):
+        if perm_by_name:
+            return perm_by_name.get(name)
+        return None
+
+    perm_repo.find_by_collection_name = AsyncMock(side_effect=_find_perm)
 
     now = datetime.now(timezone.utc)
     saved_agent = AgentDefinition(
@@ -66,6 +95,7 @@ def _make_use_case():
         workers=skeleton.workers,
         llm_model_id=default_model.id,
         status="active",
+        visibility=requested_visibility,
         created_at=now,
         updated_at=now,
     )
@@ -76,15 +106,16 @@ def _make_use_case():
         prompt_generator=prompt_generator,
         repository=repository,
         llm_model_repository=llm_model_repository,
+        perm_repo=perm_repo,
         logger=logger,
     )
-    return use_case, tool_selector, prompt_generator, repository
+    return use_case, tool_selector, prompt_generator, repository, perm_repo
 
 
 class TestCreateAgentUseCase:
     @pytest.mark.asyncio
     async def test_execute_returns_create_agent_response(self):
-        use_case, _, _, _ = _make_use_case()
+        use_case, _, _, _, _ = _make_use_case()
         request = CreateAgentRequest(
             user_request="AI 관련 뉴스 검색하고 엑셀로 저장하는 에이전트 만들어줘",
             name="AI 뉴스 수집기",
@@ -97,7 +128,7 @@ class TestCreateAgentUseCase:
 
     @pytest.mark.asyncio
     async def test_execute_calls_tool_selector(self):
-        use_case, tool_selector, _, _ = _make_use_case()
+        use_case, tool_selector, _, _, _ = _make_use_case()
         request = CreateAgentRequest(
             user_request="테스트 요청", name="테스트", user_id="user-1"
         )
@@ -106,7 +137,7 @@ class TestCreateAgentUseCase:
 
     @pytest.mark.asyncio
     async def test_execute_calls_prompt_generator(self):
-        use_case, _, prompt_generator, _ = _make_use_case()
+        use_case, _, prompt_generator, _, _ = _make_use_case()
         request = CreateAgentRequest(
             user_request="테스트 요청", name="테스트", user_id="user-1"
         )
@@ -115,7 +146,7 @@ class TestCreateAgentUseCase:
 
     @pytest.mark.asyncio
     async def test_execute_calls_repository_save(self):
-        use_case, _, _, repository = _make_use_case()
+        use_case, _, _, repository, _ = _make_use_case()
         request = CreateAgentRequest(
             user_request="테스트 요청", name="테스트", user_id="user-1"
         )
@@ -124,7 +155,7 @@ class TestCreateAgentUseCase:
 
     @pytest.mark.asyncio
     async def test_execute_response_contains_tool_ids(self):
-        use_case, _, _, _ = _make_use_case()
+        use_case, _, _, _, _ = _make_use_case()
         request = CreateAgentRequest(
             user_request="테스트 요청", name="테스트", user_id="user-1"
         )
@@ -133,7 +164,7 @@ class TestCreateAgentUseCase:
 
     @pytest.mark.asyncio
     async def test_execute_raises_on_tool_count_zero(self):
-        use_case, tool_selector, _, _ = _make_use_case()
+        use_case, tool_selector, _, _, _ = _make_use_case()
         tool_selector.select = AsyncMock(
             return_value=WorkflowSkeleton(workers=[], flow_hint="")
         )
@@ -142,3 +173,107 @@ class TestCreateAgentUseCase:
         )
         with pytest.raises(ValueError, match="최소"):
             await use_case.execute(request, "req-1")
+
+
+class TestVisibilityClamping:
+    @pytest.mark.asyncio
+    async def test_public_clamped_to_private_by_personal_collection(self):
+        perm = _make_perm(CollectionScope.PERSONAL, "my-docs")
+        use_case, _, _, repo, _ = _make_use_case(
+            perm_by_name={"my-docs": perm},
+            rag_collection="my-docs",
+            requested_visibility="public",
+        )
+        request = CreateAgentRequest(
+            user_request="테스트", name="테스트", user_id="user-1",
+            visibility="public",
+            tool_configs={
+                "internal_document_search": RagToolConfigRequest(
+                    collection_name="my-docs"
+                )
+            },
+        )
+        result = await use_case.execute(request, "req-1")
+        saved_agent = repo.save.call_args[0][0]
+        assert saved_agent.visibility == "private"
+        assert result.visibility_clamped is True
+        assert result.max_visibility == "private"
+
+    @pytest.mark.asyncio
+    async def test_public_clamped_to_department_by_department_collection(self):
+        perm = _make_perm(CollectionScope.DEPARTMENT, "dept-docs")
+        use_case, _, _, repo, _ = _make_use_case(
+            perm_by_name={"dept-docs": perm},
+            rag_collection="dept-docs",
+            requested_visibility="public",
+        )
+        request = CreateAgentRequest(
+            user_request="테스트", name="테스트", user_id="user-1",
+            visibility="public",
+            department_id="dept-1",
+            tool_configs={
+                "internal_document_search": RagToolConfigRequest(
+                    collection_name="dept-docs"
+                )
+            },
+        )
+        result = await use_case.execute(request, "req-1")
+        saved_agent = repo.save.call_args[0][0]
+        assert saved_agent.visibility == "department"
+        assert result.visibility_clamped is True
+
+    @pytest.mark.asyncio
+    async def test_no_clamp_when_visibility_within_scope(self):
+        perm = _make_perm(CollectionScope.PUBLIC, "pub-docs")
+        use_case, _, _, repo, _ = _make_use_case(
+            perm_by_name={"pub-docs": perm},
+            rag_collection="pub-docs",
+            requested_visibility="public",
+        )
+        request = CreateAgentRequest(
+            user_request="테스트", name="테스트", user_id="user-1",
+            visibility="public",
+            tool_configs={
+                "internal_document_search": RagToolConfigRequest(
+                    collection_name="pub-docs"
+                )
+            },
+        )
+        result = await use_case.execute(request, "req-1")
+        saved_agent = repo.save.call_args[0][0]
+        assert saved_agent.visibility == "public"
+        assert result.visibility_clamped is False
+
+    @pytest.mark.asyncio
+    async def test_no_rag_tool_no_clamp(self):
+        use_case, _, _, repo, _ = _make_use_case(
+            requested_visibility="public",
+        )
+        request = CreateAgentRequest(
+            user_request="테스트", name="테스트", user_id="user-1",
+            visibility="public",
+        )
+        result = await use_case.execute(request, "req-1")
+        assert result.visibility_clamped is False
+        assert result.max_visibility is None
+
+    @pytest.mark.asyncio
+    async def test_unknown_collection_treated_as_personal(self):
+        use_case, _, _, repo, _ = _make_use_case(
+            perm_by_name={},
+            rag_collection="legacy-docs",
+            requested_visibility="public",
+        )
+        request = CreateAgentRequest(
+            user_request="테스트", name="테스트", user_id="user-1",
+            visibility="public",
+            tool_configs={
+                "internal_document_search": RagToolConfigRequest(
+                    collection_name="legacy-docs"
+                )
+            },
+        )
+        result = await use_case.execute(request, "req-1")
+        saved_agent = repo.save.call_args[0][0]
+        assert saved_agent.visibility == "private"
+        assert result.visibility_clamped is True

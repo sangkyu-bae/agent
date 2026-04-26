@@ -1,14 +1,20 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Sidebar from '@/components/layout/Sidebar';
+import { useToolCatalog } from '@/hooks/useToolCatalog';
+import { useLlmModels } from '@/hooks/useLlmModels';
+import RagConfigPanel from '@/components/agent-builder/RagConfigPanel';
+import type { CatalogTool } from '@/types/toolCatalog';
+import type { LlmModel } from '@/types/llmModel';
+import type { RagToolConfig } from '@/types/ragToolConfig';
+import { DEFAULT_RAG_CONFIG } from '@/types/ragToolConfig';
 
 type ViewMode = 'list' | 'create' | 'edit';
-type AgentModel = 'claude-sonnet-4-6' | 'claude-haiku-4-5' | 'claude-opus-4-6' | 'gpt-4o';
 
 interface Agent {
   id: string;
   name: string;
   description: string;
-  model: AgentModel;
+  model: string;
   systemPrompt: string;
   tools: string[];
   temperature: number;
@@ -20,34 +26,21 @@ interface Agent {
 interface AgentFormData {
   name: string;
   description: string;
-  model: AgentModel;
+  model: string;
   systemPrompt: string;
   tools: string[];
   temperature: number;
+  toolConfigs: Record<string, RagToolConfig>;
 }
 
-const MODEL_LABELS: Record<AgentModel, string> = {
-  'claude-sonnet-4-6': 'Claude Sonnet 4.6',
-  'claude-haiku-4-5': 'Claude Haiku 4.5',
-  'claude-opus-4-6': 'Claude Opus 4.6',
-  'gpt-4o': 'GPT-4o',
+const PROVIDER_COLORS: Record<string, string> = {
+  openai: 'bg-emerald-100 text-emerald-700',
+  anthropic: 'bg-violet-100 text-violet-700',
 };
+const DEFAULT_PROVIDER_COLOR = 'bg-zinc-100 text-zinc-700';
 
-const MODEL_COLORS: Record<AgentModel, string> = {
-  'claude-sonnet-4-6': 'bg-violet-100 text-violet-700',
-  'claude-haiku-4-5': 'bg-sky-100 text-sky-700',
-  'claude-opus-4-6': 'bg-amber-100 text-amber-700',
-  'gpt-4o': 'bg-emerald-100 text-emerald-700',
-};
-
-const AVAILABLE_TOOLS = [
-  { id: 'web-search', label: '웹 검색', icon: 'M21 21l-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z' },
-  { id: 'code-exec', label: '코드 실행', icon: 'M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5' },
-  { id: 'file-read', label: '파일 읽기', icon: 'M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z' },
-  { id: 'db-query', label: 'DB 쿼리', icon: 'M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 5.625v5.625m-16.5-5.625v5.625' },
-  { id: 'api-call', label: 'API 호출', icon: 'M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244' },
-  { id: 'rag-retrieval', label: 'RAG 검색', icon: 'M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m5.231 13.481L15 17.25m-4.5-15H5.625c-.621 0-1.125.504-1.125 1.125v16.5c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Zm3.75 11.625a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z' },
-];
+const getProviderColor = (provider: string): string =>
+  PROVIDER_COLORS[provider] ?? DEFAULT_PROVIDER_COLOR;
 
 const MOCK_AGENTS: Agent[] = [
   {
@@ -56,7 +49,7 @@ const MOCK_AGENTS: Agent[] = [
     description: 'PDF, Word 문서를 분석하여 핵심 내용을 요약하고 Q&A를 생성합니다.',
     model: 'claude-sonnet-4-6',
     systemPrompt: '당신은 전문 문서 분석 AI입니다. 업로드된 문서를 꼼꼼히 읽고 핵심 내용을 추출하며, 사용자의 질문에 정확하게 답변합니다.',
-    tools: ['file-read', 'rag-retrieval'],
+    tools: [],
     temperature: 0.3,
     isActive: true,
     runCount: 142,
@@ -68,7 +61,7 @@ const MOCK_AGENTS: Agent[] = [
     description: '코드 품질, 보안 취약점, 성능 이슈를 분석하고 개선안을 제안합니다.',
     model: 'claude-opus-4-6',
     systemPrompt: '당신은 시니어 소프트웨어 엔지니어입니다. 코드를 리뷰할 때 버그, 보안 취약점, 성능 문제, 코드 품질을 중점적으로 분석합니다.',
-    tools: ['code-exec', 'web-search'],
+    tools: [],
     temperature: 0.2,
     isActive: true,
     runCount: 87,
@@ -80,7 +73,7 @@ const MOCK_AGENTS: Agent[] = [
     description: '데이터셋을 분석하여 인사이트를 도출하고 시각화 보고서를 생성합니다.',
     model: 'claude-sonnet-4-6',
     systemPrompt: '당신은 데이터 분석 전문가입니다. 주어진 데이터를 분석하여 패턴을 발견하고, 비즈니스 인사이트를 도출하여 명확한 보고서를 작성합니다.',
-    tools: ['code-exec', 'db-query', 'api-call'],
+    tools: [],
     temperature: 0.4,
     isActive: false,
     runCount: 31,
@@ -88,13 +81,16 @@ const MOCK_AGENTS: Agent[] = [
   },
 ];
 
+const RAG_TOOL_ID = 'internal:internal_document_search';
+
 const DEFAULT_FORM: AgentFormData = {
   name: '',
   description: '',
-  model: 'claude-sonnet-4-6',
+  model: '',
   systemPrompt: '',
   tools: [],
   temperature: 0.7,
+  toolConfigs: {},
 };
 
 const AgentBuilderPage = () => {
@@ -102,6 +98,17 @@ const AgentBuilderPage = () => {
   const [agents, setAgents] = useState<Agent[]>(MOCK_AGENTS);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<AgentFormData>(DEFAULT_FORM);
+  const { data: catalogTools, isLoading: isToolsLoading, isError: isToolsError, refetch: refetchTools } = useToolCatalog();
+  const { data: models, isLoading: isModelsLoading, isError: isModelsError, refetch: refetchModels } = useLlmModels();
+
+  useEffect(() => {
+    if (models && !form.model) {
+      const defaultModel = models.find(m => m.is_default);
+      if (defaultModel) {
+        setForm(prev => ({ ...prev, model: defaultModel.model_name }));
+      }
+    }
+  }, [models, form.model]);
 
   const handleNew = () => {
     setForm(DEFAULT_FORM);
@@ -117,6 +124,7 @@ const AgentBuilderPage = () => {
       systemPrompt: agent.systemPrompt,
       tools: agent.tools,
       temperature: agent.temperature,
+      toolConfigs: {},
     });
     setEditingId(agent.id);
     setView('edit');
@@ -152,11 +160,29 @@ const AgentBuilderPage = () => {
   };
 
   const handleToolToggle = (toolId: string) => {
+    setForm((prev) => {
+      const isRemoving = prev.tools.includes(toolId);
+      const newTools = isRemoving
+        ? prev.tools.filter((t) => t !== toolId)
+        : [...prev.tools, toolId];
+
+      const newConfigs = { ...prev.toolConfigs };
+      if (toolId === RAG_TOOL_ID) {
+        if (isRemoving) {
+          delete newConfigs[RAG_TOOL_ID];
+        } else {
+          newConfigs[RAG_TOOL_ID] = { ...DEFAULT_RAG_CONFIG };
+        }
+      }
+
+      return { ...prev, tools: newTools, toolConfigs: newConfigs };
+    });
+  };
+
+  const handleRagConfigChange = (config: RagToolConfig) => {
     setForm((prev) => ({
       ...prev,
-      tools: prev.tools.includes(toolId)
-        ? prev.tools.filter((t) => t !== toolId)
-        : [...prev.tools, toolId],
+      toolConfigs: { ...prev.toolConfigs, [RAG_TOOL_ID]: config },
     }));
   };
 
@@ -238,13 +264,28 @@ const AgentBuilderPage = () => {
           {view === 'list' ? (
             <ListView
               agents={agents}
+              catalogTools={catalogTools}
+              models={models}
               onEdit={handleEdit}
               onDelete={handleDelete}
               onToggle={handleToggle}
               onNew={handleNew}
             />
           ) : (
-            <FormView form={form} onChange={setForm} onToolToggle={handleToolToggle} />
+            <FormView
+              form={form}
+              onChange={setForm}
+              onToolToggle={handleToolToggle}
+              onRagConfigChange={handleRagConfigChange}
+              catalogTools={catalogTools}
+              isToolsLoading={isToolsLoading}
+              isToolsError={isToolsError}
+              onRetryTools={refetchTools}
+              models={models}
+              isModelsLoading={isModelsLoading}
+              isModelsError={isModelsError}
+              onRetryModels={refetchModels}
+            />
           )}
         </div>
       </main>
@@ -254,13 +295,15 @@ const AgentBuilderPage = () => {
 
 interface ListViewProps {
   agents: Agent[];
+  catalogTools?: CatalogTool[];
+  models?: LlmModel[];
   onEdit: (agent: Agent) => void;
   onDelete: (id: string) => void;
   onToggle: (id: string) => void;
   onNew: () => void;
 }
 
-const ListView = ({ agents, onEdit, onDelete, onToggle, onNew }: ListViewProps) => {
+const ListView = ({ agents, catalogTools, models, onEdit, onDelete, onToggle, onNew }: ListViewProps) => {
   if (agents.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-32 text-center">
@@ -291,6 +334,8 @@ const ListView = ({ agents, onEdit, onDelete, onToggle, onNew }: ListViewProps) 
           <AgentCard
             key={agent.id}
             agent={agent}
+            catalogTools={catalogTools}
+            models={models}
             onEdit={onEdit}
             onDelete={onDelete}
             onToggle={onToggle}
@@ -323,12 +368,15 @@ const ListView = ({ agents, onEdit, onDelete, onToggle, onNew }: ListViewProps) 
 
 interface AgentCardProps {
   agent: Agent;
+  catalogTools?: CatalogTool[];
+  models?: LlmModel[];
   onEdit: (agent: Agent) => void;
   onDelete: (id: string) => void;
   onToggle: (id: string) => void;
 }
 
-const AgentCard = ({ agent, onEdit, onDelete, onToggle }: AgentCardProps) => {
+const AgentCard = ({ agent, catalogTools, models, onEdit, onDelete, onToggle }: AgentCardProps) => {
+  const modelInfo = models?.find(m => m.model_name === agent.model);
   const initials = agent.name.slice(0, 2);
   const gradients = [
     'linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)',
@@ -355,8 +403,8 @@ const AgentCard = ({ agent, onEdit, onDelete, onToggle }: AgentCardProps) => {
           </div>
           <div>
             <p className="text-[14px] font-semibold text-zinc-900">{agent.name}</p>
-            <span className={`mt-0.5 inline-block rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${MODEL_COLORS[agent.model]}`}>
-              {MODEL_LABELS[agent.model]}
+            <span className={`mt-0.5 inline-block rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${getProviderColor(modelInfo?.provider ?? '')}`}>
+              {modelInfo?.display_name ?? agent.model}
             </span>
           </div>
         </div>
@@ -388,12 +436,12 @@ const AgentCard = ({ agent, onEdit, onDelete, onToggle }: AgentCardProps) => {
       {agent.tools.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5">
           {agent.tools.map((toolId) => {
-            const tool = AVAILABLE_TOOLS.find((t) => t.id === toolId);
-            return tool ? (
+            const tool = catalogTools?.find((t) => t.tool_id === toolId);
+            return (
               <span key={toolId} className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500">
-                {tool.label}
+                {tool?.name ?? toolId}
               </span>
-            ) : null;
+            );
           })}
         </div>
       )}
@@ -437,9 +485,19 @@ interface FormViewProps {
   form: AgentFormData;
   onChange: (form: AgentFormData) => void;
   onToolToggle: (toolId: string) => void;
+  onRagConfigChange: (config: RagToolConfig) => void;
+  catalogTools?: CatalogTool[];
+  isToolsLoading: boolean;
+  isToolsError: boolean;
+  onRetryTools: () => void;
+  models?: LlmModel[];
+  isModelsLoading: boolean;
+  isModelsError: boolean;
+  onRetryModels: () => void;
 }
 
-const FormView = ({ form, onChange, onToolToggle }: FormViewProps) => {
+const FormView = ({ form, onChange, onToolToggle, onRagConfigChange, catalogTools, isToolsLoading, isToolsError, onRetryTools, models, isModelsLoading, isModelsError, onRetryModels }: FormViewProps) => {
+  const ragConfig = form.toolConfigs[RAG_TOOL_ID];
   return (
     <div style={{ maxWidth: '720px', margin: '0 auto', padding: '2rem 1.5rem' }}>
       <div className="space-y-6">
@@ -472,21 +530,43 @@ const FormView = ({ form, onChange, onToolToggle }: FormViewProps) => {
         {/* 모델 선택 */}
         <div>
           <label className="mb-1.5 block text-[13px] font-semibold text-zinc-700">모델</label>
-          <div className="grid grid-cols-4 gap-2">
-            {(Object.keys(MODEL_LABELS) as AgentModel[]).map((model) => (
+          {isModelsLoading ? (
+            <div className="grid grid-cols-4 gap-2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="h-[42px] animate-pulse rounded-xl border border-zinc-200 bg-zinc-100" />
+              ))}
+            </div>
+          ) : isModelsError ? (
+            <div className="flex flex-col items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 py-6">
+              <p className="text-[13px] text-zinc-500">모델 목록을 불러올 수 없습니다</p>
               <button
-                key={model}
-                onClick={() => onChange({ ...form, model })}
-                className={`rounded-xl border px-3 py-2.5 text-[12px] font-medium transition-all ${
-                  form.model === model
-                    ? 'border-violet-400 bg-violet-50 text-violet-700 shadow-sm'
-                    : 'border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50'
-                }`}
+                onClick={onRetryModels}
+                className="rounded-lg bg-violet-600 px-3.5 py-1.5 text-[12px] font-medium text-white transition-all hover:bg-violet-700 active:scale-95"
               >
-                {MODEL_LABELS[model]}
+                다시 시도
               </button>
-            ))}
-          </div>
+            </div>
+          ) : models && models.length > 0 ? (
+            <div className="grid grid-cols-4 gap-2">
+              {models.map((m) => (
+                <button
+                  key={m.id}
+                  onClick={() => onChange({ ...form, model: m.model_name })}
+                  className={`rounded-xl border px-3 py-2.5 text-[12px] font-medium transition-all ${
+                    form.model === m.model_name
+                      ? 'border-violet-400 bg-violet-50 text-violet-700 shadow-sm'
+                      : 'border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50'
+                  }`}
+                >
+                  {m.display_name}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-zinc-200 bg-zinc-50 py-6 text-center">
+              <p className="text-[13px] text-zinc-400">등록된 모델이 없습니다</p>
+            </div>
+          )}
         </div>
 
         {/* 시스템 프롬프트 */}
@@ -506,35 +586,67 @@ const FormView = ({ form, onChange, onToolToggle }: FormViewProps) => {
         {/* 도구 연결 */}
         <div>
           <label className="mb-1.5 block text-[13px] font-semibold text-zinc-700">도구 연결</label>
-          <div className="grid grid-cols-2 gap-2">
-            {AVAILABLE_TOOLS.map((tool) => {
-              const isSelected = form.tools.includes(tool.id);
-              return (
-                <button
-                  key={tool.id}
-                  onClick={() => onToolToggle(tool.id)}
-                  className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition-all ${
-                    isSelected
-                      ? 'border-violet-300 bg-violet-50'
-                      : 'border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50'
-                  }`}
-                >
-                  <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${isSelected ? 'bg-violet-100' : 'bg-zinc-100'}`}>
-                    <svg className={`h-4 w-4 ${isSelected ? 'text-violet-600' : 'text-zinc-400'}`} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d={tool.icon} />
-                    </svg>
-                  </div>
-                  <span className={`text-[13px] font-medium ${isSelected ? 'text-violet-700' : 'text-zinc-600'}`}>{tool.label}</span>
-                  {isSelected && (
-                    <svg className="ml-auto h-4 w-4 text-violet-500" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-                    </svg>
-                  )}
-                </button>
-              );
-            })}
-          </div>
+          {isToolsLoading ? (
+            <div className="grid grid-cols-2 gap-2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="h-[52px] animate-pulse rounded-xl border border-zinc-200 bg-zinc-100" />
+              ))}
+            </div>
+          ) : isToolsError ? (
+            <div className="flex flex-col items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 py-6">
+              <p className="text-[13px] text-zinc-500">도구 목록을 불러올 수 없습니다</p>
+              <button
+                onClick={onRetryTools}
+                className="rounded-lg bg-violet-600 px-3.5 py-1.5 text-[12px] font-medium text-white transition-all hover:bg-violet-700 active:scale-95"
+              >
+                다시 시도
+              </button>
+            </div>
+          ) : catalogTools && catalogTools.length > 0 ? (
+            <div className="grid grid-cols-2 gap-2">
+              {catalogTools.map((tool) => {
+                const isSelected = form.tools.includes(tool.tool_id);
+                return (
+                  <button
+                    key={tool.tool_id}
+                    onClick={() => onToolToggle(tool.tool_id)}
+                    className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition-all ${
+                      isSelected
+                        ? 'border-violet-300 bg-violet-50'
+                        : 'border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50'
+                    }`}
+                  >
+                    <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${isSelected ? 'bg-violet-100' : 'bg-zinc-100'}`}>
+                      <svg className={`h-4 w-4 ${isSelected ? 'text-violet-600' : 'text-zinc-400'}`} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M11.42 15.17 17.25 21A2.652 2.652 0 0 0 21 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 1 1-3.586-3.586l5.653-4.655m5.976-.511a.076.076 0 0 1 .014.107l-.014-.107Zm0 0 2.355-2.355a2.553 2.553 0 0 0-3.612-3.612l-2.355 2.355" />
+                      </svg>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <span className={`text-[13px] font-medium ${isSelected ? 'text-violet-700' : 'text-zinc-600'}`}>{tool.name}</span>
+                      {tool.source === 'mcp' && (
+                        <span className="ml-1.5 rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-600">MCP</span>
+                      )}
+                    </div>
+                    {isSelected && (
+                      <svg className="ml-auto h-4 w-4 shrink-0 text-violet-500" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                      </svg>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-zinc-200 bg-zinc-50 py-6 text-center">
+              <p className="text-[13px] text-zinc-400">등록된 도구가 없습니다</p>
+            </div>
+          )}
         </div>
+
+        {/* RAG 설정 패널 (조건부) */}
+        {ragConfig && (
+          <RagConfigPanel config={ragConfig} onChange={onRagConfigChange} />
+        )}
 
         {/* Temperature */}
         <div>

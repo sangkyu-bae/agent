@@ -2,11 +2,24 @@
 from pydantic import BaseModel, Field
 
 
+class RagToolConfigRequest(BaseModel):
+    """RAG 도구 설정 요청 스키마."""
+    collection_name: str | None = None
+    es_index: str | None = None
+    metadata_filter: dict[str, str] = Field(default_factory=dict)
+    top_k: int = Field(5, ge=1, le=20)
+    search_mode: str = Field("hybrid", pattern="^(hybrid|vector_only|bm25_only)$")
+    rrf_k: int = Field(60, ge=1)
+    tool_name: str = Field("내부 문서 검색", max_length=100)
+    tool_description: str = Field("", max_length=500)
+
+
 class WorkerInfo(BaseModel):
     tool_id: str
     worker_id: str
     description: str
     sort_order: int
+    tool_config: dict | None = None
 
 
 class CreateAgentRequest(BaseModel):
@@ -17,6 +30,7 @@ class CreateAgentRequest(BaseModel):
     visibility: str = Field("private", pattern="^(private|department|public)$")
     department_id: str | None = None
     temperature: float = Field(0.70, ge=0.0, le=2.0)
+    tool_configs: dict[str, RagToolConfigRequest] | None = None
 
 
 class CreateAgentResponse(BaseModel):
@@ -28,6 +42,8 @@ class CreateAgentResponse(BaseModel):
     flow_hint: str
     llm_model_id: str
     visibility: str
+    visibility_clamped: bool = False
+    max_visibility: str | None = None
     department_id: str | None = None
     temperature: float
     created_at: str
@@ -86,6 +102,8 @@ class ToolMetaResponse(BaseModel):
     tool_id: str
     name: str
     description: str
+    configurable: bool = False
+    config_schema: dict | None = None
 
 
 class AvailableToolsResponse(BaseModel):

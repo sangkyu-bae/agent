@@ -33,6 +33,7 @@ export const API_ENDPOINTS = {
   EVAL_DATASET_EXTRACT: '/api/eval/extract',
 
   // Tools
+  TOOL_CATALOG: '/api/v1/tool-catalog',
   TOOLS: '/api/tools',
   TOOL_TOGGLE: (toolId: string) => `/api/tools/${toolId}/toggle`,
 
@@ -47,8 +48,32 @@ export const API_ENDPOINTS = {
   AUTH_LOGOUT: '/api/v1/auth/logout',
   AUTH_ME: '/api/v1/auth/me',
 
+  // RAG Tools (Custom RAG Config)
+  RAG_TOOL_COLLECTIONS: '/api/v1/rag-tools/collections',
+  RAG_TOOL_METADATA_KEYS: '/api/v1/rag-tools/metadata-keys',
+
+  // LLM Models
+  LLM_MODELS: '/api/v1/llm-models',
+
   // Admin — User approval
   ADMIN_USERS_PENDING: '/api/v1/admin/users/pending',
   ADMIN_USER_APPROVE: (userId: number) => `/api/v1/admin/users/${userId}/approve`,
   ADMIN_USER_REJECT: (userId: number) => `/api/v1/admin/users/${userId}/reject`,
+
+  // Embedding Models
+  EMBEDDING_MODELS: '/api/v1/embedding-models',
+
+  // Collections (COLLECTION-MGMT)
+  COLLECTIONS: '/api/v1/collections',
+  COLLECTION_DETAIL: (name: string) => `/api/v1/collections/${name}`,
+  COLLECTION_RENAME: (name: string) => `/api/v1/collections/${name}`,
+  COLLECTION_DELETE: (name: string) => `/api/v1/collections/${name}`,
+  COLLECTION_PERMISSION: (name: string) => `/api/v1/collections/${name}/permission`,
+  COLLECTION_DOCUMENTS: (name: string) =>
+    `/api/v1/collections/${name}/documents`,
+  COLLECTION_DOCUMENT_CHUNKS: (name: string, documentId: string) =>
+    `/api/v1/collections/${name}/documents/${documentId}/chunks`,
+  COLLECTION_ACTIVITY_LOG: '/api/v1/collections/activity-log',
+  COLLECTION_ACTIVITY_LOG_BY_NAME: (name: string) =>
+    `/api/v1/collections/${name}/activity-log`,
 } as const;
