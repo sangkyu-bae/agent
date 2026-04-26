@@ -44,6 +44,7 @@ class AgentDefinitionRepository(AgentDefinitionRepositoryInterface):
                         worker_id=w.worker_id,
                         description=w.description,
                         sort_order=w.sort_order,
+                        tool_config=w.tool_config,
                     )
                     for w in agent.workers
                 ],
@@ -237,6 +238,7 @@ class AgentDefinitionRepository(AgentDefinitionRepositoryInterface):
                     worker_id=t.worker_id,
                     description=t.description or "",
                     sort_order=t.sort_order,
+                    tool_config=t.tool_config,
                 )
                 for t in sorted(model.tools, key=lambda x: x.sort_order)
             ],

@@ -28,21 +28,34 @@ class InternalDocumentSearchTool(BaseTool):
     top_k: int = 5
     request_id: str = ""
     collected_sources: list[DocumentSource] = Field(default_factory=list)
+    search_mode: str = "hybrid"
+    rrf_k: int = 60
+    metadata_filter: dict[str, str] = Field(default_factory=dict)
+    collection_name: str | None = None
+    es_index: str | None = None
 
     def _run(self, query: str) -> str:
         raise NotImplementedError("비동기 _arun을 사용하세요.")
 
     async def _arun(self, query: str) -> str:
-        """BM25(ES) + Vector(Qdrant) 5:5 하이브리드 검색 실행.
+        """BM25(ES) + Vector(Qdrant) 하이브리드 검색 실행. search_mode에 따라 분기."""
+        if self.search_mode == "vector_only":
+            bm25_top_k = 0
+            vector_top_k = self.top_k * 2
+        elif self.search_mode == "bm25_only":
+            bm25_top_k = self.top_k * 2
+            vector_top_k = 0
+        else:
+            bm25_top_k = self.top_k * 2
+            vector_top_k = self.top_k * 2
 
-        bm25_top_k == vector_top_k 로 설정하여 동등 가중치(5:5) 보장.
-        """
         request = HybridSearchRequest(
             query=query,
             top_k=self.top_k,
-            bm25_top_k=self.top_k * 2,
-            vector_top_k=self.top_k * 2,
-            rrf_k=60,
+            bm25_top_k=bm25_top_k,
+            vector_top_k=vector_top_k,
+            rrf_k=self.rrf_k,
+            metadata_filter=self.metadata_filter,
         )
         result = await self.hybrid_search_use_case.execute(request, self.request_id)
 

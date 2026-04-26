@@ -63,6 +63,49 @@ export const queryKeys = {
     init: () => [...queryKeys.auth.all, 'init'] as const,
   },
 
+  // ── Tool Catalog ───────────────────────────────────────
+  toolCatalog: {
+    all: ['toolCatalog'] as const,
+    list: () => [...queryKeys.toolCatalog.all, 'list'] as const,
+  },
+
+  // ── LLM Models ─────────────────────────────────────────
+  llmModels: {
+    all: ['llmModels'] as const,
+    list: (includeInactive?: boolean) =>
+      [...queryKeys.llmModels.all, 'list', { includeInactive }] as const,
+  },
+
+  // ── RAG Tools ──────────────────────────────────────────
+  ragTools: {
+    all: ['ragTools'] as const,
+    collections: () => [...queryKeys.ragTools.all, 'collections'] as const,
+    metadataKeys: (collectionName?: string) =>
+      [...queryKeys.ragTools.all, 'metadataKeys', collectionName] as const,
+  },
+
+  // ── Embedding Models ────────────────────────────────────
+  embeddingModels: {
+    all: ['embeddingModels'] as const,
+    list: () => [...queryKeys.embeddingModels.all, 'list'] as const,
+  },
+
+  // ── Collections ────────────────────────────────────────
+  collections: {
+    all: ['collections'] as const,
+    list: () => [...queryKeys.collections.all, 'list'] as const,
+    detail: (name: string) =>
+      [...queryKeys.collections.all, 'detail', name] as const,
+    activityLog: (filters?: import('@/types/collection').ActivityLogFilters) =>
+      [...queryKeys.collections.all, 'activityLog', filters] as const,
+    collectionActivityLog: (name: string) =>
+      [...queryKeys.collections.all, 'collectionActivityLog', name] as const,
+    documents: (name: string, params?: import('@/types/collection').CollectionDocumentsParams) =>
+      [...queryKeys.collections.all, 'documents', name, params] as const,
+    chunks: (name: string, documentId: string, params?: import('@/types/collection').DocumentChunksParams) =>
+      [...queryKeys.collections.all, 'chunks', name, documentId, params] as const,
+  },
+
   // ── Admin ──────────────────────────────────────────────
   admin: {
     /** 관리자 도메인 전체 키 */

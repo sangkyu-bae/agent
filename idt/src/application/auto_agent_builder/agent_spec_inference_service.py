@@ -12,6 +12,9 @@ determine the optimal agent configuration. Respond ONLY in valid JSON."""
 
 _TOOL_DESCRIPTIONS = """Available tools:
 - internal_document_search: 내부 벡터/ES 하이브리드 검색 (정책/지식베이스 질의)
+  * Configurable fields: collection_name, metadata_filter, top_k (1-20), search_mode (hybrid/vector_only/bm25_only), tool_name, tool_description
+  * metadata_filter example: {"department": "finance", "category": "policy"}
+  * Multiple instances allowed with different configs (e.g. separate "금융 문서 검색" and "기술 매뉴얼 검색")
 - tavily_search: Tavily 웹 검색 (최신 외부 정보, 뉴스)
 - excel_export: pandas Excel 파일 생성 (데이터 정리/보고서)
 - python_code_executor: Python 코드 샌드박스 실행 (계산/데이터 처리)"""
@@ -27,11 +30,21 @@ _RESPONSE_FORMAT = """\nRespond in JSON:
 {
   "confidence": 0.0-1.0,
   "tool_ids": ["..."],
+  "tool_configs": {
+    "internal_document_search": {
+      "metadata_filter": {"key": "value"},
+      "top_k": 5,
+      "search_mode": "hybrid",
+      "tool_name": "custom name for LLM",
+      "tool_description": "custom description for LLM tool selection"
+    }
+  },
   "middlewares": [{"type": "...", "config": {...}}],
   "system_prompt": "...",
   "clarifying_questions": [],
   "reasoning": "..."
 }
+Note: tool_configs is optional, only include for internal_document_search when user specifies search scope.
 Note: clarifying_questions must be empty if confidence >= 0.8."""
 
 
@@ -120,4 +133,5 @@ class AgentSpecInferenceService:
             system_prompt=data.get("system_prompt", ""),
             clarifying_questions=data.get("clarifying_questions", []),
             reasoning=data.get("reasoning", ""),
+            tool_configs=data.get("tool_configs", {}),
         )

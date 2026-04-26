@@ -15,6 +15,7 @@ class HybridSearchRequest:
     bm25_top_k: int = 20
     vector_top_k: int = 20
     rrf_k: int = 60
+    metadata_filter: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass

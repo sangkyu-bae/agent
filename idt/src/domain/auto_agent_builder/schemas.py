@@ -20,6 +20,7 @@ class AgentSpecResult:
     system_prompt: str
     clarifying_questions: list[str]
     reasoning: str
+    tool_configs: dict[str, dict] = field(default_factory=dict)
 
 
 @dataclass

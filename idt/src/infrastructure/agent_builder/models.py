@@ -1,7 +1,7 @@
 """SQLAlchemy ORM 모델: agent_definition, agent_tool."""
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.infrastructure.persistence.models.base import Base
@@ -45,7 +45,7 @@ class AgentDefinitionModel(Base):
 class AgentToolModel(Base):
     __tablename__ = "agent_tool"
     __table_args__ = (
-        UniqueConstraint("agent_id", "tool_id", name="uq_agent_tool"),
+        UniqueConstraint("agent_id", "worker_id", name="uq_agent_worker"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
@@ -58,6 +58,7 @@ class AgentToolModel(Base):
     worker_id: Mapped[str] = mapped_column(String(100), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    tool_config: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=None)
 
     agent: Mapped["AgentDefinitionModel"] = relationship(
         "AgentDefinitionModel", back_populates="tools"

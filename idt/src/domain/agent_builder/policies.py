@@ -9,6 +9,19 @@ class Visibility(str, Enum):
     PUBLIC = "public"
 
 
+SCOPE_TO_VISIBILITY: dict[str, str] = {
+    "PERSONAL": "private",
+    "DEPARTMENT": "department",
+    "PUBLIC": "public",
+}
+
+VISIBILITY_RANK: dict[str, int] = {
+    "private": 0,
+    "department": 1,
+    "public": 2,
+}
+
+
 @dataclass(frozen=True)
 class AccessCheckInput:
     agent_owner_id: str
@@ -43,6 +56,31 @@ class VisibilityPolicy:
             ctx.agent_owner_id == ctx.viewer_user_id
             or ctx.viewer_role == "admin"
         )
+
+    @staticmethod
+    def max_visibility_for_scopes(scopes: list[str]) -> str:
+        if not scopes:
+            raise ValueError("scopes must not be empty")
+        ranks: list[int] = []
+        for scope in scopes:
+            vis = SCOPE_TO_VISIBILITY.get(scope)
+            if vis is None:
+                raise ValueError(f"Unknown scope: {scope}")
+            ranks.append(VISIBILITY_RANK[vis])
+        min_rank = min(ranks)
+        for vis, rank in VISIBILITY_RANK.items():
+            if rank == min_rank:
+                return vis
+        raise ValueError("Unreachable")
+
+    @staticmethod
+    def clamp_visibility(requested: str, scopes: list[str]) -> str:
+        if not scopes:
+            return requested
+        max_vis = VisibilityPolicy.max_visibility_for_scopes(scopes)
+        if VISIBILITY_RANK[requested] > VISIBILITY_RANK[max_vis]:
+            return max_vis
+        return requested
 
 
 class AgentBuilderPolicy:

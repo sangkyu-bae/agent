@@ -7,8 +7,11 @@ Orchestrates:
   4. Embedding via EmbeddingInterface
   5. Vector storage via VectorStoreInterface
 """
-from typing import Dict, List
+from typing import Callable, Dict, List, Optional
 
+from src.domain.collection.schemas import ActionType
+from src.domain.doc_browse.interfaces import DocumentMetadataRepositoryInterface
+from src.domain.doc_browse.schemas import DocumentMetadata
 from src.domain.ingest.schemas import IngestRequest, IngestResult
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.domain.parser.interfaces import PDFParserInterface
@@ -35,11 +38,17 @@ class IngestDocumentUseCase:
         embedding: EmbeddingInterface,
         vectorstore: VectorStoreInterface,
         logger: LoggerInterface,
+        activity_log_factory: Optional[Callable] = None,
+        collection_name: str = "documents",
+        document_metadata_repo: Optional[DocumentMetadataRepositoryInterface] = None,
     ) -> None:
         self._parsers = parsers
         self._embedding = embedding
         self._vectorstore = vectorstore
         self._logger = logger
+        self._activity_log_factory = activity_log_factory
+        self._collection_name = collection_name
+        self._document_metadata_repo = document_metadata_repo
 
     async def ingest(self, request: IngestRequest) -> IngestResult:
         """Run the full ingest pipeline for a PDF file.
@@ -129,7 +138,49 @@ class IngestDocumentUseCase:
             chunk_count=result.chunk_count,
         )
 
+        if self._document_metadata_repo:
+            await self._document_metadata_repo.save(
+                DocumentMetadata(
+                    document_id=result.document_id,
+                    collection_name=self._collection_name,
+                    filename=result.filename,
+                    category=getattr(request, "category", "uncategorized"),
+                    user_id=result.user_id,
+                    chunk_count=result.chunk_count,
+                    chunk_strategy=result.chunking_strategy,
+                ),
+                request_id=result.request_id,
+            )
+
+        await self._log_activity(
+            action=ActionType.ADD_DOCUMENT,
+            request_id=request.request_id,
+            user_id=request.user_id,
+            detail={"document_count": result.chunk_count, "filename": request.filename},
+        )
+
         return result
+
+    async def _log_activity(
+        self,
+        action: ActionType,
+        request_id: str,
+        user_id: str | None = None,
+        detail: dict | None = None,
+    ) -> None:
+        if self._activity_log_factory is None:
+            return
+        try:
+            service = self._activity_log_factory()
+            await service.log(
+                collection_name=self._collection_name,
+                action=action,
+                request_id=request_id,
+                user_id=user_id,
+                detail=detail,
+            )
+        except Exception:
+            pass
 
     def _to_vector_documents(
         self,
