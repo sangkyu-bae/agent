@@ -54,3 +54,5 @@
 | CUSTOM-RAG-TOOL-001 | docs/archive/2026-04/custom-rag-tool/ | 커스텀 RAG 도구 (에이전트별 검색 범위/파라미터 설정) |
 | EMB-REG-001 | docs/archive/2026-04/embedding-model-registry/ | 임베딩 모델 레지스트리 (embedding_model 테이블 + 컬렉션 자동 차원 결정) |
 | DOC-BROWSE-001 | docs/01-plan/features/collection-document-chunks.plan.md | 컬렉션별 임베딩 문서 및 청크 조회 API (문서 목록 + 청크 상세) |
+| UNIFIED-UPLOAD-001 | docs/archive/2026-04/unified-pdf-upload-api/ | 통합 PDF 업로드 API (Qdrant 벡터 + ES BM25 동시 저장 단일 엔드포인트) |
+| UNIFIED-UPLOAD-FIX-001 | docs/01-plan/features/fix-unified-upload-es-rdb.plan.md | 통합 업로드 ES/RDB 수정 (Kiwi 형태소 분석 + morph_text BM25 연동 + 문서 메타데이터 RDB 등록) |

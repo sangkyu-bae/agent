@@ -58,7 +58,7 @@ const EmptyState = ({ onSuggestionClick }: { onSuggestionClick?: (text: string) 
       {/* 로고 */}
       <div className="mx-auto mb-8">
         <img
-          src="https://m.sangsanginplussb.com/mob/img/ssiplus_logo.png"
+          src="/logo.png"
           alt="상상인플러스저축은행"
           className="h-14 w-auto object-contain"
         />

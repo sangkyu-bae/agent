@@ -116,6 +116,22 @@ class TestKiwiMorphAnalyzer:
         nouns = analyzer.extract_nouns("이자율 정책")
         assert nouns == ["이자율", "정책"]
 
+    def test_analyze_handles_string_tag(self, mock_kiwi_cls):
+        """kiwipiepy 0.22+ 에서 tok.tag가 str인 경우 정상 동작."""
+        token = SimpleNamespace(form="금융", tag="NNG", start=0, len=2)
+        mock_kiwi_cls.return_value.tokenize.return_value = [token]
+        analyzer = KiwiMorphAnalyzer()
+        result = analyzer.analyze("금융")
+        assert result.tokens[0].pos == "NNG"
+
+    def test_analyze_handles_enum_tag(self, mock_kiwi_cls):
+        """이전 kiwipiepy 버전의 enum tag도 정상 동작."""
+        token = _make_kiwi_token("정책", "NNG", 0, 2)
+        mock_kiwi_cls.return_value.tokenize.return_value = [token]
+        analyzer = KiwiMorphAnalyzer()
+        result = analyzer.analyze("정책")
+        assert result.tokens[0].pos == "NNG"
+
     def test_kiwi_instance_reused_across_calls(self, mock_kiwi_cls):
         mock_kiwi_cls.return_value.tokenize.return_value = []
         analyzer = KiwiMorphAnalyzer()

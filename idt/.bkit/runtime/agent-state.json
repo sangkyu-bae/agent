@@ -2,12 +2,12 @@
   "version": "1.0",
   "enabled": false,
   "teamName": "",
-  "feature": "auto-agent-builder",
-  "pdcaPhase": "check",
+  "feature": "collection_search",
+  "pdcaPhase": "archived",
   "orchestrationPattern": "leader",
   "ctoAgent": "opus",
-  "startedAt": "2026-04-19T07:22:10.778Z",
-  "lastUpdated": "2026-04-19T07:46:05.871Z",
+  "startedAt": "2026-04-29T02:54:07.197Z",
+  "lastUpdated": "2026-04-29T07:01:15.113Z",
   "teammates": [],
   "progress": {
     "totalTasks": 0,
@@ -17,5 +17,5 @@
     "pendingTasks": 0
   },
   "recentMessages": [],
-  "sessionId": "92844d24-b5dc-4553-a774-9d6e23ae506a"
+  "sessionId": "4f34f9b6-76f0-4a1b-8e00-01a0c4ae867d"
 }

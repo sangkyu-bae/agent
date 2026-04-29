@@ -33,6 +33,22 @@ class TestHybridSearchRequest:
         req = HybridSearchRequest(query="q", top_k=5, bm25_top_k=10, vector_top_k=10, rrf_k=30)
         assert req.top_k == 5 and req.rrf_k == 30
 
+    def test_default_bm25_weight_is_05(self):
+        from src.domain.hybrid_search.schemas import HybridSearchRequest
+        req = HybridSearchRequest(query="q")
+        assert req.bm25_weight == 0.5
+
+    def test_default_vector_weight_is_05(self):
+        from src.domain.hybrid_search.schemas import HybridSearchRequest
+        req = HybridSearchRequest(query="q")
+        assert req.vector_weight == 0.5
+
+    def test_custom_weights(self):
+        from src.domain.hybrid_search.schemas import HybridSearchRequest
+        req = HybridSearchRequest(query="q", bm25_weight=0.8, vector_weight=0.2)
+        assert req.bm25_weight == 0.8
+        assert req.vector_weight == 0.2
+
 
 class TestHybridSearchResult:
     def test_create_full(self):

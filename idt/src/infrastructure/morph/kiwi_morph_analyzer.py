@@ -27,7 +27,7 @@ class KiwiMorphAnalyzer(MorphAnalyzerInterface):
         tokens = tuple(
             MorphToken(
                 surface=tok.form,
-                pos=tok.tag.name,
+                pos=tok.tag if isinstance(tok.tag, str) else tok.tag.name,
                 start=tok.start,
                 length=tok.len,
             )

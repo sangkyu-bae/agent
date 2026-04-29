@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import Sidebar from '@/components/layout/Sidebar';
 import type { Tool, ToolCategory } from '@/types/tool';
 import { TOOL_CATEGORY, TOOL_CATEGORY_LABEL } from '@/types/tool';
 
@@ -225,10 +224,7 @@ const ToolConnectionPage = () => {
   };
 
   return (
-    <div style={{ display: 'flex', height: '100%', overflow: 'hidden', background: '#fff' }}>
-      <Sidebar sessions={[]} activeSessionId={null} onSelectSession={() => {}} onNewChat={() => {}} />
-
-      <main style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', background: '#fff' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: '#fff' }}>
         {/* 헤더 */}
         <header className="flex shrink-0 items-center justify-between border-b border-zinc-200 bg-white px-6 py-4">
           <div className="flex items-center gap-3">
@@ -325,7 +321,6 @@ const ToolConnectionPage = () => {
             )}
           </div>
         </div>
-      </main>
     </div>
   );
 };

@@ -128,6 +128,15 @@ from src.api.routes.collection_router import (
     get_collection_use_case,
     get_activity_log_service as get_collection_activity_log_service,
 )
+from src.api.routes.unified_upload_router import (
+    router as unified_upload_router,
+    get_unified_upload_use_case,
+)
+from src.api.routes.collection_search_router import (
+    router as collection_search_router,
+    get_collection_search_use_case,
+    get_search_history_use_case,
+)
 from src.api.routes.doc_browse_router import (
     router as doc_browse_router,
     get_list_documents_use_case,
@@ -1370,6 +1379,127 @@ def create_collection_factories():
     return use_case_factory, activity_log_factory
 
 
+def create_unified_upload_factories():
+    """Return per-request DI factory for UnifiedUploadUseCase."""
+    from src.infrastructure.collection.qdrant_collection_repository import QdrantCollectionRepository
+    from src.infrastructure.collection.activity_log_repository import ActivityLogRepository
+    from src.application.collection.activity_log_service import ActivityLogService
+    from src.application.unified_upload.use_case import UnifiedUploadUseCase
+    from src.infrastructure.embeddings.embedding_factory import EmbeddingFactory
+    from src.infrastructure.morph.kiwi_morph_analyzer import KiwiMorphAnalyzer
+    from src.infrastructure.doc_browse.document_metadata_repository import DocumentMetadataRepository
+
+    app_logger = get_app_logger()
+    qdrant_client = AsyncQdrantClient(
+        host=settings.qdrant_host,
+        port=settings.qdrant_port,
+    )
+    collection_repo = QdrantCollectionRepository(qdrant_client)
+    embedding_factory = EmbeddingFactory()
+    parser = ParserFactory.create_from_string(settings.parser_type)
+    morph_analyzer = KiwiMorphAnalyzer()
+
+    es_config = ElasticsearchConfig(
+        ES_HOST=settings.es_host,
+        ES_PORT=settings.es_port,
+        ES_SCHEME=settings.es_scheme,
+    )
+    es_client = ElasticsearchClient.from_config(es_config)
+    es_repo = ElasticsearchRepository(client=es_client, logger=app_logger)
+
+    def use_case_factory(session: AsyncSession = Depends(get_session)):
+        log_repo = ActivityLogRepository(session, app_logger)
+        log_service = ActivityLogService(log_repo, app_logger)
+        embedding_model_repo = EmbeddingModelRepository(
+            session=session, logger=app_logger
+        )
+        document_metadata_repo = DocumentMetadataRepository(
+            session=session, logger=app_logger
+        )
+        return UnifiedUploadUseCase(
+            parser=parser,
+            collection_repo=collection_repo,
+            activity_log_repo=log_repo,
+            embedding_model_repo=embedding_model_repo,
+            embedding_factory=embedding_factory,
+            qdrant_client=qdrant_client,
+            es_repo=es_repo,
+            es_index=settings.es_index,
+            morph_analyzer=morph_analyzer,
+            document_metadata_repo=document_metadata_repo,
+            activity_log_service=log_service,
+            logger=app_logger,
+        )
+
+    return use_case_factory
+
+
+def create_collection_search_factories():
+    """Return per-request DI factories for CollectionSearch + SearchHistory."""
+    from src.infrastructure.collection.qdrant_collection_repository import QdrantCollectionRepository
+    from src.infrastructure.collection.activity_log_repository import ActivityLogRepository
+    from src.infrastructure.collection.permission_repository import CollectionPermissionRepository
+    from src.infrastructure.department.department_repository import DepartmentRepository
+    from src.infrastructure.collection_search.search_history_repository import SearchHistoryRepository
+    from src.application.collection.permission_service import CollectionPermissionService
+    from src.domain.collection.permission_policy import CollectionPermissionPolicy
+    from src.infrastructure.embeddings.embedding_factory import EmbeddingFactory
+    from src.application.collection_search.use_case import CollectionSearchUseCase
+    from src.application.collection_search.search_history_use_case import SearchHistoryUseCase
+
+    app_logger = get_app_logger()
+    qdrant_client = AsyncQdrantClient(
+        host=settings.qdrant_host,
+        port=settings.qdrant_port,
+    )
+    collection_repo = QdrantCollectionRepository(qdrant_client)
+    embedding_factory = EmbeddingFactory()
+
+    es_config = ElasticsearchConfig(
+        ES_HOST=settings.es_host,
+        ES_PORT=settings.es_port,
+        ES_SCHEME=settings.es_scheme,
+    )
+    es_client = ElasticsearchClient.from_config(es_config)
+    es_repo = ElasticsearchRepository(client=es_client, logger=app_logger)
+
+    def search_uc_factory(session: AsyncSession = Depends(get_session)):
+        log_repo = ActivityLogRepository(session, app_logger)
+        perm_repo = CollectionPermissionRepository(session, app_logger)
+        dept_repo = DepartmentRepository(session, app_logger)
+        perm_service = CollectionPermissionService(
+            perm_repo=perm_repo,
+            dept_repo=dept_repo,
+            policy=CollectionPermissionPolicy(),
+            logger=app_logger,
+        )
+        embedding_model_repo = EmbeddingModelRepository(
+            session=session, logger=app_logger
+        )
+        history_repo = SearchHistoryRepository(session, app_logger)
+        return CollectionSearchUseCase(
+            collection_repo=collection_repo,
+            permission_service=perm_service,
+            activity_log_repo=log_repo,
+            embedding_model_repo=embedding_model_repo,
+            embedding_factory=embedding_factory,
+            qdrant_client=qdrant_client,
+            es_repo=es_repo,
+            es_index=settings.es_index,
+            search_history_repo=history_repo,
+            logger=app_logger,
+        )
+
+    def history_uc_factory(session: AsyncSession = Depends(get_session)):
+        history_repo = SearchHistoryRepository(session, app_logger)
+        return SearchHistoryUseCase(
+            search_history_repo=history_repo,
+            logger=app_logger,
+        )
+
+    return search_uc_factory, history_uc_factory
+
+
 def create_tool_catalog_factories():
     """Return per-request DI factories for Tool Catalog use cases."""
     app_logger = get_app_logger()
@@ -1476,6 +1606,31 @@ def create_load_mcp_tools_factory():
     return _factory
 
 
+async def _ensure_es_index() -> None:
+    """앱 시작 시 ES 문서 인덱스 존재를 보장한다."""
+    from src.infrastructure.elasticsearch.es_index_mappings import DOCUMENTS_INDEX_MAPPINGS
+
+    try:
+        es_config = ElasticsearchConfig(
+            ES_HOST=settings.es_host,
+            ES_PORT=settings.es_port,
+            ES_SCHEME=settings.es_scheme,
+        )
+        es_client = ElasticsearchClient.from_config(es_config)
+        es_repo = ElasticsearchRepository(client=es_client, logger=get_app_logger())
+        created = await es_repo.ensure_index_exists(
+            settings.es_index, DOCUMENTS_INDEX_MAPPINGS
+        )
+        if created:
+            get_app_logger().info(
+                "ES index ensured on startup", index=settings.es_index
+            )
+    except Exception as e:
+        get_app_logger().warning(
+            "ES index ensure failed on startup", exception=e
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler for startup/shutdown."""
@@ -1504,6 +1659,9 @@ async def lifespan(app: FastAPI):
     _auto_build_use_case, _auto_build_reply_use_case, _auto_build_session_repository = (
         create_auto_build_components()
     )
+
+    # ES 인덱스 보장 (없으면 자동 생성, 실패 시 warning만)
+    await _ensure_es_index()
 
     # LLM Model Registry: 기본 모델 시드 등록 (중복 스킵, 실패 시 경고)
     await seed_llm_models_on_startup()
@@ -1666,6 +1824,15 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_collection_use_case] = _collection_uc_factory
     app.dependency_overrides[get_collection_activity_log_service] = _activity_log_service_factory
 
+    # Unified Upload DI (per-request — session 필요)
+    _unified_upload_uc_factory = create_unified_upload_factories()
+    app.dependency_overrides[get_unified_upload_use_case] = _unified_upload_uc_factory
+
+    # Collection Search DI (per-request — session 필요)
+    _search_uc_factory, _history_uc_factory = create_collection_search_factories()
+    app.dependency_overrides[get_collection_search_use_case] = _search_uc_factory
+    app.dependency_overrides[get_search_history_use_case] = _history_uc_factory
+
     # Excel Export DI (singleton)
     _excel_export_uc = create_excel_export_use_case()
     app.dependency_overrides[get_excel_export_uc] = lambda: _excel_export_uc
@@ -1751,6 +1918,8 @@ def create_app() -> FastAPI:
     app.include_router(doc_browse_router)
     app.include_router(excel_export_router)
     app.include_router(pdf_export_router)
+    app.include_router(unified_upload_router)
+    app.include_router(collection_search_router)
 
     # Health check endpoint
     @app.get("/health")

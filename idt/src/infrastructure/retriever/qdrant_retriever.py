@@ -81,16 +81,16 @@ class QdrantRetriever(RetrieverInterface):
         if filters is not None:
             query_filter = filters.to_qdrant_filter()
 
-        results = await self._client.search(
+        response = await self._client.query_points(
             collection_name=self._collection_name,
-            query_vector=query_vector,
+            query=query_vector,
             limit=top_k,
             query_filter=query_filter,
             with_vectors=True,
         )
 
         documents_with_scores: List[Tuple[Document, float]] = []
-        for point in results:
+        for point in response.points:
             if self._score_threshold is not None and point.score < self._score_threshold:
                 continue
 

@@ -1,25 +1,14 @@
 {
   "version": "1.0",
-  "enabled": true,
+  "enabled": false,
   "teamName": "",
-  "feature": "chat-history-api",
+  "feature": "chat-sidebar-collapse",
   "pdcaPhase": "check",
   "orchestrationPattern": "leader",
   "ctoAgent": "opus",
-  "startedAt": "2026-04-17T08:06:45.477Z",
-  "lastUpdated": "2026-04-17T08:06:45.490Z",
-  "teammates": [
-    {
-      "name": "ac014aa7567183043",
-      "role": "bkit:report-generator",
-      "model": "sonnet",
-      "status": "spawning",
-      "currentTask": null,
-      "taskId": null,
-      "startedAt": "2026-04-17T08:06:45.489Z",
-      "lastActivityAt": "2026-04-17T08:06:45.489Z"
-    }
-  ],
+  "startedAt": "2026-04-29T06:08:33.775Z",
+  "lastUpdated": "2026-04-29T07:26:34.217Z",
+  "teammates": [],
   "progress": {
     "totalTasks": 0,
     "completedTasks": 0,
@@ -28,5 +17,5 @@
     "pendingTasks": 0
   },
   "recentMessages": [],
-  "sessionId": "f8161ba4-9e2d-4b07-a299-c550e2448089"
+  "sessionId": "d3bf522a-423b-4704-919b-28583dcde1d0"
 }

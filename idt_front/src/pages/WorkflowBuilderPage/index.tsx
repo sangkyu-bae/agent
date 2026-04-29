@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import Sidebar from '@/components/layout/Sidebar';
 import FlowCanvas from '@/pages/WorkflowDesignerPage/FlowCanvas';
 import type { Workflow, FlowNode, FlowEdge } from '@/types/workflow';
 
@@ -71,10 +70,7 @@ const WorkflowBuilderPage = () => {
   };
 
   return (
-    <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
-      <Sidebar sessions={[]} activeSessionId={null} onSelectSession={() => {}} onNewChat={() => {}} />
-
-      <main style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
         {/* 저장 결과 배너 */}
         {saveResult && (
           <div className="flex shrink-0 items-center justify-between border-b border-emerald-200 bg-emerald-50 px-6 py-2">
@@ -102,7 +98,6 @@ const WorkflowBuilderPage = () => {
           onSave={handleSave}
           onBack={handleBack}
         />
-      </main>
     </div>
   );
 };

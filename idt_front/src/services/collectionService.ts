@@ -15,6 +15,9 @@ import type {
   CollectionDocumentsParams,
   DocumentChunksResponse,
   DocumentChunksParams,
+  CollectionSearchRequest,
+  CollectionSearchResponse,
+  SearchHistoryResponse,
 } from '@/types/collection';
 
 export const collectionService = {
@@ -112,6 +115,28 @@ export const collectionService = {
   ): Promise<DocumentChunksResponse> => {
     const res = await authApiClient.get<DocumentChunksResponse>(
       API_ENDPOINTS.COLLECTION_DOCUMENT_CHUNKS(collectionName, documentId),
+      { params },
+    );
+    return res.data;
+  },
+
+  searchCollection: async (
+    collectionName: string,
+    data: CollectionSearchRequest,
+  ): Promise<CollectionSearchResponse> => {
+    const res = await authApiClient.post<CollectionSearchResponse>(
+      API_ENDPOINTS.COLLECTION_SEARCH(collectionName),
+      data,
+    );
+    return res.data;
+  },
+
+  getSearchHistory: async (
+    collectionName: string,
+    params?: { limit?: number; offset?: number },
+  ): Promise<SearchHistoryResponse> => {
+    const res = await authApiClient.get<SearchHistoryResponse>(
+      API_ENDPOINTS.COLLECTION_SEARCH_HISTORY(collectionName),
       { params },
     );
     return res.data;

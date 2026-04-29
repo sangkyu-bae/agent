@@ -110,24 +110,24 @@ class TestRetrieve:
     @pytest.mark.asyncio
     async def test_retrieve_embeds_query(self, retriever, mock_client, mock_embedding):
         """Should embed query text before search."""
-        mock_client.search.return_value = []
+        mock_client.query_points.return_value = MagicMock(points=[])
 
         await retriever.retrieve("test query")
 
         # Verify embedding was called
-        assert mock_client.search.called
+        assert mock_client.query_points.called
 
     @pytest.mark.asyncio
     async def test_retrieve_calls_search_with_correct_params(
         self, retriever, mock_client
     ):
         """Should call search with correct parameters."""
-        mock_client.search.return_value = []
+        mock_client.query_points.return_value = MagicMock(points=[])
 
         await retriever.retrieve("test query", top_k=5)
 
-        mock_client.search.assert_called_once()
-        call_kwargs = mock_client.search.call_args.kwargs
+        mock_client.query_points.assert_called_once()
+        call_kwargs = mock_client.query_points.call_args.kwargs
         assert call_kwargs["collection_name"] == "test_collection"
         assert call_kwargs["limit"] == 5
         assert call_kwargs["with_vectors"] is True
@@ -135,10 +135,10 @@ class TestRetrieve:
     @pytest.mark.asyncio
     async def test_retrieve_returns_documents(self, retriever, mock_client):
         """Should convert search results to Documents."""
-        mock_client.search.return_value = [
+        mock_client.query_points.return_value = MagicMock(points=[
             create_scored_point("doc-1", 0.95, "Content 1", {"user_id": "user-1"}),
             create_scored_point("doc-2", 0.85, "Content 2", {"user_id": "user-2"}),
-        ]
+        ])
 
         result = await retriever.retrieve("test query")
 
@@ -150,14 +150,14 @@ class TestRetrieve:
     @pytest.mark.asyncio
     async def test_retrieve_preserves_metadata(self, retriever, mock_client):
         """Should preserve original metadata in documents."""
-        mock_client.search.return_value = [
+        mock_client.query_points.return_value = MagicMock(points=[
             create_scored_point(
                 "doc-1",
                 0.95,
                 "Content 1",
                 {"user_id": "user-1", "document_type": "policy"},
             ),
-        ]
+        ])
 
         result = await retriever.retrieve("test query")
 
@@ -167,18 +167,18 @@ class TestRetrieve:
     @pytest.mark.asyncio
     async def test_retrieve_with_filters(self, retriever, mock_client):
         """Should apply metadata filters to search."""
-        mock_client.search.return_value = []
+        mock_client.query_points.return_value = MagicMock(points=[])
         filters = MetadataFilter(user_id="user-123", chunk_type="child")
 
         await retriever.retrieve("test query", filters=filters)
 
-        call_kwargs = mock_client.search.call_args.kwargs
+        call_kwargs = mock_client.query_points.call_args.kwargs
         assert call_kwargs["query_filter"] is not None
 
     @pytest.mark.asyncio
     async def test_retrieve_empty_results(self, retriever, mock_client):
         """Should handle empty results gracefully."""
-        mock_client.search.return_value = []
+        mock_client.query_points.return_value = MagicMock(points=[])
 
         result = await retriever.retrieve("test query")
 
@@ -187,11 +187,11 @@ class TestRetrieve:
     @pytest.mark.asyncio
     async def test_retrieve_default_top_k_is_10(self, retriever, mock_client):
         """Should use default top_k of 10."""
-        mock_client.search.return_value = []
+        mock_client.query_points.return_value = MagicMock(points=[])
 
         await retriever.retrieve("test query")
 
-        call_kwargs = mock_client.search.call_args.kwargs
+        call_kwargs = mock_client.query_points.call_args.kwargs
         assert call_kwargs["limit"] == 10
 
 
@@ -201,10 +201,10 @@ class TestRetrieveWithScores:
     @pytest.mark.asyncio
     async def test_returns_tuples_with_scores(self, retriever, mock_client):
         """Should return (Document, score) tuples."""
-        mock_client.search.return_value = [
+        mock_client.query_points.return_value = MagicMock(points=[
             create_scored_point("doc-1", 0.95, "Content 1"),
             create_scored_point("doc-2", 0.85, "Content 2"),
-        ]
+        ])
 
         result = await retriever.retrieve_with_scores("test query")
 
@@ -218,9 +218,9 @@ class TestRetrieveWithScores:
     @pytest.mark.asyncio
     async def test_scores_are_correct(self, retriever, mock_client):
         """Should return correct similarity scores."""
-        mock_client.search.return_value = [
+        mock_client.query_points.return_value = MagicMock(points=[
             create_scored_point("doc-1", 0.9876, "Content 1"),
-        ]
+        ])
 
         result = await retriever.retrieve_with_scores("test query")
 
@@ -229,12 +229,12 @@ class TestRetrieveWithScores:
     @pytest.mark.asyncio
     async def test_retrieve_with_scores_applies_filters(self, retriever, mock_client):
         """Should apply filters to search."""
-        mock_client.search.return_value = []
+        mock_client.query_points.return_value = MagicMock(points=[])
         filters = MetadataFilter(document_id="doc-123")
 
         await retriever.retrieve_with_scores("test query", filters=filters)
 
-        call_kwargs = mock_client.search.call_args.kwargs
+        call_kwargs = mock_client.query_points.call_args.kwargs
         assert call_kwargs["query_filter"] is not None
 
 
@@ -303,11 +303,11 @@ class TestScoreThreshold:
             embedding=mock_embedding,
             score_threshold=0.8,
         )
-        mock_client.search.return_value = [
+        mock_client.query_points.return_value = MagicMock(points=[
             create_scored_point("doc-1", 0.95, "High score"),
             create_scored_point("doc-2", 0.75, "Low score"),
             create_scored_point("doc-3", 0.85, "Medium score"),
-        ]
+        ])
 
         result = await retriever.retrieve("test query")
 
@@ -317,10 +317,10 @@ class TestScoreThreshold:
     @pytest.mark.asyncio
     async def test_no_threshold_returns_all(self, retriever, mock_client):
         """Should return all results when no threshold set."""
-        mock_client.search.return_value = [
+        mock_client.query_points.return_value = MagicMock(points=[
             create_scored_point("doc-1", 0.95, "High score"),
             create_scored_point("doc-2", 0.3, "Low score"),
-        ]
+        ])
 
         result = await retriever.retrieve("test query")
 
@@ -333,18 +333,18 @@ class TestMetadataFilterConversion:
     @pytest.mark.asyncio
     async def test_empty_filter_no_query_filter(self, retriever, mock_client):
         """Empty filter should result in no query_filter."""
-        mock_client.search.return_value = []
+        mock_client.query_points.return_value = MagicMock(points=[])
         filters = MetadataFilter()
 
         await retriever.retrieve("test query", filters=filters)
 
-        call_kwargs = mock_client.search.call_args.kwargs
+        call_kwargs = mock_client.query_points.call_args.kwargs
         assert call_kwargs["query_filter"] is None
 
     @pytest.mark.asyncio
     async def test_filter_conversion_correctness(self, retriever, mock_client):
         """Filter should be correctly converted to Qdrant format."""
-        mock_client.search.return_value = []
+        mock_client.query_points.return_value = MagicMock(points=[])
         filters = MetadataFilter(
             user_id="user-123",
             document_id="doc-456",
@@ -353,7 +353,7 @@ class TestMetadataFilterConversion:
 
         await retriever.retrieve("test query", filters=filters)
 
-        call_kwargs = mock_client.search.call_args.kwargs
+        call_kwargs = mock_client.query_points.call_args.kwargs
         query_filter = call_kwargs["query_filter"]
         assert query_filter is not None
         assert len(query_filter.must) == 3
@@ -365,9 +365,9 @@ class TestDocumentConversion:
     @pytest.mark.asyncio
     async def test_document_has_correct_id(self, retriever, mock_client):
         """Document should have correct ID."""
-        mock_client.search.return_value = [
+        mock_client.query_points.return_value = MagicMock(points=[
             create_scored_point("test-id-123", 0.9, "Content"),
-        ]
+        ])
 
         result = await retriever.retrieve("test query")
 
@@ -377,9 +377,9 @@ class TestDocumentConversion:
     async def test_document_has_vector(self, retriever, mock_client):
         """Document should have vector."""
         vector = [0.5] * 1536
-        mock_client.search.return_value = [
+        mock_client.query_points.return_value = MagicMock(points=[
             create_scored_point("doc-1", 0.9, "Content", vector=vector),
-        ]
+        ])
 
         result = await retriever.retrieve("test query")
 
@@ -388,9 +388,9 @@ class TestDocumentConversion:
     @pytest.mark.asyncio
     async def test_document_has_score_from_search(self, retriever, mock_client):
         """Document should have score from search."""
-        mock_client.search.return_value = [
+        mock_client.query_points.return_value = MagicMock(points=[
             create_scored_point("doc-1", 0.9, "Content"),
-        ]
+        ])
 
         result = await retriever.retrieve("test query")
 
@@ -399,9 +399,9 @@ class TestDocumentConversion:
     @pytest.mark.asyncio
     async def test_metadata_does_not_include_content(self, retriever, mock_client):
         """Metadata should not include 'content' field."""
-        mock_client.search.return_value = [
+        mock_client.query_points.return_value = MagicMock(points=[
             create_scored_point("doc-1", 0.9, "Content", {"key": "value"}),
-        ]
+        ])
 
         result = await retriever.retrieve("test query")
 

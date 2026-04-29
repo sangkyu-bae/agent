@@ -11,7 +11,7 @@ class TestRRFFusionPolicy:
     """RRF 병합 정책 단위 테스트."""
 
     def test_bm25_only_result_gets_rrf_score(self):
-        """BM25에만 있는 문서는 1/(k+rank) 점수를 받는다."""
+        """BM25에만 있는 문서는 weight * 1/(k+rank) 점수를 받는다."""
         from src.domain.hybrid_search.policies import RRFFusionPolicy
 
         policy = RRFFusionPolicy()
@@ -20,12 +20,12 @@ class TestRRFFusionPolicy:
 
         assert len(results) == 1
         assert results[0].id == "doc-1"
-        expected = 1.0 / (60 + 1)
+        expected = 0.5 / (60 + 1)
         assert abs(results[0].score - expected) < 1e-9
         assert results[0].source == "bm25_only"
 
     def test_vector_only_result_gets_rrf_score(self):
-        """벡터에만 있는 문서는 1/(k+rank) 점수를 받는다."""
+        """벡터에만 있는 문서는 weight * 1/(k+rank) 점수를 받는다."""
         from src.domain.hybrid_search.policies import RRFFusionPolicy
 
         policy = RRFFusionPolicy()
@@ -34,12 +34,12 @@ class TestRRFFusionPolicy:
 
         assert len(results) == 1
         assert results[0].id == "doc-2"
-        expected = 1.0 / (60 + 1)
+        expected = 0.5 / (60 + 1)
         assert abs(results[0].score - expected) < 1e-9
         assert results[0].source == "vector_only"
 
     def test_document_in_both_gets_combined_score(self):
-        """양쪽 모두에 있는 문서는 두 RRF 점수의 합을 받는다."""
+        """양쪽 모두에 있는 문서는 두 weighted RRF 점수의 합을 받는다."""
         from src.domain.hybrid_search.policies import RRFFusionPolicy
 
         policy = RRFFusionPolicy()
@@ -48,7 +48,7 @@ class TestRRFFusionPolicy:
         results = policy.merge(bm25, vector, top_k=10, k=60)
 
         assert len(results) == 1
-        expected = 1.0 / (60 + 1) + 1.0 / (60 + 1)
+        expected = 0.5 / (60 + 1) + 0.5 / (60 + 1)
         assert abs(results[0].score - expected) < 1e-9
         assert results[0].source == "both"
 
@@ -137,3 +137,68 @@ class TestRRFFusionPolicy:
         result_k10 = policy.merge(bm25, [], top_k=10, k=10)
 
         assert result_k60[0].score < result_k10[0].score  # smaller k → higher score
+
+    def test_default_weights_match_original_rrf(self):
+        """기본 가중치(0.5/0.5)는 기존 RRF와 동일한 점수를 산출한다."""
+        from src.domain.hybrid_search.policies import RRFFusionPolicy
+
+        policy = RRFFusionPolicy()
+        bm25 = [make_hit("shared")]
+        vector = [make_hit("shared")]
+
+        result_default = policy.merge(bm25, vector, top_k=10, k=60)
+        result_weighted = policy.merge(
+            bm25, vector, top_k=10, k=60,
+            bm25_weight=0.5, vector_weight=0.5,
+        )
+
+        assert abs(result_default[0].score - result_weighted[0].score) < 1e-9
+
+    def test_bm25_weight_1_vector_weight_0(self):
+        """bm25_weight=1.0, vector_weight=0.0이면 벡터 기여도가 0이다."""
+        from src.domain.hybrid_search.policies import RRFFusionPolicy
+
+        policy = RRFFusionPolicy()
+        bm25 = [make_hit("doc")]
+        vector = [make_hit("doc")]
+
+        results = policy.merge(
+            bm25, vector, top_k=10, k=60,
+            bm25_weight=1.0, vector_weight=0.0,
+        )
+
+        expected = 1.0 * (1.0 / (60 + 1)) + 0.0 * (1.0 / (60 + 1))
+        assert abs(results[0].score - expected) < 1e-9
+
+    def test_bm25_weight_0_vector_weight_1(self):
+        """bm25_weight=0.0, vector_weight=1.0이면 BM25 기여도가 0이다."""
+        from src.domain.hybrid_search.policies import RRFFusionPolicy
+
+        policy = RRFFusionPolicy()
+        bm25 = [make_hit("doc")]
+        vector = [make_hit("doc")]
+
+        results = policy.merge(
+            bm25, vector, top_k=10, k=60,
+            bm25_weight=0.0, vector_weight=1.0,
+        )
+
+        expected = 0.0 * (1.0 / (60 + 1)) + 1.0 * (1.0 / (60 + 1))
+        assert abs(results[0].score - expected) < 1e-9
+
+    def test_biased_weights_favor_bm25(self):
+        """bm25_weight=0.8, vector_weight=0.2일 때 BM25 상위 문서가 더 높은 score."""
+        from src.domain.hybrid_search.policies import RRFFusionPolicy
+
+        policy = RRFFusionPolicy()
+        bm25 = [make_hit("bm25-top"), make_hit("vec-top")]
+        vector = [make_hit("vec-top"), make_hit("bm25-top")]
+
+        results = policy.merge(
+            bm25, vector, top_k=10, k=60,
+            bm25_weight=0.8, vector_weight=0.2,
+        )
+
+        bm25_top = next(r for r in results if r.id == "bm25-top")
+        vec_top = next(r for r in results if r.id == "vec-top")
+        assert bm25_top.score > vec_top.score

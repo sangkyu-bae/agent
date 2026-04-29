@@ -1,7 +1,8 @@
 {
   "version": "2.0",
-  "lastUpdated": "2026-04-18T08:36:28.857Z",
+  "lastUpdated": "2026-04-29T06:57:21.771Z",
   "activeFeatures": [
+    "embedding-model-registry",
     "api",
     "routes",
     "retrieval",
@@ -37,9 +38,22 @@
     "general-chat-api",
     "__tests__",
     "repositories",
-    "auth"
+    "auth",
+    "collection",
+    "fix-activity-log-table",
+    "fix-collection-rename",
+    "scripts",
+    "collection-document-browser",
+    "mocks",
+    "unified-pdf-upload-api",
+    "unified_upload",
+    "logging",
+    "collection_search",
+    "fix-qdrant-search-api",
+    "vector",
+    "retriever"
   ],
-  "primaryFeature": "auto-agent-builder",
+  "primaryFeature": "fix-qdrant-search-api",
   "archivedFeatures": {
     "dynamic-mcp-registry": {
       "phase": "archived",
@@ -64,9 +78,46 @@
       "startedAt": "2026-04-18T00:00:00.000Z",
       "archivedAt": "2026-04-19T00:00:00.000Z",
       "archivedTo": "docs/archive/2026-04/db-session-leak-fix/"
+    },
+    "custom-rag-tool": {
+      "phase": "archived",
+      "matchRate": 100,
+      "iterationCount": 0,
+      "startedAt": "2026-04-21T00:00:00.000Z",
+      "archivedAt": "2026-04-21T00:00:00.000Z",
+      "archivedTo": "docs/archive/2026-04/custom-rag-tool/"
+    },
+    "auto-agent-builder": {
+      "phase": "archived",
+      "matchRate": 100,
+      "iterationCount": 1,
+      "startedAt": "2026-03-24T00:00:00.000Z",
+      "archivedAt": "2026-04-22T00:00:00.000Z",
+      "archivedTo": "docs/archive/2026-03/auto-agent-builder/"
+    },
+    "collection-permission-management": {
+      "phase": "archived",
+      "matchRate": 95,
+      "iterationCount": 1,
+      "startedAt": "2026-04-22T00:00:00.000Z",
+      "archivedAt": "2026-04-23T00:00:00.000Z",
+      "archivedTo": "docs/archive/2026-04/collection-permission-management/"
     }
   },
   "features": {
+    "embedding-model-registry": {
+      "phase": "archived",
+      "phaseNumber": 6,
+      "matchRate": 96,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-04-22T10:00:00.000Z",
+        "lastUpdated": "2026-04-22T14:00:00.000Z"
+      },
+      "archivedTo": "docs/archive/2026-04/embedding-model-registry/"
+    },
     "api": {
       "phase": "do",
       "phaseNumber": 3,
@@ -76,7 +127,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-04T10:53:02.380Z",
-        "lastUpdated": "2026-04-18T08:36:28.856Z"
+        "lastUpdated": "2026-04-29T02:30:39.021Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\api\\main.py"
     },
@@ -89,9 +140,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-04T10:57:06.857Z",
-        "lastUpdated": "2026-04-17T06:42:02.394Z"
+        "lastUpdated": "2026-04-28T10:48:30.650Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\api\\routes\\conversation_history_router.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\api\\routes\\collection_search_router.py"
     },
     "retrieval": {
       "phase": "do",
@@ -102,9 +153,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-04T11:07:11.850Z",
-        "lastUpdated": "2026-03-04T11:08:51.435Z"
+        "lastUpdated": "2026-04-22T02:25:18.904Z"
       },
-      "lastFile": "/c/sangplus/idt/src/application/retrieval/retrieval_use_case.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\application\\retrieval\\retrieval_use_case.py"
     },
     "redis": {
       "phase": "do",
@@ -154,9 +205,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-16T12:31:15.127Z",
-        "lastUpdated": "2026-03-16T12:33:57.095Z"
+        "lastUpdated": "2026-04-29T02:30:05.741Z"
       },
-      "lastFile": "C:\\sangplus\\idt\\src\\infrastructure\\elasticsearch\\es_repository.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\infrastructure\\elasticsearch\\es_index_mappings.py"
     },
     "hybrid_search": {
       "phase": "do",
@@ -167,9 +218,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-16T13:11:01.522Z",
-        "lastUpdated": "2026-03-16T13:14:36.190Z"
+        "lastUpdated": "2026-04-29T02:28:34.482Z"
       },
-      "lastFile": "C:\\sangplus\\idt\\src\\application\\hybrid_search\\use_case.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\application\\hybrid_search\\use_case.py"
     },
     "idt": {
       "phase": "do",
@@ -219,9 +270,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-16T14:16:48.293Z",
-        "lastUpdated": "2026-03-16T14:17:49.826Z"
+        "lastUpdated": "2026-04-28T11:53:20.919Z"
       },
-      "lastFile": "C:\\sangplus\\idt\\src\\infrastructure\\morph\\kiwi_morph_analyzer.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\infrastructure\\morph\\kiwi_morph_analyzer.py"
     },
     "morph_index": {
       "phase": "do",
@@ -245,9 +296,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-17T02:00:33.482Z",
-        "lastUpdated": "2026-03-17T02:01:55.755Z"
+        "lastUpdated": "2026-04-21T11:09:02.992Z"
       },
-      "lastFile": "C:\\sangplus\\idt\\src\\application\\rag_agent\\use_case.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\application\\rag_agent\\tools.py"
     },
     "mysql": {
       "phase": "do",
@@ -323,9 +374,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-17T14:42:20.033Z",
-        "lastUpdated": "2026-03-17T14:43:25.260Z"
+        "lastUpdated": "2026-04-23T12:59:27.338Z"
       },
-      "lastFile": "C:\\sangplus\\idt\\tests\\application\\ingest\\test_ingest_use_case.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\application\\ingest\\ingest_use_case.py"
     },
     "doc_chunk": {
       "phase": "do",
@@ -406,8 +457,8 @@
       "lastFile": "C:\\sangplus\\idt\\src\\infrastructure\\llm\\ollama\\__init__.py"
     },
     "middleware_agent": {
-      "phase": "archived",
-      "phaseNumber": 7,
+      "phase": "do",
+      "phaseNumber": 3,
       "matchRate": 95,
       "iterationCount": 0,
       "requirements": [],
@@ -416,16 +467,10 @@
       },
       "timestamps": {
         "started": "2026-03-24T05:08:19.770Z",
-        "lastUpdated": "2026-03-24T09:30:00.000Z",
+        "lastUpdated": "2026-04-21T10:45:51.104Z",
         "archivedAt": "2026-03-24T09:30:00.000Z"
       },
-      "lastFile": "C:\\sangplus\\idt\\docs\\archive\\2026-03\\middleware-agent-builder\\middleware-agent-builder.report.md"
-    },
-    "auto-agent-builder": {
-      "phase": "check",
-      "matchRate": 100,
-      "startedAt": "2026-03-24T00:00:00Z",
-      "archivedTo": "docs/archive/2026-03/auto-agent-builder/"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\application\\middleware_agent\\schemas.py"
     },
     "planner": {
       "phase": "do",
@@ -462,9 +507,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-04-01T11:13:30.494Z",
-        "lastUpdated": "2026-04-01T11:13:49.113Z"
+        "lastUpdated": "2026-04-26T09:19:10.549Z"
       },
-      "lastFile": "C:\\sangplus\\idt\\idt_front\\src\\hooks\\useChat.ts"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\types\\ragToolConfig.ts"
     },
     "ChatPage": {
       "phase": "do",
@@ -544,6 +589,214 @@
         "lastUpdated": "2026-04-18T08:31:14.483Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\infrastructure\\auth\\refresh_token_repository.py"
+    },
+    "collection": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-04-21T12:56:59.222Z",
+        "lastUpdated": "2026-04-26T09:32:44.981Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\infrastructure\\collection\\permission_repository.py"
+    },
+    "fix-activity-log-table": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {
+        "plan": "docs/01-plan/features/fix-activity-log-table.plan.md"
+      },
+      "timestamps": {
+        "started": "2026-04-22T09:00:00.000Z",
+        "lastUpdated": "2026-04-22T09:00:00.000Z"
+      },
+      "lastFile": "src/application/collection/activity_log_service.py"
+    },
+    "fix-collection-rename": {
+      "phase": "design",
+      "phaseNumber": 2,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {
+        "plan": "docs/01-plan/features/fix-collection-rename.plan.md",
+        "design": "docs/02-design/features/fix-collection-rename.design.md"
+      },
+      "timestamps": {
+        "started": "2026-04-22T12:00:00.000Z",
+        "lastUpdated": "2026-04-22T12:00:00.000Z"
+      },
+      "lastFile": "docs/02-design/features/fix-collection-rename.design.md"
+    },
+    "doc_browse": {
+      "phase": "archived",
+      "matchRate": 97,
+      "iterationCount": 0,
+      "startedAt": "2026-04-23T06:38:13.104Z",
+      "archivedAt": "2026-04-23T14:00:00.000Z",
+      "archivedTo": "docs/archive/2026-04/doc-list-optimization/",
+      "phaseNumber": 7,
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\docs\\archive\\2026-04\\doc-list-optimization\\doc-list-optimization.report.md",
+      "timestamps": {
+        "lastUpdated": "2026-04-23T14:00:00.000Z"
+      }
+    },
+    "scripts": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-04-23T13:02:43.188Z",
+        "lastUpdated": "2026-04-23T13:02:43.188Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\scripts\\migrate_doc_metadata.py"
+    },
+    "collection-document-browser": {
+      "phase": "plan",
+      "phaseNumber": 1,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {
+        "plan": "docs/01-plan/features/collection-document-browser.plan.md"
+      },
+      "timestamps": {
+        "started": "2026-04-26T00:00:00.000Z",
+        "lastUpdated": "2026-04-26T00:00:00.000Z"
+      },
+      "lastFile": "docs/01-plan/features/collection-document-browser.plan.md"
+    },
+    "agent-collection-visibility-sync": {
+      "phase": "archived",
+      "phaseNumber": 7,
+      "matchRate": 93,
+      "iterationCount": 1,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-04-26T00:00:00.000Z",
+        "lastUpdated": "2026-04-26T09:36:00.000Z"
+      },
+      "archivedTo": "docs/archive/2026-04/agent-collection-visibility-sync/"
+    },
+    "mocks": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-04-26T09:34:24.626Z",
+        "lastUpdated": "2026-04-26T09:34:24.626Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\__tests__\\mocks\\handlers.ts"
+    },
+    "unified-pdf-upload-api": {
+      "phase": "archived",
+      "matchRate": 95,
+      "iterationCount": 0,
+      "startedAt": "2026-04-26T12:00:00Z",
+      "completedAt": "2026-04-27T00:00:00Z",
+      "archivedAt": "2026-04-27T00:00:00Z",
+      "archivedTo": "docs/archive/2026-04/unified-pdf-upload-api/"
+    },
+    "fix-unified-upload-es-rdb": {
+      "phase": "archived",
+      "matchRate": 100,
+      "iterationCount": 0,
+      "startedAt": "2026-04-28T00:00:00.000Z",
+      "archivedAt": "2026-04-28T00:00:00.000Z",
+      "archivedTo": "docs/archive/2026-04/fix-unified-upload-es-rdb/"
+    },
+    "unified_upload": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-04-26T10:47:07.813Z",
+        "lastUpdated": "2026-04-28T11:54:34.896Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\application\\unified_upload\\use_case.py"
+    },
+    "logging": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-04-27T10:00:10.558Z",
+        "lastUpdated": "2026-04-28T11:55:27.501Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\infrastructure\\logging\\structured_logger.py"
+    },
+    "collection_search": {
+      "phase": "archived",
+      "phaseNumber": 6,
+      "matchRate": 98,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-04-28T10:37:22.011Z",
+        "lastUpdated": "2026-04-28T12:45:00.000Z"
+      },
+      "archivedTo": "docs/archive/2026-04/collection-scoped-search/"
+    },
+    "fix-qdrant-search-api": {
+      "phase": "design",
+      "phaseNumber": 2,
+      "matchRate": 0,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {
+        "plan": "docs/01-plan/features/fix-qdrant-search-api.plan.md",
+        "design": "docs/02-design/features/fix-qdrant-search-api.design.md"
+      },
+      "timestamps": {
+        "started": "2026-04-29T06:00:00.000Z",
+        "lastUpdated": "2026-04-29T06:00:00.000Z"
+      }
+    },
+    "vector": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-04-29T06:53:51.442Z",
+        "lastUpdated": "2026-04-29T06:57:05.113Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\infrastructure\\vector\\qdrant_vectorstore.py"
+    },
+    "retriever": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-04-29T06:54:27.056Z",
+        "lastUpdated": "2026-04-29T06:57:21.770Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\infrastructure\\retriever\\qdrant_retriever.py"
     }
   },
   "pipeline": {
@@ -554,7 +807,7 @@
   "session": {
     "startedAt": "2026-03-04T10:49:14.367Z",
     "onboardingCompleted": false,
-    "lastActivity": "2026-04-18T08:36:28.857Z"
+    "lastActivity": "2026-04-29T06:57:21.771Z"
   },
   "history": [
     {
@@ -2936,6 +3189,1512 @@
     {
       "timestamp": "2026-04-18T08:36:28.856Z",
       "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T03:34:56.430Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T03:35:10.293Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T03:35:28.491Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T03:35:53.600Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T03:36:11.654Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T03:36:21.744Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T03:36:29.636Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T03:36:49.374Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T10:37:30.682Z",
+      "feature": "hybrid_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T10:39:32.090Z",
+      "feature": "hybrid_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T10:39:45.795Z",
+      "feature": "hybrid_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T10:40:09.087Z",
+      "feature": "rag_agent",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T10:40:37.341Z",
+      "feature": "hybrid_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T10:40:54.684Z",
+      "feature": "hybrid_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T10:44:00.106Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T10:44:47.533Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T10:45:51.104Z",
+      "feature": "middleware_agent",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T11:08:46.229Z",
+      "feature": "rag_agent",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T11:09:02.992Z",
+      "feature": "rag_agent",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T12:56:59.222Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T12:57:00.284Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T12:57:10.289Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T12:57:14.654Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T12:57:25.336Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T12:57:37.337Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T12:58:15.831Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T12:58:19.179Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T12:58:20.965Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T12:58:37.313Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T12:58:47.667Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T12:59:08.852Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T12:59:15.144Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T12:59:51.437Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T12:59:52.245Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T12:59:57.386Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T13:00:07.796Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T13:00:20.300Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T13:00:35.044Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T13:02:04.195Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T13:02:52.006Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T13:03:21.849Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T13:03:36.661Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T13:03:42.015Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T13:04:03.763Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T02:22:12.191Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T02:22:25.411Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T02:22:39.985Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T02:22:56.689Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T02:23:37.507Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T02:25:02.225Z",
+      "feature": "retrieval",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T02:25:11.566Z",
+      "feature": "retrieval",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T02:25:18.905Z",
+      "feature": "retrieval",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T02:25:28.263Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T02:26:06.290Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T02:26:19.664Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T02:27:36.063Z",
+      "feature": "ingest",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T02:27:43.072Z",
+      "feature": "ingest",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T02:27:49.598Z",
+      "feature": "ingest",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T02:28:09.818Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T06:45:00.751Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T06:45:03.862Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T06:45:17.801Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T06:45:18.613Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T06:52:42.103Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T06:52:56.550Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T06:53:21.821Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T06:53:37.773Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T07:02:18.545Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T07:02:42.346Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T02:33:22.418Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T02:33:46.098Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T02:34:16.425Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T02:34:25.769Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T02:34:27.976Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T02:34:43.152Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T02:35:29.915Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T02:36:01.236Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T02:36:13.342Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T02:37:16.110Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T02:37:51.030Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T02:38:14.937Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T02:38:26.131Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T02:38:35.731Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T02:38:51.967Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T02:39:01.591Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T02:39:11.412Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T02:40:05.195Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T02:40:14.888Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T02:40:24.155Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T02:40:36.316Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T02:40:52.201Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T02:41:02.140Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T02:41:15.435Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T02:41:40.641Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T02:42:15.213Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T05:38:29.944Z",
+      "feature": "collection-permission-management gap analysis",
+      "phase": "act",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T05:44:54.758Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T05:45:01.826Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T05:45:10.412Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T05:45:18.447Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T05:45:25.518Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T05:45:36.227Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T05:45:51.605Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T05:46:19.750Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T05:47:22.171Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T05:47:29.598Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T06:38:13.104Z",
+      "feature": "doc_browse",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T06:42:28.859Z",
+      "feature": "doc_browse",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T06:42:32.825Z",
+      "feature": "doc_browse",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T06:42:48.426Z",
+      "feature": "doc_browse",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T06:43:22.410Z",
+      "feature": "doc_browse",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T06:43:49.438Z",
+      "feature": "doc_browse",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T06:44:29.590Z",
+      "feature": "doc_browse",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T06:45:05.069Z",
+      "feature": "doc_browse",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T06:45:31.590Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T06:45:50.296Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T06:46:01.604Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T06:46:06.284Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T06:46:59.092Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T12:53:43.139Z",
+      "feature": "doc_browse",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T12:53:46.542Z",
+      "feature": "doc_browse",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T12:54:13.592Z",
+      "feature": "doc_browse",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T12:54:17.391Z",
+      "feature": "doc_browse",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T12:54:44.408Z",
+      "feature": "doc_browse",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T12:55:08.283Z",
+      "feature": "doc_browse",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T12:55:49.910Z",
+      "feature": "doc_browse",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T12:57:00.235Z",
+      "feature": "doc_browse",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T12:57:45.517Z",
+      "feature": "doc_browse",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T12:58:15.996Z",
+      "feature": "doc_browse",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T12:58:57.901Z",
+      "feature": "ingest",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T12:59:03.581Z",
+      "feature": "ingest",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T12:59:15.402Z",
+      "feature": "ingest",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T12:59:27.338Z",
+      "feature": "ingest",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T13:00:25.893Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T13:01:05.315Z",
+      "feature": "doc_browse",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T13:01:15.261Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T13:02:43.188Z",
+      "feature": "scripts",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-26T09:09:22.803Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-26T09:11:45.680Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-26T09:12:23.138Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-26T09:12:33.114Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-26T09:12:44.957Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-26T09:13:21.835Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-26T09:13:33.092Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-26T09:14:53.548Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-26T09:14:58.949Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-26T09:15:25.913Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-26T09:15:41.975Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-26T09:19:10.549Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-26T09:32:05.701Z",
+      "feature": "agent-collection-visibility-sync gap analysis",
+      "phase": "act",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-26T09:32:26.273Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-26T09:32:44.981Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-26T09:34:24.626Z",
+      "feature": "mocks",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-26T10:47:07.813Z",
+      "feature": "unified_upload",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-26T10:47:11.670Z",
+      "feature": "unified_upload",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-26T10:47:56.754Z",
+      "feature": "unified_upload",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-26T10:48:11.368Z",
+      "feature": "unified_upload",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-26T10:48:46.541Z",
+      "feature": "unified_upload",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-26T10:49:18.364Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-26T10:49:32.280Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-26T10:49:47.818Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-26T10:49:56.693Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-26T10:50:04.859Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-27T10:00:10.558Z",
+      "feature": "logging",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-27T10:00:33.652Z",
+      "feature": "logging",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-27T10:00:43.840Z",
+      "feature": "logging",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-27T10:01:09.118Z",
+      "feature": "logging",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T10:14:02.613Z",
+      "feature": "unified_upload",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T10:15:05.744Z",
+      "feature": "unified_upload",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T10:16:10.957Z",
+      "feature": "unified_upload",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T10:17:09.544Z",
+      "feature": "unified_upload",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T10:17:39.690Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T10:17:52.148Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T10:18:14.980Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T10:20:40.135Z",
+      "feature": "hybrid_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T10:20:45.140Z",
+      "feature": "hybrid_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T10:20:49.023Z",
+      "feature": "hybrid_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T10:21:06.593Z",
+      "feature": "hybrid_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T10:26:16.684Z",
+      "feature": "fix-unified-upload-es-rdb Gap Analysis",
+      "phase": "act",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T10:34:58.971Z",
+      "feature": "hybrid_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T10:35:17.022Z",
+      "feature": "hybrid_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T10:35:24.774Z",
+      "feature": "hybrid_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T10:35:31.336Z",
+      "feature": "hybrid_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T10:35:41.701Z",
+      "feature": "hybrid_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T10:36:44.208Z",
+      "feature": "hybrid_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T10:37:22.011Z",
+      "feature": "collection_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T10:37:31.574Z",
+      "feature": "collection_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T10:37:55.456Z",
+      "feature": "collection_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T10:38:08.034Z",
+      "feature": "collection_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T10:38:23.839Z",
+      "feature": "collection_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T10:39:13.111Z",
+      "feature": "collection_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T10:39:30.026Z",
+      "feature": "collection_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T10:41:35.696Z",
+      "feature": "hybrid_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T10:42:54.405Z",
+      "feature": "collection_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T10:43:18.180Z",
+      "feature": "collection_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T10:43:35.746Z",
+      "feature": "collection_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T10:44:10.950Z",
+      "feature": "collection_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T10:44:19.905Z",
+      "feature": "collection_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T10:45:02.949Z",
+      "feature": "collection_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T10:45:24.612Z",
+      "feature": "collection_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T10:45:57.177Z",
+      "feature": "collection_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T10:46:13.698Z",
+      "feature": "collection_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T10:47:55.701Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T10:48:06.945Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T10:48:30.650Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T10:48:59.638Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T10:50:27.017Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T11:05:46.458Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T11:06:02.752Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T11:06:09.305Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T11:53:01.306Z",
+      "feature": "morph",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T11:53:20.919Z",
+      "feature": "morph",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T11:54:02.305Z",
+      "feature": "unified_upload",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T11:54:34.896Z",
+      "feature": "unified_upload",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T11:55:09.261Z",
+      "feature": "logging",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T11:55:27.501Z",
+      "feature": "logging",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T23:44:57.653Z",
+      "feature": "elasticsearch",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T02:20:15.516Z",
+      "feature": "elasticsearch",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T02:27:52.458Z",
+      "feature": "hybrid_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T02:28:34.482Z",
+      "feature": "hybrid_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T02:29:08.933Z",
+      "feature": "elasticsearch",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T02:29:35.426Z",
+      "feature": "elasticsearch",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T02:29:42.810Z",
+      "feature": "elasticsearch",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T02:30:05.741Z",
+      "feature": "elasticsearch",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T02:30:23.587Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T02:30:39.021Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T06:53:51.443Z",
+      "feature": "vector",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T06:54:01.780Z",
+      "feature": "vector",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T06:54:15.153Z",
+      "feature": "vector",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T06:54:22.616Z",
+      "feature": "vector",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T06:54:27.056Z",
+      "feature": "retriever",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T06:54:41.304Z",
+      "feature": "retriever",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T06:54:45.630Z",
+      "feature": "retriever",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T06:54:53.550Z",
+      "feature": "retriever",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T06:54:58.128Z",
+      "feature": "retriever",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T06:55:07.846Z",
+      "feature": "retriever",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T06:55:22.810Z",
+      "feature": "retriever",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T06:55:31.314Z",
+      "feature": "retriever",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T06:55:38.905Z",
+      "feature": "retriever",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T06:55:52.855Z",
+      "feature": "retriever",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T06:55:58.737Z",
+      "feature": "retriever",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T06:56:08.058Z",
+      "feature": "retriever",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T06:56:13.599Z",
+      "feature": "retriever",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T06:56:23.711Z",
+      "feature": "retriever",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T06:56:30.074Z",
+      "feature": "retriever",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T06:56:38.809Z",
+      "feature": "retriever",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T06:56:45.061Z",
+      "feature": "retriever",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T06:56:50.814Z",
+      "feature": "retriever",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T06:56:55.997Z",
+      "feature": "retriever",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T06:57:05.113Z",
+      "feature": "vector",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T06:57:21.771Z",
+      "feature": "retriever",
       "phase": "do",
       "action": "updated"
     }

@@ -8,6 +8,10 @@ import os
 import sys
 from typing import Any
 
+_LOGRECORD_RESERVED_KEYS: frozenset[str] = frozenset(
+    logging.LogRecord("", 0, "", 0, "", (), None).__dict__.keys()
+) | {"message", "asctime"}
+
 from src.domain.logging.interfaces import LoggerInterface
 from src.infrastructure.logging.formatters import get_formatter
 
@@ -115,12 +119,16 @@ class StructuredLogger(LoggerInterface):
             exception: 예외 객체
             **kwargs: 추가 컨텍스트 정보
         """
-        extra = kwargs.copy()
+        extra = {
+            (f"ctx_{k}" if k in _LOGRECORD_RESERVED_KEYS else k): v
+            for k, v in kwargs.items()
+        }
 
         # stacklevel=3: _log -> info/error/etc -> 실제 호출 위치
         if exception is not None:
+            exc_info = (type(exception), exception, exception.__traceback__)
             self._logger.log(
-                level, message, exc_info=exception, extra=extra, stacklevel=3
+                level, message, exc_info=exc_info, extra=extra, stacklevel=3
             )
         else:
             self._logger.log(level, message, extra=extra, stacklevel=3)

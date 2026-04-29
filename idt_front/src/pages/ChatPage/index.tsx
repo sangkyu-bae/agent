@@ -1,48 +1,48 @@
 import { useMemo, useState } from 'react';
-import Sidebar from '@/components/layout/Sidebar';
+import { useOutletContext } from 'react-router-dom';
 import ChatHeader from '@/components/layout/ChatHeader';
 import MessageList from '@/components/chat/MessageList';
 import ChatInput from '@/components/chat/ChatInput';
-import {
-  useGeneralChat,
-  useConversationSessions,
-  useSessionMessages,
-} from '@/hooks/useChat';
+import { useGeneralChat, useSessionMessages } from '@/hooks/useChat';
 import { useAuthStore } from '@/store/authStore';
-import type { Message, ChatSession } from '@/types/chat';
+import type { Message } from '@/types/chat';
+import type { AgentChatOutletContext, AgentSummary } from '@/types/agent';
 
-const createDraftSession = (): ChatSession => ({
-  id: crypto.randomUUID(),
-  title: '새 대화',
-  messages: [],
-  createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString(),
-});
+interface EmptyAgentStateProps {
+  agent: AgentSummary | null;
+}
+
+const EmptyAgentState = ({ agent }: EmptyAgentStateProps) => (
+  <div className="flex flex-col items-center justify-center h-full">
+    <img
+      src="/logo.png"
+      alt="상상인플러스저축은행"
+      className="h-16 w-16 rounded-2xl shadow-lg mb-6 object-contain"
+    />
+    <h2 className="text-2xl font-bold text-violet-600 mb-2">
+      {agent?.name ?? 'SUPER AI Agent'}와 대화하세요
+    </h2>
+    <p className="text-[14px] text-zinc-400">
+      {agent?.description ?? 'Auto-routing meta agent for all your agents'}
+    </p>
+  </div>
+);
 
 const ChatPage = () => {
+  const { selectedAgent, activeSessionId, setActiveSessionId, sessions } =
+    useOutletContext<AgentChatOutletContext>();
+
   const user = useAuthStore((s) => s.user);
   const userId = user?.id != null ? String(user.id) : undefined;
 
-  const initialDraft = useState(() => createDraftSession())[0];
-  const [draftSessions, setDraftSessions] = useState<ChatSession[]>([initialDraft]);
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(initialDraft.id);
   const [messagesBySession, setMessagesBySession] = useState<Record<string, Message[]>>({});
   const [useRag, setUseRag] = useState(true);
 
-  const {
-    data: serverSessions = [],
-    isLoading: sessionsLoading,
-    isError: sessionsError,
-    refetch: refetchSessions,
-  } = useConversationSessions(userId);
-
-  const sessions = useMemo<ChatSession[]>(() => {
-    const serverIds = new Set(serverSessions.map((s) => s.id));
-    const drafts = draftSessions.filter((s) => !serverIds.has(s.id));
-    return [...drafts, ...serverSessions];
-  }, [draftSessions, serverSessions]);
-
-  const isDraftSession = draftSessions.some((s) => s.id === activeSessionId);
+  const draftSessionIds = useMemo(
+    () => new Set(sessions.filter((s) => s.title === '새 대화' && s.messages.length === 0).map((s) => s.id)),
+    [sessions],
+  );
+  const isDraftSession = draftSessionIds.has(activeSessionId ?? '');
 
   const { data: serverMessages } = useSessionMessages(
     activeSessionId,
@@ -56,8 +56,6 @@ const ChatPage = () => {
     return serverMessages ?? [];
   }, [activeSessionId, messagesBySession, serverMessages]);
 
-  const activeSession = sessions.find((s) => s.id === activeSessionId);
-
   const { mutate: sendChat, isPending } = useGeneralChat();
 
   const addMessage = (sessionId: string, message: Message) => {
@@ -69,7 +67,6 @@ const ChatPage = () => {
 
   const syncSessionId = (clientId: string, serverId: string) => {
     if (clientId === serverId) return;
-    setDraftSessions((prev) => prev.filter((s) => s.id !== clientId));
     setMessagesBySession((prev) => {
       const msgs = prev[clientId];
       if (!msgs) return prev;
@@ -126,53 +123,35 @@ const ChatPage = () => {
     );
   };
 
-  const handleNewChat = () => {
-    const newSession = createDraftSession();
-    setDraftSessions((prev) => [newSession, ...prev]);
-    setActiveSessionId(newSession.id);
-  };
-
-  const handleSelectSession = (id: string) => {
-    setActiveSessionId(id);
-  };
-
   return (
-    <div style={{ display: 'flex', height: '100%', overflow: 'hidden', background: '#fff' }}>
-      <Sidebar
-        sessions={sessions}
-        activeSessionId={activeSessionId}
-        onSelectSession={handleSelectSession}
-        onNewChat={handleNewChat}
-        isLoading={sessionsLoading}
-        isError={sessionsError}
-        onRetry={() => refetchSessions()}
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <ChatHeader
+        title={selectedAgent?.name ?? 'SUPER AI Agent'}
+        messageCount={messages.length}
       />
 
-      <main style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', background: '#fff' }}>
-        <ChatHeader
-          title={activeSession?.title ?? '새 대화'}
-          messageCount={messages.length}
-        />
-
-        <div style={{ flex: 1, overflowY: 'auto' }}>
-          <div style={{ maxWidth: '768px', margin: '0 auto', height: '100%' }}>
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        <div style={{ maxWidth: '768px', margin: '0 auto', height: '100%' }}>
+          {messages.length === 0 ? (
+            <EmptyAgentState agent={selectedAgent} />
+          ) : (
             <MessageList
               messages={messages}
               isStreaming={isPending}
               onSuggestionClick={handleSend}
             />
-          </div>
+          )}
         </div>
+      </div>
 
-        <div style={{ background: '#fff' }}>
-          <ChatInput
-            onSend={handleSend}
-            isLoading={isPending}
-            useRag={useRag}
-            onToggleRag={() => setUseRag((v) => !v)}
-          />
-        </div>
-      </main>
+      <div style={{ background: '#fff' }}>
+        <ChatInput
+          onSend={handleSend}
+          isLoading={isPending}
+          useRag={useRag}
+          onToggleRag={() => setUseRag((v) => !v)}
+        />
+      </div>
     </div>
   );
 };

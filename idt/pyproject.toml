@@ -19,7 +19,7 @@ dependencies = [
     "asyncmy>=0.2.9",
     "alembic>=1.13.0",
     # Vector DB
-    "qdrant-client>=1.7.0",
+    "qdrant-client>=1.13.0",
     # HTTP
     "httpx>=0.26.0",
     # PDF Parsing
@@ -34,7 +34,7 @@ dependencies = [
     "mcp>=1.0.0",
     "langchain-mcp-adapters>=0.1.0",
     # Elasticsearch
-    "elasticsearch[async]>=8.0.0",
+    "elasticsearch[async]==8.10.1",
     # Korean Morphological Analyzer
     "kiwipiepy>=0.17.0",
     # HTML to PDF

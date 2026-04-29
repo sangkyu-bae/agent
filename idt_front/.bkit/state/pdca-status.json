@@ -1,7 +1,10 @@
 {
   "version": "2.0",
-  "lastUpdated": "2026-04-17T08:03:16.746Z",
+  "lastUpdated": "2026-04-29T07:23:07.172Z",
   "activeFeatures": [
+    "unified-pdf-upload",
+    "collection-management-ui",
+    "tools",
     "chat-history-api",
     "chat",
     "layout",
@@ -18,10 +21,139 @@
     "WorkflowDesignerPage",
     "ToolAdminPage",
     "WorkflowBuilderPage",
-    "__tests__"
+    "__tests__",
+    "collection",
+    "CollectionPage",
+    "api",
+    "CollectionDocumentsPage",
+    "Gap analysis for chat-sidebar-collapse"
   ],
-  "primaryFeature": "chat-history-api",
+  "primaryFeature": "hybrid-search-ui",
   "features": {
+    "chat-sidebar-collapse": {
+      "phase": "archived",
+      "matchRate": 91,
+      "iterationCount": 0,
+      "startedAt": "2026-04-29T12:00:00.000Z",
+      "archivedAt": "2026-04-29T15:10:00.000Z",
+      "archivedTo": "docs/archive/2026-04/chat-sidebar-collapse/"
+    },
+    "hybrid-search-ui": {
+      "phase": "archived",
+      "phaseNumber": 7,
+      "matchRate": 99,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {
+        "plan": "docs/archive/2026-04/hybrid-search-ui/hybrid-search-ui.plan.md",
+        "design": "docs/archive/2026-04/hybrid-search-ui/hybrid-search-ui.design.md",
+        "analysis": "docs/archive/2026-04/hybrid-search-ui/hybrid-search-ui.analysis.md",
+        "report": "docs/archive/2026-04/hybrid-search-ui/hybrid-search-ui.report.md"
+      },
+      "timestamps": {
+        "started": "2026-04-28T12:00:00.000Z",
+        "lastUpdated": "2026-04-29T06:05:00.000Z",
+        "archivedAt": "2026-04-29T06:05:00.000Z"
+      },
+      "archivedTo": "docs/archive/2026-04/hybrid-search-ui/",
+      "previousPhase": "completed",
+      "autoAdvanced": true
+    },
+    "unified-pdf-upload": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {
+        "plan": "docs/01-plan/features/unified-pdf-upload.plan.md",
+        "design": "docs/02-design/features/unified-pdf-upload.design.md"
+      },
+      "timestamps": {
+        "started": "2026-04-27T00:00:00.000Z",
+        "lastUpdated": "2026-04-27T09:47:00.000Z"
+      },
+      "lastFile": "src/components/collection/UploadDocumentModal.tsx"
+    },
+    "layout-scroll-fix": {
+      "phase": "plan",
+      "phaseNumber": 1,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {
+        "plan": "docs/01-plan/features/layout-scroll-fix.plan.md"
+      },
+      "timestamps": {
+        "started": "2026-04-23T12:00:00.000Z",
+        "lastUpdated": "2026-04-23T12:00:00.000Z"
+      },
+      "lastFile": "docs/01-plan/features/layout-scroll-fix.plan.md"
+    },
+    "collection-document-chunks": {
+      "phase": "archived",
+      "matchRate": 97,
+      "iterationCount": 0,
+      "startedAt": "2026-04-23T09:00:00.000Z",
+      "archivedAt": "2026-04-23T15:00:00.000Z",
+      "archivedTo": "docs/archive/2026-04/collection-document-chunks/"
+    },
+    "embedding-model-registry": {
+      "phase": "archived",
+      "matchRate": 100,
+      "iterationCount": 0,
+      "startedAt": "2026-04-22T00:00:00.000Z",
+      "archivedAt": "2026-04-23T06:40:00.000Z",
+      "archivedTo": "docs/archive/2026-04/embedding-model-registry/"
+    },
+    "collection-permission-management": {
+      "phase": "archived",
+      "matchRate": 100,
+      "iterationCount": 1,
+      "startedAt": "2026-04-23T00:00:00.000Z",
+      "archivedAt": "2026-04-23T12:00:00.000Z",
+      "archivedTo": "docs/archive/2026-04/collection-permission-management/"
+    },
+    "collection-management-ui": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {
+        "plan": "docs/01-plan/features/collection-management-ui.plan.md",
+        "design": "docs/02-design/features/collection-management-ui.design.md"
+      },
+      "timestamps": {
+        "started": "2026-04-22T00:00:00.000Z",
+        "lastUpdated": "2026-04-22T04:45:00.000Z"
+      },
+      "lastFile": "src/pages/CollectionPage/index.tsx"
+    },
+    "custom-rag-tool-frontend": {
+      "phase": "archived",
+      "matchRate": 100,
+      "iterationCount": 1,
+      "startedAt": "2026-04-21T12:00:00.000Z",
+      "archivedAt": "2026-04-21T12:00:00.000Z",
+      "archivedTo": "docs/archive/2026-04/custom-rag-tool-frontend/"
+    },
+    "llm-model": {
+      "phase": "archived",
+      "matchRate": 100,
+      "iterationCount": 0,
+      "startedAt": "2026-04-21T09:00:00.000Z",
+      "archivedAt": "2026-04-21T12:00:00.000Z",
+      "archivedTo": "docs/archive/2026-04/llm-model/"
+    },
+    "tools": {
+      "phase": "archived",
+      "matchRate": 100,
+      "iterationCount": 1,
+      "startedAt": "2026-04-21T00:00:00.000Z",
+      "archivedAt": "2026-04-21T12:30:00.000Z",
+      "archivedTo": "docs/archive/2026-04/tools/"
+    },
     "chat-history-api": {
       "phase": "check",
       "phaseNumber": 4,
@@ -48,9 +180,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-16T14:41:16.262Z",
-        "lastUpdated": "2026-04-12T07:59:43.072Z"
+        "lastUpdated": "2026-04-29T05:16:59.485Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\components\\chat\\SourceCitation.tsx"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\components\\chat\\MessageList.tsx"
     },
     "layout": {
       "phase": "do",
@@ -61,9 +193,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-16T14:42:54.427Z",
-        "lastUpdated": "2026-04-17T07:36:50.066Z"
+        "lastUpdated": "2026-04-29T05:41:38.929Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\components\\layout\\Sidebar.tsx"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\components\\layout\\AgentChatLayout.tsx"
     },
     "ChatPage": {
       "phase": "do",
@@ -74,7 +206,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-17T01:54:47.749Z",
-        "lastUpdated": "2026-04-17T07:37:15.027Z"
+        "lastUpdated": "2026-04-29T05:16:50.353Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\ChatPage\\index.tsx"
     },
@@ -87,9 +219,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-17T02:00:46.710Z",
-        "lastUpdated": "2026-04-17T08:02:52.000Z"
+        "lastUpdated": "2026-04-29T07:23:07.172Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\hooks\\useChat.ts"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\types\\collection.ts"
     },
     "store": {
       "phase": "do",
@@ -100,9 +232,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-17T13:07:19.915Z",
-        "lastUpdated": "2026-03-17T15:03:52.122Z"
+        "lastUpdated": "2026-04-29T02:45:27.743Z"
       },
-      "lastFile": "C:\\sangplus\\idt_front\\src\\store\\commonSlices.ts"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\store\\layoutStore.ts"
     },
     "constants": {
       "phase": "do",
@@ -113,7 +245,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-17T14:39:41.105Z",
-        "lastUpdated": "2026-04-17T07:33:46.653Z"
+        "lastUpdated": "2026-04-28T11:41:18.476Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\constants\\api.ts"
     },
@@ -126,7 +258,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-17T14:40:33.713Z",
-        "lastUpdated": "2026-04-17T07:34:21.448Z"
+        "lastUpdated": "2026-04-23T10:32:13.731Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\__tests__\\mocks\\handlers.ts"
     },
@@ -165,9 +297,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-20T04:37:43.712Z",
-        "lastUpdated": "2026-03-20T04:49:32.019Z"
+        "lastUpdated": "2026-04-29T02:59:22.913Z"
       },
-      "lastFile": "C:\\sangplus\\idt_front\\src\\pages\\EvalDatasetPage\\index.tsx"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\EvalDatasetPage\\index.tsx"
     },
     "AgentBuilderPage": {
       "phase": "do",
@@ -178,9 +310,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-20T05:20:57.277Z",
-        "lastUpdated": "2026-03-20T06:12:13.069Z"
+        "lastUpdated": "2026-04-29T03:02:01.686Z"
       },
-      "lastFile": "C:\\sangplus\\idt_front\\src\\pages\\AgentBuilderPage\\index.tsx"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\AgentBuilderPage\\index.tsx"
     },
     "ToolConnectionPage": {
       "phase": "do",
@@ -191,9 +323,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-20T05:38:16.817Z",
-        "lastUpdated": "2026-03-20T05:38:16.817Z"
+        "lastUpdated": "2026-04-29T02:59:58.434Z"
       },
-      "lastFile": "C:\\sangplus\\idt_front\\src\\pages\\ToolConnectionPage\\index.tsx"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\ToolConnectionPage\\index.tsx"
     },
     "WorkflowDesignerPage": {
       "phase": "do",
@@ -204,9 +336,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-20T05:52:43.620Z",
-        "lastUpdated": "2026-03-24T05:17:06.427Z"
+        "lastUpdated": "2026-04-29T02:59:39.427Z"
       },
-      "lastFile": "C:\\sangplus\\idt_front\\src\\pages\\WorkflowDesignerPage\\index.tsx"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\WorkflowDesignerPage\\index.tsx"
     },
     "ToolAdminPage": {
       "phase": "do",
@@ -217,9 +349,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-21T06:08:11.869Z",
-        "lastUpdated": "2026-03-21T06:08:11.869Z"
+        "lastUpdated": "2026-04-29T03:00:37.940Z"
       },
-      "lastFile": "C:\\sangplus\\idt_front\\src\\pages\\ToolAdminPage\\index.tsx"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\ToolAdminPage\\index.tsx"
     },
     "WorkflowBuilderPage": {
       "phase": "do",
@@ -230,9 +362,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-24T05:09:14.521Z",
-        "lastUpdated": "2026-03-24T05:17:30.336Z"
+        "lastUpdated": "2026-04-29T03:00:54.642Z"
       },
-      "lastFile": "C:\\sangplus\\idt_front\\src\\pages\\WorkflowBuilderPage\\index.tsx"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\WorkflowBuilderPage\\index.tsx"
     },
     "__tests__": {
       "phase": "do",
@@ -243,9 +375,83 @@
       "documents": {},
       "timestamps": {
         "started": "2026-04-12T07:57:56.857Z",
-        "lastUpdated": "2026-04-17T08:03:16.746Z"
+        "lastUpdated": "2026-04-21T09:51:35.806Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\__tests__\\components\\ChatPageIntegration.test.tsx"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\__tests__\\components\\AgentBuilderFormView.test.tsx"
+    },
+    "collection": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-04-22T04:41:44.838Z",
+        "lastUpdated": "2026-04-28T11:47:59.041Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\components\\collection\\SearchResultCard.tsx"
+    },
+    "CollectionPage": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-04-22T04:43:06.955Z",
+        "lastUpdated": "2026-04-29T06:32:05.919Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\CollectionPage\\index.tsx"
+    },
+    "api": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-04-23T07:39:17.249Z",
+        "lastUpdated": "2026-04-23T07:39:28.857Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\services\\api\\authClient.ts"
+    },
+    "CollectionDocumentsPage": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-04-23T10:35:14.596Z",
+        "lastUpdated": "2026-04-29T06:27:40.895Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\CollectionDocumentsPage\\index.tsx"
+    },
+    "agent-chat-layout": {
+      "phase": "archived",
+      "matchRate": null,
+      "iterationCount": 0,
+      "startedAt": "2026-04-28T15:00:00.000Z",
+      "archivedAt": "2026-04-29T06:00:00.000Z",
+      "archivedTo": "docs/archive/2026-04/agent-chat-layout/"
+    },
+    "Gap analysis for chat-sidebar-collapse": {
+      "phase": "act",
+      "phaseNumber": 5,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-04-29T05:57:17.645Z",
+        "lastUpdated": "2026-04-29T05:57:17.646Z"
+      },
+      "previousPhase": "check",
+      "autoAdvanced": true
     }
   },
   "pipeline": {
@@ -256,7 +462,7 @@
   "session": {
     "startedAt": "2026-03-16T14:41:16.262Z",
     "onboardingCompleted": false,
-    "lastActivity": "2026-04-17T08:03:16.746Z"
+    "lastActivity": "2026-04-29T07:23:07.172Z"
   },
   "history": [
     {
@@ -1312,6 +1518,1476 @@
     {
       "timestamp": "2026-04-17T08:03:16.746Z",
       "feature": "__tests__",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T07:23:01.949Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T07:23:06.088Z",
+      "feature": "constants",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T07:23:10.287Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T07:23:15.275Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T07:23:20.083Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T07:23:26.819Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T07:23:41.429Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T07:23:48.843Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T07:23:55.521Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T07:24:04.092Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T07:24:10.611Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T07:24:18.810Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T07:24:25.924Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T07:24:31.807Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T07:24:54.003Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T07:25:02.489Z",
+      "feature": "mocks",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T09:50:43.060Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T09:51:16.865Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T09:51:35.806Z",
+      "feature": "__tests__",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T10:10:20.839Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T10:10:26.056Z",
+      "feature": "constants",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T10:10:32.404Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T10:10:40.324Z",
+      "feature": "mocks",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T10:11:02.236Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T10:11:11.343Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T10:11:18.445Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T10:12:03.203Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T10:12:07.469Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T10:13:02.030Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T10:13:26.968Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T10:13:34.846Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T10:13:43.907Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T10:13:49.752Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T10:13:56.029Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T10:14:02.272Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T10:14:08.772Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T10:14:17.178Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T10:14:23.807Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T10:14:30.387Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T10:14:39.111Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T10:14:54.117Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T11:36:00.207Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T11:36:06.431Z",
+      "feature": "constants",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T11:36:13.064Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T11:36:21.030Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T11:36:30.688Z",
+      "feature": "mocks",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T11:36:36.860Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T11:37:07.953Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T11:38:23.738Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T11:38:30.887Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T11:38:37.266Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T11:38:48.223Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T11:38:56.891Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T11:39:05.449Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T11:39:14.312Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T11:39:20.710Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T11:53:25.217Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T11:53:32.517Z",
+      "feature": "mocks",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T11:53:38.724Z",
+      "feature": "mocks",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T11:53:44.939Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T11:53:50.885Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-21T11:53:59.320Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T04:25:40.093Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T04:25:46.344Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T04:25:55.095Z",
+      "feature": "constants",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T04:26:09.076Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T04:26:26.027Z",
+      "feature": "mocks",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T04:26:47.273Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T04:27:18.707Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T04:41:44.838Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T04:41:45.967Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T04:41:46.971Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T04:41:48.133Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T04:42:02.679Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T04:42:22.618Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T04:43:06.955Z",
+      "feature": "CollectionPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T04:43:13.322Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T04:43:14.601Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T04:43:31.150Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T06:32:39.205Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T06:32:40.861Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T06:32:42.605Z",
+      "feature": "constants",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T06:32:44.486Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T06:32:46.879Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T06:32:50.570Z",
+      "feature": "mocks",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T06:33:06.190Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T06:33:11.481Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T06:34:39.219Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T06:35:07.232Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T06:36:07.765Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T06:36:15.038Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-22T06:36:41.796Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T06:32:19.345Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T06:32:19.674Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T06:32:21.090Z",
+      "feature": "constants",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T06:32:23.839Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T06:32:34.017Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T06:32:42.376Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T06:32:53.776Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T06:33:14.110Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T06:33:23.720Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T06:33:40.133Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T06:33:51.131Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T06:33:57.356Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T06:34:17.048Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T06:34:33.056Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T06:34:41.347Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T06:34:49.614Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T06:34:55.051Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T06:35:08.418Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T06:35:42.705Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T06:35:57.965Z",
+      "feature": "CollectionPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T06:36:15.256Z",
+      "feature": "CollectionPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T06:36:20.445Z",
+      "feature": "CollectionPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T06:36:29.760Z",
+      "feature": "CollectionPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T06:36:39.080Z",
+      "feature": "CollectionPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T06:38:47.042Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T06:38:52.506Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T07:37:34.134Z",
+      "feature": "mocks",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T07:37:39.343Z",
+      "feature": "mocks",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T07:37:45.481Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T07:37:53.926Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T07:38:13.346Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T07:38:35.037Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T07:38:44.555Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T07:39:17.249Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T07:39:23.240Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T07:39:28.857Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T07:39:36.532Z",
+      "feature": "CollectionPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T07:39:44.499Z",
+      "feature": "CollectionPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T07:39:57.132Z",
+      "feature": "CollectionPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T07:40:23.005Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T10:31:00.873Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T10:31:18.721Z",
+      "feature": "constants",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T10:31:23.726Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T10:31:25.005Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T10:31:33.278Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T10:31:39.463Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T10:31:53.077Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T10:32:13.731Z",
+      "feature": "mocks",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T10:32:33.625Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T10:33:02.014Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T10:33:56.213Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T10:34:19.191Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T10:34:35.991Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T10:35:14.596Z",
+      "feature": "CollectionDocumentsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T10:35:25.482Z",
+      "feature": "CollectionDocumentsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T10:35:30.738Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T10:35:37.420Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T10:35:44.325Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T10:35:50.642Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T10:35:56.879Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T10:36:01.853Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T10:36:12.057Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T10:36:16.434Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T10:36:27.011Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T10:37:59.472Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T10:38:04.474Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T10:38:42.241Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T10:38:48.065Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T10:49:45.478Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T10:49:50.361Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T10:49:59.386Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T10:50:06.715Z",
+      "feature": "CollectionDocumentsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T10:52:24.214Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T10:59:32.278Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T11:00:05.818Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T11:00:26.520Z",
+      "feature": "CollectionDocumentsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T11:14:24.533Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T11:15:18.410Z",
+      "feature": "CollectionDocumentsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-23T11:15:59.176Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-27T09:43:59.344Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-27T09:44:10.058Z",
+      "feature": "constants",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-27T09:44:17.040Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-27T09:44:25.358Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-27T09:45:48.567Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-27T09:46:02.811Z",
+      "feature": "CollectionDocumentsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-27T09:46:11.426Z",
+      "feature": "CollectionDocumentsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-27T09:46:20.192Z",
+      "feature": "CollectionDocumentsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-27T09:46:26.541Z",
+      "feature": "CollectionDocumentsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T11:41:04.261Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T11:41:18.476Z",
+      "feature": "constants",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T11:41:29.651Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T11:41:41.429Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T11:41:50.087Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T11:42:04.204Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T11:42:11.797Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T11:42:19.861Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T11:43:00.618Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T11:43:17.837Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T11:43:36.266Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T11:43:56.031Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T11:44:11.371Z",
+      "feature": "CollectionDocumentsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T11:44:17.588Z",
+      "feature": "CollectionDocumentsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T11:44:26.145Z",
+      "feature": "CollectionDocumentsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T11:44:33.777Z",
+      "feature": "CollectionDocumentsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T11:45:07.678Z",
+      "feature": "CollectionDocumentsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T11:47:55.283Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T11:47:59.041Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-28T11:57:11.432Z",
+      "feature": "hybrid-search-ui",
+      "phase": "report",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T02:39:21.040Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T02:45:27.743Z",
+      "feature": "store",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T02:55:51.672Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T02:56:33.753Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T02:56:57.735Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T02:57:27.413Z",
+      "feature": "ChatPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T02:57:42.213Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T02:58:46.182Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T02:58:48.740Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T02:59:12.196Z",
+      "feature": "EvalDatasetPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T02:59:12.848Z",
+      "feature": "EvalDatasetPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T02:59:22.913Z",
+      "feature": "EvalDatasetPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T02:59:28.128Z",
+      "feature": "WorkflowDesignerPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T02:59:29.529Z",
+      "feature": "WorkflowDesignerPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T02:59:39.427Z",
+      "feature": "WorkflowDesignerPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T02:59:47.801Z",
+      "feature": "ToolConnectionPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T02:59:49.773Z",
+      "feature": "ToolConnectionPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T02:59:58.434Z",
+      "feature": "ToolConnectionPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T03:00:11.430Z",
+      "feature": "ToolAdminPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T03:00:13.053Z",
+      "feature": "ToolAdminPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T03:00:37.940Z",
+      "feature": "ToolAdminPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T03:00:43.070Z",
+      "feature": "WorkflowBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T03:00:44.778Z",
+      "feature": "WorkflowBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T03:00:54.642Z",
+      "feature": "WorkflowBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T03:02:01.686Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T03:03:13.192Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T03:03:23.971Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T05:13:37.874Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T05:15:09.974Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T05:16:50.353Z",
+      "feature": "ChatPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T05:16:59.485Z",
+      "feature": "chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T05:17:17.484Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T05:40:51.575Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T05:41:01.865Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T05:41:06.534Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T05:41:19.359Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T05:41:28.764Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T05:41:38.929Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T05:57:17.646Z",
+      "feature": "Gap analysis for chat-sidebar-collapse",
+      "phase": "act",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T06:27:36.145Z",
+      "feature": "CollectionDocumentsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T06:27:40.895Z",
+      "feature": "CollectionDocumentsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T06:32:02.090Z",
+      "feature": "CollectionPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T06:32:05.919Z",
+      "feature": "CollectionPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T07:23:01.868Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T07:23:07.172Z",
+      "feature": "idt_front",
       "phase": "do",
       "action": "updated"
     }

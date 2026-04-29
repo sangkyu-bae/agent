@@ -3,13 +3,18 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   useCollectionDocuments,
   useDocumentChunks,
+  useCollectionSearch,
 } from '@/hooks/useCollections';
 import DocumentTable from '@/components/collection/DocumentTable';
 import ChunkDetailPanel from '@/components/collection/ChunkDetailPanel';
+import UploadDocumentModal from '@/components/collection/UploadDocumentModal';
+import HybridSearchPanel from '@/components/collection/HybridSearchPanel';
+import SearchResultList from '@/components/collection/SearchResultList';
+import SearchHistoryPanel from '@/components/collection/SearchHistoryPanel';
+import type { CollectionSearchResponse } from '@/types/collection';
 
 const DEFAULT_LIMIT = 20;
 
-const TOP_K_OPTIONS = [3, 5, 10] as const;
 const EXAMPLE_QUERIES = ['임베딩 벡터 생성', '청킹 전략', 'API 엔드포인트', '리랭킹'];
 
 const CollectionDocumentsPage = () => {
@@ -19,9 +24,16 @@ const CollectionDocumentsPage = () => {
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
   const [includeParent, setIncludeParent] = useState(false);
 
-  // Vector search local state
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+
+  // Hybrid search local state
   const [searchQuery, setSearchQuery] = useState('');
   const [topK, setTopK] = useState<number>(5);
+  const [bm25Weight, setBm25Weight] = useState(0.5);
+  const [vectorWeight, setVectorWeight] = useState(0.5);
+  const [searchResult, setSearchResult] = useState<CollectionSearchResponse | null>(null);
+
+  const searchMutation = useCollectionSearch();
 
   const documentsQuery = useCollectionDocuments(collectionName ?? '', {
     offset,
@@ -53,8 +65,33 @@ const CollectionDocumentsPage = () => {
   };
 
   const handleSearch = () => {
-    if (!searchQuery.trim()) return;
-    // TODO: wire to retrieval API
+    if (!searchQuery.trim() || !collectionName) return;
+    searchMutation.mutate(
+      {
+        collectionName,
+        data: {
+          query: searchQuery.trim(),
+          top_k: topK,
+          bm25_weight: bm25Weight,
+          vector_weight: vectorWeight,
+        },
+      },
+      {
+        onSuccess: (data) => setSearchResult(data),
+      },
+    );
+  };
+
+  const handleHistoryApply = (params: {
+    query: string;
+    topK: number;
+    bm25Weight: number;
+    vectorWeight: number;
+  }) => {
+    setSearchQuery(params.query);
+    setTopK(params.topK);
+    setBm25Weight(params.bm25Weight);
+    setVectorWeight(params.vectorWeight);
   };
 
   if (!collectionName) {
@@ -63,7 +100,8 @@ const CollectionDocumentsPage = () => {
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+    <div className="h-full overflow-y-auto">
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
       {/* Breadcrumb */}
       <nav className="mb-6 flex items-center gap-2 text-[13.5px]">
         <button
@@ -96,7 +134,10 @@ const CollectionDocumentsPage = () => {
             </h1>
           </div>
         </div>
-        <button className="flex items-center gap-2 rounded-xl bg-violet-600 px-5 py-2.5 text-[13.5px] font-medium text-white shadow-sm transition-all hover:bg-violet-700 active:scale-95">
+        <button
+          onClick={() => setIsUploadModalOpen(true)}
+          className="flex items-center gap-2 rounded-xl bg-violet-600 px-5 py-2.5 text-[13.5px] font-medium text-white shadow-sm transition-all hover:bg-violet-700 active:scale-95"
+        >
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
           </svg>
@@ -164,26 +205,21 @@ const CollectionDocumentsPage = () => {
         />
       )}
 
-      {/* Vector Search Test Section */}
+      {/* Hybrid Search Section */}
       <div className="mt-8 rounded-2xl border border-zinc-200 bg-white p-6">
-        <div className="mb-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-100">
-              <svg className="h-5 w-5 text-violet-600" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
-              </svg>
-            </div>
-            <div>
-              <h3 className="text-[15px] font-semibold text-zinc-900">벡터 검색 테스트</h3>
-              <p className="text-[12px] text-zinc-400">실제 RAG 쿼리에서 어떤 청크가 검색되는지 확인합니다</p>
-            </div>
+        <div className="mb-4 flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-100">
+            <svg className="h-5 w-5 text-violet-600" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+            </svg>
           </div>
-          <span className="rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-[11.5px] font-semibold text-violet-600">
-            Mock
-          </span>
+          <div>
+            <h3 className="text-[15px] font-semibold text-zinc-900">하이브리드 검색</h3>
+            <p className="text-[12px] text-zinc-400">BM25 + 벡터 검색을 조합하여 최적의 검색 결과를 확인합니다</p>
+          </div>
         </div>
 
-        {/* Search Input */}
+        {/* Search Input + Button */}
         <div className="flex gap-3">
           <div className="flex-1 overflow-hidden rounded-2xl border border-zinc-300 bg-white shadow-sm transition-all focus-within:border-violet-400 focus-within:shadow-violet-100/60">
             <div className="flex items-center px-4">
@@ -201,38 +237,29 @@ const CollectionDocumentsPage = () => {
             </div>
           </div>
 
-          {/* Top K Selector */}
-          <div className="flex items-center gap-1 rounded-2xl border border-zinc-200 bg-zinc-50 px-2">
-            {TOP_K_OPTIONS.map((k) => (
-              <button
-                key={k}
-                onClick={() => setTopK(k)}
-                className={`rounded-xl px-3 py-1.5 text-[13px] font-medium transition-all ${
-                  topK === k
-                    ? 'bg-violet-600 text-white shadow-sm'
-                    : 'text-zinc-500 hover:text-zinc-700'
-                }`}
-              >
-                Top {k}
-              </button>
-            ))}
-          </div>
-
-          {/* Search Button */}
           <button
             onClick={handleSearch}
-            className="flex items-center gap-2 rounded-2xl bg-violet-600 px-5 text-[13.5px] font-medium text-white shadow-sm transition-all hover:bg-violet-700 active:scale-95"
+            disabled={!searchQuery.trim() || searchMutation.isPending}
+            className={`flex items-center gap-2 rounded-2xl px-5 text-[13.5px] font-medium shadow-sm transition-all active:scale-95 ${
+              searchQuery.trim() && !searchMutation.isPending
+                ? 'bg-violet-600 text-white hover:bg-violet-700'
+                : 'cursor-not-allowed bg-zinc-200 text-zinc-400'
+            }`}
           >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
-            </svg>
+            {searchMutation.isPending ? (
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+            ) : (
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+              </svg>
+            )}
             검색
           </button>
         </div>
 
         {/* Example Queries */}
         <div className="mt-3 flex items-center gap-2">
-          <span className="text-[12px] text-zinc-400">예시 쿼리:</span>
+          <span className="text-[12px] text-zinc-400">예시:</span>
           {EXAMPLE_QUERIES.map((q) => (
             <button
               key={q}
@@ -243,7 +270,44 @@ const CollectionDocumentsPage = () => {
             </button>
           ))}
         </div>
+
+        {/* Search Options Panel */}
+        <div className="mt-4">
+          <HybridSearchPanel
+            bm25Weight={bm25Weight}
+            vectorWeight={vectorWeight}
+            topK={topK}
+            onBm25WeightChange={setBm25Weight}
+            onVectorWeightChange={setVectorWeight}
+            onTopKChange={setTopK}
+          />
+        </div>
+
+        {/* Search Results */}
+        {(searchResult || searchMutation.isPending || searchMutation.isError) && (
+          <SearchResultList
+            results={searchResult?.results}
+            isLoading={searchMutation.isPending}
+            isError={searchMutation.isError}
+            totalFound={searchResult?.total_found ?? 0}
+            bm25Weight={searchResult?.bm25_weight ?? bm25Weight}
+            vectorWeight={searchResult?.vector_weight ?? vectorWeight}
+          />
+        )}
+
+        {/* Search History */}
+        <SearchHistoryPanel
+          collectionName={collectionName}
+          onApply={handleHistoryApply}
+        />
       </div>
+
+      <UploadDocumentModal
+        isOpen={isUploadModalOpen}
+        onClose={() => setIsUploadModalOpen(false)}
+        collectionName={collectionName}
+      />
+    </div>
     </div>
   );
 };
