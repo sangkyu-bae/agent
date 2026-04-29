@@ -88,7 +88,10 @@ class TestHybridSearchUseCaseExecute:
         mock_es_repo.search.assert_called_once()
         call_args = mock_es_repo.search.call_args
         es_query = call_args[0][0]
-        assert es_query.query["match"]["content"] == "test query"
+        mm = es_query.query["multi_match"]
+        assert mm["query"] == "test query"
+        assert mm["fields"] == ["content", "morph_text^1.5"]
+        assert mm["type"] == "most_fields"
 
     @pytest.mark.asyncio
     async def test_execute_embeds_query_for_vector_search(self, use_case, mock_embedding):
@@ -150,18 +153,49 @@ class TestHybridSearchUseCaseExecute:
         assert mock_logger.info.call_count >= 2
 
     @pytest.mark.asyncio
-    async def test_execute_logs_error_and_reraises_on_es_failure(
-        self, use_case, mock_es_repo, mock_logger
+    async def test_execute_returns_vector_only_when_es_fails(
+        self, use_case, mock_es_repo, mock_vector_store, mock_logger
     ):
+        """ES 실패 시 Vector 결과만으로 응답한다."""
         from src.domain.hybrid_search.schemas import HybridSearchRequest
 
         mock_es_repo.search.side_effect = RuntimeError("ES unavailable")
         req = HybridSearchRequest(query="q")
+        result = await use_case.execute(req, REQUEST_ID)
 
-        with pytest.raises(RuntimeError):
-            await use_case.execute(req, REQUEST_ID)
+        assert result.total_found > 0
+        mock_vector_store.search_by_vector.assert_called_once()
+        mock_logger.warning.assert_called()
 
-        mock_logger.error.assert_called_once()
+    @pytest.mark.asyncio
+    async def test_execute_returns_bm25_only_when_vector_fails(
+        self, use_case, mock_es_repo, mock_vector_store, mock_embedding, mock_logger
+    ):
+        """Vector 실패 시 BM25 결과만으로 응답한다."""
+        from src.domain.hybrid_search.schemas import HybridSearchRequest
+
+        mock_embedding.embed_text.side_effect = RuntimeError("Embedding unavailable")
+        req = HybridSearchRequest(query="q")
+        result = await use_case.execute(req, REQUEST_ID)
+
+        assert result.total_found > 0
+        mock_es_repo.search.assert_called_once()
+        mock_logger.warning.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_execute_returns_empty_when_both_fail(
+        self, use_case, mock_es_repo, mock_embedding, mock_logger
+    ):
+        """양쪽 모두 실패 시 빈 결과를 반환한다."""
+        from src.domain.hybrid_search.schemas import HybridSearchRequest
+
+        mock_es_repo.search.side_effect = RuntimeError("ES down")
+        mock_embedding.embed_text.side_effect = RuntimeError("Embedding down")
+        req = HybridSearchRequest(query="q")
+        result = await use_case.execute(req, REQUEST_ID)
+
+        assert result.total_found == 0
+        assert result.results == []
 
     @pytest.mark.asyncio
     async def test_execute_passes_bm25_top_k_to_es_search(self, use_case, mock_es_repo):
@@ -186,6 +220,9 @@ class TestHybridSearchUseCaseExecute:
         call_args = mock_es_repo.search.call_args
         es_query = call_args[0][0]
         assert "bool" in es_query.query
+        must_clause = es_query.query["bool"]["must"][0]
+        assert must_clause["multi_match"]["query"] == "q"
+        assert must_clause["multi_match"]["fields"] == ["content", "morph_text^1.5"]
         assert es_query.query["bool"]["filter"] == [
             {"term": {"department": "finance"}}
         ]
@@ -215,5 +252,5 @@ class TestHybridSearchUseCaseExecute:
 
         call_args = mock_es_repo.search.call_args
         es_query = call_args[0][0]
-        assert "match" in es_query.query
+        assert "multi_match" in es_query.query
         assert "bool" not in es_query.query

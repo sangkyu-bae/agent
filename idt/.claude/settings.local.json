@@ -55,7 +55,13 @@
       "Bash(cp \"C:/sangplus/idt/.claude/langchain-middleware/SKILL.md\" \"C:/sangplus/idt/.claude/skills/langchain-middleware/SKILL.md\")",
       "Skill(pdca)",
       "Bash(git stash *)",
-      "Bash(git checkout *)"
+      "Bash(git branch *)",
+      "Bash(git checkout *)",
+      "Bash(git pull *)",
+      "Bash(git clean *)",
+      "Bash(git push *)",
+      "Bash(gh pr create --title 'docs: add LLM-MODEL-REG-001, AGENT-SHARE-001 to task-registry' --body ' *)",
+      "Bash(gh pr *)"
     ]
   }
 }

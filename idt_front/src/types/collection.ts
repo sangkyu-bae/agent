@@ -168,3 +168,79 @@ export const COLLECTION_STATUS_MAP = {
   yellow: { label: '최적화 중', color: 'bg-yellow-400' },
   red: { label: '오류', color: 'bg-red-400' },
 } as const;
+
+// ── 하이브리드 검색 관련 타입 ────────────────────────────
+
+export type SearchSource = 'bm25_only' | 'vector_only' | 'both';
+
+export interface CollectionSearchRequest {
+  query: string;
+  top_k?: number;
+  bm25_weight?: number;
+  vector_weight?: number;
+  bm25_top_k?: number;
+  vector_top_k?: number;
+  rrf_k?: number;
+}
+
+export interface SearchResultItem {
+  id: string;
+  content: string;
+  score: number;
+  bm25_rank: number | null;
+  bm25_score: number | null;
+  vector_rank: number | null;
+  vector_score: number | null;
+  source: SearchSource;
+  metadata: Record<string, unknown>;
+}
+
+export interface CollectionSearchResponse {
+  query: string;
+  collection_name: string;
+  results: SearchResultItem[];
+  total_found: number;
+  bm25_weight: number;
+  vector_weight: number;
+  request_id: string;
+  document_id: string | null;
+}
+
+export interface SearchHistoryItem {
+  id: number;
+  query: string;
+  document_id: string | null;
+  bm25_weight: number;
+  vector_weight: number;
+  top_k: number;
+  result_count: number;
+  created_at: string;
+}
+
+export interface SearchHistoryResponse {
+  collection_name: string;
+  histories: SearchHistoryItem[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export const SEARCH_SOURCE_BADGE: Record<SearchSource, { label: string; color: string; bg: string }> = {
+  bm25_only: { label: 'BM25', color: 'text-orange-600', bg: 'bg-orange-50' },
+  vector_only: { label: 'Vector', color: 'text-blue-600', bg: 'bg-blue-50' },
+  both: { label: 'Both', color: 'text-emerald-600', bg: 'bg-emerald-50' },
+};
+
+export interface WeightPreset {
+  bm25_weight: number;
+  vector_weight: number;
+  label: string;
+}
+
+export const WEIGHT_PRESETS: Record<string, WeightPreset> = {
+  balanced: { bm25_weight: 0.5, vector_weight: 0.5, label: '균형' },
+  bm25_heavy: { bm25_weight: 0.8, vector_weight: 0.2, label: 'BM25 중심' },
+  vector_heavy: { bm25_weight: 0.2, vector_weight: 0.8, label: '벡터 중심' },
+  bm25_only: { bm25_weight: 1.0, vector_weight: 0.0, label: 'BM25만' },
+  vector_only: { bm25_weight: 0.0, vector_weight: 1.0, label: '벡터만' },
+};

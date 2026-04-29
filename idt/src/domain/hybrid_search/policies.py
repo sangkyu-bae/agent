@@ -36,6 +36,8 @@ class RRFFusionPolicy:
         vector_hits: list[SearchHit],
         top_k: int,
         k: int = DEFAULT_K,
+        bm25_weight: float = 0.5,
+        vector_weight: float = 0.5,
     ) -> list[HybridSearchResult]:
         """BM25 + 벡터 결과를 RRF로 병합하여 상위 top_k 반환.
 
@@ -76,9 +78,9 @@ class RRFFusionPolicy:
         for entry in entries.values():
             rrf_score = 0.0
             if entry.bm25_rank is not None:
-                rrf_score += 1.0 / (k + entry.bm25_rank)
+                rrf_score += bm25_weight * (1.0 / (k + entry.bm25_rank))
             if entry.vector_rank is not None:
-                rrf_score += 1.0 / (k + entry.vector_rank)
+                rrf_score += vector_weight * (1.0 / (k + entry.vector_rank))
 
             if entry.bm25_rank is not None and entry.vector_rank is not None:
                 source = "both"

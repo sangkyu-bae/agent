@@ -8,6 +8,7 @@ import type {
   ActivityLogFilters,
   CollectionDocumentsParams,
   DocumentChunksParams,
+  CollectionSearchRequest,
 } from '@/types/collection';
 
 export const useCollectionList = () =>
@@ -98,4 +99,26 @@ export const useDocumentChunks = (
     queryKey: queryKeys.collections.chunks(collectionName, documentId ?? '', params),
     queryFn: () => collectionService.getDocumentChunks(collectionName, documentId!, params),
     enabled: !!collectionName && !!documentId,
+  });
+
+export const useCollectionSearch = () =>
+  useMutation({
+    mutationFn: ({ collectionName, data }: {
+      collectionName: string;
+      data: CollectionSearchRequest;
+    }) => collectionService.searchCollection(collectionName, data),
+    onSuccess: (_, { collectionName }) =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.collections.searchHistory(collectionName),
+      }),
+  });
+
+export const useSearchHistory = (
+  collectionName: string,
+  params?: { limit?: number; offset?: number },
+) =>
+  useQuery({
+    queryKey: queryKeys.collections.searchHistory(collectionName, params),
+    queryFn: () => collectionService.getSearchHistory(collectionName, params),
+    enabled: !!collectionName,
   });

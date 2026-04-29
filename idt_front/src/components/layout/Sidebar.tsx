@@ -65,7 +65,7 @@ const Sidebar = ({
       {/* 로고 */}
       <div className="flex items-center gap-3 px-5 py-5">
         <img
-          src="https://m.sangsanginplussb.com/mob/img/ssiplus_logo.png"
+          src="/logo.png"
           alt="상상인플러스저축은행"
           className="h-8 w-auto object-contain brightness-0 invert"
         />

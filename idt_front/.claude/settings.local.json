@@ -12,7 +12,9 @@
       "WebFetch(domain:www.sangsanginplussb.com)",
       "WebFetch(domain:m.sangsanginplussb.com)",
       "Bash(npm run:*)",
-      "Skill(bkit:pdca)"
+      "Skill(bkit:pdca)",
+      "Bash(npx vitest *)",
+      "Bash(npx vite *)"
     ]
   }
 }

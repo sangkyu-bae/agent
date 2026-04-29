@@ -78,7 +78,8 @@ const CollectionPage = () => {
     collectionList.data?.collections.map((c) => c.name) ?? [];
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+    <div className="h-full overflow-y-auto">
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
       <h1 className="text-3xl font-bold tracking-tight text-zinc-900">
         컬렉션 관리
       </h1>
@@ -219,6 +220,7 @@ const CollectionPage = () => {
         isPending={scopeMutation.isPending}
         error={getScopeError(scopeMutation.error)}
       />
+    </div>
     </div>
   );
 };

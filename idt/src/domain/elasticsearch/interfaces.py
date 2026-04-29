@@ -105,3 +105,17 @@ class ElasticsearchRepositoryInterface(ABC):
         Returns:
             삭제된 건수
         """
+
+    @abstractmethod
+    async def ensure_index_exists(
+        self, index: str, mappings: dict[str, Any]
+    ) -> bool:
+        """인덱스 존재 확인 후 없으면 생성.
+
+        Args:
+            index: ES 인덱스 이름
+            mappings: 인덱스 매핑 정의
+
+        Returns:
+            True: 새로 생성됨, False: 이미 존재하거나 실패
+        """

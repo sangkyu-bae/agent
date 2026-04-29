@@ -19,6 +19,8 @@ class HybridSearchAPIRequest(BaseModel):
     bm25_top_k: int = Field(default=20, ge=1, le=100, description="BM25 후보 수")
     vector_top_k: int = Field(default=20, ge=1, le=100, description="벡터 검색 후보 수")
     rrf_k: int = Field(default=60, ge=1, description="RRF 상수 k")
+    bm25_weight: float = Field(default=0.5, ge=0.0, le=1.0, description="BM25 가중치")
+    vector_weight: float = Field(default=0.5, ge=0.0, le=1.0, description="벡터 검색 가중치")
 
 
 class HybridSearchResultItem(BaseModel):
@@ -73,6 +75,8 @@ async def hybrid_search(
         bm25_top_k=request.bm25_top_k,
         vector_top_k=request.vector_top_k,
         rrf_k=request.rrf_k,
+        bm25_weight=request.bm25_weight,
+        vector_weight=request.vector_weight,
     )
     try:
         result = await use_case.execute(domain_request, request_id)

@@ -86,14 +86,14 @@ class QdrantVectorStore(VectorStoreInterface):
         query_filter = self._build_qdrant_filter(filter) if filter else None
 
         try:
-            results = await self._client.search(
+            response = await self._client.query_points(
                 collection_name=self._collection_name,
-                query_vector=vector,
+                query=vector,
                 limit=top_k,
                 query_filter=query_filter,
                 with_vectors=True,
             )
-            return [self._point_to_document(point) for point in results]
+            return [self._point_to_document(point) for point in response.points]
         except Exception as e:
             logger.error(
                 "Vector search failed", exception=e, collection=self._collection_name

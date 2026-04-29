@@ -149,3 +149,51 @@ class TestStructuredLogger:
         output = stream.getvalue()
         assert "should not appear" not in output
         assert "should appear" in output
+
+    def test_reserved_key_filename_does_not_raise(self, logger):
+        """LogRecord 예약 키 'filename'을 전달해도 KeyError가 발생하지 않는다."""
+        structured_logger, stream = logger
+        structured_logger.info(
+            "Upload started",
+            request_id="req-001",
+            filename="test.pdf",
+        )
+        output = stream.getvalue()
+        parsed = json.loads(output)
+        assert parsed["ctx_filename"] == "test.pdf"
+        assert parsed["request_id"] == "req-001"
+
+    def test_reserved_key_name_does_not_raise(self, logger):
+        """LogRecord 예약 키 'name'을 전달해도 KeyError가 발생하지 않는다."""
+        structured_logger, stream = logger
+        structured_logger.info(
+            "Department lookup",
+            request_id="req-002",
+            name="engineering",
+        )
+        output = stream.getvalue()
+        parsed = json.loads(output)
+        assert parsed["ctx_name"] == "engineering"
+
+    def test_non_reserved_keys_are_not_prefixed(self, logger):
+        """예약 키가 아닌 일반 kwargs는 접두사 없이 그대로 전달된다."""
+        structured_logger, stream = logger
+        structured_logger.info(
+            "Normal log",
+            request_id="req-003",
+            user_id="user-789",
+        )
+        output = stream.getvalue()
+        parsed = json.loads(output)
+        assert parsed["request_id"] == "req-003"
+        assert parsed["user_id"] == "user-789"
+
+    def test_error_with_no_traceback_exception_does_not_crash(self, logger):
+        """raise 없이 생성된 예외도 안전하게 로깅된다."""
+        structured_logger, stream = logger
+        exc = ValueError("no traceback")
+        structured_logger.error("Error occurred", exception=exc)
+        output = stream.getvalue()
+        parsed = json.loads(output.split("\n")[0])
+        assert parsed["error_type"] == "ValueError"
+        assert parsed["error_message"] == "no traceback"

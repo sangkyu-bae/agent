@@ -29,6 +29,9 @@ export const API_ENDPOINTS = {
   RETRIEVE: '/api/rag/retrieve',
   DOCUMENT_CHUNKS: (docId: string) => `/api/rag/documents/${docId}/chunks`,
 
+  // Unified Document Upload
+  DOCUMENT_UPLOAD_ALL: '/api/v1/documents/upload-all',
+
   // Eval Dataset
   EVAL_DATASET_EXTRACT: '/api/eval/extract',
 
@@ -73,6 +76,10 @@ export const API_ENDPOINTS = {
     `/api/v1/collections/${name}/documents`,
   COLLECTION_DOCUMENT_CHUNKS: (name: string, documentId: string) =>
     `/api/v1/collections/${name}/documents/${documentId}/chunks`,
+  COLLECTION_SEARCH: (name: string) =>
+    `/api/v1/collections/${name}/search`,
+  COLLECTION_SEARCH_HISTORY: (name: string) =>
+    `/api/v1/collections/${name}/search-history`,
   COLLECTION_ACTIVITY_LOG: '/api/v1/collections/activity-log',
   COLLECTION_ACTIVITY_LOG_BY_NAME: (name: string) =>
     `/api/v1/collections/${name}/activity-log`,

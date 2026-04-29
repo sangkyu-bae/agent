@@ -56,6 +56,8 @@ class HybridSearchUseCase:
                 vector_hits=vector_hits,
                 top_k=request.top_k,
                 k=request.rrf_k,
+                bm25_weight=request.bm25_weight,
+                vector_weight=request.vector_weight,
             )
 
             self._logger.info(
@@ -78,56 +80,85 @@ class HybridSearchUseCase:
     async def _fetch_both(
         self, request: HybridSearchRequest, request_id: str
     ) -> tuple[list[SearchHit], list[SearchHit]]:
-        """BM25와 벡터 검색을 순차적으로 실행하고 SearchHit 목록으로 변환."""
-        # BM25
-        es_query_body: dict = {"match": {"content": request.query}}
-        if request.metadata_filter:
-            filter_clauses = [
-                {"term": {k: v}} for k, v in request.metadata_filter.items()
-            ]
-            es_query_body = {
-                "bool": {
-                    "must": [{"match": {"content": request.query}}],
-                    "filter": filter_clauses,
-                },
-            }
-        es_query = ESSearchQuery(
-            index=self._es_index,
-            query=es_query_body,
-            size=request.bm25_top_k,
-        )
-        es_results = await self._es_repo.search(es_query, request_id)
-        bm25_hits = [
-            SearchHit(
-                id=hit.id,
-                content=hit.source.get("content", ""),
-                metadata={
-                    k: str(v) for k, v in hit.source.items() if k != "content"
-                },
-                raw_score=hit.score,
-            )
-            for hit in es_results
-        ]
-
-        # Vector
-        query_vector = await self._embedding.embed_text(request.query)
-        vector_filter = None
-        if request.metadata_filter:
-            from src.domain.vector.value_objects import SearchFilter
-            vector_filter = SearchFilter(metadata=request.metadata_filter)
-        vector_docs = await self._vector_store.search_by_vector(
-            vector=query_vector,
-            top_k=request.vector_top_k,
-            filter=vector_filter,
-        )
-        vector_hits = [
-            SearchHit(
-                id=doc.id.value if hasattr(doc.id, "value") else str(doc.id),
-                content=doc.content,
-                metadata=doc.metadata,
-                raw_score=doc.score or 0.0,
-            )
-            for doc in vector_docs
-        ]
-
+        """BM25와 벡터 검색을 독립 실행하고 SearchHit 목록으로 변환."""
+        bm25_hits = await self._fetch_bm25(request, request_id)
+        vector_hits = await self._fetch_vector(request, request_id)
         return bm25_hits, vector_hits
+
+    async def _fetch_bm25(
+        self, request: HybridSearchRequest, request_id: str
+    ) -> list[SearchHit]:
+        try:
+            multi_match_clause: dict = {
+                "multi_match": {
+                    "query": request.query,
+                    "fields": ["content", "morph_text^1.5"],
+                    "type": "most_fields",
+                }
+            }
+            es_query_body: dict = multi_match_clause
+            if request.metadata_filter:
+                filter_clauses = [
+                    {"term": {k: v}} for k, v in request.metadata_filter.items()
+                ]
+                es_query_body = {
+                    "bool": {
+                        "must": [multi_match_clause],
+                        "filter": filter_clauses,
+                    },
+                }
+            es_query = ESSearchQuery(
+                index=self._es_index,
+                query=es_query_body,
+                size=request.bm25_top_k,
+            )
+            es_results = await self._es_repo.search(es_query, request_id)
+            return [
+                SearchHit(
+                    id=hit.id,
+                    content=hit.source.get("content", ""),
+                    metadata={
+                        k: str(v) for k, v in hit.source.items() if k != "content"
+                    },
+                    raw_score=hit.score,
+                )
+                for hit in es_results
+            ]
+        except Exception as e:
+            self._logger.warning(
+                "BM25 search failed, falling back to empty",
+                exception=e,
+                request_id=request_id,
+            )
+            return []
+
+    async def _fetch_vector(
+        self, request: HybridSearchRequest, request_id: str
+    ) -> list[SearchHit]:
+        try:
+            query_vector = await self._embedding.embed_text(request.query)
+            vector_filter = None
+            if request.metadata_filter:
+                from src.domain.vector.value_objects import SearchFilter
+                vector_filter = SearchFilter(metadata=request.metadata_filter)
+            vector_docs = await self._vector_store.search_by_vector(
+                vector=query_vector,
+                top_k=request.vector_top_k,
+                filter=vector_filter,
+            )
+            return [
+                SearchHit(
+                    id=doc.id.value if hasattr(doc.id, "value") else str(doc.id),
+                    content=doc.content,
+                    metadata=doc.metadata,
+                    raw_score=doc.score or 0.0,
+                )
+                for doc in vector_docs
+            ]
+        except Exception as e:
+            self._logger.warning(
+                "Vector search failed, falling back to empty",
+                exception=e,
+                request_id=request_id,
+            )
+            return []

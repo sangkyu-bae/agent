@@ -142,6 +142,13 @@ class ElasticsearchRepository(ElasticsearchRepositoryInterface):
                 result_count=len(results),
             )
             return results
+        except NotFoundError:
+            self._logger.warning(
+                "ES index not found, returning empty results",
+                request_id=request_id,
+                index=query.index,
+            )
+            return []
         except Exception as e:
             self._logger.error(
                 "ES search failed", exception=e, request_id=request_id
@@ -155,6 +162,24 @@ class ElasticsearchRepository(ElasticsearchRepositoryInterface):
             result = await es.exists(index=index, id=doc_id)
             return bool(result)
         except NotFoundError:
+            return False
+
+    async def ensure_index_exists(
+        self, index: str, mappings: dict[str, Any]
+    ) -> bool:
+        """인덱스 존재 확인 후 없으면 생성."""
+        try:
+            es = self._client.get_client()
+            exists = await es.indices.exists(index=index)
+            if exists:
+                return False
+            await es.indices.create(index=index, mappings=mappings)
+            self._logger.info("ES index created", index=index)
+            return True
+        except Exception as e:
+            self._logger.warning(
+                "ES ensure_index_exists failed", exception=e, index=index
+            )
             return False
 
     async def delete_by_query(

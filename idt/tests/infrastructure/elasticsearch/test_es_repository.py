@@ -285,6 +285,24 @@ class TestElasticsearchRepositorySearch:
         assert results == []
 
     @pytest.mark.asyncio
+    async def test_search_returns_empty_list_on_index_not_found(
+        self, repo, mock_es, mock_logger
+    ):
+        """인덱스가 존재하지 않으면 빈 리스트를 반환하고 warning 로그를 남긴다."""
+        from elasticsearch import NotFoundError
+        from src.domain.elasticsearch.schemas import ESSearchQuery
+
+        mock_es.search.side_effect = NotFoundError(
+            404, "index_not_found_exception", "no such index [documents]"
+        )
+        q = ESSearchQuery(index="documents", query={"match_all": {}})
+        results = await repo.search(q, REQUEST_ID)
+
+        assert results == []
+        mock_logger.warning.assert_called_once()
+        mock_logger.error.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_search_logs_error_and_reraises_on_exception(
         self, repo, mock_es, mock_logger
     ):
@@ -359,3 +377,43 @@ class TestElasticsearchRepositoryDeleteByQuery:
             await repo.delete_by_query("idx", {}, REQUEST_ID)
 
         mock_logger.error.assert_called_once()
+
+
+class TestElasticsearchRepositoryEnsureIndexExists:
+    """ensure_index_exists() 메서드 테스트."""
+
+    @pytest.mark.asyncio
+    async def test_ensure_index_exists_creates_when_missing(self, repo, mock_es, mock_logger):
+        """인덱스가 없으면 생성하고 True를 반환한다."""
+        mock_es.indices = MagicMock()
+        mock_es.indices.exists = AsyncMock(return_value=False)
+        mock_es.indices.create = AsyncMock(return_value={"acknowledged": True})
+
+        result = await repo.ensure_index_exists("documents", {"properties": {}})
+
+        assert result is True
+        mock_es.indices.create.assert_called_once()
+        mock_logger.info.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_ensure_index_exists_skips_when_present(self, repo, mock_es):
+        """인덱스가 이미 존재하면 생성하지 않고 False를 반환한다."""
+        mock_es.indices = MagicMock()
+        mock_es.indices.exists = AsyncMock(return_value=True)
+        mock_es.indices.create = AsyncMock()
+
+        result = await repo.ensure_index_exists("documents", {"properties": {}})
+
+        assert result is False
+        mock_es.indices.create.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_ensure_index_exists_returns_false_on_error(self, repo, mock_es, mock_logger):
+        """ES 연결 실패 시 False를 반환하고 warning 로그를 남긴다."""
+        mock_es.indices = MagicMock()
+        mock_es.indices.exists = AsyncMock(side_effect=ConnectionError("ES down"))
+
+        result = await repo.ensure_index_exists("documents", {"properties": {}})
+
+        assert result is False
+        mock_logger.warning.assert_called()

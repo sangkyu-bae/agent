@@ -104,6 +104,8 @@ export const queryKeys = {
       [...queryKeys.collections.all, 'documents', name, params] as const,
     chunks: (name: string, documentId: string, params?: import('@/types/collection').DocumentChunksParams) =>
       [...queryKeys.collections.all, 'chunks', name, documentId, params] as const,
+    searchHistory: (name: string, params?: { limit?: number; offset?: number }) =>
+      [...queryKeys.collections.all, 'searchHistory', name, params] as const,
   },
 
   // ── Admin ──────────────────────────────────────────────

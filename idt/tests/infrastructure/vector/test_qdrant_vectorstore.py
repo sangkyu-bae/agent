@@ -27,7 +27,7 @@ class TestQdrantVectorStore:
         """Create a mock Qdrant client."""
         client = MagicMock()
         client.upsert = AsyncMock()
-        client.search = AsyncMock(return_value=[])
+        client.query_points = AsyncMock(return_value=MagicMock(points=[]))
         client.delete = AsyncMock()
         client.retrieve = AsyncMock(return_value=[])
         # 컬렉션 관련 (기본: 컬렉션 이미 존재)
@@ -143,7 +143,9 @@ class TestQdrantVectorStore:
         mock_point.vector = [0.1] * 1536
         mock_point.payload = {"content": "Test content", "type": "policy"}
         mock_point.score = 0.95
-        mock_qdrant_client.search = AsyncMock(return_value=[mock_point])
+        mock_qdrant_client.query_points = AsyncMock(
+            return_value=MagicMock(points=[mock_point])
+        )
 
         store = QdrantVectorStore(
             client=mock_qdrant_client,
@@ -171,7 +173,9 @@ class TestQdrantVectorStore:
         mock_point.vector = [0.1] * 1536
         mock_point.payload = {"content": "Test content"}
         mock_point.score = 0.9
-        mock_qdrant_client.search = AsyncMock(return_value=[mock_point])
+        mock_qdrant_client.query_points = AsyncMock(
+            return_value=MagicMock(points=[mock_point])
+        )
 
         store = QdrantVectorStore(
             client=mock_qdrant_client,
@@ -189,7 +193,9 @@ class TestQdrantVectorStore:
         self, mock_qdrant_client: MagicMock, mock_embedding: MagicMock
     ) -> None:
         """search should apply document_type filter."""
-        mock_qdrant_client.search = AsyncMock(return_value=[])
+        mock_qdrant_client.query_points = AsyncMock(
+            return_value=MagicMock(points=[])
+        )
 
         store = QdrantVectorStore(
             client=mock_qdrant_client,
@@ -204,7 +210,7 @@ class TestQdrantVectorStore:
             filter=search_filter,
         )
 
-        call_args = mock_qdrant_client.search.call_args
+        call_args = mock_qdrant_client.query_points.call_args
         assert call_args.kwargs.get("query_filter") is not None
 
     @pytest.mark.asyncio
@@ -212,7 +218,9 @@ class TestQdrantVectorStore:
         self, mock_qdrant_client: MagicMock, mock_embedding: MagicMock
     ) -> None:
         """search should apply metadata filter."""
-        mock_qdrant_client.search = AsyncMock(return_value=[])
+        mock_qdrant_client.query_points = AsyncMock(
+            return_value=MagicMock(points=[])
+        )
 
         store = QdrantVectorStore(
             client=mock_qdrant_client,
@@ -227,7 +235,7 @@ class TestQdrantVectorStore:
             filter=search_filter,
         )
 
-        call_args = mock_qdrant_client.search.call_args
+        call_args = mock_qdrant_client.query_points.call_args
         assert call_args.kwargs.get("query_filter") is not None
 
     @pytest.mark.asyncio
@@ -311,7 +319,9 @@ class TestQdrantVectorStore:
         self, mock_qdrant_client: MagicMock, mock_embedding: MagicMock
     ) -> None:
         """Default top_k should be 10."""
-        mock_qdrant_client.search = AsyncMock(return_value=[])
+        mock_qdrant_client.query_points = AsyncMock(
+            return_value=MagicMock(points=[])
+        )
 
         store = QdrantVectorStore(
             client=mock_qdrant_client,
@@ -321,7 +331,7 @@ class TestQdrantVectorStore:
 
         await store.search_by_vector(vector=[0.1] * 1536)
 
-        call_args = mock_qdrant_client.search.call_args
+        call_args = mock_qdrant_client.query_points.call_args
         assert call_args.kwargs["limit"] == 10
 
     @pytest.mark.asyncio
