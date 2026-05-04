@@ -56,3 +56,5 @@
 | DOC-BROWSE-001 | docs/01-plan/features/collection-document-chunks.plan.md | 컬렉션별 임베딩 문서 및 청크 조회 API (문서 목록 + 청크 상세) |
 | UNIFIED-UPLOAD-001 | docs/archive/2026-04/unified-pdf-upload-api/ | 통합 PDF 업로드 API (Qdrant 벡터 + ES BM25 동시 저장 단일 엔드포인트) |
 | UNIFIED-UPLOAD-FIX-001 | docs/01-plan/features/fix-unified-upload-es-rdb.plan.md | 통합 업로드 ES/RDB 수정 (Kiwi 형태소 분석 + morph_text BM25 연동 + 문서 메타데이터 RDB 등록) |
+| DOC-DELETE-001 | docs/01-plan/features/document-delete-api.plan.md | 문서 삭제 API (Qdrant 청크 + ES 청크 + MySQL 메타데이터 3중 동기 삭제, 단건/일괄) |
+| AGENT-CHAT-001 | docs/01-plan/features/agent-chat-history.plan.md | 에이전트별 채팅 기록 관리 (conversation_message에 agent_id 추가, 에이전트별 세션 조회 API) |

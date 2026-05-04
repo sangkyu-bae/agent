@@ -1,11 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import AppSidebar from '@/components/layout/AppSidebar';
 import ChatHistoryPanel from '@/components/layout/ChatHistoryPanel';
 import { useLayoutStore } from '@/store/layoutStore';
 import { useAuthStore } from '@/store/authStore';
 import { useConversationSessions } from '@/hooks/useChat';
-import { MOCK_AGENTS } from '@/types/agent';
+import { useMyAgents } from '@/hooks/useAgentSubscription';
+import { toAgentSummary } from '@/services/agentSubscriptionService';
 import type { AgentSummary, AgentChatOutletContext } from '@/types/agent';
 import type { ChatSession } from '@/types/chat';
 
@@ -42,6 +43,21 @@ const AgentChatLayout = () => {
     refetch: refetchSessions,
   } = useConversationSessions(userId);
 
+  const {
+    data: myAgentsData,
+    isLoading: agentsLoading,
+    isError: agentsError,
+    refetch: refetchAgents,
+  } = useMyAgents();
+
+  const myAgents = useMemo(() => myAgentsData?.agents ?? [], [myAgentsData]);
+
+  useEffect(() => {
+    if (myAgents.length > 0 && !myAgents.find((a) => a.agent_id === selectedAgentId)) {
+      selectAgent(myAgents[0].agent_id);
+    }
+  }, [myAgents, selectedAgentId, selectAgent]);
+
   const sessions = useMemo<ChatSession[]>(() => {
     const serverIds = new Set(serverSessions.map((s) => s.id));
     const drafts = draftSessions.filter((s) => !serverIds.has(s.id));
@@ -58,8 +74,12 @@ const AgentChatLayout = () => {
     setActiveSessionId(id);
   };
 
-  const selectedAgent: AgentSummary | null =
-    MOCK_AGENTS.find((a) => a.id === selectedAgentId) ?? MOCK_AGENTS[0];
+  const selectedAgent: AgentSummary | null = (() => {
+    const found = myAgents.find((a) => a.agent_id === selectedAgentId);
+    if (found) return toAgentSummary(found);
+    if (myAgents.length > 0) return toAgentSummary(myAgents[0]);
+    return null;
+  })();
 
   const outletContext: AgentChatOutletContext = {
     selectedAgent,
@@ -72,9 +92,12 @@ const AgentChatLayout = () => {
   return (
     <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
       <AppSidebar
-        agents={MOCK_AGENTS}
+        agents={myAgents}
         selectedAgentId={selectedAgentId}
         onSelectAgent={selectAgent}
+        isLoading={agentsLoading}
+        isError={agentsError}
+        onRetry={() => refetchAgents()}
       />
 
       {isChatRoute && (

@@ -13,11 +13,14 @@ const authApiClient: AxiosInstance = axios.create({
   timeout: 30000,
 });
 
-// Request interceptor — Access Token 주입
+// Request interceptor — Access Token + X-User-Id 주입
 authApiClient.interceptors.request.use((config) => {
-  const { accessToken } = useAuthStore.getState();
+  const { accessToken, user } = useAuthStore.getState();
   if (accessToken) {
     config.headers.Authorization = `Bearer ${accessToken}`;
+  }
+  if (user?.id) {
+    config.headers['X-User-Id'] = String(user.id);
   }
   return config;
 });

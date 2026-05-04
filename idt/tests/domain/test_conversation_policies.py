@@ -14,6 +14,7 @@ import pytest
 from src.domain.conversation.policies import SummarizationPolicy
 from src.domain.conversation.entities import ConversationMessage, MessageId
 from src.domain.conversation.value_objects import (
+    AgentId,
     UserId,
     SessionId,
     TurnIndex,
@@ -27,6 +28,7 @@ def create_message(turn: int, role: MessageRole = MessageRole.USER) -> Conversat
         id=MessageId(turn),
         user_id=UserId("user-123"),
         session_id=SessionId("session-abc"),
+        agent_id=AgentId.super(),
         role=role,
         content=f"Message at turn {turn}",
         turn_index=TurnIndex(turn),

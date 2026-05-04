@@ -192,6 +192,7 @@ const CollectionDocumentsPage = () => {
         onSelect={handleSelectDocument}
         onPageChange={setOffset}
         onRetry={() => documentsQuery.refetch()}
+        collectionName={collectionName}
       />
 
       {/* Chunk Detail Panel */}

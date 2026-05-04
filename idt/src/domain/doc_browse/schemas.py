@@ -49,3 +49,14 @@ class DocumentChunksResult:
     total_chunks: int
     chunks: List[ChunkDetail] = field(default_factory=list)
     parents: Optional[List[ParentChunkGroup]] = None
+
+
+@dataclass(frozen=True)
+class DeleteDocumentResult:
+    document_id: str
+    collection_name: str
+    filename: str
+    deleted_qdrant_chunks: int
+    deleted_es_chunks: int
+    status: str
+    error: Optional[str] = None

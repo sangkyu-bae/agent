@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 from src.domain.conversation.entities import ConversationMessage, ConversationSummary
 from src.domain.conversation.policies import SummarizationPolicy
 from src.domain.conversation.schemas import ConversationChatRequest
-from src.domain.conversation.value_objects import MessageRole, SessionId, TurnIndex, UserId
+from src.domain.conversation.value_objects import AgentId, MessageRole, SessionId, TurnIndex, UserId
 
 
 # ─────────────────────────────────────────────
@@ -18,6 +18,7 @@ def _make_message(turn: int, role: str = "user", content: str = "msg") -> Conver
         id=None,
         user_id=UserId("u-1"),
         session_id=SessionId("s-1"),
+        agent_id=AgentId.super(),
         role=MessageRole.USER if role == "user" else MessageRole.ASSISTANT,
         content=content,
         turn_index=TurnIndex(turn),

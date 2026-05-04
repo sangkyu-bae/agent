@@ -42,6 +42,28 @@ class TurnIndex:
             raise ValueError("TurnIndex must be >= 1")
 
 
+SUPER_AGENT_ID = "super"
+
+
+@dataclass(frozen=True)
+class AgentId:
+    """에이전트 식별자. 일반 채팅은 'super', 커스텀 에이전트는 UUID."""
+
+    value: str
+
+    def __post_init__(self) -> None:
+        if not self.value or not self.value.strip():
+            raise ValueError("AgentId cannot be empty")
+
+    @classmethod
+    def super(cls) -> "AgentId":
+        return cls(SUPER_AGENT_ID)
+
+    @property
+    def is_super(self) -> bool:
+        return self.value == SUPER_AGENT_ID
+
+
 class MessageRole(Enum):
     """Allowed roles for conversation messages.
 

@@ -1,4 +1,8 @@
+import { useState } from 'react';
 import type { DocumentSummary } from '@/types/collection';
+import { useDeleteDocument, useDeleteDocuments } from '@/hooks/useCollections';
+import ConfirmDialog from '@/components/common/ConfirmDialog';
+import { ApiError } from '@/services/api/ApiError';
 
 interface DocumentTableProps {
   documents: DocumentSummary[];
@@ -11,13 +15,27 @@ interface DocumentTableProps {
   onSelect: (documentId: string) => void;
   onPageChange: (newOffset: number) => void;
   onRetry: () => void;
+  collectionName: string;
 }
+
+type DeleteTarget =
+  | { type: 'single'; documentId: string; filename: string }
+  | { type: 'batch'; documentIds: string[] };
+
+const getDeleteError = (error: unknown): string => {
+  if (error instanceof ApiError) {
+    if (error.status === 403) return '삭제 권한이 없습니다';
+    if (error.status === 404) return '문서를 찾을 수 없습니다';
+    return error.message;
+  }
+  return '삭제 중 오류가 발생했습니다';
+};
 
 const SkeletonRows = () => (
   <>
     {[1, 2, 3].map((i) => (
       <tr key={i}>
-        {[1, 2, 3, 4, 5].map((j) => (
+        {[1, 2, 3, 4, 5, 6].map((j) => (
           <td key={j} className="px-4 py-3">
             <div className="h-4 animate-pulse rounded bg-zinc-200" />
           </td>
@@ -59,11 +77,66 @@ const DocumentTable = ({
   onSelect,
   onPageChange,
   onRetry,
+  collectionName,
 }: DocumentTableProps) => {
   const currentPage = Math.floor(offset / limit) + 1;
   const totalPages = Math.ceil(totalDocuments / limit);
   const hasPrev = offset > 0;
   const hasNext = offset + limit < totalDocuments;
+
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [batchResult, setBatchResult] = useState<string | null>(null);
+
+  const deleteMutation = useDeleteDocument();
+  const batchDeleteMutation = useDeleteDocuments();
+
+  const toggleSelect = (id: string) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
+  const toggleSelectAll = () =>
+    setSelectedIds((prev) =>
+      prev.size === documents.length
+        ? new Set()
+        : new Set(documents.map((d) => d.document_id))
+    );
+
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const handleConfirmDelete = () => {
+    if (!deleteTarget) return;
+
+    if (deleteTarget.type === 'single') {
+      deleteMutation.mutate(
+        { collectionName, documentId: deleteTarget.documentId },
+        {
+          onSuccess: () => setDeleteTarget(null),
+        },
+      );
+    } else {
+      batchDeleteMutation.mutate(
+        { collectionName, documentIds: deleteTarget.documentIds },
+        {
+          onSuccess: (data) => {
+            setDeleteTarget(null);
+            clearSelection();
+            if (data.failure_count > 0) {
+              setBatchResult(
+                `${data.success_count}건 삭제 성공, ${data.failure_count}건 실패`
+              );
+            }
+          },
+        },
+      );
+    }
+  };
+
+  const isPending = deleteMutation.isPending || batchDeleteMutation.isPending;
+  const deleteError = deleteMutation.error ?? batchDeleteMutation.error;
 
   if (isError) {
     return (
@@ -81,9 +154,58 @@ const DocumentTable = ({
 
   return (
     <div className="rounded-2xl border border-zinc-200 bg-white">
+      {/* Batch action bar */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center justify-between border-b border-zinc-200 bg-violet-50/60 px-5 py-2.5">
+          <span className="text-[13.5px] font-medium text-violet-700">
+            {selectedIds.size}건 선택됨
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={clearSelection}
+              className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-[12px] font-medium text-zinc-600 transition-all hover:bg-zinc-50"
+            >
+              선택 해제
+            </button>
+            <button
+              onClick={() =>
+                setDeleteTarget({ type: 'batch', documentIds: [...selectedIds] })
+              }
+              className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-[12px] font-medium text-red-500 transition-all hover:bg-red-50"
+            >
+              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+              </svg>
+              삭제
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Batch result toast */}
+      {batchResult && (
+        <div className="flex items-center justify-between border-b border-amber-200 bg-amber-50 px-5 py-2.5">
+          <span className="text-[13px] text-amber-700">{batchResult}</span>
+          <button
+            onClick={() => setBatchResult(null)}
+            className="text-[12px] text-amber-600 underline"
+          >
+            닫기
+          </button>
+        </div>
+      )}
+
       <table className="w-full">
         <thead>
           <tr className="border-b border-zinc-100 bg-zinc-50/60">
+            <th className="w-10 px-3 py-3">
+              <input
+                type="checkbox"
+                checked={documents.length > 0 && selectedIds.size === documents.length}
+                onChange={toggleSelectAll}
+                className="h-4 w-4 rounded border-zinc-300 text-violet-600 focus:ring-violet-500"
+              />
+            </th>
             <th className="px-5 py-3 text-left text-[12px] font-semibold uppercase tracking-wider text-zinc-400">
               파일명
             </th>
@@ -105,7 +227,7 @@ const DocumentTable = ({
           ) : documents.length === 0 ? (
             <tr>
               <td
-                colSpan={5}
+                colSpan={6}
                 className="px-5 py-12 text-center text-[15px] text-zinc-400"
               >
                 이 컬렉션에 문서가 없습니다
@@ -114,6 +236,7 @@ const DocumentTable = ({
           ) : (
             documents.map((doc) => {
               const isSelected = selectedDocumentId === doc.document_id;
+              const isChecked = selectedIds.has(doc.document_id);
               return (
                 <tr
                   key={doc.document_id}
@@ -122,6 +245,15 @@ const DocumentTable = ({
                     isSelected ? 'bg-violet-50' : 'hover:bg-zinc-50/70'
                   }`}
                 >
+                  <td className="px-3 py-3.5">
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={() => toggleSelect(doc.document_id)}
+                      className="h-4 w-4 rounded border-zinc-300 text-violet-600 focus:ring-violet-500"
+                    />
+                  </td>
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-2.5">
                       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-zinc-100">
@@ -147,7 +279,11 @@ const DocumentTable = ({
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        // TODO: delete handler
+                        setDeleteTarget({
+                          type: 'single',
+                          documentId: doc.document_id,
+                          filename: doc.filename,
+                        });
                       }}
                       className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-300 transition-colors hover:bg-red-50 hover:text-red-500"
                     >
@@ -184,6 +320,41 @@ const DocumentTable = ({
           </button>
         </div>
       )}
+
+      {/* Delete confirmation dialog */}
+      <ConfirmDialog
+        isOpen={deleteTarget !== null}
+        title={deleteTarget?.type === 'batch' ? '문서 일괄 삭제' : '문서 삭제'}
+        description={
+          deleteTarget?.type === 'batch' ? (
+            <>
+              {deleteTarget.documentIds.length}건의 문서를 삭제하시겠습니까?
+              <br />
+              <span className="text-red-500">이 작업은 되돌릴 수 없습니다.</span>
+            </>
+          ) : deleteTarget?.type === 'single' ? (
+            <>
+              &lsquo;{deleteTarget.filename}&rsquo; 문서를 삭제하시겠습니까?
+              <br />
+              <span className="text-red-500">이 작업은 되돌릴 수 없습니다.</span>
+            </>
+          ) : null
+        }
+        confirmLabel={
+          deleteTarget?.type === 'batch'
+            ? `${deleteTarget.documentIds.length}건 삭제`
+            : '삭제'
+        }
+        variant="danger"
+        onClose={() => {
+          setDeleteTarget(null);
+          deleteMutation.reset();
+          batchDeleteMutation.reset();
+        }}
+        onConfirm={handleConfirmDelete}
+        isPending={isPending}
+        error={deleteError ? getDeleteError(deleteError) : null}
+      />
     </div>
   );
 };

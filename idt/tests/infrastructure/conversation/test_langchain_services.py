@@ -4,7 +4,7 @@ from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.domain.conversation.entities import ConversationMessage
-from src.domain.conversation.value_objects import MessageRole, SessionId, TurnIndex, UserId
+from src.domain.conversation.value_objects import AgentId, MessageRole, SessionId, TurnIndex, UserId
 
 
 def _make_message(turn: int, role: str, content: str) -> ConversationMessage:
@@ -12,6 +12,7 @@ def _make_message(turn: int, role: str, content: str) -> ConversationMessage:
         id=None,
         user_id=UserId("u-1"),
         session_id=SessionId("s-1"),
+        agent_id=AgentId.super(),
         role=MessageRole.USER if role == "user" else MessageRole.ASSISTANT,
         content=content,
         turn_index=TurnIndex(turn),

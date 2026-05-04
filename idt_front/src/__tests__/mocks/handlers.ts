@@ -268,4 +268,149 @@ export const handlers = [
       ],
     });
   }),
+
+  // AGENT-STORE: 내 에이전트 목록 (static path — must precede :agentId)
+  http.get(`*${API_ENDPOINTS.AGENT_STORE_MY}`, () =>
+    HttpResponse.json({
+      agents: [
+        {
+          agent_id: 'my-1',
+          name: '내 에이전트',
+          description: '내가 만든 에이전트',
+          source_type: 'owned',
+          visibility: 'private',
+          temperature: 0.5,
+          owner_user_id: 'user-me',
+          forked_from: null,
+          is_pinned: false,
+          created_at: '2026-04-20T10:00:00Z',
+        },
+      ],
+      total: 1,
+      page: 1,
+      size: 20,
+    }),
+  ),
+
+  // AGENT-STORE: 포크/구독 통계 (sub-path — must precede :agentId)
+  http.get('*/api/v1/agents/:agentId/forks', ({ params }) =>
+    HttpResponse.json({
+      agent_id: params.agentId as string,
+      fork_count: 5,
+      subscriber_count: 12,
+    }),
+  ),
+
+  // AGENT-STORE: 에이전트 목록
+  http.get(`*${API_ENDPOINTS.AGENT_STORE_LIST}`, ({ request }) => {
+    const url = new URL(request.url);
+    const search = url.searchParams.get('search');
+    const agents = [
+      {
+        agent_id: 'agent-1',
+        name: '문서 분석가',
+        description: '문서를 분석하는 AI 에이전트',
+        visibility: 'public',
+        department_name: null,
+        owner_user_id: 'user-1',
+        owner_email: 'owner@test.com',
+        temperature: 0.7,
+        can_edit: false,
+        can_delete: false,
+        created_at: '2026-04-20T10:00:00Z',
+      },
+      {
+        agent_id: 'agent-2',
+        name: '코드 리뷰어',
+        description: '코드를 리뷰하는 AI 에이전트',
+        visibility: 'public',
+        department_name: 'IT부서',
+        owner_user_id: 'user-2',
+        owner_email: 'dev@test.com',
+        temperature: 0.3,
+        can_edit: false,
+        can_delete: false,
+        created_at: '2026-04-21T10:00:00Z',
+      },
+    ];
+    const filtered = search
+      ? agents.filter((a) => a.name.includes(search))
+      : agents;
+    return HttpResponse.json({
+      agents: filtered,
+      total: filtered.length,
+      page: Number(url.searchParams.get('page') ?? '1'),
+      size: Number(url.searchParams.get('size') ?? '20'),
+    });
+  }),
+
+  // AGENT-STORE: 에이전트 상세
+  http.get('*/api/v1/agents/:agentId', ({ params }) =>
+    HttpResponse.json({
+      agent_id: params.agentId as string,
+      name: '문서 분석가',
+      description: '문서를 분석하는 AI 에이전트',
+      system_prompt: '당신은 문서 분석 전문가입니다.',
+      tool_ids: ['tool-1'],
+      workers: [
+        { tool_id: 'tool-1', worker_id: 'w-1', description: '검색 도구', sort_order: 1, tool_config: null },
+      ],
+      flow_hint: 'sequential',
+      llm_model_id: 'gpt-4o',
+      status: 'active',
+      visibility: 'public',
+      department_id: null,
+      department_name: null,
+      temperature: 0.7,
+      owner_user_id: 'user-1',
+      can_edit: true,
+      can_delete: true,
+      created_at: '2026-04-20T10:00:00Z',
+      updated_at: '2026-04-20T10:00:00Z',
+    }),
+  ),
+
+  // AGENT-STORE: 구독
+  http.post('*/api/v1/agents/:agentId/subscribe', ({ params }) =>
+    HttpResponse.json({
+      subscription_id: 'sub-1',
+      agent_id: params.agentId as string,
+      agent_name: '문서 분석가',
+      is_pinned: false,
+      subscribed_at: '2026-04-22T10:00:00Z',
+    }),
+  ),
+
+  // AGENT-STORE: 구독 해제
+  http.delete('*/api/v1/agents/:agentId/subscribe', () =>
+    new HttpResponse(null, { status: 204 }),
+  ),
+
+  // AGENT-SUBSCRIPTION: 구독 설정 변경 (pin toggle)
+  http.patch('*/api/v1/agents/:agentId/subscribe', async ({ params, request }) => {
+    const body = (await request.json()) as { is_pinned: boolean };
+    return HttpResponse.json({
+      subscription_id: 'sub-1',
+      agent_id: params.agentId as string,
+      agent_name: 'test',
+      is_pinned: body.is_pinned,
+      subscribed_at: '2026-05-01T00:00:00Z',
+    });
+  }),
+
+  // AGENT-STORE: 포크
+  http.post('*/api/v1/agents/:agentId/fork', ({ params }) =>
+    HttpResponse.json({
+      agent_id: 'forked-1',
+      name: '문서 분석가 (포크)',
+      forked_from: params.agentId as string,
+      forked_at: '2026-04-22T10:00:00Z',
+      system_prompt: '당신은 문서 분석 전문가입니다.',
+      workers: [],
+      visibility: 'private',
+      temperature: 0.7,
+      llm_model_id: 'gpt-4o',
+    }),
+  ),
+
 ];

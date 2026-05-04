@@ -1,74 +1,81 @@
 /**
  * ChatPage Integration Tests — Design §8.2.3
  *
- * I1: /chat 진입 시 Sidebar에 서버 세션 목록 렌더
- * I2: 세션 클릭 → MessageList에 해당 세션 메시지 렌더
- * I3: 메시지 전송 후 sidebar 세션 invalidate → 재조회 호출
- * I4: 비로그인 상태 → 세션 쿼리 disabled, 빈 상태 UI
- * I5: 세션 조회 실패 → Sidebar에 error banner + "다시 시도" 버튼 → retry 시 재요청
+ * Renders the full AgentChatLayout → ChatPage routing tree.
+ * Session management lives in AgentChatLayout; ChatPage consumes it via outlet context.
  */
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { vi, beforeAll, afterEach, afterAll, describe, it, expect } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter } from 'react-router-dom';
-import type { ReactNode } from 'react';
+import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { server } from '@/__tests__/mocks/server';
+import AgentChatLayout from '@/components/layout/AgentChatLayout';
 import ChatPage from '@/pages/ChatPage';
 
-// useAuthStore mock — same pattern as ChatPage.test.tsx:21-33
-// mutable so individual tests (I4) can simulate signed-out state
 const mockAuthState: {
-  user: { id: number } | null;
+  user: { id: number; email: string; role: string; status: string } | null;
   accessToken: string | null;
   refreshToken: string | null;
   updateAccessToken: ReturnType<typeof vi.fn>;
   logout: ReturnType<typeof vi.fn>;
 } = {
-  user: { id: 1 },
-  accessToken: null,
-  refreshToken: null,
+  user: { id: 1, email: 'test@test.com', role: 'user', status: 'approved' },
+  accessToken: 'test-token',
+  refreshToken: 'test-refresh',
   updateAccessToken: vi.fn(),
   logout: vi.fn(),
 };
+
 vi.mock('@/store/authStore', () => ({
   useAuthStore: Object.assign(
-    (selector: (state: typeof mockAuthState) => unknown) => selector(mockAuthState),
+    (selector?: (state: typeof mockAuthState) => unknown) =>
+      selector ? selector(mockAuthState) : mockAuthState,
     { getState: () => mockAuthState },
   ),
 }));
 
-// jsdom does not support scrollIntoView
+vi.mock('@/store/layoutStore', () => ({
+  useLayoutStore: () => ({
+    isChatPanelOpen: true,
+    selectedAgentId: 'super-ai',
+    toggleChatPanel: vi.fn(),
+    setChatPanelOpen: vi.fn(),
+    selectAgent: vi.fn(),
+  }),
+}));
+
 window.HTMLElement.prototype.scrollIntoView = vi.fn();
 
-const createTestWrapper = (queryClient?: QueryClient) => {
-  const qc = queryClient ?? new QueryClient({
+const renderChatApp = () => {
+  const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  const Wrapper = ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={qc}>
-      <MemoryRouter>{children}</MemoryRouter>
-    </QueryClientProvider>
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={['/chatpage']}>
+        <Routes>
+          <Route element={<AgentChatLayout />}>
+            <Route path="/chatpage" element={<ChatPage />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
-  Wrapper.displayName = 'TestWrapper';
-  return Wrapper;
 };
 
 beforeAll(() => server.listen());
 afterEach(() => {
   server.resetHandlers();
   vi.restoreAllMocks();
-  // restore default auth state between tests (I4 mutates it)
-  mockAuthState.user = { id: 1 };
+  mockAuthState.user = { id: 1, email: 'test@test.com', role: 'user', status: 'approved' };
 });
 afterAll(() => server.close());
 
 describe('ChatPage Integration (CHAT-HIST-001)', () => {
-  it('I1: /chat 진입 시 Sidebar에 서버 세션 2개가 렌더링된다', async () => {
-    render(<ChatPage />, { wrapper: createTestWrapper() });
+  it('I1: /chatpage 진입 시 ChatHistoryPanel에 서버 세션 2개가 렌더링된다', async () => {
+    renderChatApp();
 
-    // MSW default handler returns sessions s1='안녕', s2='이전 질문'
     await waitFor(() => {
       expect(screen.getByText('안녕')).toBeInTheDocument();
     });
@@ -76,20 +83,18 @@ describe('ChatPage Integration (CHAT-HIST-001)', () => {
   });
 
   it('I2: 사이드바 세션 클릭 시 이전 메시지가 MessageList에 렌더된다', async () => {
-    render(<ChatPage />, { wrapper: createTestWrapper() });
+    renderChatApp();
 
-    // Wait for sessions to load
     const sessionButton = await screen.findByText('안녕');
     fireEvent.click(sessionButton);
 
-    // MSW handler returns messages: '이전 질문입니다', '이전 답변입니다'
     await waitFor(() => {
       expect(screen.getByText('이전 질문입니다')).toBeInTheDocument();
     });
     expect(screen.getByText('이전 답변입니다')).toBeInTheDocument();
   });
 
-  it('I3: 새 메시지 전송 성공 → sessions endpoint 재조회 발생한다 (invalidation triggers refetch)', async () => {
+  it('I3: 새 메시지 전송 성공 → sessions endpoint 재조회 발생한다', async () => {
     let sessionsCallCount = 0;
 
     server.use(
@@ -112,7 +117,7 @@ describe('ChatPage Integration (CHAT-HIST-001)', () => {
       http.post('*/api/v1/chat', () =>
         HttpResponse.json({
           user_id: '1',
-          session_id: 'uuid-init-1',
+          session_id: 'server-session-1',
           answer: '테스트 답변입니다.',
           tools_used: [],
           sources: [],
@@ -122,29 +127,21 @@ describe('ChatPage Integration (CHAT-HIST-001)', () => {
       ),
     );
 
-    vi.spyOn(crypto, 'randomUUID')
-      .mockReturnValueOnce('uuid-init-1' as `${string}-${string}-${string}-${string}-${string}`)
-      .mockReturnValue('uuid-msg-id' as `${string}-${string}-${string}-${string}-${string}`);
+    renderChatApp();
 
-    render(<ChatPage />, { wrapper: createTestWrapper() });
-
-    // Wait for initial sessions load (call #1)
     await waitFor(() => expect(sessionsCallCount).toBeGreaterThanOrEqual(1));
     const callsAfterMount = sessionsCallCount;
 
-    // Send a message to trigger invalidation
     const textarea = screen.getByPlaceholderText('상플AI에게 메시지 보내기...');
     fireEvent.change(textarea, { target: { value: '새 메시지' } });
     fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
 
-    // After send success, invalidation should trigger a re-fetch (call count increases)
     await waitFor(() => {
       expect(sessionsCallCount).toBeGreaterThan(callsAfterMount);
     });
   });
 
   it('I4: 비로그인 상태에서는 히스토리 API 호출이 발생하지 않는다', async () => {
-    // Simulate signed-out user — selector will now see user: null
     mockAuthState.user = null;
 
     let sessionsCallCount = 0;
@@ -155,32 +152,28 @@ describe('ChatPage Integration (CHAT-HIST-001)', () => {
       }),
     );
 
-    render(<ChatPage />, { wrapper: createTestWrapper() });
+    renderChatApp();
 
-    // Give react-query a chance to run enabled check and confirm no fetch occurs
     await new Promise((resolve) => setTimeout(resolve, 200));
     expect(sessionsCallCount).toBe(0);
   });
 
-  it('I5: 500 에러 시 Sidebar에 에러 배너 + "다시 시도" 버튼이 표시된다', async () => {
+  it('I5: 500 에러 시 에러 배너 + "다시 시도" 버튼이 표시된다', async () => {
     server.use(
       http.get('*/api/v1/conversations/sessions', () =>
         HttpResponse.json({ detail: 'Internal Server Error' }, { status: 500 }),
       ),
     );
 
-    render(<ChatPage />, { wrapper: createTestWrapper() });
+    renderChatApp();
 
-    // Error banner should appear
     await waitFor(() => {
       expect(screen.getByText(/불러오지 못했습니다/)).toBeInTheDocument();
     });
 
-    // Retry button should be present
     const retryButton = screen.getByText('다시 시도');
     expect(retryButton).toBeInTheDocument();
 
-    // Click retry — should trigger another request
     let retryCallCount = 0;
     server.use(
       http.get('*/api/v1/conversations/sessions', ({ request }) => {

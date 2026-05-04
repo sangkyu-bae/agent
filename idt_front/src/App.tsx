@@ -9,6 +9,7 @@ import ToolConnectionPage from '@/pages/ToolConnectionPage';
 import ToolAdminPage from '@/pages/ToolAdminPage';
 import WorkflowDesignerPage from '@/pages/WorkflowDesignerPage';
 import WorkflowBuilderPage from '@/pages/WorkflowBuilderPage';
+import AgentStorePage from '@/pages/AgentStorePage';
 import CollectionPage from '@/pages/CollectionPage';
 import CollectionDocumentsPage from '@/pages/CollectionDocumentsPage';
 import LoginPage from '@/pages/LoginPage';
@@ -41,6 +42,7 @@ const App = () => (
           <Route path="/tool-admin" element={<ToolAdminPage />} />
           <Route path="/workflow-designer" element={<WorkflowDesignerPage />} />
           <Route path="/workflow-builder" element={<WorkflowBuilderPage />} />
+          <Route path="/agent-store" element={<AgentStorePage />} />
           <Route path="/collections" element={<CollectionPage />} />
           <Route path="/collections/:collectionName/documents" element={<CollectionDocumentsPage />} />
         </Route>

@@ -1,5 +1,69 @@
 export type AgentStatus = 'idle' | 'thinking' | 'tool_calling' | 'responding' | 'error';
 
+// ── Agent Subscription ──────────────────────────
+
+export type AgentSourceType = 'owned' | 'subscribed' | 'forked';
+export type AgentVisibility = 'private' | 'public';
+
+export interface MyAgent {
+  agent_id: string;
+  name: string;
+  description: string;
+  source_type: AgentSourceType;
+  visibility: AgentVisibility;
+  temperature: number;
+  owner_user_id: string;
+  forked_from: string | null;
+  is_pinned: boolean;
+  created_at: string;
+}
+
+export interface MyAgentsResponse {
+  agents: MyAgent[];
+  total: number;
+  page: number;
+  size: number;
+}
+
+export interface MyAgentsParams {
+  filter?: 'all' | AgentSourceType;
+  search?: string;
+  page?: number;
+  size?: number;
+}
+
+export interface SubscriptionResponse {
+  subscription_id: string;
+  agent_id: string;
+  agent_name: string;
+  is_pinned: boolean;
+  subscribed_at: string;
+}
+
+export interface UpdateSubscriptionRequest {
+  is_pinned: boolean;
+}
+
+export interface ForkAgentRequest {
+  name?: string;
+}
+
+export interface ForkAgentResponse {
+  agent_id: string;
+  name: string;
+  forked_from: string;
+  forked_at: string;
+  system_prompt: string;
+  workers: Array<{
+    name: string;
+    tool_type: string;
+    config: Record<string, unknown>;
+  }>;
+  visibility: AgentVisibility;
+  temperature: number;
+  llm_model_id: string;
+}
+
 export interface AgentRun {
   id: string;
   status: AgentStatus;
@@ -46,30 +110,3 @@ export interface AgentChatOutletContext {
   sessions: import('@/types/chat').ChatSession[];
 }
 
-export const MOCK_AGENTS: AgentSummary[] = [
-  {
-    id: 'super-ai',
-    name: 'SUPER AI Agent',
-    description: 'Auto-routing meta agent for all your agents',
-    category: '기본',
-    isDefault: true,
-  },
-  {
-    id: 'doc-rag',
-    name: '사내 문서 RAG 챗봇',
-    description: '업로드된 사내 문서를 기반으로 정보를 검색합니다',
-    category: '미분류',
-  },
-  {
-    id: 'trading-assistant',
-    name: 'AI 트레이딩 어시스턴트',
-    description: '시장 데이터, 기술적 분석, 뉴스 및 트렌드를 기반으로 투자 인사이트를 제공합니다',
-    category: '미분류',
-  },
-  {
-    id: 'doc-rag-2',
-    name: '사내 문서 RAG 챗봇',
-    description: '업로드된 사내 문서를 기반으로 정보를 검색합니다',
-    category: '미분류',
-  },
-];

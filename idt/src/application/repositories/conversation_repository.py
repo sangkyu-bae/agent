@@ -3,8 +3,8 @@ from abc import ABC, abstractmethod
 from typing import List, Optional
 
 from src.domain.conversation.entities import ConversationMessage, MessageId
-from src.domain.conversation.history_schemas import SessionSummary
-from src.domain.conversation.value_objects import UserId, SessionId
+from src.domain.conversation.history_schemas import AgentChatSummary, SessionSummary
+from src.domain.conversation.value_objects import AgentId, UserId, SessionId
 
 
 class ConversationMessageRepository(ABC):
@@ -79,6 +79,20 @@ class ConversationMessageRepository(ABC):
         Returns:
             List of SessionSummary sorted by last_message_at desc.
         """
+        pass
+
+    @abstractmethod
+    async def find_agents_by_user(
+        self, user_id: UserId
+    ) -> List[AgentChatSummary]:
+        """Return agent summaries with chat history for a user, newest-first."""
+        pass
+
+    @abstractmethod
+    async def find_sessions_by_user_and_agent(
+        self, user_id: UserId, agent_id: AgentId
+    ) -> List[SessionSummary]:
+        """Return session summaries for a user+agent, newest-first."""
         pass
 
     @abstractmethod

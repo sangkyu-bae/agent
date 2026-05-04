@@ -10,6 +10,9 @@ from src.application.agent_builder.schemas import (
     AvailableToolsResponse,
     CreateAgentRequest,
     CreateAgentResponse,
+    ForkAgentRequest,
+    ForkAgentResponse,
+    ForkStatsResponse,
     GetAgentResponse,
     InterviewAnswerRequest,
     InterviewAnswerResponse,
@@ -18,11 +21,14 @@ from src.application.agent_builder.schemas import (
     InterviewStartResponse,
     ListAgentsRequest,
     ListAgentsResponse,
+    ListMyAgentsResponse,
     RunAgentRequest,
     RunAgentResponse,
+    SubscribeResponse,
     ToolMetaResponse,
     UpdateAgentRequest,
     UpdateAgentResponse,
+    UpdateSubscriptionRequest,
     WorkerInfo,
 )
 
@@ -60,6 +66,18 @@ def get_list_agents_use_case():
 
 
 def get_delete_agent_use_case():
+    raise NotImplementedError
+
+
+def get_subscribe_use_case():
+    raise NotImplementedError
+
+
+def get_fork_agent_use_case():
+    raise NotImplementedError
+
+
+def get_list_my_agents_use_case():
     raise NotImplementedError
 
 
@@ -139,6 +157,27 @@ async def create_agent(
     """에이전트 생성 (LLM이 도구 자동 선택 + 시스템 프롬프트 자동 생성)."""
     request_id = str(uuid.uuid4())
     return await use_case.execute(body, request_id)
+
+
+@router.get("/my", response_model=ListMyAgentsResponse)
+async def list_my_agents(
+    filter: str = Query("all", pattern="^(all|owned|subscribed|forked)$"),
+    search: str | None = Query(None),
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
+    use_case=Depends(get_list_my_agents_use_case),
+):
+    """내 에이전트 통합 목록 (소유+구독+포크)."""
+    request_id = str(uuid.uuid4())
+    return await use_case.execute(
+        user_id=str(current_user.id),
+        filter_type=filter,
+        search=search,
+        page=page,
+        size=size,
+        request_id=request_id,
+    )
 
 
 @router.get("/{agent_id}", response_model=GetAgentResponse)
@@ -283,3 +322,150 @@ async def finalize_interview(
         if "세션" in msg:
             raise HTTPException(status_code=404, detail=msg)
         raise HTTPException(status_code=422, detail=msg)
+
+
+# ── 구독 / 포크 엔드포인트 ──────────────────────────────────────
+
+
+@router.post(
+    "/{agent_id}/subscribe",
+    response_model=SubscribeResponse,
+    status_code=201,
+)
+async def subscribe_agent(
+    agent_id: str,
+    current_user: User = Depends(get_current_user),
+    use_case=Depends(get_subscribe_use_case),
+):
+    """에이전트 구독."""
+    request_id = str(uuid.uuid4())
+    try:
+        return await use_case.subscribe(
+            agent_id=agent_id,
+            user_id=str(current_user.id),
+            viewer_department_ids=current_user.department_ids
+            if hasattr(current_user, "department_ids")
+            else [],
+            request_id=request_id,
+        )
+    except PermissionError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="접근 권한 없음"
+        )
+    except ValueError as e:
+        msg = str(e)
+        if "이미 구독" in msg:
+            raise HTTPException(status_code=409, detail=msg)
+        if "자신의" in msg:
+            raise HTTPException(status_code=400, detail=msg)
+        raise HTTPException(status_code=404, detail=msg)
+
+
+@router.delete(
+    "/{agent_id}/subscribe",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def unsubscribe_agent(
+    agent_id: str,
+    current_user: User = Depends(get_current_user),
+    use_case=Depends(get_subscribe_use_case),
+):
+    """구독 해제."""
+    request_id = str(uuid.uuid4())
+    try:
+        await use_case.unsubscribe(
+            agent_id=agent_id,
+            user_id=str(current_user.id),
+            request_id=request_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.patch(
+    "/{agent_id}/subscribe",
+    response_model=SubscribeResponse,
+)
+async def update_subscription(
+    agent_id: str,
+    body: UpdateSubscriptionRequest,
+    current_user: User = Depends(get_current_user),
+    use_case=Depends(get_subscribe_use_case),
+):
+    """구독 설정 변경 (즐겨찾기)."""
+    request_id = str(uuid.uuid4())
+    try:
+        return await use_case.update_pin(
+            agent_id=agent_id,
+            user_id=str(current_user.id),
+            is_pinned=body.is_pinned,
+            request_id=request_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post(
+    "/{agent_id}/fork",
+    response_model=ForkAgentResponse,
+    status_code=201,
+)
+async def fork_agent(
+    agent_id: str,
+    body: ForkAgentRequest | None = None,
+    current_user: User = Depends(get_current_user),
+    use_case=Depends(get_fork_agent_use_case),
+):
+    """에이전트 포크 (전체 복사)."""
+    request_id = str(uuid.uuid4())
+    custom_name = body.name if body else None
+    try:
+        return await use_case.execute(
+            source_agent_id=agent_id,
+            user_id=str(current_user.id),
+            custom_name=custom_name,
+            viewer_department_ids=current_user.department_ids
+            if hasattr(current_user, "department_ids")
+            else [],
+            request_id=request_id,
+        )
+    except PermissionError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="접근 권한 없음"
+        )
+    except ValueError as e:
+        msg = str(e)
+        if "자신의" in msg:
+            raise HTTPException(status_code=400, detail=msg)
+        if "삭제된" in msg:
+            raise HTTPException(status_code=400, detail=msg)
+        raise HTTPException(status_code=404, detail=msg)
+
+
+@router.get(
+    "/{agent_id}/forks",
+    response_model=ForkStatsResponse,
+)
+async def get_fork_stats(
+    agent_id: str,
+    current_user: User = Depends(get_current_user),
+    use_case=Depends(get_list_my_agents_use_case),
+):
+    """포크 통계 (원본 소유자 전용)."""
+    from src.application.agent_builder.fork_agent_use_case import ForkAgentUseCase
+
+    request_id = str(uuid.uuid4())
+    agent_repo = use_case._agent_repo
+    agent = await agent_repo.find_by_id(agent_id, request_id)
+    if agent is None:
+        raise HTTPException(status_code=404, detail="에이전트를 찾을 수 없습니다")
+    if agent.user_id != str(current_user.id):
+        raise HTTPException(status_code=403, detail="원본 소유자만 조회 가능")
+
+    fork_count = await agent_repo.count_forks(agent_id, request_id)
+    subscriber_count = await agent_repo.count_subscribers(agent_id, request_id)
+    return ForkStatsResponse(
+        agent_id=agent_id,
+        fork_count=fork_count,
+        subscriber_count=subscriber_count,
+    )

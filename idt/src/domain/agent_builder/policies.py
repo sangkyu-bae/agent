@@ -112,6 +112,21 @@ class AgentBuilderPolicy:
             raise ValueError(f"name은 {cls.MAX_NAME_LENGTH}자를 초과할 수 없습니다.")
 
 
+class ForkPolicy:
+    @staticmethod
+    def can_fork(ctx: AccessCheckInput) -> bool:
+        """포크 가능 여부: 접근 가능 + 자신의 에이전트가 아닌 경우."""
+        if ctx.agent_owner_id == ctx.viewer_user_id:
+            return False
+        return VisibilityPolicy.can_access(ctx)
+
+    @staticmethod
+    def validate_source_status(status: str) -> None:
+        """삭제된 에이전트는 포크 불가."""
+        if status == "deleted":
+            raise ValueError("삭제된 에이전트는 포크할 수 없습니다.")
+
+
 class UpdateAgentPolicy:
     @classmethod
     def validate_update(cls, status: str, system_prompt: str | None) -> None:

@@ -158,6 +158,35 @@ export const CHUNK_TYPE_BADGE: Record<ChunkType, { label: string; color: string;
   semantic: { label: 'semantic', color: 'text-amber-600', bg: 'bg-amber-50' },
 };
 
+// ── 문서 삭제 관련 타입 ────────────────────────────
+export interface DeleteDocumentResponse {
+  document_id: string;
+  collection_name: string;
+  filename: string;
+  deleted_qdrant_chunks: number;
+  deleted_es_chunks: number;
+}
+
+export interface BatchDeleteDocumentsRequest {
+  document_ids: string[];
+}
+
+export interface BatchDeleteDocumentResult {
+  document_id: string;
+  status: 'deleted' | 'failed';
+  deleted_qdrant_chunks: number;
+  deleted_es_chunks: number;
+  filename: string;
+  error: string | null;
+}
+
+export interface BatchDeleteDocumentsResponse {
+  total: number;
+  success_count: number;
+  failure_count: number;
+  results: BatchDeleteDocumentResult[];
+}
+
 export const PROTECTED_COLLECTIONS = ['documents'] as const;
 
 export const DISTANCE_METRICS = ['Cosine', 'Euclid', 'Dot'] as const;

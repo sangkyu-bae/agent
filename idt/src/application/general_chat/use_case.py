@@ -16,7 +16,7 @@ from src.application.repositories.conversation_summary_repository import (
 )
 from src.domain.conversation.entities import ConversationMessage, ConversationSummary
 from src.domain.conversation.policies import SummarizationPolicy
-from src.domain.conversation.value_objects import MessageRole, SessionId, TurnIndex, UserId
+from src.domain.conversation.value_objects import AgentId, MessageRole, SessionId, TurnIndex, UserId
 from src.domain.general_chat.schemas import DocumentSource, GeneralChatRequest, GeneralChatResponse
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.infrastructure.langsmith.langsmith import langsmith
@@ -106,7 +106,7 @@ class GeneralChatUseCase:
             if self._policy.needs_summarization(history):
                 was_summarized = True
                 context_messages = await self._build_summarized_context(
-                    history, request.message, user_id, session_id, request_id
+                    history, request.message, user_id, session_id, AgentId.super(), request_id
                 )
             else:
                 context_messages = self._build_full_context(history, request.message)
@@ -125,10 +125,12 @@ class GeneralChatUseCase:
 
             # 7. 사용자 메시지 + AI 응답 DB 저장
             turn_base = len(history)
+            super_agent = AgentId.super()
             user_msg = ConversationMessage(
                 id=None,
                 user_id=user_id,
                 session_id=session_id,
+                agent_id=super_agent,
                 role=MessageRole.USER,
                 content=request.message,
                 turn_index=TurnIndex(turn_base + 1),
@@ -140,6 +142,7 @@ class GeneralChatUseCase:
                 id=None,
                 user_id=user_id,
                 session_id=session_id,
+                agent_id=super_agent,
                 role=MessageRole.ASSISTANT,
                 content=answer,
                 turn_index=TurnIndex(turn_base + 2),
@@ -175,6 +178,7 @@ class GeneralChatUseCase:
         new_message: str,
         user_id: UserId,
         session_id: SessionId,
+        agent_id: AgentId,
         request_id: str,
     ) -> list:
         """오래된 턴 요약 → 저장 → (SystemMessage(요약) + 최근 3턴 + 새 메시지)."""
@@ -187,6 +191,7 @@ class GeneralChatUseCase:
             id=None,
             user_id=user_id,
             session_id=session_id,
+            agent_id=agent_id,
             summary_content=summary_text,
             start_turn=start_turn,
             end_turn=end_turn,

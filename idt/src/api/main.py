@@ -81,6 +81,9 @@ from src.api.routes.agent_builder_router import (
     get_list_agents_use_case,
     get_delete_agent_use_case,
     get_load_mcp_tools_use_case,
+    get_subscribe_use_case,
+    get_fork_agent_use_case,
+    get_list_my_agents_use_case,
 )
 from src.api.routes.rag_tool_router import (
     router as rag_tool_router,
@@ -141,9 +144,11 @@ from src.api.routes.doc_browse_router import (
     router as doc_browse_router,
     get_list_documents_use_case,
     get_chunks_use_case,
+    get_delete_document_use_case,
 )
 from src.application.doc_browse.list_documents_use_case import ListDocumentsUseCase
 from src.application.doc_browse.get_chunks_use_case import GetChunksUseCase
+from src.application.doc_browse.delete_document_use_case import DeleteDocumentUseCase
 from src.api.routes.excel_export_router import (
     router as excel_export_router,
     get_excel_export_use_case as get_excel_export_uc,
@@ -173,6 +178,10 @@ from src.application.agent_builder.interviewer import Interviewer
 from src.application.agent_builder.interview_session_store import InMemoryInterviewSessionStore
 from src.application.agent_builder.list_agents_use_case import ListAgentsUseCase
 from src.application.agent_builder.delete_agent_use_case import DeleteAgentUseCase
+from src.application.agent_builder.subscribe_use_case import SubscribeUseCase
+from src.application.agent_builder.fork_agent_use_case import ForkAgentUseCase
+from src.application.agent_builder.list_my_agents_use_case import ListMyAgentsUseCase
+from src.application.agent_builder.auto_fork_service import AutoForkService
 from src.application.department.create_department_use_case import CreateDepartmentUseCase
 from src.application.department.list_departments_use_case import ListDepartmentsUseCase
 from src.application.department.update_department_use_case import UpdateDepartmentUseCase
@@ -182,6 +191,7 @@ from src.application.department.remove_user_department_use_case import RemoveUse
 from src.application.tool_catalog.list_tool_catalog_use_case import ListToolCatalogUseCase
 from src.application.tool_catalog.sync_mcp_tools_use_case import SyncMcpToolsUseCase
 from src.infrastructure.agent_builder.agent_definition_repository import AgentDefinitionRepository
+from src.infrastructure.agent_builder.subscription_repository import SubscriptionRepository
 from src.infrastructure.department.department_repository import DepartmentRepository
 from src.infrastructure.tool_catalog.tool_catalog_repository import ToolCatalogRepository
 from src.infrastructure.agent_builder.tool_factory import ToolFactory
@@ -1135,7 +1145,10 @@ def create_history_use_case_factory():
         session: AsyncSession = Depends(get_session),
     ) -> ConversationHistoryUseCase:
         repo = SQLAlchemyConversationMessageRepository(session)
-        return ConversationHistoryUseCase(repo=repo, logger=app_logger)
+        agent_repo = MiddlewareAgentRepository(session=session)
+        return ConversationHistoryUseCase(
+            repo=repo, logger=app_logger, agent_repo=agent_repo
+        )
 
     return _factory
 
@@ -1291,13 +1304,45 @@ def create_agent_builder_factories():
             logger=app_logger,
         )
 
+    def _make_sub_repo(session: AsyncSession):
+        return SubscriptionRepository(session=session, logger=app_logger)
+
     def delete_uc_factory(session: AsyncSession = Depends(get_session)):
-        return DeleteAgentUseCase(repository=_make_repo(session), logger=app_logger)
+        return DeleteAgentUseCase(
+            repository=_make_repo(session),
+            logger=app_logger,
+            auto_fork_service=AutoForkService(
+                agent_repo=_make_repo(session),
+                subscription_repo=_make_sub_repo(session),
+                logger=app_logger,
+            ),
+        )
+
+    def subscribe_uc_factory(session: AsyncSession = Depends(get_session)):
+        return SubscribeUseCase(
+            agent_repo=_make_repo(session),
+            subscription_repo=_make_sub_repo(session),
+            logger=app_logger,
+        )
+
+    def fork_uc_factory(session: AsyncSession = Depends(get_session)):
+        return ForkAgentUseCase(
+            agent_repo=_make_repo(session),
+            logger=app_logger,
+        )
+
+    def list_my_uc_factory(session: AsyncSession = Depends(get_session)):
+        return ListMyAgentsUseCase(
+            agent_repo=_make_repo(session),
+            subscription_repo=_make_sub_repo(session),
+            logger=app_logger,
+        )
 
     return (
         create_uc_factory, update_uc_factory, run_uc_factory,
         get_uc_factory, interview_uc_factory,
         list_uc_factory, delete_uc_factory,
+        subscribe_uc_factory, fork_uc_factory, list_my_uc_factory,
     )
 
 
@@ -1734,6 +1779,7 @@ def create_app() -> FastAPI:
     (
         _create_uc, _update_uc, _run_uc, _get_uc, _interview_uc,
         _list_agents_uc, _delete_agent_uc,
+        _subscribe_uc, _fork_uc, _list_my_uc,
     ) = create_agent_builder_factories()
     app.dependency_overrides[get_create_agent_use_case] = _create_uc
     app.dependency_overrides[get_update_agent_use_case] = _update_uc
@@ -1742,6 +1788,9 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_interview_use_case] = _interview_uc
     app.dependency_overrides[get_list_agents_use_case] = _list_agents_uc
     app.dependency_overrides[get_delete_agent_use_case] = _delete_agent_uc
+    app.dependency_overrides[get_subscribe_use_case] = _subscribe_uc
+    app.dependency_overrides[get_fork_agent_use_case] = _fork_uc
+    app.dependency_overrides[get_list_my_agents_use_case] = _list_my_uc
     app.dependency_overrides[get_load_mcp_tools_use_case] = create_load_mcp_tools_factory()
 
     # Department DI
@@ -1886,8 +1935,58 @@ def create_app() -> FastAPI:
             logger=StructuredLogger("doc_browse.chunks"),
         )
 
+    def _delete_document_uc_factory(
+        session: AsyncSession = Depends(get_session),
+    ):
+        from src.infrastructure.doc_browse.document_metadata_repository import DocumentMetadataRepository
+        from src.infrastructure.collection.activity_log_repository import ActivityLogRepository
+        from src.infrastructure.collection.permission_repository import CollectionPermissionRepository
+        from src.infrastructure.department.department_repository import DepartmentRepository
+        from src.application.collection.permission_service import CollectionPermissionService
+        from src.application.collection.activity_log_service import ActivityLogService
+        from src.domain.collection.permission_policy import CollectionPermissionPolicy
+        from src.domain.doc_browse.policies import DocumentDeletePolicy
+
+        metadata_repo = DocumentMetadataRepository(
+            session=session,
+            logger=StructuredLogger("doc_browse.metadata_repo"),
+        )
+        log_repo = ActivityLogRepository(session, StructuredLogger("doc_browse.activity_log"))
+        log_service = ActivityLogService(log_repo, StructuredLogger("doc_browse.activity_log"))
+        perm_repo = CollectionPermissionRepository(session, StructuredLogger("doc_browse.perm"))
+        dept_repo = DepartmentRepository(session, StructuredLogger("doc_browse.dept"))
+        perm_service = CollectionPermissionService(
+            perm_repo=perm_repo,
+            dept_repo=dept_repo,
+            policy=CollectionPermissionPolicy(),
+            logger=StructuredLogger("doc_browse.perm_service"),
+        )
+
+        es_config_local = ElasticsearchConfig(
+            ES_HOST=settings.es_host,
+            ES_PORT=settings.es_port,
+            ES_SCHEME=settings.es_scheme,
+        )
+        es_client_local = ElasticsearchClient.from_config(es_config_local)
+        es_repo_local = ElasticsearchRepository(client=es_client_local, logger=StructuredLogger("doc_browse.es"))
+
+        return DeleteDocumentUseCase(
+            document_metadata_repo=metadata_repo,
+            qdrant_client=AsyncQdrantClient(
+                host=settings.qdrant_host,
+                port=settings.qdrant_port,
+            ),
+            es_repo=es_repo_local,
+            es_index=settings.es_index,
+            permission_service=perm_service,
+            activity_log_service=log_service,
+            policy=DocumentDeletePolicy(),
+            logger=StructuredLogger("doc_browse.delete"),
+        )
+
     app.dependency_overrides[get_list_documents_use_case] = _list_documents_uc_factory
     app.dependency_overrides[get_chunks_use_case] = _get_chunks_uc_factory
+    app.dependency_overrides[get_delete_document_use_case] = _delete_document_uc_factory
 
     # Include routers
     app.include_router(document_router)
