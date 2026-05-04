@@ -31,6 +31,10 @@ class AgentDefinitionModel(Base):
         nullable=True,
     )
     temperature: Mapped[float] = mapped_column(nullable=False, default=0.70)
+    forked_from: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, index=True
+    )
+    forked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 

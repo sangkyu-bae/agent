@@ -51,6 +51,20 @@ export const API_ENDPOINTS = {
   AUTH_LOGOUT: '/api/v1/auth/logout',
   AUTH_ME: '/api/v1/auth/me',
 
+  // Agent Subscription (legacy — used by agentSubscriptionService)
+  AGENT_MY: '/api/v1/agents/my',
+  AGENT_SUBSCRIBE: (agentId: string) => `/api/v1/agents/${agentId}/subscribe`,
+  AGENT_FORK: (agentId: string) => `/api/v1/agents/${agentId}/fork`,
+  AGENT_FORK_STATS: (agentId: string) => `/api/v1/agents/${agentId}/forks`,
+
+  // Agent Store
+  AGENT_STORE_LIST: '/api/v1/agents',
+  AGENT_STORE_DETAIL: (agentId: string) => `/api/v1/agents/${agentId}`,
+  AGENT_STORE_SUBSCRIBE: (agentId: string) => `/api/v1/agents/${agentId}/subscribe`,
+  AGENT_STORE_FORK: (agentId: string) => `/api/v1/agents/${agentId}/fork`,
+  AGENT_STORE_MY: '/api/v1/agents/my',
+  AGENT_STORE_FORK_STATS: (agentId: string) => `/api/v1/agents/${agentId}/forks`,
+
   // RAG Tools (Custom RAG Config)
   RAG_TOOL_COLLECTIONS: '/api/v1/rag-tools/collections',
   RAG_TOOL_METADATA_KEYS: '/api/v1/rag-tools/metadata-keys',
@@ -80,6 +94,10 @@ export const API_ENDPOINTS = {
     `/api/v1/collections/${name}/search`,
   COLLECTION_SEARCH_HISTORY: (name: string) =>
     `/api/v1/collections/${name}/search-history`,
+  COLLECTION_DOCUMENT_DELETE: (name: string, documentId: string) =>
+    `/api/v1/collections/${name}/documents/${documentId}`,
+  COLLECTION_DOCUMENTS_BATCH_DELETE: (name: string) =>
+    `/api/v1/collections/${name}/documents`,
   COLLECTION_ACTIVITY_LOG: '/api/v1/collections/activity-log',
   COLLECTION_ACTIVITY_LOG_BY_NAME: (name: string) =>
     `/api/v1/collections/${name}/activity-log`,

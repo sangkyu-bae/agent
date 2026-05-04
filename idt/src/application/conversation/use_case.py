@@ -24,7 +24,7 @@ from src.application.repositories.conversation_summary_repository import (
 from src.domain.conversation.entities import ConversationMessage, ConversationSummary
 from src.domain.conversation.policies import SummarizationPolicy
 from src.domain.conversation.schemas import ConversationChatRequest, ConversationChatResponse
-from src.domain.conversation.value_objects import MessageRole, SessionId, TurnIndex, UserId
+from src.domain.conversation.value_objects import AgentId, MessageRole, SessionId, TurnIndex, UserId
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 
 
@@ -72,6 +72,7 @@ class ConversationUseCase:
         try:
             user_id = UserId(request.user_id)
             session_id = SessionId(request.session_id)
+            agent_id = AgentId(request.agent_id)
 
             # 1. 기존 메시지 조회
             existing = await self._msg_repo.find_by_session(user_id, session_id)
@@ -82,6 +83,7 @@ class ConversationUseCase:
                 id=None,
                 user_id=user_id,
                 session_id=session_id,
+                agent_id=agent_id,
                 role=MessageRole.USER,
                 content=request.message,
                 turn_index=user_turn,
@@ -94,7 +96,7 @@ class ConversationUseCase:
             if self._policy.needs_summarization(existing):
                 was_summarized = True
                 context = await self._build_summarized_context(
-                    existing, request.message, user_id, session_id, request_id
+                    existing, request.message, user_id, session_id, agent_id, request_id
                 )
             else:
                 context = self._build_full_context(existing, request.message)
@@ -108,6 +110,7 @@ class ConversationUseCase:
                 id=None,
                 user_id=user_id,
                 session_id=session_id,
+                agent_id=agent_id,
                 role=MessageRole.ASSISTANT,
                 content=answer,
                 turn_index=assistant_turn,
@@ -139,6 +142,7 @@ class ConversationUseCase:
         new_message: str,
         user_id: UserId,
         session_id: SessionId,
+        agent_id: AgentId,
         request_id: str,
     ) -> list[dict]:
         """요약 컨텍스트 구성: 오래된 턴 요약 → 저장 → (요약 + 최근 3턴 + 새 메시지)."""
@@ -151,6 +155,7 @@ class ConversationUseCase:
             id=None,
             user_id=user_id,
             session_id=session_id,
+            agent_id=agent_id,
             summary_content=summary_text,
             start_turn=start_turn,
             end_turn=end_turn,

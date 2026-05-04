@@ -51,6 +51,9 @@ export const queryKeys = {
     /** 특정 Agent 실행 상태 */
     run: (runId: string) =>
       [...queryKeys.agent.all, 'run', runId] as const,
+    /** 내 에이전트 통합 목록 */
+    my: (params?: import('@/types/agent').MyAgentsParams) =>
+      [...queryKeys.agent.all, 'my', params] as const,
   },
 
   // ── Auth ───────────────────────────────────────────────
@@ -106,6 +109,19 @@ export const queryKeys = {
       [...queryKeys.collections.all, 'chunks', name, documentId, params] as const,
     searchHistory: (name: string, params?: { limit?: number; offset?: number }) =>
       [...queryKeys.collections.all, 'searchHistory', name, params] as const,
+  },
+
+  // ── Agent Store ────────────────────────────────────────
+  agentStore: {
+    all: ['agentStore'] as const,
+    list: (params: import('@/types/agentStore').AgentListParams) =>
+      [...queryKeys.agentStore.all, 'list', params] as const,
+    detail: (agentId: string) =>
+      [...queryKeys.agentStore.all, 'detail', agentId] as const,
+    my: (params: import('@/types/agentStore').MyAgentListParams) =>
+      [...queryKeys.agentStore.all, 'my', params] as const,
+    forkStats: (agentId: string) =>
+      [...queryKeys.agentStore.all, 'forkStats', agentId] as const,
   },
 
   // ── Admin ──────────────────────────────────────────────

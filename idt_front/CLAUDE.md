@@ -493,6 +493,8 @@ npm run coverage     # 커버리지 리포트 생성
 | AGENT-001 | src/claude/task/task-agent-builder.md | 에이전트 만들기 페이지 (Mock 완료 / API 연동 예정) |
 | TOOL-ADMIN-001 | src/claude/task/task-tool-admin.md | 도구 관리 어드민 페이지 (Mock 완료 / API 연동 예정) |
 | AUTH-001 | docs/01-plan/features/auth.plan.md | JWT 인증 + 관리자 승인 흐름 (Design 완료 / 구현 예정) |
+| DOC-DEL-001 | docs/01-plan/features/document-delete-api.plan.md | 컬렉션 문서 삭제 API 연동 (Design 완료 / 구현 예정) |
+| AGENT-STORE-001 | docs/01-plan/features/agent-store.plan.md | 에이전트 스토어 마켓플레이스 (구현 완료) |
 
 ### 완료된 주요 파일 참조
 
@@ -548,3 +550,12 @@ npm run coverage     # 커버리지 리포트 생성
 | **훅** | `src/hooks/useAuth.ts` | useLogin, useLogout, useRegister, useMe, useInitAuth |
 | **컴포넌트** | `src/components/common/ProtectedRoute.tsx` | 비인증 시 /login 리다이렉트 |
 | **컴포넌트** | `src/components/common/AdminRoute.tsx` | 비admin 시 / 리다이렉트 |
+| **컴포넌트** | `src/components/common/ConfirmDialog.tsx` | 공통 확인 다이얼로그 (variant: danger/warning/info) |
+| **타입** | `src/types/agentStore.ts` | StoreAgentSummary, AgentDetail, SubscribeResponse, ForkAgentResponse 등 |
+| **서비스** | `src/services/agentStoreService.ts` | 에이전트 스토어 API (목록, 상세, 구독, 포크, 등록) |
+| **훅** | `src/hooks/useAgentStore.ts` | useAgentList, useAgentDetail, useMyAgents, useSubscribeAgent, useForkAgent 등 |
+| **UI** | `src/pages/AgentStorePage/index.tsx` | 에이전트 스토어 페이지 (카드 그리드 + 검색 + 탭 + 페이지네이션) |
+| **컴포넌트** | `src/components/agent-store/AgentStoreCard.tsx` | 에이전트 카드 (아바타, 구독/포크 버튼) |
+| **컴포넌트** | `src/components/agent-store/AgentStoreTab.tsx` | 탭 네비게이션 (전체공개/부서별/내에이전트) |
+| **컴포넌트** | `src/components/agent-store/AgentDetailModal.tsx` | 에이전트 상세 팝업 (프롬프트, 도구, 통계) |
+| **컴포넌트** | `src/components/agent-store/PublishAgentModal.tsx` | 내 에이전트 공개 등록 모달 |

@@ -6,6 +6,7 @@ import pytest
 
 from src.domain.conversation.entities import ConversationMessage, MessageId
 from src.domain.conversation.value_objects import (
+    AgentId,
     MessageRole,
     SessionId,
     TurnIndex,
@@ -38,6 +39,7 @@ def _msg(turn: int, role: str, content: str, msg_id: int = None) -> Conversation
         id=MessageId(msg_id) if msg_id else None,
         user_id=UserId("u-1"),
         session_id=SessionId("s-1"),
+        agent_id=AgentId.super(),
         role=MessageRole.USER if role == "user" else MessageRole.ASSISTANT,
         content=content,
         turn_index=TurnIndex(turn),

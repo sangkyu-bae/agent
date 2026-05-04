@@ -176,3 +176,67 @@ class ListAgentsResponse(BaseModel):
     total: int
     page: int
     size: int
+
+
+# ── Subscription / Fork / My Agents ──────────────────────────────
+
+
+class SubscribeResponse(BaseModel):
+    subscription_id: str
+    agent_id: str
+    agent_name: str
+    is_pinned: bool
+    subscribed_at: str
+
+
+class UpdateSubscriptionRequest(BaseModel):
+    is_pinned: bool
+
+
+class ForkAgentRequest(BaseModel):
+    name: str | None = Field(None, max_length=200)
+
+
+class ForkAgentResponse(BaseModel):
+    agent_id: str
+    name: str
+    forked_from: str
+    forked_at: str
+    system_prompt: str
+    workers: list[WorkerInfo]
+    visibility: str
+    temperature: float
+    llm_model_id: str
+
+
+class MyAgentSummary(BaseModel):
+    agent_id: str
+    name: str
+    description: str
+    source_type: str
+    visibility: str
+    temperature: float
+    owner_user_id: str
+    forked_from: str | None = None
+    is_pinned: bool = False
+    created_at: str
+
+
+class ListMyAgentsRequest(BaseModel):
+    filter: str = Field("all", pattern="^(all|owned|subscribed|forked)$")
+    search: str | None = None
+    page: int = Field(1, ge=1)
+    size: int = Field(20, ge=1, le=100)
+
+
+class ListMyAgentsResponse(BaseModel):
+    agents: list[MyAgentSummary]
+    total: int
+    page: int
+    size: int
+
+
+class ForkStatsResponse(BaseModel):
+    agent_id: str
+    fork_count: int
+    subscriber_count: int

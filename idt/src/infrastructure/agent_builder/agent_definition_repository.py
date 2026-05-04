@@ -10,6 +10,7 @@ from src.domain.agent_builder.interfaces import AgentDefinitionRepositoryInterfa
 from src.domain.agent_builder.schemas import AgentDefinition, WorkerDefinition
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.infrastructure.agent_builder.models import AgentDefinitionModel, AgentToolModel
+from src.infrastructure.agent_builder.subscription_model import UserAgentSubscriptionModel
 
 
 class AgentDefinitionRepository(AgentDefinitionRepositoryInterface):
@@ -34,6 +35,8 @@ class AgentDefinitionRepository(AgentDefinitionRepositoryInterface):
                 visibility=agent.visibility,
                 department_id=agent.department_id,
                 temperature=agent.temperature,
+                forked_from=agent.forked_from,
+                forked_at=agent.forked_at,
                 created_at=agent.created_at,
                 updated_at=agent.updated_at,
                 tools=[
@@ -205,6 +208,34 @@ class AgentDefinitionRepository(AgentDefinitionRepositoryInterface):
             )
             raise
 
+    async def find_by_id_with_status(
+        self, agent_id: str, request_id: str
+    ) -> AgentDefinition | None:
+        """삭제된 에이전트 포함 조회."""
+        self._logger.info(
+            "AgentDefinition find_by_id_with_status",
+            request_id=request_id,
+            agent_id=agent_id,
+        )
+        try:
+            stmt = (
+                select(AgentDefinitionModel)
+                .options(selectinload(AgentDefinitionModel.tools))
+                .where(AgentDefinitionModel.id == agent_id)
+            )
+            result = await self._session.execute(stmt)
+            model = result.scalar_one_or_none()
+            if model is None:
+                return None
+            return self._to_domain(model)
+        except Exception as e:
+            self._logger.error(
+                "AgentDefinition find_by_id_with_status failed",
+                exception=e,
+                request_id=request_id,
+            )
+            raise
+
     async def soft_delete(self, agent_id: str, request_id: str) -> None:
         self._logger.info(
             "AgentDefinition soft_delete", request_id=request_id, agent_id=agent_id
@@ -221,6 +252,45 @@ class AgentDefinitionRepository(AgentDefinitionRepositoryInterface):
             self._logger.error(
                 "AgentDefinition soft_delete failed",
                 exception=e, request_id=request_id,
+            )
+            raise
+
+    async def count_forks(self, source_agent_id: str, request_id: str) -> int:
+        self._logger.info(
+            "AgentDefinition count_forks",
+            request_id=request_id,
+            agent_id=source_agent_id,
+        )
+        try:
+            stmt = select(func.count()).where(
+                AgentDefinitionModel.forked_from == source_agent_id,
+                AgentDefinitionModel.status != "deleted",
+            )
+            return (await self._session.execute(stmt)).scalar_one()
+        except Exception as e:
+            self._logger.error(
+                "AgentDefinition count_forks failed",
+                exception=e,
+                request_id=request_id,
+            )
+            raise
+
+    async def count_subscribers(self, agent_id: str, request_id: str) -> int:
+        self._logger.info(
+            "AgentDefinition count_subscribers",
+            request_id=request_id,
+            agent_id=agent_id,
+        )
+        try:
+            stmt = select(func.count()).where(
+                UserAgentSubscriptionModel.agent_id == agent_id
+            )
+            return (await self._session.execute(stmt)).scalar_one()
+        except Exception as e:
+            self._logger.error(
+                "AgentDefinition count_subscribers failed",
+                exception=e,
+                request_id=request_id,
             )
             raise
 
@@ -247,6 +317,8 @@ class AgentDefinitionRepository(AgentDefinitionRepositoryInterface):
             visibility=model.visibility,
             department_id=model.department_id,
             temperature=model.temperature,
+            forked_from=model.forked_from,
+            forked_at=model.forked_at,
             created_at=model.created_at,
             updated_at=model.updated_at,
         )

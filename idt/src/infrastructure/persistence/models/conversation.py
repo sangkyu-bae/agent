@@ -21,6 +21,7 @@ class ConversationMessageModel(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[str] = mapped_column(String(255), nullable=False)
     session_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    agent_id: Mapped[str] = mapped_column(String(36), nullable=False, default="super")
     role: Mapped[str] = mapped_column(String(20), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     turn_index: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -28,6 +29,7 @@ class ConversationMessageModel(Base):
 
     __table_args__ = (
         Index("ix_message_user_session", "user_id", "session_id"),
+        Index("ix_message_user_agent", "user_id", "agent_id"),
     )
 
 
@@ -42,6 +44,7 @@ class ConversationSummaryModel(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[str] = mapped_column(String(255), nullable=False)
     session_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    agent_id: Mapped[str] = mapped_column(String(36), nullable=False, default="super")
     summary_content: Mapped[str] = mapped_column(Text, nullable=False)
     start_turn: Mapped[int] = mapped_column(Integer, nullable=False)
     end_turn: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -49,4 +52,5 @@ class ConversationSummaryModel(Base):
 
     __table_args__ = (
         Index("ix_summary_user_session", "user_id", "session_id"),
+        Index("ix_summary_user_agent", "user_id", "agent_id"),
     )

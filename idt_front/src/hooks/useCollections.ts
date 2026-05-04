@@ -122,3 +122,27 @@ export const useSearchHistory = (
     queryFn: () => collectionService.getSearchHistory(collectionName, params),
     enabled: !!collectionName,
   });
+
+export const useDeleteDocument = () =>
+  useMutation({
+    mutationFn: ({ collectionName, documentId }: {
+      collectionName: string;
+      documentId: string;
+    }) => collectionService.deleteDocument(collectionName, documentId),
+    onSuccess: (_, { collectionName }) =>
+      queryClient.invalidateQueries({
+        queryKey: [...queryKeys.collections.all, 'documents', collectionName],
+      }),
+  });
+
+export const useDeleteDocuments = () =>
+  useMutation({
+    mutationFn: ({ collectionName, documentIds }: {
+      collectionName: string;
+      documentIds: string[];
+    }) => collectionService.deleteDocuments(collectionName, { document_ids: documentIds }),
+    onSuccess: (_, { collectionName }) =>
+      queryClient.invalidateQueries({
+        queryKey: [...queryKeys.collections.all, 'documents', collectionName],
+      }),
+  });

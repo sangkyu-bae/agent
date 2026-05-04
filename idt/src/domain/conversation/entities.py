@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Optional
 
 from src.domain.conversation.value_objects import (
+    AgentId,
     UserId,
     SessionId,
     TurnIndex,
@@ -47,6 +48,7 @@ class ConversationMessage:
     id: Optional[MessageId]
     user_id: UserId
     session_id: SessionId
+    agent_id: AgentId
     role: MessageRole
     content: str
     turn_index: TurnIndex
@@ -68,6 +70,7 @@ class ConversationSummary:
     id: Optional[SummaryId]
     user_id: UserId
     session_id: SessionId
+    agent_id: AgentId
     summary_content: str
     start_turn: TurnIndex
     end_turn: TurnIndex

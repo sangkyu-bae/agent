@@ -18,6 +18,9 @@ import type {
   CollectionSearchRequest,
   CollectionSearchResponse,
   SearchHistoryResponse,
+  DeleteDocumentResponse,
+  BatchDeleteDocumentsRequest,
+  BatchDeleteDocumentsResponse,
 } from '@/types/collection';
 
 export const collectionService = {
@@ -138,6 +141,27 @@ export const collectionService = {
     const res = await authApiClient.get<SearchHistoryResponse>(
       API_ENDPOINTS.COLLECTION_SEARCH_HISTORY(collectionName),
       { params },
+    );
+    return res.data;
+  },
+
+  deleteDocument: async (
+    collectionName: string,
+    documentId: string,
+  ): Promise<DeleteDocumentResponse> => {
+    const res = await authApiClient.delete<DeleteDocumentResponse>(
+      API_ENDPOINTS.COLLECTION_DOCUMENT_DELETE(collectionName, documentId),
+    );
+    return res.data;
+  },
+
+  deleteDocuments: async (
+    collectionName: string,
+    data: BatchDeleteDocumentsRequest,
+  ): Promise<BatchDeleteDocumentsResponse> => {
+    const res = await authApiClient.delete<BatchDeleteDocumentsResponse>(
+      API_ENDPOINTS.COLLECTION_DOCUMENTS_BATCH_DELETE(collectionName),
+      { data },
     );
     return res.data;
   },

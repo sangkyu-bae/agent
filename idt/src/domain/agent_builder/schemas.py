@@ -62,6 +62,8 @@ class AgentDefinition:
     department_id: str | None = None
     temperature: float = 0.70
     llm_model: LlmModel | None = None
+    forked_from: str | None = None
+    forked_at: datetime | None = None
 
     def __post_init__(self) -> None:
         if not (0.0 <= self.temperature <= 2.0):

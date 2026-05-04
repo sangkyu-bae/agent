@@ -1,12 +1,16 @@
+import { useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { useLogout } from '@/hooks/useAuth';
-import type { AgentSummary } from '@/types/agent';
+import type { MyAgent } from '@/types/agent';
 
 interface AppSidebarProps {
-  agents: AgentSummary[];
+  agents: MyAgent[];
   selectedAgentId: string | null;
   onSelectAgent: (id: string) => void;
+  isLoading?: boolean;
+  isError?: boolean;
+  onRetry?: () => void;
 }
 
 const NAV_ITEMS = [
@@ -24,15 +28,43 @@ const BOTTOM_ITEMS = [
   { label: '환경설정', path: '/settings', iconPath: 'M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28ZM15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z' },
 ];
 
+const GROUP_CONFIG = [
+  { key: 'pinned', label: '고정됨' },
+  { key: 'owned', label: '내 에이전트' },
+  { key: 'subscribed', label: '구독' },
+  { key: 'forked', label: '포크' },
+] as const;
+
 const AppSidebar = ({
   agents,
   selectedAgentId,
   onSelectAgent,
+  isLoading = false,
+  isError = false,
+  onRetry,
 }: AppSidebarProps) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuthStore();
   const { mutate: logout, isPending: isLoggingOut } = useLogout();
+
+  const groups = useMemo(() => {
+    const pinned = agents.filter((a) => a.is_pinned);
+    const owned = agents.filter((a) => a.source_type === 'owned' && !a.is_pinned);
+    const subscribed = agents.filter((a) => a.source_type === 'subscribed' && !a.is_pinned);
+    const forked = agents.filter((a) => a.source_type === 'forked' && !a.is_pinned);
+
+    return GROUP_CONFIG
+      .map((cfg) => {
+        const items =
+          cfg.key === 'pinned' ? pinned :
+          cfg.key === 'owned' ? owned :
+          cfg.key === 'subscribed' ? subscribed :
+          forked;
+        return { ...cfg, agents: items };
+      })
+      .filter((g) => g.agents.length > 0);
+  }, [agents]);
 
   const handleNavClick = (path: string) => {
     navigate(path);
@@ -104,50 +136,75 @@ const AppSidebar = ({
             </svg>
             <span className="text-[13px] font-medium text-white">에이전트</span>
           </div>
-          <div className="flex items-center gap-0.5">
-            {['숨기기', '필터', '복사', '새로고침'].map((title, i) => {
-              const icons = [
-                'M3.98 8.223A10.477 10.477 0 0 0 1.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.451 10.451 0 0 1 12 4.5c4.756 0 8.773 3.162 10.065 7.498a10.522 10.522 0 0 1-4.293 5.774M6.228 6.228 3 3m3.228 3.228 3.65 3.65m7.894 7.894L21 21m-3.228-3.228-3.65-3.65m0 0a3 3 0 1 0-4.243-4.243m4.242 4.242L9.88 9.88',
-                'M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 0 1-.659 1.591l-5.432 5.432a2.25 2.25 0 0 0-.659 1.591v2.927a2.25 2.25 0 0 1-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 0 0-.659-1.591L3.659 7.409A2.25 2.25 0 0 1 3 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0 1 12 3Z',
-                'M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 0 1-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 0 1 1.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 0 0-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 0 1-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 0 0-3.375-3.375h-1.5a1.125 1.125 0 0 1-1.125-1.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H9.75',
-                'M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182',
-              ];
-              return (
-                <button
-                  key={title}
-                  title={title}
-                  className="flex h-6 w-6 items-center justify-center rounded-md text-white/25 hover:bg-white/[0.08] hover:text-white/50 transition-all"
-                >
-                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" d={icons[i]} />
-                  </svg>
-                </button>
-              );
-            })}
-          </div>
         </div>
 
         <div className="mt-1 px-3">
-          <div className="mb-1 px-1">
-            <span className="text-[11px] font-medium text-white/20">미분류 ({agents.filter((a) => !a.isDefault).length})</span>
-          </div>
-          {agents.filter((a) => !a.isDefault).map((agent) => {
-            const isSelected = agent.id === selectedAgentId;
-            return (
+          {isError ? (
+            <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-center">
+              <p className="text-[12.5px] text-red-300">에이전트 목록을 불러오지 못했습니다</p>
+              {onRetry && (
+                <button
+                  onClick={onRetry}
+                  className="mt-2 rounded-lg border border-white/15 px-3 py-1 text-[11.5px] text-white/70 hover:bg-white/[0.08] hover:text-white"
+                >
+                  다시 시도
+                </button>
+              )}
+            </div>
+          ) : isLoading ? (
+            <div className="space-y-1" aria-label="불러오는 중" role="status">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="flex w-full flex-col items-start rounded-xl px-3 py-2">
+                  <span className="h-3 w-3/4 animate-pulse rounded bg-white/10" />
+                  <span className="mt-2 h-2 w-1/2 animate-pulse rounded bg-white/5" />
+                </div>
+              ))}
+            </div>
+          ) : agents.length === 0 ? (
+            <div className="mt-6 text-center">
+              <p className="text-[12.5px] text-white/20">등록된 에이전트가 없습니다</p>
               <button
-                key={agent.id}
-                onClick={() => onSelectAgent(agent.id)}
-                className={`w-full rounded-lg px-3 py-2 text-left transition-all duration-150 ${
-                  isSelected
-                    ? 'bg-white/[0.12] text-white'
-                    : 'text-white/45 hover:bg-white/[0.06] hover:text-white/70'
-                }`}
+                onClick={() => navigate('/agent-builder')}
+                className="mt-3 rounded-lg border border-violet-500/30 px-3 py-1.5 text-[11.5px] text-violet-400 hover:bg-violet-500/10 transition-all"
               >
-                <p className="text-[13px] font-medium truncate">{agent.name}</p>
-                <p className="text-[11px] text-white/25 truncate mt-0.5">{agent.description}</p>
+                에이전트 만들기
               </button>
-            );
-          })}
+            </div>
+          ) : (
+            groups.map((group) => (
+              <div key={group.key} className="mb-2">
+                <div className="mb-1 px-1">
+                  <span className="text-[11px] font-medium text-white/20">
+                    {group.label} ({group.agents.length})
+                  </span>
+                </div>
+                {group.agents.map((agent) => {
+                  const isSelected = agent.agent_id === selectedAgentId;
+                  return (
+                    <button
+                      key={agent.agent_id}
+                      onClick={() => onSelectAgent(agent.agent_id)}
+                      className={`w-full rounded-lg px-3 py-2 text-left transition-all duration-150 ${
+                        isSelected
+                          ? 'bg-white/[0.12] text-white'
+                          : 'text-white/45 hover:bg-white/[0.06] hover:text-white/70'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <p className="text-[13px] font-medium truncate flex-1">{agent.name}</p>
+                        {agent.is_pinned && (
+                          <svg className="h-3 w-3 shrink-0 text-violet-400 ml-1" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.111a.563.563 0 0 0 .475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 0 0-.182.557l1.285 5.385a.562.562 0 0 1-.84.61l-4.725-2.885a.562.562 0 0 0-.586 0L6.982 20.54a.562.562 0 0 1-.84-.61l1.285-5.386a.562.562 0 0 0-.182-.557l-4.204-3.602a.562.562 0 0 1 .321-.988l5.518-.442a.563.563 0 0 0 .475-.345L11.48 3.5Z" />
+                          </svg>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-white/25 truncate mt-0.5">{agent.description}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            ))
+          )}
         </div>
       </div>
 

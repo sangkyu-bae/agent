@@ -7,7 +7,7 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from src.application.general_chat.use_case import GeneralChatUseCase
 from src.domain.conversation.entities import ConversationMessage
-from src.domain.conversation.value_objects import MessageRole, SessionId, TurnIndex, UserId
+from src.domain.conversation.value_objects import AgentId, MessageRole, SessionId, TurnIndex, UserId
 from src.domain.general_chat.schemas import DocumentSource, GeneralChatRequest
 
 
@@ -18,6 +18,7 @@ def _make_msg(role: MessageRole, content: str, turn: int) -> ConversationMessage
         id=None,
         user_id=UserId("u1"),
         session_id=SessionId("s1"),
+        agent_id=AgentId.super(),
         role=role,
         content=content,
         turn_index=TurnIndex(turn),

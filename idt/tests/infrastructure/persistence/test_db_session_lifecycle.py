@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import (
 from src.domain.auth.entities import UserRole, UserStatus
 from src.domain.conversation.entities import ConversationMessage
 from src.domain.conversation.value_objects import (
+    AgentId,
     MessageRole,
     SessionId,
     TurnIndex,
@@ -119,6 +120,7 @@ def _make_message() -> ConversationMessage:
         id=None,
         user_id=UserId("u"),
         session_id=SessionId("s"),
+        agent_id=AgentId.super(),
         role=MessageRole.USER,
         content="hello",
         turn_index=TurnIndex(1),
@@ -346,6 +348,7 @@ class TestSharedSessionAtomicity:
                 id=None,
                 user_id=UserId("u"),
                 session_id=SessionId("s"),
+                agent_id=AgentId.super(),
                 summary_content="s",
                 start_turn=TurnIndex(1),
                 end_turn=TurnIndex(3),

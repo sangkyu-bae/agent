@@ -22,3 +22,4 @@
 | collection-scoped-search | 2026-04-28 | 98% | 70 passing | [→](./collection-scoped-search/) |
 | fix-es-upload-morph-error | 2026-04-29 | 95% | 1284 passing | [→](./fix-es-upload-morph-error/) |
 | fix-es-index-not-found | 2026-04-29 | 100% | 2886 passing (6 new) | [→](./fix-es-index-not-found/) |
+| document-delete-api | 2026-04-29 | 98% | 31 passing (16 new) | [→](./document-delete-api/) |

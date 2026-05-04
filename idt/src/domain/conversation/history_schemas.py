@@ -59,3 +59,40 @@ class MessageListResponse:
     user_id: str
     session_id: str
     messages: List[MessageItem]
+
+
+@dataclass(frozen=True)
+class AgentChatSummary:
+    """대화 기록이 있는 에이전트 요약."""
+
+    agent_id: str
+    agent_name: str
+    session_count: int
+    last_chat_at: datetime
+
+
+@dataclass(frozen=True)
+class AgentListResponse:
+    """사용자의 에이전트 목록 응답."""
+
+    user_id: str
+    agents: List[AgentChatSummary]
+
+
+@dataclass(frozen=True)
+class AgentSessionListResponse:
+    """에이전트별 세션 목록 응답."""
+
+    user_id: str
+    agent_id: str
+    sessions: List[SessionSummary]
+
+
+@dataclass(frozen=True)
+class AgentMessageListResponse:
+    """에이전트별 세션 메시지 응답."""
+
+    user_id: str
+    agent_id: str
+    session_id: str
+    messages: List[MessageItem]

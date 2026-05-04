@@ -9,6 +9,7 @@ class ConversationChatRequest:
     user_id: str
     session_id: str
     message: str
+    agent_id: str = "super"
 
 
 @dataclass(frozen=True)
