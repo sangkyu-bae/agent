@@ -130,5 +130,9 @@ export const queryKeys = {
     all: ['admin'] as const,
     /** 승인 대기 사용자 목록 */
     pendingUsers: () => [...queryKeys.admin.all, 'pendingUsers'] as const,
+    /** 부서 목록 */
+    departments: () => [...queryKeys.admin.all, 'departments'] as const,
+    /** 특정 부서 상세 */
+    department: (deptId: string) => [...queryKeys.admin.departments(), deptId] as const,
   },
 } as const;

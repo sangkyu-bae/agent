@@ -15,6 +15,8 @@ import CollectionDocumentsPage from '@/pages/CollectionDocumentsPage';
 import LoginPage from '@/pages/LoginPage';
 import RegisterPage from '@/pages/RegisterPage';
 import AdminUsersPage from '@/pages/AdminUsersPage';
+import AdminDepartmentsPage from '@/pages/AdminDepartmentsPage';
+import AdminLayout from '@/components/layout/AdminLayout';
 import { useInitAuth } from '@/hooks/useAuth';
 
 const AuthInitializer = ({ children }: { children: React.ReactNode }) => {
@@ -50,7 +52,10 @@ const App = () => (
 
       {/* Admin 전용 라우트 */}
       <Route element={<AdminRoute />}>
-        <Route path="/admin/users" element={<AdminUsersPage />} />
+        <Route element={<AdminLayout />}>
+          <Route path="/admin/users" element={<AdminUsersPage />} />
+          <Route path="/admin/departments" element={<AdminDepartmentsPage />} />
+        </Route>
       </Route>
 
     </Routes>

@@ -1891,7 +1891,11 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_html_to_pdf_uc] = lambda: _html_to_pdf_uc
 
     # RAG Tool Router DI
-    app.dependency_overrides[rag_tool_get_qdrant_client] = lambda: qdrant_client
+    _rag_tool_qdrant = AsyncQdrantClient(
+        host=settings.qdrant_host,
+        port=settings.qdrant_port,
+    )
+    app.dependency_overrides[rag_tool_get_qdrant_client] = lambda: _rag_tool_qdrant
     app.dependency_overrides[rag_tool_get_aliases] = lambda: getattr(settings, "collection_aliases", {})
 
     def _rag_tool_perm_service_factory(
@@ -1901,13 +1905,13 @@ def create_app() -> FastAPI:
         from src.application.collection.permission_service import CollectionPermissionService
         from src.domain.collection.permission_policy import CollectionPermissionPolicy
         from src.infrastructure.department.department_repository import DepartmentRepository
-        perm_repo = CollectionPermissionRepository(session, app_logger)
-        dept_repo = DepartmentRepository(session, app_logger)
+        perm_repo = CollectionPermissionRepository(session, logger)
+        dept_repo = DepartmentRepository(session, logger)
         return CollectionPermissionService(
             perm_repo=perm_repo,
             dept_repo=dept_repo,
             policy=CollectionPermissionPolicy(),
-            logger=app_logger,
+            logger=logger,
         )
 
     app.dependency_overrides[rag_tool_get_perm_service] = _rag_tool_perm_service_factory
