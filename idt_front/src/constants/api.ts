@@ -77,6 +77,13 @@ export const API_ENDPOINTS = {
   ADMIN_USER_APPROVE: (userId: number) => `/api/v1/admin/users/${userId}/approve`,
   ADMIN_USER_REJECT: (userId: number) => `/api/v1/admin/users/${userId}/reject`,
 
+  // Admin — Department
+  ADMIN_DEPARTMENTS: '/api/v1/departments',
+  ADMIN_DEPARTMENT_DETAIL: (deptId: string) => `/api/v1/departments/${deptId}`,
+  ADMIN_USER_DEPT_ASSIGN: (userId: number) => `/api/v1/users/${userId}/departments`,
+  ADMIN_USER_DEPT_REMOVE: (userId: number, deptId: string) =>
+    `/api/v1/users/${userId}/departments/${deptId}`,
+
   // Embedding Models
   EMBEDDING_MODELS: '/api/v1/embedding-models',
 

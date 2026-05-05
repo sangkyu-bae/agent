@@ -1,4 +1,4 @@
-import apiClient from '@/services/api/client';
+import authApiClient from '@/services/api/authClient';
 import { API_ENDPOINTS } from '@/constants/api';
 import type { CollectionInfo, MetadataKeyInfo } from '@/types/ragToolConfig';
 
@@ -12,14 +12,14 @@ interface MetadataKeysResponse {
 
 const ragToolService = {
   getCollections: async (): Promise<CollectionInfo[]> => {
-    const { data } = await apiClient.get<CollectionsResponse>(
+    const { data } = await authApiClient.get<CollectionsResponse>(
       API_ENDPOINTS.RAG_TOOL_COLLECTIONS,
     );
     return data.collections;
   },
 
   getMetadataKeys: async (collectionName?: string): Promise<MetadataKeyInfo[]> => {
-    const { data } = await apiClient.get<MetadataKeysResponse>(
+    const { data } = await authApiClient.get<MetadataKeysResponse>(
       API_ENDPOINTS.RAG_TOOL_METADATA_KEYS,
       { params: collectionName ? { collection_name: collectionName } : undefined },
     );

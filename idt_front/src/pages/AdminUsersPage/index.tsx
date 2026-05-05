@@ -23,7 +23,7 @@ const AdminUsersPage = () => {
   const isActing = isApproving || isRejecting;
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-8">
+    <div className="mx-auto max-w-5xl px-6 py-8">
       {/* 헤더 */}
       <div className="mb-6">
         <p className="text-[11.5px] font-semibold uppercase tracking-widest text-violet-500">
