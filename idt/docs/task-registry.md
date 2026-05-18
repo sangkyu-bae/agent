@@ -58,3 +58,17 @@
 | UNIFIED-UPLOAD-FIX-001 | docs/01-plan/features/fix-unified-upload-es-rdb.plan.md | 통합 업로드 ES/RDB 수정 (Kiwi 형태소 분석 + morph_text BM25 연동 + 문서 메타데이터 RDB 등록) |
 | DOC-DELETE-001 | docs/01-plan/features/document-delete-api.plan.md | 문서 삭제 API (Qdrant 청크 + ES 청크 + MySQL 메타데이터 3중 동기 삭제, 단건/일괄) |
 | AGENT-CHAT-001 | docs/01-plan/features/agent-chat-history.plan.md | 에이전트별 채팅 기록 관리 (conversation_message에 agent_id 추가, 에이전트별 세션 조회 API) |
+| PDF-ANALYZER-001 | docs/archive/2026-05/pdf-analyzer/ | PDF 유형 분류기 (앞 N페이지 샘플링 → text/ocr/table/multimodal 분류, 라우팅 계층용 결과 반환) |
+| PYMUPDF4LLM-001 | docs/archive/2026-05/pymupdf4llm-parser/ | pymupdf4llm 기반 Markdown PDF 파서 (구조 보존 파싱, 테이블 포함/제외 옵션, 전체 문서 단일 MD 출력) |
+| RERANKER-001 | docs/archive/2026-05/reranker-module/ | Reranker 모듈 (Lost in the Middle 대응 PositionalReranker 양끝 배치 + RerankerInterface 전략 패턴) |
+| PDF-ROUTING-001 | docs/archive/2026-05/pdf-routing/ | PDF 라우팅 모듈 (PDFDocumentType 기반 파서 자동 선택, Policy Pattern + string 매핑, graceful fallback) |
+| PYMUPDF4LLM-META-001 | docs/archive/2026-05/pymupdf4llm-page-metadata/ | pymupdf4llm 페이지별 메타데이터 보존 (page_chunks=True, section_title/has_table 추출) |
+| ADV-PARSER-001 | docs/archive/2026-05/advanced-document-parser/ | 고도화 문서 파서 (좌표 기반 요소 추출 → 7단계 레이아웃 분석 → 품질 점수 → fallback → section-aware 청킹) |
+| RAGAS-001 | docs/archive/2026-05/ragas-evaluation/ | RAGAS 평가 모듈 (배치/실시간 평가, 테스트셋 CRUD, 9개 지표, 13 API 엔드포인트) |
+| TABLE-FLAT-001 | docs/archive/2026-05/table-retrieval-enhancer/ | 표 검색 향상 모듈 (Parent-Child 청킹 표 플래트닝, 부모=원본 markdown 보존, 자식=의미 문장 변환, Strategy Pattern) |
+| FIX-TOOL-BYPASS-001 | docs/archive/2026-05/fix-agent-creation-tool-bypass/ | Agent 생성 시 tool_configs 바이패스 수정 (명시적 도구 선택 경로 + prefix 정규화 + ValueError→422 분류) |
+| MULTI-AGENT-001 | docs/archive/2026-05/multi-agent-composition/ | 멀티 에이전트 조합 (Sub-Agent 재귀 컴파일, 순환참조/중첩깊이/접근권한 3대 정책, Task 위임 방식) |
+| AGENT-CHAT-MT-001 | docs/archive/2026-05/agent-chat-multiturn/ | Agent Multi-turn 대화 (RunAgentUseCase에 session_id 기반 히스토리 로드/저장/요약 통합, 하위호환 100%) |
+| SEARCH-PIPE-001 | docs/archive/2026-05/search-pipeline-refactor/ | 검색 파이프라인 리팩터 (ToolMeta.category 기반 워커 분기 + Search Node 직접 실행 + Answer Agent 자동 주입) |
+| NORI-001 | docs/archive/2026-05/nori-analyzer-integration/ | ES Nori 한국어 분석기 (mixed decompound + 18 stoptags POS filter, content^1.5 부스트, Zero-downtime 마이그레이션) |
+| ADV-INGEST-001 | docs/archive/2026-05/advanced-ingest-pipeline/ | 고도화 PDF Ingest 파이프라인 (9노드 LangGraph, 5모듈 통합, Qdrant+ES 이중 색인, POST /api/v1/ingest/pdf/advanced) |

@@ -61,7 +61,31 @@
       "Bash(git clean *)",
       "Bash(git push *)",
       "Bash(gh pr create --title 'docs: add LLM-MODEL-REG-001, AGENT-SHARE-001 to task-registry' --body ' *)",
-      "Bash(gh pr *)"
+      "Bash(gh pr *)",
+      "Bash(grep -E \"\\\\.py$\")",
+      "PowerShell(New-Item *)",
+      "PowerShell(python -m pytest tests/ --no-header -q --ignore=tests/infrastructure/elasticsearch 2>&1 | Select-Object -Last 10)",
+      "PowerShell(Copy-Item *)",
+      "PowerShell(Remove-Item *)",
+      "WebFetch(domain:github.com)",
+      "WebSearch",
+      "WebFetch(domain:docling-project.github.io)",
+      "PowerShell(Move-Item *)",
+      "PowerShell(python -m pytest tests/domain/pdf_routing/test_schemas.py -v 2>&1 | Select-Object -Last 20)",
+      "PowerShell(python -m pytest tests/domain/pdf_routing/test_value_objects.py -v 2>&1 | Select-Object -Last 25)",
+      "PowerShell(python -m pytest tests/domain/pdf_routing/test_policies.py -v 2>&1 | Select-Object -Last 25)",
+      "PowerShell(python -m pytest tests/infrastructure/pdf_routing/test_default_parser_router.py -v 2>&1 | Select-Object -Last 20)",
+      "PowerShell(python -m pytest tests/application/pdf_routing/test_use_case.py -v 2>&1 | Select-Object -Last 30)",
+      "PowerShell(python -m pytest tests/domain/pdf_routing/ tests/infrastructure/pdf_routing/ tests/application/pdf_routing/ -v 2>&1 | Select-Object -Last 55)",
+      "PowerShell(python -m pytest tests/domain/pdf_routing/ -v --tb=no 2>&1 | Select-Object -Last 5; python -m pytest tests/infrastructure/pdf_routing/ -v --tb=no 2>&1 | Select-Object -Last 3; python -m pytest tests/application/pdf_routing/ -v --tb=no 2>&1 | Select-Object -Last 3)",
+      "PowerShell(python -m pytest tests/application/pdf_routing/test_use_case.py -v --tb=short 2>&1 | Select-Object -Last 25)",
+      "PowerShell(python -m pytest tests/domain/pdf_routing/ tests/infrastructure/pdf_routing/ -v --tb=no 2>&1 | Select-Object -Last 5)",
+      "PowerShell(Start-Sleep -Seconds 5; try { $r = Invoke-RestMethod -Uri http://localhost:8000/openapi.json -Method Get; $paths = \\($r.paths | Get-Member -MemberType NoteProperty\\).Name | Where-Object { $_ -match 'preview' }; $paths } catch { $_.Exception.Message })",
+      "PowerShell(pip show *)",
+      "PowerShell(python -c \"import pymupdf4llm; import inspect; src = inspect.getsource\\(pymupdf4llm.to_markdown\\); lines = src.split\\('\\\\n'\\); [print\\(f'{i}: {l}'\\) for i,l in enumerate\\(lines\\) if 'metadata' in l.lower\\(\\) or 'page' in l.lower\\(\\) or 'chunk' in l.lower\\(\\)]\")",
+      "PowerShell(python -c \"import fitz, pymupdf4llm, json; doc = fitz.open\\(\\); page = doc.new_page\\(\\); page.insert_text\\(\\(72, 72\\), 'Hello World'\\); result = pymupdf4llm.to_markdown\\(doc, page_chunks=True, write_images=False, show_progress=False\\); [print\\('Keys:', list\\(c.keys\\(\\)\\), 'Meta:', c.get\\('metadata', {}\\)\\) for c in result]; doc.close\\(\\)\")",
+      "PowerShell(Get-ChildItem \"C:\\\\sangplus\\\\sangplusbot\\\\idt\\\\docs\\\\archive\\\\2026-05\\\\multi-agent-composition\" | ForEach-Object { $_.Name })",
+      "PowerShell(Test-Path *)"
     ]
   }
 }

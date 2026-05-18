@@ -5,7 +5,6 @@ import uuid
 from datetime import datetime
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
-from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
 
 from src.application.conversation.interfaces import ConversationSummarizerInterface
@@ -18,6 +17,8 @@ from src.domain.conversation.entities import ConversationMessage, ConversationSu
 from src.domain.conversation.policies import SummarizationPolicy
 from src.domain.conversation.value_objects import AgentId, MessageRole, SessionId, TurnIndex, UserId
 from src.domain.general_chat.schemas import DocumentSource, GeneralChatRequest, GeneralChatResponse
+from src.domain.llm.interfaces import LLMFactoryInterface
+from src.domain.llm_model.entity import LlmModel
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.infrastructure.langsmith.langsmith import langsmith
 
@@ -50,8 +51,8 @@ class GeneralChatUseCase:
         summarizer: ConversationSummarizerInterface,
         summarization_policy: SummarizationPolicy,
         logger: LoggerInterface,
-        openai_api_key: str = "",
-        model_name: str = "gpt-4o",
+        llm_factory: LLMFactoryInterface,
+        llm_model: LlmModel,
         max_iterations: int = 10,
     ) -> None:
         self._tool_builder = chat_tool_builder
@@ -60,17 +61,13 @@ class GeneralChatUseCase:
         self._summarizer = summarizer
         self._policy = summarization_policy
         self._logger = logger
-        self._api_key = openai_api_key
-        self._model_name = model_name
+        self._llm_factory = llm_factory
+        self._llm_model = llm_model
         self._max_iterations = max_iterations
 
     def _create_agent(self, tools: list):
         """ReAct 에이전트 생성 (테스트에서 패치 가능)."""
-        llm = ChatOpenAI(
-            model=self._model_name,
-            api_key=self._api_key or None,
-            temperature=0,
-        )
+        llm = self._llm_factory.create(self._llm_model, temperature=0)
         return create_react_agent(llm, tools=tools, prompt=_SYSTEM_PROMPT)
 
     async def execute(

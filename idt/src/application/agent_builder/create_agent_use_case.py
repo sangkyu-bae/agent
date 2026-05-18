@@ -3,11 +3,21 @@ import uuid
 from datetime import datetime, timezone
 
 from src.application.agent_builder.prompt_generator import PromptGenerator
-from src.application.agent_builder.schemas import CreateAgentRequest, CreateAgentResponse, WorkerInfo
+from src.application.agent_builder.schemas import (
+    CreateAgentRequest, CreateAgentResponse, RagToolConfigRequest, SubAgentConfigRequest, WorkerInfo,
+)
 from src.application.agent_builder.tool_selector import ToolSelector
-from src.domain.agent_builder.interfaces import AgentDefinitionRepositoryInterface
-from src.domain.agent_builder.policies import AgentBuilderPolicy, VisibilityPolicy
-from src.domain.agent_builder.schemas import AgentDefinition, WorkerDefinition
+from src.domain.agent_builder.interfaces import (
+    AgentDefinitionRepositoryInterface,
+    SubscriptionRepositoryInterface,
+)
+from src.domain.agent_builder.policies import (
+    AgentBuilderPolicy,
+    NestingDepthPolicy,
+    SubAgentAccessPolicy,
+    VisibilityPolicy,
+)
+from src.domain.agent_builder.schemas import AgentDefinition, WorkerDefinition, WorkflowSkeleton
 from src.domain.agent_builder.tool_registry import get_tool_meta
 from src.domain.collection.permission_interfaces import CollectionPermissionRepositoryInterface
 from src.domain.llm_model.interfaces import LlmModelRepositoryInterface
@@ -23,6 +33,7 @@ class CreateAgentUseCase:
         llm_model_repository: LlmModelRepositoryInterface,
         perm_repo: CollectionPermissionRepositoryInterface,
         logger: LoggerInterface,
+        subscription_repo: SubscriptionRepositoryInterface | None = None,
     ) -> None:
         self._selector = tool_selector
         self._generator = prompt_generator
@@ -30,6 +41,7 @@ class CreateAgentUseCase:
         self._llm_model_repository = llm_model_repository
         self._perm_repo = perm_repo
         self._logger = logger
+        self._subscription_repo = subscription_repo
 
     async def execute(
         self, request: CreateAgentRequest, request_id: str
@@ -44,18 +56,32 @@ class CreateAgentUseCase:
             )
 
             # Step 1: 도구 선택 + 플로우 결정
-            skeleton = await self._selector.select(request.user_request, request_id)
-
-            # Step 1.5: tool_configs 적용
             if request.tool_configs:
-                for worker in skeleton.workers:
-                    if worker.tool_id in request.tool_configs:
-                        worker.tool_config = request.tool_configs[
-                            worker.tool_id
-                        ].model_dump()
+                skeleton = self._build_skeleton_from_configs(
+                    request.tool_configs, request_id
+                )
+            else:
+                skeleton = await self._selector.select(
+                    request.user_request, request_id
+                )
+
+            # Step 1.5: 서브 에이전트 워커 빌드
+            sub_agent_workers: list[WorkerDefinition] = []
+            if request.sub_agent_configs:
+                sub_agent_workers = await self._build_sub_agent_workers(
+                    configs=request.sub_agent_configs,
+                    user_id=request.user_id,
+                    request_id=request_id,
+                    existing_tool_count=len(skeleton.workers),
+                )
+
+            all_workers = list(skeleton.workers) + sub_agent_workers
 
             # Step 2: Policy 검증
-            AgentBuilderPolicy.validate_tool_count(len(skeleton.workers))
+            if sub_agent_workers:
+                AgentBuilderPolicy.validate_worker_count(all_workers)
+            else:
+                AgentBuilderPolicy.validate_tool_count(len(skeleton.workers))
             AgentBuilderPolicy.validate_name(request.name)
 
             # Step 2.5: 컬렉션 scope 기반 visibility 자동 조정
@@ -79,7 +105,7 @@ class CreateAgentUseCase:
                 description=request.user_request,
                 system_prompt=system_prompt,
                 flow_hint=skeleton.flow_hint,
-                workers=skeleton.workers,
+                workers=all_workers,
                 llm_model_id=llm_model_id,
                 status="active",
                 visibility=visibility,
@@ -97,7 +123,7 @@ class CreateAgentUseCase:
                 agent_id=saved.id,
                 name=saved.name,
                 system_prompt=saved.system_prompt,
-                tool_ids=[w.tool_id for w in saved.workers],
+                tool_ids=[w.tool_id for w in saved.workers if w.worker_type == "tool"],
                 workers=[
                     WorkerInfo(
                         tool_id=w.tool_id,
@@ -105,6 +131,8 @@ class CreateAgentUseCase:
                         description=w.description,
                         sort_order=w.sort_order,
                         tool_config=w.tool_config,
+                        worker_type=w.worker_type,
+                        ref_agent_id=w.ref_agent_id,
                     )
                     for w in saved.workers
                 ],
@@ -116,12 +144,41 @@ class CreateAgentUseCase:
                 department_id=saved.department_id,
                 temperature=saved.temperature,
                 created_at=saved.created_at.isoformat(),
+                has_sub_agents=any(w.worker_type == "sub_agent" for w in saved.workers),
             )
         except Exception as e:
             self._logger.error(
                 "CreateAgentUseCase failed", exception=e, request_id=request_id
             )
             raise
+
+    def _build_skeleton_from_configs(
+        self,
+        tool_configs: dict[str, RagToolConfigRequest],
+        request_id: str,
+    ) -> WorkflowSkeleton:
+        workers: list[WorkerDefinition] = []
+        for i, (raw_key, config) in enumerate(tool_configs.items()):
+            tool_id = self._normalize_tool_id(raw_key)
+            meta = get_tool_meta(tool_id)
+            workers.append(WorkerDefinition(
+                tool_id=tool_id,
+                worker_id=f"{tool_id}_worker",
+                description=meta.description,
+                sort_order=i,
+                tool_config=config.model_dump(),
+            ))
+        flow_hint = " → ".join(w.tool_id for w in workers)
+        self._logger.info(
+            "Built skeleton from tool_configs",
+            request_id=request_id,
+            tool_ids=[w.tool_id for w in workers],
+        )
+        return WorkflowSkeleton(workers=workers, flow_hint=flow_hint)
+
+    @staticmethod
+    def _normalize_tool_id(raw_key: str) -> str:
+        return raw_key.split(":")[-1] if ":" in raw_key else raw_key
 
     async def _resolve_visibility(
         self,
@@ -165,10 +222,61 @@ class CreateAgentUseCase:
             scopes.append(perm.scope.value if perm else "PERSONAL")
         return scopes
 
+    async def _build_sub_agent_workers(
+        self,
+        configs: list[SubAgentConfigRequest],
+        user_id: str,
+        request_id: str,
+        existing_tool_count: int,
+    ) -> list[WorkerDefinition]:
+        workers: list[WorkerDefinition] = []
+
+        for i, config in enumerate(configs):
+            sub_agent = await self._repository.find_by_id(
+                config.ref_agent_id, request_id
+            )
+            if sub_agent is None or sub_agent.status == "deleted":
+                raise ValueError(
+                    f"서브 에이전트를 찾을 수 없습니다: {config.ref_agent_id}"
+                )
+
+            is_subscribed = await self._check_subscription(
+                user_id, config.ref_agent_id, request_id
+            )
+            if not SubAgentAccessPolicy.can_use_as_sub_agent(
+                parent_owner_id=user_id,
+                sub_agent_owner_id=sub_agent.user_id,
+                is_subscribed=is_subscribed,
+            ):
+                raise PermissionError(
+                    f"서브 에이전트 '{sub_agent.name}'에 대한 사용 권한이 없습니다"
+                )
+
+            description = config.description or sub_agent.description
+            workers.append(WorkerDefinition(
+                tool_id=f"sub_agent_{config.ref_agent_id[:8]}",
+                worker_id=f"sub_agent_{sub_agent.name}_{i}",
+                description=description,
+                sort_order=existing_tool_count + i,
+                worker_type="sub_agent",
+                ref_agent_id=config.ref_agent_id,
+            ))
+
+        return workers
+
+    async def _check_subscription(
+        self, user_id: str, agent_id: str, request_id: str
+    ) -> bool:
+        if self._subscription_repo is None:
+            return False
+        sub = await self._subscription_repo.find_by_user_and_agent(
+            user_id, agent_id, request_id
+        )
+        return sub is not None
+
     async def _resolve_llm_model_id(
         self, llm_model_id: str | None, request_id: str
     ) -> str:
-        """요청에 model_id가 없으면 기본 모델 사용."""
         if llm_model_id:
             found = await self._llm_model_repository.find_by_id(
                 llm_model_id, request_id

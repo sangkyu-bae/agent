@@ -165,7 +165,8 @@ class ElasticsearchRepository(ElasticsearchRepositoryInterface):
             return False
 
     async def ensure_index_exists(
-        self, index: str, mappings: dict[str, Any]
+        self, index: str, mappings: dict[str, Any],
+        settings: Optional[dict[str, Any]] = None,
     ) -> bool:
         """인덱스 존재 확인 후 없으면 생성."""
         try:
@@ -173,7 +174,10 @@ class ElasticsearchRepository(ElasticsearchRepositoryInterface):
             exists = await es.indices.exists(index=index)
             if exists:
                 return False
-            await es.indices.create(index=index, mappings=mappings)
+            kwargs: dict[str, Any] = {"index": index, "mappings": mappings}
+            if settings:
+                kwargs["settings"] = settings
+            await es.indices.create(**kwargs)
             self._logger.info("ES index created", index=index)
             return True
         except Exception as e:

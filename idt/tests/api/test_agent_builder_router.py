@@ -93,6 +93,7 @@ def _make_run_response(agent_id: str) -> RunAgentResponse:
         answer="AI 뉴스를 수집했습니다.",
         tools_used=["tavily_search"],
         request_id=str(uuid.uuid4()),
+        session_id=str(uuid.uuid4()),
     )
 
 

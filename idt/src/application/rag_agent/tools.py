@@ -25,10 +25,12 @@ class InternalDocumentSearchTool(BaseTool):
     )
 
     hybrid_search_use_case: Any
+    multi_query_use_case: Any = None
     top_k: int = 5
     request_id: str = ""
     collected_sources: list[DocumentSource] = Field(default_factory=list)
     search_mode: str = "hybrid"
+    use_multi_query: bool = False
     rrf_k: int = 60
     metadata_filter: dict[str, str] = Field(default_factory=dict)
     collection_name: str | None = None
@@ -38,7 +40,29 @@ class InternalDocumentSearchTool(BaseTool):
         raise NotImplementedError("비동기 _arun을 사용하세요.")
 
     async def _arun(self, query: str) -> str:
-        """BM25(ES) + Vector(Qdrant) 하이브리드 검색 실행. search_mode에 따라 분기."""
+        """BM25(ES) + Vector(Qdrant) 하이브리드 검색 실행."""
+        if self.use_multi_query and self.multi_query_use_case is not None:
+            return await self._multi_query_search(query)
+        return await self._single_query_search(query)
+
+    async def _multi_query_search(self, query: str) -> str:
+        """Multi-Query 워크플로우를 통한 검색."""
+        result = await self.multi_query_use_case.execute(
+            query=query,
+            request_id=self.request_id,
+            top_k=self.top_k,
+            collection_name=self.collection_name,
+            es_index=self.es_index,
+            metadata_filter=self.metadata_filter if self.metadata_filter else None,
+        )
+
+        if not result.results:
+            return "관련 내부 문서를 찾지 못했습니다."
+
+        return self._format_results(result.results)
+
+    async def _single_query_search(self, query: str) -> str:
+        """기존 단일 쿼리 하이브리드 검색."""
         if self.search_mode == "vector_only":
             bm25_top_k = 0
             vector_top_k = self.top_k * 2
@@ -56,14 +80,20 @@ class InternalDocumentSearchTool(BaseTool):
             vector_top_k=vector_top_k,
             rrf_k=self.rrf_k,
             metadata_filter=self.metadata_filter,
+            collection_name=self.collection_name,
+            es_index=self.es_index,
         )
         result = await self.hybrid_search_use_case.execute(request, self.request_id)
 
         if not result.results:
             return "관련 내부 문서를 찾지 못했습니다."
 
+        return self._format_results(result.results)
+
+    def _format_results(self, results: list) -> str:
+        """검색 결과를 텍스트로 포맷팅."""
         lines: list[str] = []
-        for hit in result.results:
+        for hit in results:
             source = hit.metadata.get("source", "unknown")
             self.collected_sources.append(
                 DocumentSource(

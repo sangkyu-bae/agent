@@ -48,6 +48,9 @@ class AgentDefinitionRepository(AgentDefinitionRepositoryInterface):
                         description=w.description,
                         sort_order=w.sort_order,
                         tool_config=w.tool_config,
+                        worker_type=w.worker_type,
+                        ref_agent_id=w.ref_agent_id,
+                        category=w.category,
                     )
                     for w in agent.workers
                 ],
@@ -309,6 +312,9 @@ class AgentDefinitionRepository(AgentDefinitionRepositoryInterface):
                     description=t.description or "",
                     sort_order=t.sort_order,
                     tool_config=t.tool_config,
+                    worker_type=t.worker_type,
+                    ref_agent_id=t.ref_agent_id,
+                    category=t.category,
                 )
                 for t in sorted(model.tools, key=lambda x: x.sort_order)
             ],

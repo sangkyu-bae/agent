@@ -2,12 +2,12 @@
   "version": "1.0",
   "enabled": false,
   "teamName": "",
-  "feature": "chat-sidebar-collapse",
-  "pdcaPhase": "check",
+  "feature": "collection-department-dropdown",
+  "pdcaPhase": "do",
   "orchestrationPattern": "leader",
   "ctoAgent": "opus",
-  "startedAt": "2026-04-29T06:08:33.775Z",
-  "lastUpdated": "2026-04-29T07:26:34.217Z",
+  "startedAt": "2026-05-09T07:43:55.306Z",
+  "lastUpdated": "2026-05-11T00:09:29.747Z",
   "teammates": [],
   "progress": {
     "totalTasks": 0,
@@ -17,5 +17,5 @@
     "pendingTasks": 0
   },
   "recentMessages": [],
-  "sessionId": "d3bf522a-423b-4704-919b-28583dcde1d0"
+  "sessionId": "9ac747f5-122e-40d7-b494-a6745309280d"
 }

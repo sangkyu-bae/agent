@@ -108,13 +108,15 @@ class ElasticsearchRepositoryInterface(ABC):
 
     @abstractmethod
     async def ensure_index_exists(
-        self, index: str, mappings: dict[str, Any]
+        self, index: str, mappings: dict[str, Any],
+        settings: Optional[dict[str, Any]] = None,
     ) -> bool:
         """인덱스 존재 확인 후 없으면 생성.
 
         Args:
             index: ES 인덱스 이름
             mappings: 인덱스 매핑 정의
+            settings: 인덱스 설정 (analyzer 등, 선택)
 
         Returns:
             True: 새로 생성됨, False: 이미 존재하거나 실패

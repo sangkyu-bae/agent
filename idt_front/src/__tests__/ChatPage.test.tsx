@@ -1,12 +1,11 @@
 /**
- * ChatPage 세션 초기화 버그 수정 검증
+ * ChatPage Unit Tests
  *
- * TC-FE-1: 초기화 시 crypto.randomUUID가 한 번만 호출된다
- *   (버그: createSession()이 sessions + activeSessionId 초기화에 각각 한 번씩 → 2회 호출)
- *   (수정: sessions[0].id를 직접 참조 → 1회 호출)
+ * ChatPage는 AgentChatLayout이 Outlet context로 세션 상태를 전달한다.
+ * 단위 테스트에서는 useOutletContext를 mock하여 ChatPage 고유 로직만 검증한다.
  *
- * TC-FE-2: 두 번째 메시지 발송 시 서버 반환 session_id를 사용한다
- *   (syncSessionId가 올바르게 동작하면 두 번째 요청은 서버 session_id를 사용해야 함)
+ * TC-FE-1: 빈 세션에서 EmptyAgentState가 표시된다
+ * TC-FE-2: 메시지 전송 성공 시 syncSessionId가 올바르게 동작한다
  */
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi, beforeAll, afterEach, afterAll, describe, it, expect } from 'vitest';
@@ -17,22 +16,46 @@ import type { ReactNode } from 'react';
 import { server } from '@/__tests__/mocks/server';
 import ChatPage from '@/pages/ChatPage';
 
-// useAuthStore mock (hook + getState for authClient interceptor)
-const mockAuthState = {
-  user: { id: 1 },
-  accessToken: null,
+const mockSetActiveSessionId = vi.fn();
+const mockRefetchSessions = vi.fn();
+
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual('react-router-dom');
+  return {
+    ...actual,
+    useOutletContext: () => ({
+      selectedAgent: { id: 'super', name: 'SUPER AI Agent', description: 'test', category: 'system', isDefault: true },
+      activeSessionId: 'test-session-1',
+      setActiveSessionId: mockSetActiveSessionId,
+      handleNewChat: vi.fn(),
+      sessions: [{ id: 'test-session-1', title: '새 대화', messages: [], createdAt: '2026-04-17T10:00:00Z', updatedAt: '2026-04-17T10:00:00Z' }],
+      refetchSessions: mockRefetchSessions,
+    }),
+  };
+});
+
+const mockAuthState: {
+  user: { id: number; email: string; role: string; status: string } | null;
+  accessToken: string | null;
+  refreshToken: string | null;
+  updateAccessToken: ReturnType<typeof vi.fn>;
+  logout: ReturnType<typeof vi.fn>;
+} = {
+  user: { id: 1, email: 'test@test.com', role: 'user', status: 'approved' },
+  accessToken: 'test-token',
   refreshToken: null,
   updateAccessToken: vi.fn(),
   logout: vi.fn(),
 };
+
 vi.mock('@/store/authStore', () => ({
   useAuthStore: Object.assign(
-    (selector: (state: typeof mockAuthState) => unknown) => selector(mockAuthState),
+    (selector?: (state: typeof mockAuthState) => unknown) =>
+      selector ? selector(mockAuthState) : mockAuthState,
     { getState: () => mockAuthState },
   ),
 }));
 
-// jsdom does not support scrollIntoView
 window.HTMLElement.prototype.scrollIntoView = vi.fn();
 
 const createTestWrapper = () => {
@@ -55,27 +78,16 @@ afterEach(() => {
 });
 afterAll(() => server.close());
 
-describe('ChatPage 세션 초기화', () => {
-  it('TC-FE-1: 초기화 시 crypto.randomUUID는 한 번만 호출된다', () => {
-    const uuidSpy = vi.spyOn(crypto, 'randomUUID').mockReturnValue(
-      'uuid-session-1' as `${string}-${string}-${string}-${string}-${string}`,
-    );
-
+describe('ChatPage 단위 테스트', () => {
+  it('TC-FE-1: 빈 세션(draft)에서 EmptyAgentState가 표시된다', () => {
     render(<ChatPage />, { wrapper: createTestWrapper() });
-
-    // sessions 초기화에서 1회만 호출되어야 함
-    // 버그 상태: activeSessionId 초기화에서도 추가 호출 → 2회
-    expect(uuidSpy).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/SUPER AI Agent와 대화하세요/)).toBeInTheDocument();
   });
 
-  it('TC-FE-2: 첫 응답 후 두 번째 메시지는 서버 반환 session_id를 사용한다', async () => {
-    const capturedBodies: Array<{ session_id: string; message: string }> = [];
-
+  it('TC-FE-2: 메시지 전송 성공 시 setActiveSessionId가 서버 세션 ID로 호출된다', async () => {
     server.use(
-      http.post('*', async ({ request }) => {
-        const body = (await request.json()) as { session_id: string; message: string };
-        capturedBodies.push(body);
-        return HttpResponse.json({
+      http.post('*/api/v1/chat', () =>
+        HttpResponse.json({
           user_id: '1',
           session_id: 'server-session-abc',
           answer: '테스트 답변',
@@ -83,34 +95,18 @@ describe('ChatPage 세션 초기화', () => {
           sources: [],
           was_summarized: false,
           request_id: 'req-001',
-        });
-      }),
+        }),
+      ),
     );
-
-    vi.spyOn(crypto, 'randomUUID')
-      .mockReturnValueOnce('uuid-init-1' as `${string}-${string}-${string}-${string}-${string}`)
-      .mockReturnValue('uuid-msg-id' as `${string}-${string}-${string}-${string}-${string}`);
 
     render(<ChatPage />, { wrapper: createTestWrapper() });
 
     const textarea = screen.getByPlaceholderText('상플AI에게 메시지 보내기...');
-
-    // 첫 번째 메시지 발송
     fireEvent.change(textarea, { target: { value: '첫 번째 질문' } });
     fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
 
-    // 첫 번째 응답 대기
-    await waitFor(() => expect(capturedBodies).toHaveLength(1));
-    expect(capturedBodies[0].session_id).toBe('uuid-init-1');
-
-    // 두 번째 메시지 발송
-    fireEvent.change(textarea, { target: { value: '두 번째 질문' } });
-    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
-
-    // 두 번째 요청 대기
-    await waitFor(() => expect(capturedBodies).toHaveLength(2));
-
-    // 두 번째 요청은 서버가 반환한 session_id를 사용해야 함
-    expect(capturedBodies[1].session_id).toBe('server-session-abc');
+    await waitFor(() => {
+      expect(mockSetActiveSessionId).toHaveBeenCalledWith('server-session-abc');
+    });
   });
 });

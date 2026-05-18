@@ -1,4 +1,6 @@
 """InternalDocumentSearchTool + RAGAgentUseCase 단위 테스트."""
+from datetime import datetime
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -6,7 +8,24 @@ from src.domain.hybrid_search.schemas import (
     HybridSearchResponse,
     HybridSearchResult,
 )
+from src.domain.llm.interfaces import LLMFactoryInterface
+from src.domain.llm_model.entity import LlmModel
 from src.domain.rag_agent.schemas import RAGAgentRequest
+
+
+def _make_llm_model() -> LlmModel:
+    return LlmModel(
+        id="test-id", provider="openai", model_name="gpt-4o-mini",
+        display_name="GPT-4o Mini", description=None, api_key_env="OPENAI_API_KEY",
+        max_tokens=128000, is_active=True, is_default=True,
+        created_at=datetime(2026, 1, 1), updated_at=datetime(2026, 1, 1),
+    )
+
+
+def _make_mock_factory() -> MagicMock:
+    factory = MagicMock(spec=LLMFactoryInterface)
+    factory.create.return_value = MagicMock()
+    return factory
 
 
 # ──────────────────────────────────────────────────────────
@@ -143,8 +162,8 @@ class TestRAGAgentUseCase:
         ):
             uc = RAGAgentUseCase(
                 hybrid_search_use_case=AsyncMock(),
-                openai_api_key="test-key",
-                model_name="gpt-4o-mini",
+                llm_factory=_make_mock_factory(),
+                llm_model=_make_llm_model(),
                 logger=MagicMock(),
             )
             response = await uc.execute(
@@ -186,8 +205,8 @@ class TestRAGAgentUseCase:
         ):
             uc = RAGAgentUseCase(
                 hybrid_search_use_case=AsyncMock(),
-                openai_api_key="key",
-                model_name="gpt-4o-mini",
+                llm_factory=_make_mock_factory(),
+                llm_model=_make_llm_model(),
                 logger=MagicMock(),
             )
             response = await uc.execute(
@@ -215,8 +234,8 @@ class TestRAGAgentUseCase:
         ):
             uc = RAGAgentUseCase(
                 hybrid_search_use_case=AsyncMock(),
-                openai_api_key="key",
-                model_name="gpt-4o-mini",
+                llm_factory=_make_mock_factory(),
+                llm_model=_make_llm_model(),
                 logger=MagicMock(),
             )
             response = await uc.execute(
@@ -243,8 +262,8 @@ class TestRAGAgentUseCase:
         ):
             uc = RAGAgentUseCase(
                 hybrid_search_use_case=AsyncMock(),
-                openai_api_key="key",
-                model_name="gpt-4o-mini",
+                llm_factory=_make_mock_factory(),
+                llm_model=_make_llm_model(),
                 logger=mock_logger,
             )
             await uc.execute(RAGAgentRequest(query="q", user_id="u-1"), "req-3")
@@ -265,8 +284,8 @@ class TestRAGAgentUseCase:
         ):
             uc = RAGAgentUseCase(
                 hybrid_search_use_case=AsyncMock(),
-                openai_api_key="key",
-                model_name="gpt-4o-mini",
+                llm_factory=_make_mock_factory(),
+                llm_model=_make_llm_model(),
                 logger=mock_logger,
             )
             with pytest.raises(RuntimeError):

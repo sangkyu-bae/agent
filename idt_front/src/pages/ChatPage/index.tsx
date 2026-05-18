@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import ChatHeader from '@/components/layout/ChatHeader';
 import MessageList from '@/components/chat/MessageList';
 import ChatInput from '@/components/chat/ChatInput';
-import { useGeneralChat, useSessionMessages } from '@/hooks/useChat';
+import { useGeneralChat, useAgentChat, useAgentSessionMessages } from '@/hooks/useChat';
 import { useAuthStore } from '@/store/authStore';
+import { queryKeys } from '@/lib/queryKeys';
 import type { Message } from '@/types/chat';
 import type { AgentChatOutletContext, AgentSummary } from '@/types/agent';
 
@@ -29,14 +31,17 @@ const EmptyAgentState = ({ agent }: EmptyAgentStateProps) => (
 );
 
 const ChatPage = () => {
-  const { selectedAgent, activeSessionId, setActiveSessionId, sessions } =
+  const { selectedAgent, activeSessionId, setActiveSessionId, sessions, refetchSessions } =
     useOutletContext<AgentChatOutletContext>();
 
   const user = useAuthStore((s) => s.user);
   const userId = user?.id != null ? String(user.id) : undefined;
+  const queryClient = useQueryClient();
 
   const [messagesBySession, setMessagesBySession] = useState<Record<string, Message[]>>({});
   const [useRag, setUseRag] = useState(true);
+
+  const agentId = selectedAgent?.id ?? null;
 
   const draftSessionIds = useMemo(
     () => new Set(sessions.filter((s) => s.title === '새 대화' && s.messages.length === 0).map((s) => s.id)),
@@ -44,7 +49,8 @@ const ChatPage = () => {
   );
   const isDraftSession = draftSessionIds.has(activeSessionId ?? '');
 
-  const { data: serverMessages } = useSessionMessages(
+  const { data: serverMessages } = useAgentSessionMessages(
+    agentId,
     activeSessionId,
     userId,
     { enabled: !!activeSessionId && !isDraftSession },
@@ -56,7 +62,9 @@ const ChatPage = () => {
     return serverMessages ?? [];
   }, [activeSessionId, messagesBySession, serverMessages]);
 
-  const { mutate: sendChat, isPending } = useGeneralChat();
+  const { mutate: sendGeneralChat, isPending: isGeneralPending } = useGeneralChat();
+  const { mutate: sendAgentChat, isPending: isAgentPending } = useAgentChat();
+  const isPending = isGeneralPending || isAgentPending;
 
   const addMessage = (sessionId: string, message: Message) => {
     setMessagesBySession((prev) => ({
@@ -90,37 +98,77 @@ const ChatPage = () => {
     addMessage(activeSessionId, userMessage);
 
     const currentSessionId = activeSessionId;
-    sendChat(
-      {
-        user_id: userId ?? '',
-        session_id: currentSessionId,
-        message: content,
-        top_k: useRag ? 5 : undefined,
-      },
-      {
-        onSuccess: (data) => {
-          syncSessionId(currentSessionId, data.session_id);
 
-          const assistantMessage: Message = {
-            id: data.request_id,
-            role: 'assistant',
-            content: data.answer,
-            createdAt: new Date().toISOString(),
-            sources: data.sources,
-          };
-          addMessage(data.session_id, assistantMessage);
+    const onError = () => {
+      const errorMessage: Message = {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: '죄송합니다. 응답을 받지 못했습니다. 잠시 후 다시 시도해주세요.',
+        createdAt: new Date().toISOString(),
+      };
+      addMessage(currentSessionId, errorMessage);
+    };
+
+    if (selectedAgent) {
+      sendAgentChat(
+        {
+          agentId: selectedAgent.id,
+          query: content,
+          user_id: userId ?? '',
+          session_id: isDraftSession ? null : currentSessionId,
         },
-        onError: () => {
-          const errorMessage: Message = {
-            id: crypto.randomUUID(),
-            role: 'assistant',
-            content: '죄송합니다. 응답을 받지 못했습니다. 잠시 후 다시 시도해주세요.',
-            createdAt: new Date().toISOString(),
-          };
-          addMessage(currentSessionId, errorMessage);
+        {
+          onSuccess: (data) => {
+            syncSessionId(currentSessionId, data.session_id);
+
+            const assistantMessage: Message = {
+              id: data.request_id,
+              role: 'assistant',
+              content: data.answer,
+              createdAt: new Date().toISOString(),
+            };
+            addMessage(data.session_id, assistantMessage);
+
+            if (userId) {
+              queryClient.invalidateQueries({
+                queryKey: queryKeys.chat.agentHistory(data.agent_id, userId),
+              });
+            }
+          },
+          onError,
         },
-      },
-    );
+      );
+    } else {
+      sendGeneralChat(
+        {
+          user_id: userId ?? '',
+          session_id: currentSessionId,
+          message: content,
+          top_k: useRag ? 5 : undefined,
+        },
+        {
+          onSuccess: (data) => {
+            syncSessionId(currentSessionId, data.session_id);
+
+            const assistantMessage: Message = {
+              id: data.request_id,
+              role: 'assistant',
+              content: data.answer,
+              createdAt: new Date().toISOString(),
+              sources: data.sources,
+            };
+            addMessage(data.session_id, assistantMessage);
+
+            if (agentId && userId) {
+              queryClient.invalidateQueries({
+                queryKey: queryKeys.chat.agentHistory(agentId, userId),
+              });
+            }
+          },
+          onError,
+        },
+      );
+    }
   };
 
   return (

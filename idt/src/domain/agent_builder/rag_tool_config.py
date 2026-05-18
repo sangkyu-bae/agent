@@ -1,10 +1,21 @@
 """RagToolConfig: RAG 도구 커스텀 설정 Value Object + 검증 정책."""
+import re
 from dataclasses import dataclass, field
 from typing import Literal
 
 SearchMode = Literal["hybrid", "vector_only", "bm25_only"]
 
 _VALID_SEARCH_MODES = {"hybrid", "vector_only", "bm25_only"}
+_TOOL_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
+
+
+def sanitize_tool_name(name: str) -> str:
+    """OpenAI tool name 패턴(^[a-zA-Z0-9_-]+$)에 맞도록 변환."""
+    if _TOOL_NAME_PATTERN.match(name):
+        return name
+    sanitized = re.sub(r"[^a-zA-Z0-9_-]", "_", name)
+    sanitized = re.sub(r"_+", "_", sanitized)
+    return sanitized.strip("_") or "unnamed_tool"
 
 
 @dataclass(frozen=True)
@@ -17,7 +28,7 @@ class RagToolConfig:
     top_k: int = 5
     search_mode: SearchMode = "hybrid"
     rrf_k: int = 60
-    tool_name: str = "내부 문서 검색"
+    tool_name: str = "internal_document_search"
     tool_description: str = (
         "내부 문서에서 관련 정보를 검색합니다. "
         "질문에 대한 내부 문서 정보가 필요할 때 사용하세요."

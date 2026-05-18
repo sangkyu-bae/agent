@@ -90,8 +90,10 @@ class ExceptionHandlerMiddleware(BaseHTTPMiddleware):
             error=error_detail,
         )
 
+        status_code = 422 if isinstance(exc, ValueError) else 500
+
         return JSONResponse(
-            status_code=500,
+            status_code=status_code,
             content=error_response.model_dump(exclude_none=not self._debug),
             headers={"X-Request-ID": request_id},
         )

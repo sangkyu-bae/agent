@@ -1,8 +1,21 @@
-"""도메인 스키마: AgentDefinition, WorkerDefinition, WorkflowDefinition, WorkflowSkeleton."""
+"""도메인 스키마: AgentDefinition, WorkerDefinition, WorkflowDefinition, WorkflowSkeleton, SupervisorConfig."""
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Literal
 
 from src.domain.llm_model.entity import LlmModel
+
+ToolCategory = Literal["search", "action"]
+
+
+@dataclass(frozen=True)
+class SupervisorConfig:
+    """Supervisor 루프 실행 설정. WorkflowCompiler에 전달."""
+
+    max_iterations: int = 10
+    token_limit: int = 8000
+    quality_gate_enabled: bool = False
+    max_retries_per_worker: int = 2
 
 
 @dataclass(frozen=True)
@@ -13,6 +26,7 @@ class ToolMeta:
     name: str
     description: str
     requires_env: list[str] = field(default_factory=list)
+    category: ToolCategory = "action"
 
 
 @dataclass
@@ -24,6 +38,17 @@ class WorkerDefinition:
     description: str
     sort_order: int = 0
     tool_config: dict | None = None
+    worker_type: str = "tool"
+    ref_agent_id: str | None = None
+    category: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.worker_type not in ("tool", "sub_agent"):
+            raise ValueError(f"worker_type must be 'tool' or 'sub_agent', got '{self.worker_type}'")
+        if self.worker_type == "sub_agent" and not self.ref_agent_id:
+            raise ValueError("ref_agent_id is required when worker_type='sub_agent'")
+        if self.worker_type == "tool" and not self.tool_id:
+            raise ValueError("tool_id is required when worker_type='tool'")
 
 
 @dataclass

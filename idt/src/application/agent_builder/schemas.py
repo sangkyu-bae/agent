@@ -20,17 +20,27 @@ class WorkerInfo(BaseModel):
     description: str
     sort_order: int
     tool_config: dict | None = None
+    worker_type: str = "tool"
+    ref_agent_id: str | None = None
+    ref_agent_name: str | None = None
+
+
+class SubAgentConfigRequest(BaseModel):
+    """서브 에이전트 설정 요청 스키마."""
+    ref_agent_id: str = Field(..., description="서브 에이전트로 사용할 에이전트 ID")
+    description: str = Field("", max_length=500, description="상위 에이전트에서의 역할 설명")
 
 
 class CreateAgentRequest(BaseModel):
     user_request: str = Field(..., max_length=1000)
     name: str = Field(..., max_length=200)
-    user_id: str
+    user_id: str = ""
     llm_model_id: str | None = None
     visibility: str = Field("private", pattern="^(private|department|public)$")
     department_id: str | None = None
     temperature: float = Field(0.70, ge=0.0, le=2.0)
     tool_configs: dict[str, RagToolConfigRequest] | None = None
+    sub_agent_configs: list[SubAgentConfigRequest] | None = None
 
 
 class CreateAgentResponse(BaseModel):
@@ -47,6 +57,7 @@ class CreateAgentResponse(BaseModel):
     department_id: str | None = None
     temperature: float
     created_at: str
+    has_sub_agents: bool = False
 
 
 class UpdateAgentRequest(BaseModel):
@@ -88,6 +99,7 @@ class GetAgentResponse(BaseModel):
 class RunAgentRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=2000)
     user_id: str
+    session_id: str | None = None
 
 
 class RunAgentResponse(BaseModel):
@@ -96,6 +108,7 @@ class RunAgentResponse(BaseModel):
     answer: str
     tools_used: list[str]
     request_id: str
+    session_id: str
 
 
 class ToolMetaResponse(BaseModel):
@@ -108,6 +121,22 @@ class ToolMetaResponse(BaseModel):
 
 class AvailableToolsResponse(BaseModel):
     tools: list[ToolMetaResponse]
+
+
+# ── Sub-Agent Candidate ───────────────────────────────────────
+
+
+class SubAgentCandidate(BaseModel):
+    agent_id: str
+    name: str
+    description: str
+    source_type: str  # "owned" | "subscribed"
+    tool_ids: list[str]
+    has_sub_agents: bool = False
+
+
+class AvailableSubAgentsResponse(BaseModel):
+    agents: list[SubAgentCandidate]
 
 
 # ── Human-in-the-Loop Interview ─────────────────────────────────

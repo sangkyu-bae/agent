@@ -7,6 +7,12 @@ from src.infrastructure.chunking.strategies.parent_child_strategy import (
 )
 from src.domain.chunking.value_objects import ChunkingConfig
 from src.domain.chunking.interfaces import ChunkingStrategy
+from src.infrastructure.chunking.table_flattening.preprocessor import (
+    TableFlatteningPreprocessor,
+)
+from src.infrastructure.chunking.table_flattening.rule_based_generator import (
+    RuleBasedTableContentGenerator,
+)
 
 
 class TestParentChildStrategy:
@@ -255,3 +261,138 @@ class TestParentChildStrategy:
             assert len(matching_children) > 0
             # Number of matching children should equal children_ids count
             assert len(matching_children) == len(parent.metadata["children_ids"])
+
+
+class TestParentChildStrategyTableFlattening:
+    """Tests for table flattening integration in ParentChildStrategy."""
+
+    @pytest.fixture
+    def table_strategy(self):
+        parent_config = ChunkingConfig(chunk_size=2000, chunk_overlap=0)
+        child_config = ChunkingConfig(chunk_size=500, chunk_overlap=50)
+        generator = RuleBasedTableContentGenerator()
+        preprocessor = TableFlatteningPreprocessor(generator)
+        return ParentChildStrategy(
+            parent_config=parent_config,
+            child_config=child_config,
+            table_preprocessor=preprocessor,
+        )
+
+    @pytest.fixture
+    def table_doc(self):
+        content = (
+            "대출 금리 안내\n\n"
+            "아래 표를 참고하세요.\n\n"
+            "| 등급 | 금리 | 한도 |\n"
+            "|---|---|---|\n"
+            "| A | 3.5% | 1억 |\n"
+            "| B | 4.2% | 5천만 |\n"
+            "\n후속 안내 내용입니다."
+        )
+        return Document(
+            page_content=content,
+            metadata={
+                "document_id": "doc_1",
+                "has_table": True,
+                "section_title": "대출 금리",
+            },
+        )
+
+    @pytest.fixture
+    def no_table_doc(self):
+        return Document(
+            page_content="일반 텍스트 " * 100,
+            metadata={"document_id": "doc_2", "has_table": False},
+        )
+
+    def test_parent_has_original_markdown(self, table_strategy, table_doc):
+        """부모 chunk에 원본 markdown 표가 보존되는지 확인."""
+        result = table_strategy.chunk([table_doc])
+        parents = [d for d in result if d.metadata.get("chunk_type") == "parent"]
+
+        assert len(parents) >= 1
+        parent_text = " ".join(p.page_content for p in parents)
+        assert "| 등급 | 금리 | 한도 |" in parent_text
+        assert "| A | 3.5% | 1억 |" in parent_text
+
+    def test_child_has_semantic_sentences(self, table_strategy, table_doc):
+        """자식 chunk에 의미 문장이 포함되고 표가 없는지 확인."""
+        result = table_strategy.chunk([table_doc])
+        children = [d for d in result if d.metadata.get("chunk_type") == "child"]
+
+        assert len(children) >= 1
+        child_text = " ".join(c.page_content for c in children)
+        assert "등급은(는) A" in child_text
+        assert "금리은(는) 3.5%" in child_text
+        assert "| A |" not in child_text
+
+    def test_child_metadata_has_table_flattened(self, table_strategy, table_doc):
+        """자식 chunk에 table_flattened 메타데이터 확인."""
+        result = table_strategy.chunk([table_doc])
+        children = [d for d in result if d.metadata.get("chunk_type") == "child"]
+
+        for child in children:
+            assert child.metadata.get("table_flattened") is True
+
+    def test_parent_metadata_has_table_count(self, table_strategy, table_doc):
+        """부모 chunk에 table_count 메타데이터 확인."""
+        result = table_strategy.chunk([table_doc])
+        parents = [d for d in result if d.metadata.get("chunk_type") == "parent"]
+
+        for parent in parents:
+            assert parent.metadata.get("table_count") == 1
+
+    def test_no_table_doc_uses_default_logic(self, table_strategy, no_table_doc):
+        """has_table=False인 문서는 기존 로직 사용."""
+        result = table_strategy.chunk([no_table_doc])
+        children = [d for d in result if d.metadata.get("chunk_type") == "child"]
+
+        for child in children:
+            assert child.metadata.get("table_flattened") is not True
+
+    def test_no_preprocessor_uses_default_logic(self):
+        """table_preprocessor=None이면 기존 로직 사용."""
+        parent_config = ChunkingConfig(chunk_size=2000, chunk_overlap=0)
+        child_config = ChunkingConfig(chunk_size=500, chunk_overlap=50)
+        strategy = ParentChildStrategy(
+            parent_config=parent_config,
+            child_config=child_config,
+            table_preprocessor=None,
+        )
+
+        doc = Document(
+            page_content="| A | B |\n|---|---|\n| 1 | 2 |\n" + "text " * 100,
+            metadata={"has_table": True},
+        )
+        result = strategy.chunk([doc])
+        children = [d for d in result if d.metadata.get("chunk_type") == "child"]
+
+        for child in children:
+            assert child.metadata.get("table_flattened") is not True
+
+    def test_parent_child_relationship_intact(self, table_strategy, table_doc):
+        """표 flatten 후에도 parent_id ↔ children_ids 관계 정상."""
+        result = table_strategy.chunk([table_doc])
+        parents = [d for d in result if d.metadata.get("chunk_type") == "parent"]
+        children = [d for d in result if d.metadata.get("chunk_type") == "child"]
+
+        for parent in parents:
+            parent_id = parent.metadata["chunk_id"]
+            children_ids = parent.metadata["children_ids"]
+            for child_id in children_ids:
+                matching = [
+                    c for c in children if c.metadata.get("chunk_id") == child_id
+                ]
+                assert len(matching) == 1
+                assert matching[0].metadata["parent_id"] == parent_id
+
+    def test_surrounding_text_preserved_in_children(
+        self, table_strategy, table_doc
+    ):
+        """표 전후 텍스트가 자식 chunk에 보존되는지 확인."""
+        result = table_strategy.chunk([table_doc])
+        children = [d for d in result if d.metadata.get("chunk_type") == "child"]
+
+        child_text = " ".join(c.page_content for c in children)
+        assert "대출 금리 안내" in child_text
+        assert "후속 안내 내용" in child_text

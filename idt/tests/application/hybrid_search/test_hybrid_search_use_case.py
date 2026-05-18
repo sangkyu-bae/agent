@@ -90,7 +90,7 @@ class TestHybridSearchUseCaseExecute:
         es_query = call_args[0][0]
         mm = es_query.query["multi_match"]
         assert mm["query"] == "test query"
-        assert mm["fields"] == ["content", "morph_text^1.5"]
+        assert mm["fields"] == ["content^1.5", "morph_text"]
         assert mm["type"] == "most_fields"
 
     @pytest.mark.asyncio
@@ -112,7 +112,7 @@ class TestHybridSearchUseCaseExecute:
         await use_case.execute(req, REQUEST_ID)
 
         mock_vector_store.search_by_vector.assert_called_once_with(
-            vector=[0.1, 0.2, 0.3], top_k=15, filter=None
+            vector=[0.1, 0.2, 0.3], top_k=15, filter=None, collection_name=None
         )
 
     @pytest.mark.asyncio
@@ -222,7 +222,7 @@ class TestHybridSearchUseCaseExecute:
         assert "bool" in es_query.query
         must_clause = es_query.query["bool"]["must"][0]
         assert must_clause["multi_match"]["query"] == "q"
-        assert must_clause["multi_match"]["fields"] == ["content", "morph_text^1.5"]
+        assert must_clause["multi_match"]["fields"] == ["content^1.5", "morph_text"]
         assert es_query.query["bool"]["filter"] == [
             {"term": {"department": "finance"}}
         ]
@@ -254,3 +254,72 @@ class TestHybridSearchUseCaseExecute:
         es_query = call_args[0][0]
         assert "multi_match" in es_query.query
         assert "bool" not in es_query.query
+
+
+class TestHybridSearchCollectionOverride:
+    """컬렉션/인덱스 오버라이드 테스트."""
+
+    @pytest.mark.asyncio
+    async def test_fetch_bm25_uses_request_es_index_when_provided(
+        self, use_case, mock_es_repo
+    ):
+        from src.domain.hybrid_search.schemas import HybridSearchRequest
+
+        req = HybridSearchRequest(query="금리", es_index="dept_finance_idx")
+        await use_case.execute(req, REQUEST_ID)
+
+        call_args = mock_es_repo.search.call_args[0][0]
+        assert call_args.index == "dept_finance_idx"
+
+    @pytest.mark.asyncio
+    async def test_fetch_bm25_uses_global_es_index_when_none(
+        self, use_case, mock_es_repo
+    ):
+        from src.domain.hybrid_search.schemas import HybridSearchRequest
+
+        req = HybridSearchRequest(query="금리")
+        await use_case.execute(req, REQUEST_ID)
+
+        call_args = mock_es_repo.search.call_args[0][0]
+        assert call_args.index == "documents"
+
+    @pytest.mark.asyncio
+    async def test_fetch_vector_uses_request_collection_when_provided(
+        self, use_case, mock_vector_store
+    ):
+        from src.domain.hybrid_search.schemas import HybridSearchRequest
+
+        req = HybridSearchRequest(query="금리", collection_name="finance_docs")
+        await use_case.execute(req, REQUEST_ID)
+
+        mock_vector_store.search_by_vector.assert_called_once()
+        call_kwargs = mock_vector_store.search_by_vector.call_args.kwargs
+        assert call_kwargs["collection_name"] == "finance_docs"
+
+    @pytest.mark.asyncio
+    async def test_fetch_vector_passes_none_when_no_collection(
+        self, use_case, mock_vector_store
+    ):
+        from src.domain.hybrid_search.schemas import HybridSearchRequest
+
+        req = HybridSearchRequest(query="금리")
+        await use_case.execute(req, REQUEST_ID)
+
+        call_kwargs = mock_vector_store.search_by_vector.call_args.kwargs
+        assert call_kwargs["collection_name"] is None
+
+    @pytest.mark.asyncio
+    async def test_both_overrides_applied(
+        self, use_case, mock_es_repo, mock_vector_store
+    ):
+        from src.domain.hybrid_search.schemas import HybridSearchRequest
+
+        req = HybridSearchRequest(
+            query="금리", collection_name="finance", es_index="fin_idx"
+        )
+        await use_case.execute(req, REQUEST_ID)
+
+        es_query = mock_es_repo.search.call_args[0][0]
+        assert es_query.index == "fin_idx"
+        call_kwargs = mock_vector_store.search_by_vector.call_args.kwargs
+        assert call_kwargs["collection_name"] == "finance"

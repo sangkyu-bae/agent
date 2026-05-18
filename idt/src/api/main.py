@@ -7,6 +7,7 @@ import logging
 import os
 import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime
 from typing import Optional
 
 from dotenv import load_dotenv
@@ -67,6 +68,10 @@ from src.api.routes.ingest_router import (
     router as ingest_router,
     get_ingest_use_case,
 )
+from src.api.routes.advanced_ingest_router import (
+    router as advanced_ingest_router,
+    get_advanced_ingest_use_case,
+)
 from src.api.routes.doc_chunk_router import (
     router as doc_chunk_router,
     get_doc_chunk_use_case,
@@ -84,6 +89,7 @@ from src.api.routes.agent_builder_router import (
     get_subscribe_use_case,
     get_fork_agent_use_case,
     get_list_my_agents_use_case,
+    get_list_available_sub_agents_use_case,
 )
 from src.api.routes.rag_tool_router import (
     router as rag_tool_router,
@@ -91,6 +97,13 @@ from src.api.routes.rag_tool_router import (
     get_collection_aliases as rag_tool_get_aliases,
     get_collection_permission_service as rag_tool_get_perm_service,
 )
+from src.api.routes.ws_router import (
+    router as ws_router,
+    get_connection_manager,
+    get_ws_jwt_adapter,
+    get_ws_user_repository,
+)
+from src.infrastructure.websocket.connection_manager import ConnectionManager
 from src.api.routes.department_router import (
     router as department_router,
     get_list_departments_use_case,
@@ -157,7 +170,13 @@ from src.api.routes.pdf_export_router import (
     router as pdf_export_router,
     get_html_to_pdf_use_case as get_html_to_pdf_uc,
 )
+from src.api.routes.preview_router import (
+    router as preview_router,
+    get_preview_parser,
+    get_preview_upload_use_case,
+)
 from src.application.doc_chunk.use_case import DocChunkUseCase
+from src.application.advanced_ingest.use_case import AdvancedIngestUseCase
 from src.application.hybrid_search.use_case import HybridSearchUseCase
 from src.application.ingest.ingest_use_case import IngestDocumentUseCase
 from src.application.chunk_and_index.use_case import ChunkAndIndexUseCase
@@ -168,6 +187,7 @@ from src.application.retrieval.retrieval_use_case import RetrievalUseCase
 from src.application.use_cases.excel_upload_use_case import ExcelUploadUseCase
 from src.application.agent_builder.tool_selector import ToolSelector
 from src.application.agent_builder.prompt_generator import PromptGenerator
+from src.application.agent_builder.supervisor_hooks import DefaultHooks
 from src.application.agent_builder.workflow_compiler import WorkflowCompiler
 from src.application.agent_builder.create_agent_use_case import CreateAgentUseCase
 from src.application.agent_builder.update_agent_use_case import UpdateAgentUseCase
@@ -219,6 +239,7 @@ from src.infrastructure.logging.middleware import (
 from src.infrastructure.config.analysis_config import AnalysisConfig
 from src.infrastructure.excel.pandas_excel_parser import PandasExcelParser
 from src.infrastructure.llm.claude_client import ClaudeClient
+from src.infrastructure.llm.llm_factory import LLMFactory
 from src.infrastructure.web_search.tavily_tool import TavilySearchTool
 from src.application.hallucination.use_case import HallucinationEvaluatorUseCase
 from src.infrastructure.hallucination.adapter import HallucinationEvaluatorAdapter
@@ -253,6 +274,19 @@ from src.application.use_cases.excel_export_use_case import ExcelExportUseCase
 from src.infrastructure.excel_export.pandas_excel_exporter import PandasExcelExporter
 from src.application.use_cases.html_to_pdf_use_case import HtmlToPdfUseCase
 from src.infrastructure.pdf_export.weasyprint_converter import WeasyprintConverter
+from src.api.routes.ragas_router import (
+    router as ragas_router,
+    get_batch_eval_use_case,
+    get_realtime_eval_use_case,
+    get_eval_result_use_case,
+    get_testset_use_case,
+)
+from src.application.ragas.batch_eval_use_case import BatchEvaluationUseCase
+from src.application.ragas.realtime_eval_use_case import RealtimeEvaluationUseCase
+from src.application.ragas.eval_result_use_case import EvalResultUseCase
+from src.application.ragas.testset_use_case import TestsetUseCase
+from src.infrastructure.ragas.repository import EvaluationRepository
+from src.infrastructure.ragas.ragas_adapter import RagasEvaluatorAdapter
 
 # Auth
 from src.api.routes.general_chat_router import (
@@ -304,6 +338,7 @@ from src.application.llm_model.update_llm_model_use_case import UpdateLlmModelUs
 from src.application.llm_model.deactivate_llm_model_use_case import DeactivateLlmModelUseCase
 from src.application.llm_model.get_llm_model_use_case import GetLlmModelUseCase
 from src.application.llm_model.list_llm_models_use_case import ListLlmModelsUseCase
+from src.domain.llm_model.entity import LlmModel
 from src.infrastructure.llm_model.llm_model_repository import LlmModelRepository
 from src.infrastructure.llm_model.seed import seed_default_models
 from src.interfaces.dependencies.auth import get_jwt_adapter, get_user_repository
@@ -348,6 +383,9 @@ _rag_agent_use_case: Optional[RAGAgentUseCase] = None
 # Global ingest use case instance (initialized on startup)
 _ingest_use_case: Optional[IngestDocumentUseCase] = None
 
+# Global advanced ingest use case instance (initialized on startup)
+_advanced_ingest_use_case: Optional[AdvancedIngestUseCase] = None
+
 # Global doc-chunk use case instance (initialized on startup)
 _doc_chunk_use_case: Optional[DocChunkUseCase] = None
 
@@ -355,6 +393,10 @@ _doc_chunk_use_case: Optional[DocChunkUseCase] = None
 _auto_build_use_case: Optional[AutoBuildUseCase] = None
 _auto_build_reply_use_case: Optional[AutoBuildReplyUseCase] = None
 _auto_build_session_repository: Optional[AutoBuildSessionRepository] = None
+
+# Global LLM factory and default model (initialized on startup)
+_llm_factory: LLMFactory = LLMFactory()
+_default_llm_model: Optional[LlmModel] = None
 
 # Global logger instance
 _app_logger: Optional[StructuredLogger] = None
@@ -673,8 +715,8 @@ def create_rag_agent_use_case() -> RAGAgentUseCase:
 
     return RAGAgentUseCase(
         hybrid_search_use_case=hybrid_search_uc,
-        openai_api_key=settings.openai_api_key,
-        model_name=settings.openai_llm_model,
+        llm_factory=_llm_factory,
+        llm_model=_default_llm_model,
         logger=app_logger,
     )
 
@@ -815,6 +857,7 @@ def create_ingest_use_case() -> IngestDocumentUseCase:
     )
     parsers = {
         "pymupdf": ParserFactory.create_from_string("pymupdf"),
+        "pymupdf4llm": ParserFactory.create_from_string("pymupdf4llm"),
         "llamaparser": ParserFactory.create_from_string(
             "llamaparser", api_key=settings.llama_parse_api_key
         ),
@@ -848,6 +891,66 @@ def get_configured_ingest_use_case() -> IngestDocumentUseCase:
     if _ingest_use_case is None:
         raise RuntimeError("Ingest use case not initialized")
     return _ingest_use_case
+
+
+def create_advanced_ingest_use_case() -> AdvancedIngestUseCase:
+    """Create and configure the advanced PDF ingest use case."""
+    from src.infrastructure.pdf_analyzer.pymupdf_analyzer import PyMuPDFAnalyzer
+    from src.infrastructure.pdf_routing.default_parser_router import DefaultParserRouter
+    from src.infrastructure.parser.layout.layout_analyzer import LayoutAnalyzer
+    from src.infrastructure.chunking.table_flattening.preprocessor import TableFlatteningPreprocessor
+    from src.infrastructure.chunking.table_flattening.rule_based_generator import RuleBasedTableContentGenerator
+
+    app_logger = get_app_logger()
+    analyzer = PyMuPDFAnalyzer()
+    parser_router = DefaultParserRouter()
+    parsers = {
+        "pymupdf": ParserFactory.create_from_string("pymupdf"),
+        "pymupdf4llm": ParserFactory.create_from_string("pymupdf4llm"),
+        "llamaparser": ParserFactory.create_from_string(
+            "llamaparser", api_key=settings.llama_parse_api_key
+        ),
+    }
+    layout_analyzer = LayoutAnalyzer()
+    table_preprocessor = TableFlatteningPreprocessor(RuleBasedTableContentGenerator())
+    morph_analyzer = KiwiMorphAnalyzer()
+    embedding = OpenAIEmbedding(model_name=settings.openai_embedding_model)
+    qdrant_client = AsyncQdrantClient(
+        host=settings.qdrant_host,
+        port=settings.qdrant_port,
+    )
+    vectorstore = QdrantVectorStore(
+        client=qdrant_client,
+        embedding=embedding,
+        collection_name=settings.qdrant_collection_name,
+    )
+    es_config = ElasticsearchConfig(
+        ES_HOST=settings.es_host,
+        ES_PORT=settings.es_port,
+        ES_SCHEME=settings.es_scheme,
+    )
+    es_client = ElasticsearchClient.from_config(es_config)
+    es_repo = ElasticsearchRepository(client=es_client, logger=app_logger)
+
+    return AdvancedIngestUseCase(
+        analyzer=analyzer,
+        router=parser_router,
+        parsers=parsers,
+        layout_analyzer=layout_analyzer,
+        table_preprocessor=table_preprocessor,
+        morph_analyzer=morph_analyzer,
+        embedding=embedding,
+        vectorstore=vectorstore,
+        es_repo=es_repo,
+        logger=app_logger,
+    )
+
+
+def get_configured_advanced_ingest_use_case() -> AdvancedIngestUseCase:
+    """Get the configured advanced ingest use case instance."""
+    if _advanced_ingest_use_case is None:
+        raise RuntimeError("AdvancedIngestUseCase not initialized")
+    return _advanced_ingest_use_case
 
 
 def create_doc_chunk_use_case() -> DocChunkUseCase:
@@ -894,7 +997,8 @@ def create_auto_build_components():
     session_repo = AutoBuildSessionRepository(redis=redis_repo)
 
     inference_service = AgentSpecInferenceService(
-        model_name=settings.openai_llm_model,
+        llm_factory=_llm_factory,
+        llm_model=_default_llm_model,
         logger=app_logger,
     )
 
@@ -1134,6 +1238,35 @@ async def seed_llm_models_on_startup() -> None:
         )
 
 
+async def _load_default_llm_model() -> LlmModel:
+    """DB에서 is_default=True 모델을 조회한다."""
+    app_logger = get_app_logger()
+    request_id = str(uuid.uuid4())
+    factory = get_session_factory()
+    async with factory() as session:
+        repo = LlmModelRepository(session=session, logger=app_logger)
+        default = await repo.find_default(request_id)
+        if default is None:
+            app_logger.warning(
+                "기본 LLM 모델 미설정, 환경변수 폴백 사용",
+                request_id=request_id,
+            )
+            return LlmModel(
+                id="fallback",
+                provider="openai",
+                model_name=settings.openai_llm_model,
+                display_name="Fallback",
+                description=None,
+                api_key_env="OPENAI_API_KEY",
+                max_tokens=128000,
+                is_active=True,
+                is_default=True,
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow(),
+            )
+        return default
+
+
 def create_history_use_case_factory():
     """Return a per-request factory for ConversationHistoryUseCase.
 
@@ -1209,8 +1342,8 @@ def create_general_chat_use_case_factory():
             summarizer=summarizer,
             summarization_policy=policy,
             logger=app_logger,
-            openai_api_key=settings.openai_api_key,
-            model_name=settings.openai_llm_model,
+            llm_factory=_llm_factory,
+            llm_model=_default_llm_model,
         )
 
     return _factory
@@ -1233,9 +1366,13 @@ def create_agent_builder_factories():
 
     tool_factory = ToolFactory(
         logger=app_logger,
+        hybrid_search_use_case_getter=get_configured_hybrid_search_use_case,
         tavily_api_key=os.environ.get("TAVILY_API_KEY"),
     )
-    workflow_compiler = WorkflowCompiler(tool_factory=tool_factory, logger=app_logger)
+    workflow_compiler = WorkflowCompiler(
+        tool_factory=tool_factory, llm_factory=_llm_factory, logger=app_logger,
+        hooks=DefaultHooks(),
+    )
 
     # 인터뷰 세션 스토어는 앱 전체에서 공유 (싱글턴)
     interview_session_store = InMemoryInterviewSessionStore()
@@ -1269,11 +1406,23 @@ def create_agent_builder_factories():
         )
 
     def run_uc_factory(session: AsyncSession = Depends(get_session)):
+        message_repo = SQLAlchemyConversationMessageRepository(session)
+        summary_repo = SQLAlchemyConversationSummaryRepository(session)
+        summarizer = LangChainSummarizer(
+            model_name=settings.openai_llm_model,
+            api_key=settings.openai_api_key,
+            logger=app_logger,
+        )
+        policy = SummarizationPolicy()
         return RunAgentUseCase(
             repository=_make_repo(session),
             llm_model_repository=_make_llm_model_repo(session),
             compiler=workflow_compiler,
             logger=app_logger,
+            message_repo=message_repo,
+            summary_repo=summary_repo,
+            summarizer=summarizer,
+            policy=policy,
         )
 
     def get_uc_factory(session: AsyncSession = Depends(get_session)):
@@ -1338,11 +1487,22 @@ def create_agent_builder_factories():
             logger=app_logger,
         )
 
+    def list_available_sub_agents_uc_factory(session: AsyncSession = Depends(get_session)):
+        from src.application.agent_builder.list_available_sub_agents_use_case import (
+            ListAvailableSubAgentsUseCase,
+        )
+        return ListAvailableSubAgentsUseCase(
+            agent_repo=_make_repo(session),
+            subscription_repo=_make_sub_repo(session),
+            logger=app_logger,
+        )
+
     return (
         create_uc_factory, update_uc_factory, run_uc_factory,
         get_uc_factory, interview_uc_factory,
         list_uc_factory, delete_uc_factory,
         subscribe_uc_factory, fork_uc_factory, list_my_uc_factory,
+        list_available_sub_agents_uc_factory,
     )
 
 
@@ -1372,6 +1532,37 @@ def create_department_factories():
         return RemoveUserDepartmentUseCase(repository=_make_repo(session), logger=app_logger)
 
     return list_factory, create_factory, update_factory, delete_factory, assign_factory, remove_factory
+
+
+def create_ragas_factories():
+    """Return per-request DI factories for RAGAS evaluation use cases."""
+    app_logger = get_app_logger()
+    evaluator = RagasEvaluatorAdapter()
+
+    def _make_repo(session: AsyncSession):
+        return EvaluationRepository(session=session, logger=app_logger)
+
+    def batch_factory(session: AsyncSession = Depends(get_session)):
+        return BatchEvaluationUseCase(
+            repository=_make_repo(session),
+            evaluator=evaluator,
+            logger=app_logger,
+        )
+
+    def realtime_factory(session: AsyncSession = Depends(get_session)):
+        return RealtimeEvaluationUseCase(
+            repository=_make_repo(session),
+            evaluator=evaluator,
+            logger=app_logger,
+        )
+
+    def result_factory(session: AsyncSession = Depends(get_session)):
+        return EvalResultUseCase(repository=_make_repo(session), logger=app_logger)
+
+    def testset_factory(session: AsyncSession = Depends(get_session)):
+        return TestsetUseCase(repository=_make_repo(session), logger=app_logger)
+
+    return batch_factory, realtime_factory, result_factory, testset_factory
 
 
 def create_collection_factories():
@@ -1653,7 +1844,10 @@ def create_load_mcp_tools_factory():
 
 async def _ensure_es_index() -> None:
     """앱 시작 시 ES 문서 인덱스 존재를 보장한다."""
-    from src.infrastructure.elasticsearch.es_index_mappings import DOCUMENTS_INDEX_MAPPINGS
+    from src.infrastructure.elasticsearch.es_index_mappings import (
+        DOCUMENTS_INDEX_MAPPINGS,
+        DOCUMENTS_INDEX_SETTINGS,
+    )
 
     try:
         es_config = ElasticsearchConfig(
@@ -1663,9 +1857,18 @@ async def _ensure_es_index() -> None:
         )
         es_client = ElasticsearchClient.from_config(es_config)
         es_repo = ElasticsearchRepository(client=es_client, logger=get_app_logger())
-        created = await es_repo.ensure_index_exists(
-            settings.es_index, DOCUMENTS_INDEX_MAPPINGS
-        )
+        try:
+            created = await es_repo.ensure_index_exists(
+                settings.es_index, DOCUMENTS_INDEX_MAPPINGS,
+                settings=DOCUMENTS_INDEX_SETTINGS,
+            )
+        except Exception:
+            get_app_logger().warning(
+                "ES index creation with nori failed, falling back to standard analyzer",
+            )
+            created = await es_repo.ensure_index_exists(
+                settings.es_index, DOCUMENTS_INDEX_MAPPINGS
+            )
         if created:
             get_app_logger().info(
                 "ES index ensured on startup", index=settings.es_index
@@ -1683,6 +1886,7 @@ async def lifespan(app: FastAPI):
     global _retrieval_use_case, _hybrid_search_use_case, _chunk_index_use_case
     global _morph_index_use_case, _rag_agent_use_case, _ingest_use_case
     global _doc_chunk_use_case
+    global _advanced_ingest_use_case
     global _auto_build_use_case, _auto_build_reply_use_case, _auto_build_session_repository
 
     # uvicorn access log 억제 (RequestLoggingMiddleware가 중복 로깅하므로)
@@ -1704,6 +1908,7 @@ async def lifespan(app: FastAPI):
     _auto_build_use_case, _auto_build_reply_use_case, _auto_build_session_repository = (
         create_auto_build_components()
     )
+    _advanced_ingest_use_case = create_advanced_ingest_use_case()
 
     # ES 인덱스 보장 (없으면 자동 생성, 실패 시 warning만)
     await _ensure_es_index()
@@ -1711,6 +1916,10 @@ async def lifespan(app: FastAPI):
     # LLM Model Registry: 기본 모델 시드 등록 (중복 스킵, 실패 시 경고)
     await seed_llm_models_on_startup()
     await seed_embedding_models_on_startup()
+
+    # LLM Factory: 기본 모델 조회 (시드 후 실행)
+    global _default_llm_model
+    _default_llm_model = await _load_default_llm_model()
 
     yield
 
@@ -1728,6 +1937,7 @@ async def lifespan(app: FastAPI):
     _auto_build_use_case = None
     _auto_build_reply_use_case = None
     _auto_build_session_repository = None
+    _advanced_ingest_use_case = None
 
 
 def create_app() -> FastAPI:
@@ -1774,12 +1984,14 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_general_chat_use_case] = create_general_chat_use_case_factory()
     app.dependency_overrides[get_ingest_use_case] = get_configured_ingest_use_case
     app.dependency_overrides[get_doc_chunk_use_case] = get_configured_doc_chunk_use_case
+    app.dependency_overrides[get_advanced_ingest_use_case] = get_configured_advanced_ingest_use_case
 
     # Agent Builder DI
     (
         _create_uc, _update_uc, _run_uc, _get_uc, _interview_uc,
         _list_agents_uc, _delete_agent_uc,
         _subscribe_uc, _fork_uc, _list_my_uc,
+        _list_available_sub_agents_uc,
     ) = create_agent_builder_factories()
     app.dependency_overrides[get_create_agent_use_case] = _create_uc
     app.dependency_overrides[get_update_agent_use_case] = _update_uc
@@ -1791,6 +2003,7 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_subscribe_use_case] = _subscribe_uc
     app.dependency_overrides[get_fork_agent_use_case] = _fork_uc
     app.dependency_overrides[get_list_my_agents_use_case] = _list_my_uc
+    app.dependency_overrides[get_list_available_sub_agents_use_case] = _list_available_sub_agents_uc
     app.dependency_overrides[get_load_mcp_tools_use_case] = create_load_mcp_tools_factory()
 
     # Department DI
@@ -1831,6 +2044,12 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_reject_use_case] = _reject_f
     app.dependency_overrides[get_jwt_adapter] = _jwt_f
     app.dependency_overrides[get_user_repository] = _user_repo_f
+
+    # WebSocket DI
+    _connection_manager = ConnectionManager(logger=logger, max_connections=100)
+    app.dependency_overrides[get_connection_manager] = lambda: _connection_manager
+    app.dependency_overrides[get_ws_jwt_adapter] = _jwt_f
+    app.dependency_overrides[get_ws_user_repository] = _user_repo_f
 
     # LLM Model Registry DI
     (
@@ -1876,6 +2095,12 @@ def create_app() -> FastAPI:
     # Unified Upload DI (per-request — session 필요)
     _unified_upload_uc_factory = create_unified_upload_factories()
     app.dependency_overrides[get_unified_upload_use_case] = _unified_upload_uc_factory
+
+    # Preview Router DI
+    _preview_parser = ParserFactory.create_from_string("pymupdf4llm")
+    app.dependency_overrides[get_preview_parser] = lambda: _preview_parser
+    _preview_upload_uc_factory = create_unified_upload_factories()
+    app.dependency_overrides[get_preview_upload_use_case] = _preview_upload_uc_factory
 
     # Collection Search DI (per-request — session 필요)
     _search_uc_factory, _history_uc_factory = create_collection_search_factories()
@@ -1992,6 +2217,16 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_chunks_use_case] = _get_chunks_uc_factory
     app.dependency_overrides[get_delete_document_use_case] = _delete_document_uc_factory
 
+    # RAGAS Evaluation DI
+    (
+        _ragas_batch_f, _ragas_realtime_f,
+        _ragas_result_f, _ragas_testset_f,
+    ) = create_ragas_factories()
+    app.dependency_overrides[get_batch_eval_use_case] = _ragas_batch_f
+    app.dependency_overrides[get_realtime_eval_use_case] = _ragas_realtime_f
+    app.dependency_overrides[get_eval_result_use_case] = _ragas_result_f
+    app.dependency_overrides[get_testset_use_case] = _ragas_testset_f
+
     # Include routers
     app.include_router(document_router)
     app.include_router(analysis_router)
@@ -2023,6 +2258,10 @@ def create_app() -> FastAPI:
     app.include_router(pdf_export_router)
     app.include_router(unified_upload_router)
     app.include_router(collection_search_router)
+    app.include_router(ragas_router)
+    app.include_router(preview_router)
+    app.include_router(advanced_ingest_router)
+    app.include_router(ws_router)
 
     # Health check endpoint
     @app.get("/health")

@@ -57,3 +57,21 @@ class TestToolRegistry:
     def test_excel_export_requires_no_env(self):
         meta = get_tool_meta("excel_export")
         assert meta.requires_env == []
+
+
+class TestToolRegistryCategory:
+    def test_internal_document_search_is_search(self):
+        meta = get_tool_meta("internal_document_search")
+        assert meta.category == "search"
+
+    def test_tavily_search_is_search(self):
+        meta = get_tool_meta("tavily_search")
+        assert meta.category == "search"
+
+    def test_excel_export_is_action(self):
+        meta = get_tool_meta("excel_export")
+        assert meta.category == "action"
+
+    def test_python_code_executor_is_action(self):
+        meta = get_tool_meta("python_code_executor")
+        assert meta.category == "action"

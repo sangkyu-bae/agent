@@ -1,0 +1,2 @@
+ALTER TABLE agent_tool
+    ADD COLUMN category VARCHAR(20) NULL DEFAULT NULL;

@@ -436,3 +436,58 @@ class TestQdrantVectorStore:
         mock_qdrant_client.get_collections.assert_not_called()
         mock_qdrant_client.create_collection.assert_not_called()
         assert result == []
+
+    @pytest.mark.asyncio
+    async def test_search_by_vector_uses_override_collection(
+        self, mock_qdrant_client: MagicMock, mock_embedding: MagicMock
+    ) -> None:
+        """collection_name 파라미터 전달 시 해당 컬렉션으로 쿼리한다."""
+        mock_qdrant_client.query_points = AsyncMock(
+            return_value=MagicMock(points=[])
+        )
+        store = QdrantVectorStore(
+            client=mock_qdrant_client,
+            embedding=mock_embedding,
+            collection_name="default_col",
+        )
+        await store.search_by_vector(
+            vector=[0.1] * 1536, top_k=5, collection_name="custom_col"
+        )
+        call_kwargs = mock_qdrant_client.query_points.call_args.kwargs
+        assert call_kwargs["collection_name"] == "custom_col"
+
+    @pytest.mark.asyncio
+    async def test_search_by_vector_uses_default_when_collection_none(
+        self, mock_qdrant_client: MagicMock, mock_embedding: MagicMock
+    ) -> None:
+        """collection_name=None이면 초기화 시 설정한 기본 컬렉션 사용."""
+        mock_qdrant_client.query_points = AsyncMock(
+            return_value=MagicMock(points=[])
+        )
+        store = QdrantVectorStore(
+            client=mock_qdrant_client,
+            embedding=mock_embedding,
+            collection_name="default_col",
+        )
+        await store.search_by_vector(
+            vector=[0.1] * 1536, top_k=5, collection_name=None
+        )
+        call_kwargs = mock_qdrant_client.query_points.call_args.kwargs
+        assert call_kwargs["collection_name"] == "default_col"
+
+    @pytest.mark.asyncio
+    async def test_search_by_vector_uses_default_when_collection_omitted(
+        self, mock_qdrant_client: MagicMock, mock_embedding: MagicMock
+    ) -> None:
+        """collection_name 생략 시 기본 컬렉션 사용."""
+        mock_qdrant_client.query_points = AsyncMock(
+            return_value=MagicMock(points=[])
+        )
+        store = QdrantVectorStore(
+            client=mock_qdrant_client,
+            embedding=mock_embedding,
+            collection_name="default_col",
+        )
+        await store.search_by_vector(vector=[0.1] * 1536, top_k=5)
+        call_kwargs = mock_qdrant_client.query_points.call_args.kwargs
+        assert call_kwargs["collection_name"] == "default_col"

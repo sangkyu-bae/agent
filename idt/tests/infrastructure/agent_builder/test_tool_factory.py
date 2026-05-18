@@ -41,7 +41,7 @@ class TestToolFactory:
         factory = _make_factory()
         tool = factory.create("internal_document_search")
         assert isinstance(tool, BaseTool)
-        assert tool.name == "내부 문서 검색"
+        assert tool.name == "internal_document_search"
 
     def test_create_unknown_tool_raises(self):
         factory = _make_factory()
@@ -60,11 +60,18 @@ class TestToolFactoryRagConfig:
             "tool_description": "금융 관련 내부 문서를 검색합니다.",
         }
         tool = factory.create("internal_document_search", tool_config=config)
-        assert tool.name == "금융 문서 검색"
+        import re
+        assert re.match(r"^[a-zA-Z0-9_-]+$", tool.name)
         assert tool.description == "금융 관련 내부 문서를 검색합니다."
         assert tool.top_k == 10
         assert tool.search_mode == "vector_only"
         assert tool.metadata_filter == {"department": "finance"}
+
+    def test_create_with_ascii_tool_name_preserved(self):
+        factory = _make_factory()
+        config = {"tool_name": "finance_doc_search"}
+        tool = factory.create("internal_document_search", tool_config=config)
+        assert tool.name == "finance_doc_search"
 
     def test_create_without_config_uses_defaults(self):
         factory = _make_factory()

@@ -38,7 +38,7 @@ vi.mock('@/store/authStore', () => ({
 vi.mock('@/store/layoutStore', () => ({
   useLayoutStore: () => ({
     isChatPanelOpen: true,
-    selectedAgentId: 'super-ai',
+    selectedAgentId: 'super',
     toggleChatPanel: vi.fn(),
     setChatPanelOpen: vi.fn(),
     selectAgent: vi.fn(),
@@ -98,7 +98,7 @@ describe('ChatPage Integration (CHAT-HIST-001)', () => {
     let sessionsCallCount = 0;
 
     server.use(
-      http.get('*/api/v1/conversations/sessions', ({ request }) => {
+      http.get('*/api/v1/conversations/agents/:agentId/sessions', ({ request }) => {
         sessionsCallCount += 1;
         const url = new URL(request.url);
         const userId = url.searchParams.get('user_id');
@@ -146,7 +146,7 @@ describe('ChatPage Integration (CHAT-HIST-001)', () => {
 
     let sessionsCallCount = 0;
     server.use(
-      http.get('*/api/v1/conversations/sessions', () => {
+      http.get('*/api/v1/conversations/agents/:agentId/sessions', () => {
         sessionsCallCount += 1;
         return HttpResponse.json({ user_id: null, sessions: [] });
       }),
@@ -160,7 +160,7 @@ describe('ChatPage Integration (CHAT-HIST-001)', () => {
 
   it('I5: 500 에러 시 에러 배너 + "다시 시도" 버튼이 표시된다', async () => {
     server.use(
-      http.get('*/api/v1/conversations/sessions', () =>
+      http.get('*/api/v1/conversations/agents/:agentId/sessions', () =>
         HttpResponse.json({ detail: 'Internal Server Error' }, { status: 500 }),
       ),
     );
@@ -176,7 +176,7 @@ describe('ChatPage Integration (CHAT-HIST-001)', () => {
 
     let retryCallCount = 0;
     server.use(
-      http.get('*/api/v1/conversations/sessions', ({ request }) => {
+      http.get('*/api/v1/conversations/agents/:agentId/sessions', ({ request }) => {
         retryCallCount += 1;
         const url = new URL(request.url);
         return HttpResponse.json({
