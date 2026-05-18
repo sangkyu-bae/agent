@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import AppSidebar from '@/components/layout/AppSidebar';
 import ChatHistoryPanel from '@/components/layout/ChatHistoryPanel';
 import { useLayoutStore } from '@/store/layoutStore';
 import { useAuthStore } from '@/store/authStore';
-import { useConversationSessions } from '@/hooks/useChat';
+import { useAgentSessions } from '@/hooks/useChat';
 import { useMyAgents } from '@/hooks/useAgentSubscription';
 import { toAgentSummary } from '@/services/agentSubscriptionService';
 import type { AgentSummary, AgentChatOutletContext } from '@/types/agent';
@@ -32,16 +32,17 @@ const AgentChatLayout = () => {
   const user = useAuthStore((s) => s.user);
   const userId = user?.id != null ? String(user.id) : undefined;
 
-  const initialDraft = useState(() => createDraftSession())[0];
-  const [draftSessions, setDraftSessions] = useState<ChatSession[]>([initialDraft]);
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(initialDraft.id);
+  const [draftSessions, setDraftSessions] = useState<ChatSession[]>(() => [createDraftSession()]);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(draftSessions[0]?.id ?? null);
+
+  const prevAgentIdRef = useRef(selectedAgentId);
 
   const {
     data: serverSessions = [],
     isLoading: sessionsLoading,
     isError: sessionsError,
     refetch: refetchSessions,
-  } = useConversationSessions(userId);
+  } = useAgentSessions(selectedAgentId, userId);
 
   const {
     data: myAgentsData,
@@ -52,11 +53,25 @@ const AgentChatLayout = () => {
 
   const myAgents = useMemo(() => myAgentsData?.agents ?? [], [myAgentsData]);
 
+  // 에이전트 전환 시 세션 초기화
   useEffect(() => {
-    if (myAgents.length > 0 && !myAgents.find((a) => a.agent_id === selectedAgentId)) {
-      selectAgent(myAgents[0].agent_id);
+    if (prevAgentIdRef.current !== selectedAgentId) {
+      prevAgentIdRef.current = selectedAgentId;
+      const newDraft = createDraftSession();
+      setDraftSessions([newDraft]);
+      setActiveSessionId(newDraft.id);
     }
-  }, [myAgents, selectedAgentId, selectAgent]);
+  }, [selectedAgentId]);
+
+  // 서버 세션 로드 완료 후 → 서버 세션 있으면 첫 번째 선택
+  useEffect(() => {
+    if (serverSessions.length > 0) {
+      const isDraft = draftSessions.some((d) => d.id === activeSessionId);
+      if (isDraft) {
+        setActiveSessionId(serverSessions[0].id);
+      }
+    }
+  }, [serverSessions]);
 
   const sessions = useMemo<ChatSession[]>(() => {
     const serverIds = new Set(serverSessions.map((s) => s.id));
@@ -75,6 +90,15 @@ const AgentChatLayout = () => {
   };
 
   const selectedAgent: AgentSummary | null = (() => {
+    if (selectedAgentId === 'super') {
+      return {
+        id: 'super',
+        name: 'SUPER AI Agent',
+        description: 'Auto-routing meta agent for all your agents',
+        category: 'system',
+        isDefault: true,
+      };
+    }
     const found = myAgents.find((a) => a.agent_id === selectedAgentId);
     if (found) return toAgentSummary(found);
     if (myAgents.length > 0) return toAgentSummary(myAgents[0]);
@@ -87,6 +111,7 @@ const AgentChatLayout = () => {
     setActiveSessionId,
     handleNewChat,
     sessions,
+    refetchSessions: () => refetchSessions(),
   };
 
   return (

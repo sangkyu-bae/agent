@@ -8,6 +8,7 @@ from typing import Optional
 
 from src.domain.parser.interfaces import PDFParserInterface
 from src.infrastructure.parser.pymupdf_parser import PyMuPDFParser
+from src.infrastructure.parser.pymupdf4llm_parser import PyMuPDF4LLMParser
 from src.infrastructure.parser.llamaparser import LlamaParserAdapter
 
 
@@ -15,7 +16,10 @@ class ParserType(Enum):
     """Supported parser types."""
 
     PYMUPDF = "pymupdf"
+    PYMUPDF4LLM = "pymupdf4llm"
     LLAMAPARSER = "llamaparser"
+    LAYOUT = "layout"
+    FALLBACK = "fallback"
 
     @classmethod
     def from_string(cls, type_str: str) -> "ParserType":
@@ -59,6 +63,9 @@ class ParserFactory:
         """
         if parser_type == ParserType.PYMUPDF:
             return PyMuPDFParser()
+
+        if parser_type == ParserType.PYMUPDF4LLM:
+            return PyMuPDF4LLMParser()
 
         if parser_type == ParserType.LLAMAPARSER:
             if not api_key:

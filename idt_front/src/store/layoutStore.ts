@@ -13,7 +13,7 @@ export const useLayoutStore = create<LayoutState>()(
   persist(
     (set) => ({
       isChatPanelOpen: false,
-      selectedAgentId: 'super-ai',
+      selectedAgentId: 'super',
       toggleChatPanel: () => set((s) => ({ isChatPanelOpen: !s.isChatPanelOpen })),
       setChatPanelOpen: (open) => set({ isChatPanelOpen: open }),
       selectAgent: (id) => set({ selectedAgentId: id }),

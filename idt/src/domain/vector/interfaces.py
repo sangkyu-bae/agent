@@ -78,6 +78,7 @@ class VectorStoreInterface(ABC):
         vector: List[float],
         top_k: int = 10,
         filter: Optional[SearchFilter] = None,
+        collection_name: Optional[str] = None,
     ) -> List[Document]:
         """Search for similar documents using a vector.
 
@@ -85,6 +86,7 @@ class VectorStoreInterface(ABC):
             vector: The query vector
             top_k: Maximum number of results to return (default: 10)
             filter: Optional filter conditions
+            collection_name: Override default collection (None = use default)
 
         Returns:
             List of documents with similarity scores, sorted by relevance

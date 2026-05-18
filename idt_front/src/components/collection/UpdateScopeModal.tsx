@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { COLLECTION_SCOPES, SCOPE_LABELS } from '@/types/collection';
 import type { CollectionScope, UpdateScopeRequest } from '@/types/collection';
+import { useDepartments } from '@/hooks/useDepartments';
 
 interface UpdateScopeModalProps {
   isOpen: boolean;
@@ -23,6 +24,7 @@ const UpdateScopeModal = ({
 }: UpdateScopeModalProps) => {
   const [scope, setScope] = useState<CollectionScope>(currentScope);
   const [departmentId, setDepartmentId] = useState('');
+  const { data: deptData, isLoading: isDeptLoading } = useDepartments();
 
   useEffect(() => {
     setScope(currentScope);
@@ -103,15 +105,26 @@ const UpdateScopeModal = ({
             {scope === 'DEPARTMENT' && (
               <div className="mt-3">
                 <label className="mb-1.5 block text-[12px] font-medium text-zinc-500">
-                  부서 ID
+                  부서 선택
                 </label>
-                <input
-                  type="text"
-                  value={departmentId}
-                  onChange={(e) => setDepartmentId(e.target.value)}
-                  placeholder="dept-uuid"
-                  className="w-full rounded-xl border border-zinc-300 px-4 py-2.5 text-[15px] text-zinc-900 placeholder-zinc-400 outline-none transition-all focus:border-violet-400"
-                />
+                {isDeptLoading ? (
+                  <p className="text-[13px] text-zinc-400">부서 목록을 불러오는 중...</p>
+                ) : !deptData?.departments.length ? (
+                  <p className="text-[13px] text-amber-600">등록된 부서가 없습니다. 관리자 페이지에서 부서를 먼저 등록해주세요.</p>
+                ) : (
+                  <select
+                    value={departmentId}
+                    onChange={(e) => setDepartmentId(e.target.value)}
+                    className="w-full rounded-xl border border-zinc-300 px-4 py-2.5 text-[15px] text-zinc-900 outline-none transition-all focus:border-violet-400"
+                  >
+                    <option value="">부서를 선택하세요</option>
+                    {deptData.departments.map((dept) => (
+                      <option key={dept.id} value={dept.id}>
+                        {dept.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
             )}
           </div>

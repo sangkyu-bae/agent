@@ -19,6 +19,7 @@ TOOL_REGISTRY: dict[str, ToolMeta] = {
             "관련 문서를 찾습니다. 내부 정책/지식 기반 질의에 사용하세요."
         ),
         requires_env=[],
+        category="search",
     ),
     "python_code_executor": ToolMeta(
         tool_id="python_code_executor",
@@ -38,6 +39,7 @@ TOOL_REGISTRY: dict[str, ToolMeta] = {
             "실시간 뉴스, 최신 트렌드, 외부 정보가 필요할 때 사용하세요."
         ),
         requires_env=["TAVILY_API_KEY"],
+        category="search",
     ),
 }
 

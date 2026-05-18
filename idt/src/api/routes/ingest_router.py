@@ -26,7 +26,7 @@ async def ingest_pdf(
     user_id: str = Query(..., description="Owner user ID"),
     parser_type: str = Query(
         "pymupdf",
-        description="PDF parser: 'pymupdf' (fast) | 'llamaparser' (OCR/AI)",
+        description="PDF parser: 'pymupdf' (fast) | 'pymupdf4llm' (markdown) | 'llamaparser' (OCR/AI)",
     ),
     chunking_strategy: str = Query(
         "full_token",

@@ -82,10 +82,10 @@ class TestExceptionHandlerMiddleware:
         """DEBUG=false 테스트 클라이언트 fixture."""
         return TestClient(app_debug_false, raise_server_exceptions=False)
 
-    def test_exception_returns_500_status(self, client_debug_true):
-        """예외 발생 시 500 상태 코드를 반환한다."""
+    def test_value_error_returns_422_status(self, client_debug_true):
+        """ValueError 발생 시 422 상태 코드를 반환한다."""
         response = client_debug_true.get("/error")
-        assert response.status_code == 500
+        assert response.status_code == 422
 
     def test_exception_returns_json_response(self, client_debug_true):
         """예외 발생 시 JSON 응답을 반환한다."""
@@ -140,8 +140,8 @@ class TestExceptionHandlerMiddleware:
         assert response.status_code == 200
         assert response.json() == {"status": "ok"}
 
-    def test_different_exception_types_handled(self, client_debug_true):
-        """다양한 예외 타입이 처리된다."""
+    def test_runtime_error_returns_500(self, client_debug_true):
+        """RuntimeError는 500 상태 코드를 반환한다."""
         response = client_debug_true.get("/runtime-error")
         assert response.status_code == 500
         data = response.json()

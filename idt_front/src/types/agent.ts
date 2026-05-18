@@ -108,5 +108,6 @@ export interface AgentChatOutletContext {
   setActiveSessionId: (id: string) => void;
   handleNewChat: () => void;
   sessions: import('@/types/chat').ChatSession[];
+  refetchSessions: () => void;
 }
 

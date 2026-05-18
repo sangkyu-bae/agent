@@ -11,6 +11,9 @@ from src.infrastructure.chunking.strategies.parent_child_strategy import (
     ParentChildStrategy,
 )
 from src.infrastructure.chunking.strategies.semantic_strategy import SemanticStrategy
+from src.infrastructure.chunking.strategies.section_aware_strategy import (
+    SectionAwareChunkingStrategy,
+)
 
 
 class StrategyType(Enum):
@@ -19,6 +22,7 @@ class StrategyType(Enum):
     FULL_TOKEN = "full_token"
     PARENT_CHILD = "parent_child"
     SEMANTIC = "semantic"
+    SECTION_AWARE = "section_aware"
 
 
 class ChunkingStrategyFactory:
@@ -64,6 +68,8 @@ class ChunkingStrategyFactory:
             return cls._create_parent_child_strategy(**kwargs)
         elif strategy_type == StrategyType.SEMANTIC:
             return cls._create_semantic_strategy(**kwargs)
+        elif strategy_type == StrategyType.SECTION_AWARE:
+            return cls._create_section_aware_strategy(**kwargs)
         else:
             raise ValueError(f"Unknown strategy type: {strategy_type}")
 
@@ -111,7 +117,7 @@ class ChunkingStrategyFactory:
 
         Args:
             **kwargs: parent_chunk_size, child_chunk_size,
-                      child_chunk_overlap overrides.
+                      child_chunk_overlap, table_flattening overrides.
 
         Returns:
             ParentChildStrategy instance.
@@ -125,6 +131,7 @@ class ChunkingStrategyFactory:
         child_chunk_overlap = kwargs.get(
             "child_chunk_overlap", cls.DEFAULT_CHILD_OVERLAP
         )
+        table_flattening = kwargs.get("table_flattening", True)
 
         parent_config = ChunkingConfig(
             chunk_size=parent_chunk_size,
@@ -134,9 +141,24 @@ class ChunkingStrategyFactory:
             chunk_size=child_chunk_size,
             chunk_overlap=child_chunk_overlap
         )
+
+        table_preprocessor = None
+        if table_flattening:
+            from src.infrastructure.chunking.table_flattening.preprocessor import (
+                TableFlatteningPreprocessor,
+            )
+            from src.infrastructure.chunking.table_flattening.rule_based_generator import (
+                RuleBasedTableContentGenerator,
+            )
+
+            table_preprocessor = TableFlatteningPreprocessor(
+                RuleBasedTableContentGenerator()
+            )
+
         return ParentChildStrategy(
             parent_config=parent_config,
-            child_config=child_config
+            child_config=child_config,
+            table_preprocessor=table_preprocessor,
         )
 
     @classmethod
@@ -145,6 +167,20 @@ class ChunkingStrategyFactory:
         min_chunk_size = kwargs.get("min_chunk_size", cls.DEFAULT_SEMANTIC_MIN_SIZE)
         config = ChunkingConfig(chunk_size=chunk_size, chunk_overlap=0)
         return SemanticStrategy(config, min_chunk_size=min_chunk_size)
+
+    DEFAULT_SECTION_AWARE_SIZE = 2000
+    DEFAULT_SECTION_AWARE_OVERLAP = 200
+    DEFAULT_SECTION_AWARE_MIN = 100
+
+    @classmethod
+    def _create_section_aware_strategy(
+        cls, **kwargs
+    ) -> SectionAwareChunkingStrategy:
+        chunk_size = kwargs.get("chunk_size", cls.DEFAULT_SECTION_AWARE_SIZE)
+        chunk_overlap = kwargs.get("chunk_overlap", cls.DEFAULT_SECTION_AWARE_OVERLAP)
+        min_chunk_size = kwargs.get("min_chunk_size", cls.DEFAULT_SECTION_AWARE_MIN)
+        config = ChunkingConfig(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+        return SectionAwareChunkingStrategy(config, min_chunk_size=min_chunk_size)
 
     @classmethod
     def list_strategies(cls) -> List[str]:

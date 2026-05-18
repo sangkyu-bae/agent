@@ -1,8 +1,9 @@
 """RAGAgentUseCase: LangGraph ReAct 에이전트 기반 내부 문서 질의응답."""
-from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
 
 from src.application.rag_agent.tools import InternalDocumentSearchTool
+from src.domain.llm.interfaces import LLMFactoryInterface
+from src.domain.llm_model.entity import LlmModel
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.domain.rag_agent.schemas import RAGAgentRequest, RAGAgentResponse
 
@@ -28,13 +29,13 @@ class RAGAgentUseCase:
     def __init__(
         self,
         hybrid_search_use_case: object,
-        openai_api_key: str,
-        model_name: str,
+        llm_factory: LLMFactoryInterface,
+        llm_model: LlmModel,
         logger: LoggerInterface,
     ) -> None:
         self._hybrid_search = hybrid_search_use_case
-        self._api_key = openai_api_key
-        self._model_name = model_name
+        self._llm_factory = llm_factory
+        self._llm_model = llm_model
         self._logger = logger
 
     async def execute(
@@ -61,11 +62,7 @@ class RAGAgentUseCase:
                 top_k=request.top_k,
                 request_id=request_id,
             )
-            llm = ChatOpenAI(
-                model=self._model_name,
-                api_key=self._api_key,
-                temperature=0,
-            )
+            llm = self._llm_factory.create(self._llm_model, temperature=0)
             agent = create_react_agent(llm, tools=[tool])
 
             messages = [

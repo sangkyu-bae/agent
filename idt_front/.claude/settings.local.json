@@ -14,7 +14,14 @@
       "Bash(npm run:*)",
       "Skill(bkit:pdca)",
       "Bash(npx vitest *)",
-      "Bash(npx vite *)"
+      "Bash(npx vite *)",
+      "Skill(pdca)",
+      "Bash(dir \"C:\\\\sangplus\\\\sangplusbot\\\\docs\\\\api\\\\agnet-subscription.md\")",
+      "Bash(dir \"C:\\\\sangplus\\\\sangplusbot\\\\docs\\\\api\\\\agent-subscription.md\")",
+      "PowerShell(Get-ChildItem -Path \"C:\\\\sangplus\\\\sangplusbot\" -Directory -Name | ForEach-Object { \"$_\" })",
+      "PowerShell(Move-Item *)",
+      "PowerShell(Copy-Item *)",
+      "PowerShell(Remove-Item *)"
     ]
   }
 }

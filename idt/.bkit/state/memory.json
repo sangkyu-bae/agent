@@ -1,8 +1,12 @@
 {
-  "sessionCount": 140,
+  "sessionCount": 226,
   "lastSession": {
-    "startedAt": "2026-04-29T06:52:10.131Z",
+    "startedAt": "2026-05-18T08:57:45.247Z",
     "platform": "claude",
     "level": "Starter"
-  }
+  },
+  "currentFeature": "advanced-document-parser",
+  "currentPhase": "archived",
+  "matchRate": 93,
+  "archivedTo": "docs/archive/2026-05/advanced-document-parser/"
 }

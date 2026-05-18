@@ -5,7 +5,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.application.agent_builder.schemas import CreateAgentRequest, CreateAgentResponse, RagToolConfigRequest
+from src.application.agent_builder.schemas import (
+    CreateAgentRequest, CreateAgentResponse, RagToolConfigRequest, SubAgentConfigRequest,
+)
 from src.application.agent_builder.create_agent_use_case import CreateAgentUseCase
 from src.domain.agent_builder.schemas import AgentDefinition, WorkerDefinition, WorkflowSkeleton
 from src.domain.collection.permission_schemas import CollectionPermission, CollectionScope
@@ -99,7 +101,10 @@ def _make_use_case(
         created_at=now,
         updated_at=now,
     )
-    repository.save = AsyncMock(return_value=saved_agent)
+    async def _save_passthrough(agent, req_id):
+        return agent
+
+    repository.save = AsyncMock(side_effect=_save_passthrough)
 
     use_case = CreateAgentUseCase(
         tool_selector=tool_selector,
@@ -258,6 +263,28 @@ class TestVisibilityClamping:
         assert result.max_visibility is None
 
     @pytest.mark.asyncio
+    async def test_explicit_tool_configs_clamp_visibility(self):
+        """tool_configs로 직접 선택해도 visibility clamping이 동작한다."""
+        perm = _make_perm(CollectionScope.PERSONAL, "my-docs")
+        use_case, _, _, repo, _ = _make_use_case(
+            perm_by_name={"my-docs": perm},
+        )
+        request = CreateAgentRequest(
+            user_request="테스트",
+            name="테스트 에이전트",
+            user_id="user-1",
+            visibility="public",
+            tool_configs={
+                "internal:internal_document_search": RagToolConfigRequest(
+                    collection_name="my-docs"
+                )
+            },
+        )
+        result = await use_case.execute(request, "req-1")
+        assert result.visibility == "private"
+        assert result.visibility_clamped is True
+
+    @pytest.mark.asyncio
     async def test_unknown_collection_treated_as_personal(self):
         use_case, _, _, repo, _ = _make_use_case(
             perm_by_name={},
@@ -277,3 +304,284 @@ class TestVisibilityClamping:
         saved_agent = repo.save.call_args[0][0]
         assert saved_agent.visibility == "private"
         assert result.visibility_clamped is True
+
+
+class TestExplicitToolSelection:
+    """tool_configs 명시적 도구 선택 테스트."""
+
+    @pytest.mark.asyncio
+    async def test_tool_configs_skips_llm_selector(self):
+        """tool_configs 존재 시 ToolSelector.select()를 호출하지 않는다."""
+        use_case, tool_selector, _, _, _ = _make_use_case()
+        request = CreateAgentRequest(
+            user_request="테스트",
+            name="테스트 에이전트",
+            user_id="user-1",
+            tool_configs={
+                "internal:internal_document_search": RagToolConfigRequest(
+                    collection_name="my-docs"
+                )
+            },
+        )
+        await use_case.execute(request, "req-1")
+        tool_selector.select.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_tool_configs_normalizes_prefix(self):
+        """'internal:internal_document_search' → 'internal_document_search'."""
+        use_case, _, _, _, _ = _make_use_case()
+        request = CreateAgentRequest(
+            user_request="테스트",
+            name="테스트 에이전트",
+            user_id="user-1",
+            tool_configs={
+                "internal:internal_document_search": RagToolConfigRequest(
+                    collection_name="my-docs"
+                )
+            },
+        )
+        result = await use_case.execute(request, "req-1")
+        assert "internal_document_search" in result.tool_ids
+
+    @pytest.mark.asyncio
+    async def test_unknown_tool_id_raises_value_error(self):
+        """TOOL_REGISTRY에 없는 tool_id → ValueError."""
+        use_case, _, _, _, _ = _make_use_case()
+        request = CreateAgentRequest(
+            user_request="테스트",
+            name="테스트 에이전트",
+            user_id="user-1",
+            tool_configs={
+                "internal:nonexistent_tool": RagToolConfigRequest()
+            },
+        )
+        with pytest.raises(ValueError, match="Unknown tool_id"):
+            await use_case.execute(request, "req-1")
+
+    @pytest.mark.asyncio
+    async def test_no_tool_configs_uses_llm_selector(self):
+        """tool_configs 없을 때 ToolSelector.select() 호출."""
+        use_case, tool_selector, _, _, _ = _make_use_case()
+        request = CreateAgentRequest(
+            user_request="테스트 요청",
+            name="테스트",
+            user_id="user-1",
+        )
+        await use_case.execute(request, "req-1")
+        tool_selector.select.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_tool_config_applied_to_worker(self):
+        """tool_configs의 설정이 WorkerDefinition.tool_config에 적용된다."""
+        use_case, _, _, repo, _ = _make_use_case()
+        config = RagToolConfigRequest(
+            collection_name="my-docs",
+            top_k=10,
+            search_mode="vector_only",
+        )
+        request = CreateAgentRequest(
+            user_request="테스트",
+            name="테스트 에이전트",
+            user_id="user-1",
+            tool_configs={"internal:internal_document_search": config},
+        )
+        await use_case.execute(request, "req-1")
+        saved_agent = repo.save.call_args[0][0]
+        worker = next(
+            w for w in saved_agent.workers
+            if w.tool_id == "internal_document_search"
+        )
+        assert worker.tool_config["collection_name"] == "my-docs"
+        assert worker.tool_config["top_k"] == 10
+
+
+def _make_sub_agent(
+    agent_id: str = "sub-agent-1",
+    user_id: str = "user-1",
+    name: str = "서브 에이전트",
+) -> AgentDefinition:
+    now = datetime.now(timezone.utc)
+    return AgentDefinition(
+        id=agent_id,
+        user_id=user_id,
+        name=name,
+        description="테스트 서브 에이전트",
+        system_prompt="서브 프롬프트",
+        flow_hint="test",
+        workers=[WorkerDefinition("tavily_search", "search_worker", "검색", 0)],
+        llm_model_id="model-default",
+        status="active",
+        created_at=now,
+        updated_at=now,
+    )
+
+
+def _make_use_case_with_sub_agent(
+    sub_agent: AgentDefinition | None = None,
+    is_subscribed: bool = False,
+):
+    tool_selector = MagicMock()
+    prompt_generator = MagicMock()
+    repository = MagicMock()
+    llm_model_repository = MagicMock()
+    perm_repo = MagicMock()
+    logger = MagicMock()
+    subscription_repo = MagicMock()
+
+    workers = [_make_worker("tavily_search", 0)]
+    skeleton = WorkflowSkeleton(workers=workers, flow_hint="search")
+    tool_selector.select = AsyncMock(return_value=skeleton)
+    prompt_generator.generate = AsyncMock(return_value="시스템 프롬프트")
+
+    default_model = _make_default_llm_model()
+    llm_model_repository.find_by_id = AsyncMock(return_value=default_model)
+    llm_model_repository.find_default = AsyncMock(return_value=default_model)
+    perm_repo.find_by_collection_name = AsyncMock(return_value=None)
+
+    repository.find_by_id = AsyncMock(return_value=sub_agent)
+
+    async def _save_passthrough(agent, req_id):
+        return agent
+    repository.save = AsyncMock(side_effect=_save_passthrough)
+
+    if is_subscribed:
+        subscription_repo.find_by_user_and_agent = AsyncMock(
+            return_value=MagicMock()
+        )
+    else:
+        subscription_repo.find_by_user_and_agent = AsyncMock(return_value=None)
+
+    use_case = CreateAgentUseCase(
+        tool_selector=tool_selector,
+        prompt_generator=prompt_generator,
+        repository=repository,
+        llm_model_repository=llm_model_repository,
+        perm_repo=perm_repo,
+        logger=logger,
+        subscription_repo=subscription_repo,
+    )
+    return use_case, repository, subscription_repo
+
+
+class TestSubAgentComposition:
+    """서브 에이전트 조합 기능 테스트."""
+
+    @pytest.mark.asyncio
+    async def test_sub_agent_worker_created_for_own_agent(self):
+        """본인 소유 에이전트를 서브 에이전트로 추가."""
+        sub = _make_sub_agent("sub-1", user_id="user-1", name="검색봇")
+        use_case, repo, _ = _make_use_case_with_sub_agent(sub_agent=sub)
+        request = CreateAgentRequest(
+            user_request="테스트",
+            name="복합 에이전트",
+            user_id="user-1",
+            sub_agent_configs=[
+                SubAgentConfigRequest(ref_agent_id="sub-1", description="검색 담당")
+            ],
+        )
+        result = await use_case.execute(request, "req-1")
+        assert result.has_sub_agents is True
+        sub_workers = [w for w in result.workers if w.worker_type == "sub_agent"]
+        assert len(sub_workers) == 1
+        assert sub_workers[0].ref_agent_id == "sub-1"
+
+    @pytest.mark.asyncio
+    async def test_sub_agent_not_found_raises(self):
+        """존재하지 않는 에이전트 참조 시 에러."""
+        use_case, _, _ = _make_use_case_with_sub_agent(sub_agent=None)
+        request = CreateAgentRequest(
+            user_request="테스트",
+            name="복합 에이전트",
+            user_id="user-1",
+            sub_agent_configs=[
+                SubAgentConfigRequest(ref_agent_id="missing-id")
+            ],
+        )
+        with pytest.raises(ValueError, match="서브 에이전트를 찾을 수 없습니다"):
+            await use_case.execute(request, "req-1")
+
+    @pytest.mark.asyncio
+    async def test_sub_agent_deleted_raises(self):
+        """삭제된 에이전트 참조 시 에러."""
+        sub = _make_sub_agent("sub-1", user_id="user-1")
+        sub.status = "deleted"
+        use_case, _, _ = _make_use_case_with_sub_agent(sub_agent=sub)
+        request = CreateAgentRequest(
+            user_request="테스트",
+            name="복합 에이전트",
+            user_id="user-1",
+            sub_agent_configs=[
+                SubAgentConfigRequest(ref_agent_id="sub-1")
+            ],
+        )
+        with pytest.raises(ValueError, match="서브 에이전트를 찾을 수 없습니다"):
+            await use_case.execute(request, "req-1")
+
+    @pytest.mark.asyncio
+    async def test_sub_agent_access_denied_for_other_user_without_subscription(self):
+        """타인 소유 에이전트에 구독 없이 접근 시 PermissionError."""
+        sub = _make_sub_agent("sub-1", user_id="other-user")
+        use_case, _, _ = _make_use_case_with_sub_agent(
+            sub_agent=sub, is_subscribed=False
+        )
+        request = CreateAgentRequest(
+            user_request="테스트",
+            name="복합 에이전트",
+            user_id="user-1",
+            sub_agent_configs=[
+                SubAgentConfigRequest(ref_agent_id="sub-1")
+            ],
+        )
+        with pytest.raises(PermissionError, match="사용 권한이 없습니다"):
+            await use_case.execute(request, "req-1")
+
+    @pytest.mark.asyncio
+    async def test_sub_agent_access_allowed_with_subscription(self):
+        """타인 에이전트도 구독 시 사용 가능."""
+        sub = _make_sub_agent("sub-1", user_id="other-user", name="공유봇")
+        use_case, _, _ = _make_use_case_with_sub_agent(
+            sub_agent=sub, is_subscribed=True
+        )
+        request = CreateAgentRequest(
+            user_request="테스트",
+            name="복합 에이전트",
+            user_id="user-1",
+            sub_agent_configs=[
+                SubAgentConfigRequest(ref_agent_id="sub-1")
+            ],
+        )
+        result = await use_case.execute(request, "req-1")
+        assert result.has_sub_agents is True
+
+    @pytest.mark.asyncio
+    async def test_mixed_tool_and_sub_agent_workers(self):
+        """도구 + 서브 에이전트 혼합 모드."""
+        sub = _make_sub_agent("sub-1", user_id="user-1", name="분석봇")
+        use_case, repo, _ = _make_use_case_with_sub_agent(sub_agent=sub)
+        request = CreateAgentRequest(
+            user_request="테스트",
+            name="복합 에이전트",
+            user_id="user-1",
+            sub_agent_configs=[
+                SubAgentConfigRequest(ref_agent_id="sub-1", description="분석 담당")
+            ],
+        )
+        result = await use_case.execute(request, "req-1")
+        tool_workers = [w for w in result.workers if w.worker_type == "tool"]
+        sub_workers = [w for w in result.workers if w.worker_type == "sub_agent"]
+        assert len(tool_workers) == 1
+        assert len(sub_workers) == 1
+        assert tool_workers[0].tool_id == "tavily_search"
+
+    @pytest.mark.asyncio
+    async def test_no_sub_agent_configs_backward_compatible(self):
+        """sub_agent_configs 없을 때 기존 동작 유지."""
+        use_case, _, _ = _make_use_case_with_sub_agent(sub_agent=None)
+        request = CreateAgentRequest(
+            user_request="테스트",
+            name="일반 에이전트",
+            user_id="user-1",
+        )
+        result = await use_case.execute(request, "req-1")
+        assert result.has_sub_agents is False
+        assert all(w.worker_type == "tool" for w in result.workers)

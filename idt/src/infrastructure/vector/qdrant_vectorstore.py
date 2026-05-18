@@ -81,13 +81,15 @@ class QdrantVectorStore(VectorStoreInterface):
         vector: List[float],
         top_k: int = 10,
         filter: Optional[SearchFilter] = None,
+        collection_name: Optional[str] = None,
     ) -> List[Document]:
         """Search for similar documents using a vector."""
+        target_collection = collection_name if collection_name else self._collection_name
         query_filter = self._build_qdrant_filter(filter) if filter else None
 
         try:
             response = await self._client.query_points(
-                collection_name=self._collection_name,
+                collection_name=target_collection,
                 query=vector,
                 limit=top_k,
                 query_filter=query_filter,
@@ -96,7 +98,7 @@ class QdrantVectorStore(VectorStoreInterface):
             return [self._point_to_document(point) for point in response.points]
         except Exception as e:
             logger.error(
-                "Vector search failed", exception=e, collection=self._collection_name
+                "Vector search failed", exception=e, collection=target_collection
             )
             raise
 

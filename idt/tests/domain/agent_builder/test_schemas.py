@@ -176,3 +176,43 @@ class TestAgentDefinition:
         )
         assert agent.visibility == "department"
         assert agent.department_id == "dept-1"
+
+
+# ── ToolMeta.category ───────────────────────────────────────────
+
+
+class TestToolMetaCategory:
+    def test_default_category_is_action(self):
+        meta = ToolMeta(tool_id="t", name="n", description="d")
+        assert meta.category == "action"
+
+    def test_category_search(self):
+        meta = ToolMeta(tool_id="t", name="n", description="d", category="search")
+        assert meta.category == "search"
+
+    def test_category_action_explicit(self):
+        meta = ToolMeta(tool_id="t", name="n", description="d", category="action")
+        assert meta.category == "action"
+
+
+# ── WorkerDefinition.category ────────────────────────────────────
+
+
+class TestWorkerDefinitionCategory:
+    def test_default_category_is_none(self):
+        worker = _make_worker()
+        assert worker.category is None
+
+    def test_category_search_from_db(self):
+        worker = WorkerDefinition(
+            tool_id="tavily_search", worker_id="s", description="d",
+            category="search",
+        )
+        assert worker.category == "search"
+
+    def test_category_action_from_db(self):
+        worker = WorkerDefinition(
+            tool_id="tavily_search", worker_id="s", description="d",
+            category="action",
+        )
+        assert worker.category == "action"

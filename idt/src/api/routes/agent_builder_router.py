@@ -7,6 +7,7 @@ from src.domain.auth.entities import User
 from src.interfaces.dependencies.auth import get_current_user, require_role
 
 from src.application.agent_builder.schemas import (
+    AvailableSubAgentsResponse,
     AvailableToolsResponse,
     CreateAgentRequest,
     CreateAgentResponse,
@@ -81,6 +82,10 @@ def get_list_my_agents_use_case():
     raise NotImplementedError
 
 
+def get_list_available_sub_agents_use_case():
+    raise NotImplementedError
+
+
 # ── 엔드포인트 ────────────────────────────────────────────────────
 
 
@@ -152,10 +157,12 @@ async def list_agents(
 @router.post("", response_model=CreateAgentResponse, status_code=201)
 async def create_agent(
     body: CreateAgentRequest,
+    current_user: User = Depends(get_current_user),
     use_case=Depends(get_create_agent_use_case),
 ):
     """에이전트 생성 (LLM이 도구 자동 선택 + 시스템 프롬프트 자동 생성)."""
     request_id = str(uuid.uuid4())
+    body.user_id = str(current_user.id)
     return await use_case.execute(body, request_id)
 
 
@@ -176,6 +183,19 @@ async def list_my_agents(
         search=search,
         page=page,
         size=size,
+        request_id=request_id,
+    )
+
+
+@router.get("/available-sub-agents", response_model=AvailableSubAgentsResponse)
+async def list_available_sub_agents(
+    current_user: User = Depends(get_current_user),
+    use_case=Depends(get_list_available_sub_agents_use_case),
+):
+    """서브 에이전트로 사용 가능한 에이전트 목록 (본인 소유 + 구독)."""
+    request_id = str(uuid.uuid4())
+    return await use_case.execute(
+        user_id=str(current_user.id),
         request_id=request_id,
     )
 

@@ -43,6 +43,7 @@ class AgentDefinitionModel(Base):
         back_populates="agent",
         cascade="all, delete-orphan",
         order_by="AgentToolModel.sort_order",
+        foreign_keys="[AgentToolModel.agent_id]",
     )
 
 
@@ -63,7 +64,19 @@ class AgentToolModel(Base):
     description: Mapped[str | None] = mapped_column(Text)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     tool_config: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=None)
+    worker_type: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="tool"
+    )
+    ref_agent_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("agent_definition.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    category: Mapped[str | None] = mapped_column(
+        String(20), nullable=True, default=None,
+    )
 
     agent: Mapped["AgentDefinitionModel"] = relationship(
-        "AgentDefinitionModel", back_populates="tools"
+        "AgentDefinitionModel", back_populates="tools",
+        foreign_keys=[agent_id],
     )

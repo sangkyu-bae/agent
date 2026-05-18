@@ -92,7 +92,7 @@ class HybridSearchUseCase:
             multi_match_clause: dict = {
                 "multi_match": {
                     "query": request.query,
-                    "fields": ["content", "morph_text^1.5"],
+                    "fields": ["content^1.5", "morph_text"],
                     "type": "most_fields",
                 }
             }
@@ -107,8 +107,9 @@ class HybridSearchUseCase:
                         "filter": filter_clauses,
                     },
                 }
+            target_es_index = request.es_index if request.es_index else self._es_index
             es_query = ESSearchQuery(
-                index=self._es_index,
+                index=target_es_index,
                 query=es_query_body,
                 size=request.bm25_top_k,
             )
@@ -145,6 +146,7 @@ class HybridSearchUseCase:
                 vector=query_vector,
                 top_k=request.vector_top_k,
                 filter=vector_filter,
+                collection_name=request.collection_name,
             )
             return [
                 SearchHit(

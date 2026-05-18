@@ -11,6 +11,7 @@ from src.infrastructure.parser.parser_factory import (
 )
 from src.domain.parser.interfaces import PDFParserInterface
 from src.infrastructure.parser.pymupdf_parser import PyMuPDFParser
+from src.infrastructure.parser.pymupdf4llm_parser import PyMuPDF4LLMParser
 from src.infrastructure.parser.llamaparser import LlamaParserAdapter
 
 
@@ -35,6 +36,15 @@ class TestParserType:
         parser_type = ParserType.from_string("llamaparser")
         assert parser_type == ParserType.LLAMAPARSER
 
+    def test_pymupdf4llm_type(self) -> None:
+        """PYMUPDF4LLM type should have value 'pymupdf4llm'."""
+        assert ParserType.PYMUPDF4LLM.value == "pymupdf4llm"
+
+    def test_from_string_pymupdf4llm(self) -> None:
+        """Should create PYMUPDF4LLM from string."""
+        parser_type = ParserType.from_string("pymupdf4llm")
+        assert parser_type == ParserType.PYMUPDF4LLM
+
     def test_from_string_case_insensitive(self) -> None:
         """from_string should be case-insensitive."""
         assert ParserType.from_string("PYMUPDF") == ParserType.PYMUPDF
@@ -54,6 +64,13 @@ class TestParserFactoryCreate:
         parser = ParserFactory.create(ParserType.PYMUPDF)
         assert isinstance(parser, PyMuPDFParser)
         assert isinstance(parser, PDFParserInterface)
+
+    def test_create_pymupdf4llm_parser(self) -> None:
+        """Should create PyMuPDF4LLMParser for PYMUPDF4LLM type."""
+        parser = ParserFactory.create(ParserType.PYMUPDF4LLM)
+        assert isinstance(parser, PyMuPDF4LLMParser)
+        assert isinstance(parser, PDFParserInterface)
+        assert parser.get_parser_name() == "pymupdf4llm"
 
     def test_create_llamaparser_requires_api_key(self) -> None:
         """LLAMAPARSER should require api_key parameter."""
@@ -83,6 +100,11 @@ class TestParserFactoryCreateFromString:
         """Should create parser from string 'pymupdf'."""
         parser = ParserFactory.create_from_string("pymupdf")
         assert isinstance(parser, PyMuPDFParser)
+
+    def test_create_from_string_pymupdf4llm(self) -> None:
+        """Should create parser from string 'pymupdf4llm'."""
+        parser = ParserFactory.create_from_string("pymupdf4llm")
+        assert isinstance(parser, PyMuPDF4LLMParser)
 
     def test_create_from_string_case_insensitive(self) -> None:
         """Should be case-insensitive."""

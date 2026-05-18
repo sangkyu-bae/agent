@@ -86,6 +86,9 @@ class VisibilityPolicy:
 class AgentBuilderPolicy:
     MAX_TOOLS = 5
     MIN_TOOLS = 1
+    MAX_SUB_AGENTS = 3
+    MAX_WORKERS_TOTAL = 6
+    MIN_WORKERS = 1
     MAX_NAME_LENGTH = 200
     MAX_SYSTEM_PROMPT_LENGTH = 4000
     MAX_USER_REQUEST_LENGTH = 1000
@@ -96,6 +99,21 @@ class AgentBuilderPolicy:
             raise ValueError(f"최소 {cls.MIN_TOOLS}개 이상의 도구가 필요합니다.")
         if count > cls.MAX_TOOLS:
             raise ValueError(f"도구는 최대 {cls.MAX_TOOLS}개까지 선택할 수 있습니다.")
+
+    @classmethod
+    def validate_worker_count(cls, workers: list) -> None:
+        if len(workers) < cls.MIN_WORKERS:
+            raise ValueError(f"최소 {cls.MIN_WORKERS}개 이상의 워커가 필요합니다.")
+        if len(workers) > cls.MAX_WORKERS_TOTAL:
+            raise ValueError(f"워커는 최대 {cls.MAX_WORKERS_TOTAL}개까지 선택할 수 있습니다.")
+
+        tool_count = sum(1 for w in workers if w.worker_type == "tool")
+        sub_agent_count = sum(1 for w in workers if w.worker_type == "sub_agent")
+
+        if tool_count > cls.MAX_TOOLS:
+            raise ValueError(f"도구는 최대 {cls.MAX_TOOLS}개까지 선택할 수 있습니다.")
+        if sub_agent_count > cls.MAX_SUB_AGENTS:
+            raise ValueError(f"서브 에이전트는 최대 {cls.MAX_SUB_AGENTS}개까지 선택할 수 있습니다.")
 
     @classmethod
     def validate_system_prompt(cls, prompt: str) -> None:
@@ -127,6 +145,25 @@ class ForkPolicy:
             raise ValueError("삭제된 에이전트는 포크할 수 없습니다.")
 
 
+class QualityGatePolicy:
+    """워커 응답 품질 검증 도메인 규칙."""
+
+    MIN_RESPONSE_LENGTH = 10
+    EMPTY_INDICATORS = ["모르겠습니다", "답변할 수 없습니다", "정보를 찾을 수 없"]
+
+    @classmethod
+    def check_response(cls, content: str) -> bool:
+        if not content or len(content.strip()) < cls.MIN_RESPONSE_LENGTH:
+            return False
+
+        stripped = content.strip().lower()
+        for indicator in cls.EMPTY_INDICATORS:
+            if stripped.startswith(indicator):
+                return False
+
+        return True
+
+
 class UpdateAgentPolicy:
     @classmethod
     def validate_update(cls, status: str, system_prompt: str | None) -> None:
@@ -134,3 +171,59 @@ class UpdateAgentPolicy:
             raise ValueError("비활성화된 에이전트는 수정할 수 없습니다.")
         if system_prompt is not None:
             AgentBuilderPolicy.validate_system_prompt(system_prompt)
+
+
+# ── Multi-Agent Composition Policies ──────────────────────────
+
+
+class CircularReferenceError(ValueError):
+    """에이전트 참조 순환 발생."""
+
+    def __init__(self, cycle_path: list[str]) -> None:
+        self.cycle_path = cycle_path
+        path_str = " → ".join(cycle_path)
+        super().__init__(f"순환참조가 감지되었습니다: {path_str}")
+
+
+class NestingDepthExceededError(ValueError):
+    """중첩 깊이 초과."""
+
+    def __init__(self, current_depth: int, max_depth: int) -> None:
+        super().__init__(
+            f"중첩 깊이 {current_depth}이(가) 최대 허용 깊이 {max_depth}을(를) 초과합니다"
+        )
+
+
+class CircularReferencePolicy:
+    """에이전트 간 순환참조 방지 정책."""
+
+    @staticmethod
+    def validate_no_cycle(current_agent_id: str, visited: set[str]) -> None:
+        if current_agent_id in visited:
+            cycle = list(visited) + [current_agent_id]
+            raise CircularReferenceError(cycle)
+
+
+class NestingDepthPolicy:
+    """에이전트 중첩 깊이 제한 정책."""
+
+    MAX_NESTING_DEPTH = 2
+
+    @classmethod
+    def validate_depth(cls, current_depth: int) -> None:
+        if current_depth > cls.MAX_NESTING_DEPTH:
+            raise NestingDepthExceededError(current_depth, cls.MAX_NESTING_DEPTH)
+
+
+class SubAgentAccessPolicy:
+    """서브 에이전트 사용 권한 정책. 본인 소유 + 구독 에이전트만 허용."""
+
+    @staticmethod
+    def can_use_as_sub_agent(
+        parent_owner_id: str,
+        sub_agent_owner_id: str,
+        is_subscribed: bool,
+    ) -> bool:
+        if parent_owner_id == sub_agent_owner_id:
+            return True
+        return is_subscribed

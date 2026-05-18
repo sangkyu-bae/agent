@@ -154,3 +154,27 @@ class TestChunkingStrategyFactory:
         """StrategyType enum should have SEMANTIC."""
         assert hasattr(StrategyType, "SEMANTIC")
         assert StrategyType.SEMANTIC.value == "semantic"
+
+    def test_parent_child_with_table_flattening_true(self):
+        """table_flattening=True should inject preprocessor."""
+        strategy = ChunkingStrategyFactory.create_strategy(
+            "parent_child", table_flattening=True
+        )
+
+        assert isinstance(strategy, ParentChildStrategy)
+        assert strategy._table_preprocessor is not None
+
+    def test_parent_child_with_table_flattening_false(self):
+        """table_flattening=False should not inject preprocessor."""
+        strategy = ChunkingStrategyFactory.create_strategy(
+            "parent_child", table_flattening=False
+        )
+
+        assert isinstance(strategy, ParentChildStrategy)
+        assert strategy._table_preprocessor is None
+
+    def test_parent_child_default_has_table_flattening(self):
+        """Default parent_child should have table_flattening=True."""
+        strategy = ChunkingStrategyFactory.create_strategy("parent_child")
+
+        assert strategy._table_preprocessor is not None

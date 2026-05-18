@@ -96,3 +96,32 @@ class TestSearchModeBranching:
         tool = _make_tool(hybrid_search_use_case=mock_uc)
         result = await tool._arun("결과 없음")
         assert "찾지 못했습니다" in result
+
+
+class TestCollectionPassing:
+    @pytest.mark.asyncio
+    async def test_arun_passes_collection_name_to_request(self):
+        tool = _make_tool(collection_name="finance_docs", es_index="finance_idx")
+        await tool._arun("금리 정책")
+
+        request_arg = tool.hybrid_search_use_case.execute.call_args[0][0]
+        assert request_arg.collection_name == "finance_docs"
+        assert request_arg.es_index == "finance_idx"
+
+    @pytest.mark.asyncio
+    async def test_arun_passes_none_when_no_collection(self):
+        tool = _make_tool()
+        await tool._arun("금리 정책")
+
+        request_arg = tool.hybrid_search_use_case.execute.call_args[0][0]
+        assert request_arg.collection_name is None
+        assert request_arg.es_index is None
+
+    @pytest.mark.asyncio
+    async def test_arun_passes_only_collection_name(self):
+        tool = _make_tool(collection_name="my_col")
+        await tool._arun("검색")
+
+        request_arg = tool.hybrid_search_use_case.execute.call_args[0][0]
+        assert request_arg.collection_name == "my_col"
+        assert request_arg.es_index is None

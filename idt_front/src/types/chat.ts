@@ -109,3 +109,35 @@ export interface SessionMessagesResponse {
   session_id: string;
   messages: HistoryMessageItem[];
 }
+
+/** AGENT-RUN: POST /api/v1/agents/{agent_id}/run 요청 */
+export interface AgentChatRequest {
+  query: string;
+  user_id: string;
+  session_id: string | null;
+}
+
+/** AGENT-RUN: POST /api/v1/agents/{agent_id}/run 응답 */
+export interface AgentChatResponse {
+  agent_id: string;
+  query: string;
+  answer: string;
+  tools_used: string[];
+  request_id: string;
+  session_id: string;
+}
+
+/** 에이전트별 세션 목록 응답 */
+export interface AgentSessionListResponse {
+  user_id: string;
+  agent_id: string;
+  sessions: SessionSummary[];
+}
+
+/** 에이전트별 세션 메시지 응답 */
+export interface AgentSessionMessagesResponse {
+  user_id: string;
+  agent_id: string;
+  session_id: string;
+  messages: HistoryMessageItem[];
+}

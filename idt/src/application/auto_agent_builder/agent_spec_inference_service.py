@@ -1,9 +1,9 @@
 """AgentSpecInferenceService: LLM으로 에이전트 명세 자동 추론."""
 import json
 
-from langchain_openai import ChatOpenAI
-
 from src.domain.auto_agent_builder.schemas import AgentSpecResult, ConversationTurn
+from src.domain.llm.interfaces import LLMFactoryInterface
+from src.domain.llm_model.entity import LlmModel
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 
 _SYSTEM_PROMPT = """You are an expert at configuring AI agent pipelines.
@@ -50,8 +50,14 @@ Note: clarifying_questions must be empty if confidence >= 0.8."""
 
 class AgentSpecInferenceService:
 
-    def __init__(self, model_name: str, logger: LoggerInterface) -> None:
-        self._model_name = model_name
+    def __init__(
+        self,
+        llm_factory: LLMFactoryInterface,
+        llm_model: LlmModel,
+        logger: LoggerInterface,
+    ) -> None:
+        self._llm_factory = llm_factory
+        self._llm_model = llm_model
         self._logger = logger
 
     async def infer(
@@ -59,7 +65,6 @@ class AgentSpecInferenceService:
         user_request: str,
         conversation_history: list[ConversationTurn],
         request_id: str,
-        model_name: str | None = None,
     ) -> AgentSpecResult:
         self._logger.info(
             "AgentSpecInferenceService infer start",
@@ -67,7 +72,7 @@ class AgentSpecInferenceService:
             user_request=user_request[:100],
         )
         try:
-            llm = ChatOpenAI(model=model_name or self._model_name, temperature=0)
+            llm = self._llm_factory.create(self._llm_model, temperature=0)
             messages = self._build_messages(user_request, conversation_history)
             raw = await llm.ainvoke(messages)
             result = self._parse_response(raw.content, request_id)

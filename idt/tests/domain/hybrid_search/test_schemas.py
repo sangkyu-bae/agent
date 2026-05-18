@@ -49,6 +49,34 @@ class TestHybridSearchRequest:
         assert req.bm25_weight == 0.8
         assert req.vector_weight == 0.2
 
+    def test_default_collection_name_is_none(self):
+        from src.domain.hybrid_search.schemas import HybridSearchRequest
+        req = HybridSearchRequest(query="q")
+        assert req.collection_name is None
+
+    def test_default_es_index_is_none(self):
+        from src.domain.hybrid_search.schemas import HybridSearchRequest
+        req = HybridSearchRequest(query="q")
+        assert req.es_index is None
+
+    def test_explicit_collection_name(self):
+        from src.domain.hybrid_search.schemas import HybridSearchRequest
+        req = HybridSearchRequest(query="q", collection_name="finance_docs")
+        assert req.collection_name == "finance_docs"
+
+    def test_explicit_es_index(self):
+        from src.domain.hybrid_search.schemas import HybridSearchRequest
+        req = HybridSearchRequest(query="q", es_index="finance_idx")
+        assert req.es_index == "finance_idx"
+
+    def test_both_collection_and_es_index(self):
+        from src.domain.hybrid_search.schemas import HybridSearchRequest
+        req = HybridSearchRequest(
+            query="q", collection_name="finance", es_index="finance_idx"
+        )
+        assert req.collection_name == "finance"
+        assert req.es_index == "finance_idx"
+
 
 class TestHybridSearchResult:
     def test_create_full(self):

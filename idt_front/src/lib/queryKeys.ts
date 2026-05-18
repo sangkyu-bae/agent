@@ -25,6 +25,12 @@ export const queryKeys = {
     /** CHAT-HIST-001: 세션별 메시지 */
     sessionMessages: (sessionId: string, userId: string) =>
       [...queryKeys.chat.all, 'sessionMessages', sessionId, userId] as const,
+    /** 에이전트별 세션 목록 */
+    agentHistory: (agentId: string, userId: string) =>
+      [...queryKeys.chat.all, 'agentHistory', agentId, userId] as const,
+    /** 에이전트별 세션 메시지 */
+    agentSessionMessages: (agentId: string, sessionId: string, userId: string) =>
+      [...queryKeys.chat.all, 'agentSessionMessages', agentId, sessionId, userId] as const,
   },
 
   // ── Documents ──────────────────────────────────────────
@@ -109,6 +115,15 @@ export const queryKeys = {
       [...queryKeys.collections.all, 'chunks', name, documentId, params] as const,
     searchHistory: (name: string, params?: { limit?: number; offset?: number }) =>
       [...queryKeys.collections.all, 'searchHistory', name, params] as const,
+  },
+
+  // ── Agent Builder ──────────────────────────────────────
+  agentBuilder: {
+    all: ['agentBuilder'] as const,
+    list: (params?: { search?: string; page?: number; size?: number }) =>
+      [...queryKeys.agentBuilder.all, 'list', params] as const,
+    detail: (agentId: string) =>
+      [...queryKeys.agentBuilder.all, 'detail', agentId] as const,
   },
 
   // ── Agent Store ────────────────────────────────────────

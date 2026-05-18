@@ -408,6 +408,35 @@ class TestElasticsearchRepositoryEnsureIndexExists:
         mock_es.indices.create.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_ensure_index_exists_passes_settings_when_provided(self, repo, mock_es, mock_logger):
+        """settings가 제공되면 es.indices.create에 전달한다."""
+        mock_es.indices = MagicMock()
+        mock_es.indices.exists = AsyncMock(return_value=False)
+        mock_es.indices.create = AsyncMock(return_value={"acknowledged": True})
+
+        mappings = {"properties": {"title": {"type": "text"}}}
+        nori_settings = {"analysis": {"analyzer": {"nori_analyzer": {}}}}
+        await repo.ensure_index_exists("documents", mappings, settings=nori_settings)
+
+        mock_es.indices.create.assert_called_once_with(
+            index="documents", mappings=mappings, settings=nori_settings
+        )
+
+    @pytest.mark.asyncio
+    async def test_ensure_index_exists_omits_settings_when_none(self, repo, mock_es, mock_logger):
+        """settings가 None이면 es.indices.create에 settings를 전달하지 않는다."""
+        mock_es.indices = MagicMock()
+        mock_es.indices.exists = AsyncMock(return_value=False)
+        mock_es.indices.create = AsyncMock(return_value={"acknowledged": True})
+
+        mappings = {"properties": {}}
+        await repo.ensure_index_exists("documents", mappings)
+
+        mock_es.indices.create.assert_called_once_with(
+            index="documents", mappings=mappings
+        )
+
+    @pytest.mark.asyncio
     async def test_ensure_index_exists_returns_false_on_error(self, repo, mock_es, mock_logger):
         """ES 연결 실패 시 False를 반환하고 warning 로그를 남긴다."""
         mock_es.indices = MagicMock()

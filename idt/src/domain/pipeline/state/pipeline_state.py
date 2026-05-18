@@ -72,3 +72,7 @@ class PipelineState(TypedDict):
     processing_time_ms: int
     errors: List[str]
     status: str  # pending, parsing, classifying, chunking, storing, completed, failed
+
+    # Layout Analysis (Optional — 기존 파이프라인에서는 미사용)
+    quality_score: float
+    layout_metadata: dict

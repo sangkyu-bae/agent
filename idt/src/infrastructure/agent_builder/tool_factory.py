@@ -1,7 +1,10 @@
 """ToolFactory: tool_id → LangChain BaseTool 인스턴스 생성."""
+from collections.abc import Callable
+from typing import Any
+
 from langchain_core.tools import BaseTool
 
-from src.domain.agent_builder.rag_tool_config import RagToolConfig
+from src.domain.agent_builder.rag_tool_config import RagToolConfig, sanitize_tool_name
 from src.domain.agent_builder.tool_registry import get_tool_meta
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 
@@ -13,13 +16,22 @@ class ToolFactory:
         self,
         logger: LoggerInterface,
         hybrid_search_use_case: object | None = None,
+        hybrid_search_use_case_getter: Callable[[], Any] | None = None,
         tavily_api_key: str | None = None,
         mcp_tool_loader=None,
     ) -> None:
         self._logger = logger
         self._hybrid_search = hybrid_search_use_case
+        self._hybrid_search_getter = hybrid_search_use_case_getter
         self._tavily_api_key = tavily_api_key
         self._mcp_tool_loader = mcp_tool_loader
+
+    def _get_hybrid_search(self) -> object | None:
+        if self._hybrid_search is not None:
+            return self._hybrid_search
+        if self._hybrid_search_getter is not None:
+            return self._hybrid_search_getter()
+        return None
 
     def create(
         self, tool_id: str, request_id: str = "", tool_config: dict | None = None
@@ -33,7 +45,7 @@ class ToolFactory:
 
                 rag_config = self._parse_rag_config(tool_config)
                 return InternalDocumentSearchTool(
-                    hybrid_search_use_case=self._hybrid_search,
+                    hybrid_search_use_case=self._get_hybrid_search(),
                     request_id=request_id,
                     top_k=rag_config.top_k,
                     search_mode=rag_config.search_mode,
@@ -41,7 +53,7 @@ class ToolFactory:
                     metadata_filter=rag_config.metadata_filter,
                     collection_name=rag_config.collection_name,
                     es_index=rag_config.es_index,
-                    name=rag_config.tool_name,
+                    name=sanitize_tool_name(rag_config.tool_name),
                     description=rag_config.tool_description,
                 )
             case "tavily_search":

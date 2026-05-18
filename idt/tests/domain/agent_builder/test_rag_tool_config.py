@@ -1,7 +1,11 @@
 """Tests for RagToolConfig VO and RagToolConfigPolicy. Domain: mock 금지."""
 import pytest
 
-from src.domain.agent_builder.rag_tool_config import RagToolConfig, RagToolConfigPolicy
+from src.domain.agent_builder.rag_tool_config import (
+    RagToolConfig,
+    RagToolConfigPolicy,
+    sanitize_tool_name,
+)
 
 
 class TestRagToolConfig:
@@ -13,7 +17,7 @@ class TestRagToolConfig:
         assert config.top_k == 5
         assert config.search_mode == "hybrid"
         assert config.rrf_k == 60
-        assert config.tool_name == "내부 문서 검색"
+        assert config.tool_name == "internal_document_search"
         assert config.tool_description != ""
 
     def test_custom_values(self):
@@ -124,3 +128,36 @@ class TestRagToolConfigPolicy:
     def test_boundary_tool_name_100_passes(self):
         config = RagToolConfig(tool_name="x" * 100)
         RagToolConfigPolicy.validate(config)
+
+
+class TestSanitizeToolName:
+    def test_ascii_name_unchanged(self):
+        assert sanitize_tool_name("internal_document_search") == "internal_document_search"
+
+    def test_korean_name_converted_to_underscores(self):
+        result = sanitize_tool_name("내부 문서 검색")
+        assert result != ""
+        assert all(c.isalnum() or c in "_-" for c in result)
+
+    def test_spaces_replaced(self):
+        assert sanitize_tool_name("my tool name") == "my_tool_name"
+
+    def test_dots_replaced(self):
+        assert sanitize_tool_name("tool.v2.search") == "tool_v2_search"
+
+    def test_consecutive_invalid_chars_collapsed(self):
+        assert sanitize_tool_name("a!!!b") == "a_b"
+
+    def test_hyphens_preserved(self):
+        assert sanitize_tool_name("my-tool-name") == "my-tool-name"
+
+    def test_empty_after_sanitize_returns_unnamed(self):
+        assert sanitize_tool_name("!!!") == "unnamed_tool"
+
+    def test_already_valid_pattern(self):
+        assert sanitize_tool_name("Tool_Name-123") == "Tool_Name-123"
+
+    def test_mixed_korean_and_ascii(self):
+        result = sanitize_tool_name("금융_search_tool")
+        assert all(c.isalnum() or c in "_-" for c in result)
+        assert "search_tool" in result

@@ -9,6 +9,17 @@ from src.application.general_chat.use_case import GeneralChatUseCase
 from src.domain.conversation.entities import ConversationMessage
 from src.domain.conversation.value_objects import AgentId, MessageRole, SessionId, TurnIndex, UserId
 from src.domain.general_chat.schemas import DocumentSource, GeneralChatRequest
+from src.domain.llm.interfaces import LLMFactoryInterface
+from src.domain.llm_model.entity import LlmModel
+
+
+def _make_llm_model() -> LlmModel:
+    return LlmModel(
+        id="test-id", provider="openai", model_name="gpt-4o",
+        display_name="GPT-4o", description=None, api_key_env="OPENAI_API_KEY",
+        max_tokens=128000, is_active=True, is_default=True,
+        created_at=datetime(2026, 1, 1), updated_at=datetime(2026, 1, 1),
+    )
 
 
 # ── helpers ─────────────────────────────────────────────────────────────────
@@ -53,6 +64,9 @@ def _make_use_case(
 
     mock_logger = MagicMock()
 
+    mock_llm_factory = MagicMock(spec=LLMFactoryInterface)
+    mock_llm_factory.create.return_value = MagicMock()
+
     default_messages = agent_messages or [AIMessage(content="에이전트 답변")]
 
     mock_agent = AsyncMock()
@@ -66,6 +80,7 @@ def _make_use_case(
         "policy": mock_policy,
         "logger": mock_logger,
         "agent": mock_agent,
+        "llm_factory": mock_llm_factory,
     }
 
     uc = GeneralChatUseCase(
@@ -75,6 +90,8 @@ def _make_use_case(
         summarizer=mock_summarizer,
         summarization_policy=mock_policy,
         logger=mock_logger,
+        llm_factory=mock_llm_factory,
+        llm_model=_make_llm_model(),
     )
     # agent 주입을 위해 _create_agent 패치
     uc._create_agent = MagicMock(return_value=mock_agent)
@@ -301,6 +318,9 @@ def test_create_agent_passes_system_prompt():
     """TC-13: _create_agent()가 create_react_agent에 prompt=_SYSTEM_PROMPT를 전달한다."""
     from src.application.general_chat.use_case import _SYSTEM_PROMPT
 
+    mock_factory = MagicMock(spec=LLMFactoryInterface)
+    mock_factory.create.return_value = MagicMock()
+
     with patch("src.application.general_chat.use_case.create_react_agent") as mock_create:
         mock_create.return_value = MagicMock()
         uc = GeneralChatUseCase(
@@ -310,9 +330,10 @@ def test_create_agent_passes_system_prompt():
             summarizer=AsyncMock(),
             summarization_policy=MagicMock(),
             logger=MagicMock(),
+            llm_factory=mock_factory,
+            llm_model=_make_llm_model(),
         )
-        with patch("src.application.general_chat.use_case.ChatOpenAI"):
-            uc._create_agent(tools=[])
+        uc._create_agent(tools=[])
         mock_create.assert_called_once()
         _, kwargs = mock_create.call_args
         assert kwargs.get("prompt") == _SYSTEM_PROMPT

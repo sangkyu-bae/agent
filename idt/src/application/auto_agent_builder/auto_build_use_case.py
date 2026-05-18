@@ -39,7 +39,7 @@ class AutoBuildUseCase:
         try:
             available_ids = {t.tool_id for t in get_all_tools()}
             spec = await self._inference.infer(
-                request.user_request, [], request.request_id, request.model_name
+                request.user_request, [], request.request_id
             )
             AutoAgentBuilderPolicy.validate_tool_ids(spec.tool_ids, available_ids)
 

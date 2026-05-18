@@ -54,7 +54,6 @@ class AutoBuildReplyUseCase:
                     session.user_request,
                     session.conversation_turns,
                     request.request_id,
-                    session.model_name,
                 )
                 AutoAgentBuilderPolicy.validate_tool_ids(spec.tool_ids, available_ids)
                 forced = replace(spec, clarifying_questions=[])
@@ -67,7 +66,6 @@ class AutoBuildReplyUseCase:
                 session.user_request,
                 session.conversation_turns,
                 request.request_id,
-                session.model_name,
             )
             AutoAgentBuilderPolicy.validate_tool_ids(spec.tool_ids, available_ids)
 

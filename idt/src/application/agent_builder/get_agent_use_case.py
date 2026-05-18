@@ -54,22 +54,32 @@ class GetAgentUseCase:
                 if dept is not None:
                     department_name = dept.name
 
+            workers_info: list[WorkerInfo] = []
+            for w in agent.workers:
+                ref_name: str | None = None
+                if w.worker_type == "sub_agent" and w.ref_agent_id:
+                    sub = await self._repository.find_by_id(
+                        w.ref_agent_id, request_id
+                    )
+                    ref_name = sub.name if sub else "(삭제됨)"
+                workers_info.append(WorkerInfo(
+                    tool_id=w.tool_id,
+                    worker_id=w.worker_id,
+                    description=w.description,
+                    sort_order=w.sort_order,
+                    tool_config=w.tool_config,
+                    worker_type=w.worker_type,
+                    ref_agent_id=w.ref_agent_id,
+                    ref_agent_name=ref_name,
+                ))
+
             return GetAgentResponse(
                 agent_id=agent.id,
                 name=agent.name,
                 description=agent.description,
                 system_prompt=agent.system_prompt,
-                tool_ids=[w.tool_id for w in agent.workers],
-                workers=[
-                    WorkerInfo(
-                        tool_id=w.tool_id,
-                        worker_id=w.worker_id,
-                        description=w.description,
-                        sort_order=w.sort_order,
-                        tool_config=w.tool_config,
-                    )
-                    for w in agent.workers
-                ],
+                tool_ids=[w.tool_id for w in agent.workers if w.worker_type == "tool"],
+                workers=workers_info,
                 flow_hint=agent.flow_hint,
                 llm_model_id=agent.llm_model_id,
                 status=agent.status,

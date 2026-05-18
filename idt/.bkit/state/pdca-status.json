@@ -1,7 +1,9 @@
 {
   "version": "2.0",
-  "lastUpdated": "2026-04-29T06:57:21.771Z",
+  "lastUpdated": "2026-05-18T09:07:32.682Z",
   "activeFeatures": [
+    "websocket-common-module",
+    "agent-chat-multiturn",
     "embedding-model-registry",
     "api",
     "routes",
@@ -50,11 +52,44 @@
     "logging",
     "collection_search",
     "fix-qdrant-search-api",
+    "nori-analyzer-integration",
     "vector",
-    "retriever"
+    "retriever",
+    "doc_browse",
+    "mappers",
+    "domain",
+    "infrastructure",
+    "middleware",
+    "pymupdf4llm-parser",
+    "pdf_analyzer",
+    "pdf-analyzer",
+    "pdf-routing",
+    "pdf_routing",
+    "reranker",
+    "reranker-module",
+    "ragas",
+    "layout",
+    "strategies",
+    "chunking",
+    "state",
+    "table_flattening",
+    "multi_query",
+    "websocket",
+    "advanced_ingest",
+    "nodes",
+    "graph",
+    "fix-agent-run-session-save — Gap Analysis 완료 (83%)"
   ],
-  "primaryFeature": "fix-qdrant-search-api",
+  "primaryFeature": "table-retrieval-enhancer",
   "archivedFeatures": {
+    "dynamic-llm-factory": {
+      "phase": "archived",
+      "matchRate": 97,
+      "iterationCount": 1,
+      "startedAt": "2026-05-08T00:00:00.000Z",
+      "archivedAt": "2026-05-08T15:17:00.000Z",
+      "archivedTo": "docs/archive/2026-05/dynamic-llm-factory/"
+    },
     "dynamic-mcp-registry": {
       "phase": "archived",
       "matchRate": 100,
@@ -105,6 +140,114 @@
     }
   },
   "features": {
+    "advanced-ingest-pipeline": {
+      "phase": "archived",
+      "matchRate": 98,
+      "iterationCount": 0,
+      "startedAt": "2026-05-16T10:00:00Z",
+      "archivedAt": "2026-05-17T00:00:00Z",
+      "archivedTo": "docs/archive/2026-05/advanced-ingest-pipeline/"
+    },
+    "fix-quality-gate-infinite-loop": {
+      "phase": "archived",
+      "matchRate": 100,
+      "iterationCount": 0,
+      "startedAt": "2026-05-18T05:53:11.596Z",
+      "archivedAt": "2026-05-18T00:00:00Z",
+      "archivedTo": "docs/archive/2026-05/fix-quality-gate-infinite-loop/"
+    },
+    "fix-pymupdf4llm-page-key": {
+      "phase": "plan",
+      "matchRate": null,
+      "iterationCount": 0,
+      "startedAt": "2026-05-15T03:30:00Z",
+      "planDoc": "docs/01-plan/features/fix-pymupdf4llm-page-key.plan.md"
+    },
+    "multi-query-rewrite": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": 0,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {
+        "plan": "docs/01-plan/features/multi-query-rewrite.plan.md",
+        "design": "docs/02-design/features/multi-query-rewrite.design.md"
+      },
+      "history": [
+        {
+          "phase": "plan",
+          "timestamp": "2026-05-14T14:00:00.000Z",
+          "action": "Plan document created"
+        },
+        {
+          "phase": "design",
+          "timestamp": "2026-05-14T15:00:00.000Z",
+          "action": "Design document created"
+        },
+        {
+          "phase": "do",
+          "timestamp": "2026-05-14T16:00:00.000Z",
+          "action": "Implementation completed - 40 tests passing"
+        }
+      ]
+    },
+    "table-retrieval-enhancer": {
+      "phase": "archived",
+      "matchRate": 98,
+      "iterationCount": 0,
+      "startedAt": "2026-05-14T10:00:00.000Z",
+      "archivedAt": "2026-05-14T13:13:00.000Z",
+      "archivedTo": "docs/archive/2026-05/table-retrieval-enhancer/"
+    },
+    "multi-agent-composition": {
+      "phase": "archived",
+      "matchRate": 93,
+      "iterationCount": 0,
+      "startedAt": "2026-05-11T18:00:00.000Z",
+      "archivedAt": "2026-05-16T12:00:00.000Z",
+      "archivedTo": "docs/archive/2026-05/multi-agent-composition/"
+    },
+    "search-pipeline-refactor": {
+      "phase": "archived",
+      "matchRate": 98,
+      "iterationCount": 1,
+      "startedAt": "2026-05-11T18:00:00.000Z",
+      "archivedAt": "2026-05-16T12:00:00.000Z",
+      "archivedTo": "docs/archive/2026-05/search-pipeline-refactor/"
+    },
+    "pymupdf4llm-page-metadata": {
+      "phase": "archived",
+      "matchRate": 98,
+      "iterationCount": 0,
+      "startedAt": "2026-05-13T18:00:00.000Z",
+      "archivedAt": "2026-05-13T20:00:00.000Z",
+      "archivedTo": "docs/archive/2026-05/pymupdf4llm-page-metadata/"
+    },
+    "ragas-evaluation": {
+      "phase": "archived",
+      "matchRate": 93,
+      "iterationCount": 0,
+      "startedAt": "2026-05-13T14:00:00.000Z",
+      "archivedAt": "2026-05-14T13:00:00.000Z",
+      "archivedTo": "docs/archive/2026-05/ragas-evaluation/"
+    },
+    "rag-collection-scoped-search": {
+      "phase": "archived",
+      "matchRate": 100,
+      "iterationCount": 0,
+      "startedAt": "2026-05-11T08:00:00.000Z",
+      "archivedAt": "2026-05-11T17:14:00.000Z",
+      "archivedTo": "docs/archive/2026-05/rag-collection-scoped-search/"
+    },
+    "agent-chat-multiturn": {
+      "phase": "completed",
+      "phaseNumber": 5,
+      "matchRate": 93,
+      "iterationCount": 0,
+      "startedAt": "2026-05-10T12:00:00.000Z",
+      "archivedAt": "2026-05-16T17:37:00.000Z",
+      "archivedTo": "docs/archive/2026-05/agent-chat-multiturn/"
+    },
     "embedding-model-registry": {
       "phase": "archived",
       "phaseNumber": 6,
@@ -127,7 +270,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-04T10:53:02.380Z",
-        "lastUpdated": "2026-04-29T02:30:39.021Z"
+        "lastUpdated": "2026-05-16T09:56:58.731Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\api\\main.py"
     },
@@ -140,9 +283,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-04T10:57:06.857Z",
-        "lastUpdated": "2026-04-28T10:48:30.650Z"
+        "lastUpdated": "2026-05-16T09:53:54.393Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\api\\routes\\collection_search_router.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\api\\routes\\advanced_ingest_router.py"
     },
     "retrieval": {
       "phase": "do",
@@ -205,9 +348,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-16T12:31:15.127Z",
-        "lastUpdated": "2026-04-29T02:30:05.741Z"
+        "lastUpdated": "2026-05-08T03:47:18.895Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\infrastructure\\elasticsearch\\es_index_mappings.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\infrastructure\\elasticsearch\\es_repository.py"
     },
     "hybrid_search": {
       "phase": "do",
@@ -218,9 +361,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-16T13:11:01.522Z",
-        "lastUpdated": "2026-04-29T02:28:34.482Z"
+        "lastUpdated": "2026-05-11T07:22:54.623Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\application\\hybrid_search\\use_case.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\application\\hybrid_search\\test_hybrid_search_use_case.py"
     },
     "idt": {
       "phase": "do",
@@ -296,7 +439,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-17T02:00:33.482Z",
-        "lastUpdated": "2026-04-21T11:09:02.992Z"
+        "lastUpdated": "2026-05-14T14:23:41.469Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\application\\rag_agent\\tools.py"
     },
@@ -322,9 +465,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-17T02:48:38.247Z",
-        "lastUpdated": "2026-04-18T08:30:44.598Z"
+        "lastUpdated": "2026-04-30T04:43:52.564Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\infrastructure\\persistence\\database.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\infrastructure\\persistence\\test_db_session_lifecycle.py"
     },
     "conversation": {
       "phase": "do",
@@ -335,9 +478,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-17T06:05:51.300Z",
-        "lastUpdated": "2026-04-17T06:40:47.967Z"
+        "lastUpdated": "2026-04-30T04:46:37.631Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\application\\conversation\\history_use_case.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\application\\conversation\\test_agent_history_use_case.py"
     },
     "use_cases": {
       "phase": "do",
@@ -361,9 +504,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-17T14:08:30.450Z",
-        "lastUpdated": "2026-03-17T14:08:30.450Z"
+        "lastUpdated": "2026-05-14T03:09:11.433Z"
       },
-      "lastFile": "C:\\sangplus\\idt\\src\\domain\\parser\\schemas.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\infrastructure\\parser\\parser_factory.py"
     },
     "ingest": {
       "phase": "do",
@@ -439,9 +582,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-23T01:38:12.282Z",
-        "lastUpdated": "2026-03-23T01:43:31.273Z"
+        "lastUpdated": "2026-05-08T05:34:43.492Z"
       },
-      "lastFile": "C:\\sangplus\\idt\\tests\\infrastructure\\llm\\test_ollama_client.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\unit\\infrastructure\\llm\\test_llm_factory.py"
     },
     "ollama": {
       "phase": "do",
@@ -533,7 +676,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-04-12T06:31:25.528Z",
-        "lastUpdated": "2026-04-12T11:13:05.549Z"
+        "lastUpdated": "2026-05-08T03:50:15.562Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\application\\general_chat\\test_use_case.py"
     },
@@ -573,7 +716,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-04-17T06:40:30.209Z",
-        "lastUpdated": "2026-04-18T08:30:51.012Z"
+        "lastUpdated": "2026-04-30T04:34:41.893Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\infrastructure\\persistence\\repositories\\conversation_repository.py"
     },
@@ -635,16 +778,16 @@
       "lastFile": "docs/02-design/features/fix-collection-rename.design.md"
     },
     "doc_browse": {
-      "phase": "archived",
+      "phase": "do",
       "matchRate": 97,
       "iterationCount": 0,
       "startedAt": "2026-04-23T06:38:13.104Z",
       "archivedAt": "2026-04-23T14:00:00.000Z",
       "archivedTo": "docs/archive/2026-04/doc-list-optimization/",
-      "phaseNumber": 7,
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\docs\\archive\\2026-04\\doc-list-optimization\\doc-list-optimization.report.md",
+      "phaseNumber": 3,
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\application\\doc_browse\\test_delete_document_use_case.py",
       "timestamps": {
-        "lastUpdated": "2026-04-23T14:00:00.000Z"
+        "lastUpdated": "2026-04-29T12:06:42.912Z"
       }
     },
     "scripts": {
@@ -656,9 +799,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-04-23T13:02:43.188Z",
-        "lastUpdated": "2026-04-23T13:02:43.188Z"
+        "lastUpdated": "2026-05-08T03:49:15.408Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\scripts\\migrate_doc_metadata.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\scripts\\migrate_es_nori.py"
     },
     "collection-document-browser": {
       "phase": "plan",
@@ -740,9 +883,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-04-27T10:00:10.558Z",
-        "lastUpdated": "2026-04-28T11:55:27.501Z"
+        "lastUpdated": "2026-05-09T06:54:34.903Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\infrastructure\\logging\\structured_logger.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\infrastructure\\logging\\test_exception_handler_middleware.py"
     },
     "collection_search": {
       "phase": "archived",
@@ -756,6 +899,19 @@
         "lastUpdated": "2026-04-28T12:45:00.000Z"
       },
       "archivedTo": "docs/archive/2026-04/collection-scoped-search/"
+    },
+    "agent-subscription-customization": {
+      "phase": "archived",
+      "phaseNumber": 6,
+      "matchRate": 94,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-05-04T00:00:00.000Z",
+        "lastUpdated": "2026-05-04T12:00:00.000Z"
+      },
+      "archivedTo": "docs/archive/2026-05/agent-subscription-customization/"
     },
     "fix-qdrant-search-api": {
       "phase": "design",
@@ -772,6 +928,14 @@
         "lastUpdated": "2026-04-29T06:00:00.000Z"
       }
     },
+    "nori-analyzer-integration": {
+      "phase": "archived",
+      "matchRate": 97,
+      "iterationCount": 0,
+      "startedAt": "2026-05-08T00:00:00.000Z",
+      "archivedAt": "2026-05-16T00:00:00.000Z",
+      "archivedTo": "docs/archive/2026-05/nori-analyzer-integration/"
+    },
     "vector": {
       "phase": "do",
       "phaseNumber": 3,
@@ -781,7 +945,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-04-29T06:53:51.442Z",
-        "lastUpdated": "2026-04-29T06:57:05.113Z"
+        "lastUpdated": "2026-05-11T07:20:28.039Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\infrastructure\\vector\\qdrant_vectorstore.py"
     },
@@ -797,6 +961,312 @@
         "lastUpdated": "2026-04-29T06:57:21.770Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\infrastructure\\retriever\\qdrant_retriever.py"
+    },
+    "mappers": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-04-30T04:33:33.863Z",
+        "lastUpdated": "2026-04-30T04:34:03.581Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\infrastructure\\persistence\\mappers\\conversation_mapper.py"
+    },
+    "domain": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-04-30T04:38:03.139Z",
+        "lastUpdated": "2026-05-04T07:07:41.729Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\domain\\test_subscription_policies.py"
+    },
+    "infrastructure": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-04-30T04:38:05.901Z",
+        "lastUpdated": "2026-04-30T04:43:25.712Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\infrastructure\\test_conversation_repository_impl.py"
+    },
+    "fix-agent-creation-tool-bypass": {
+      "phase": "archived",
+      "matchRate": 100,
+      "iterationCount": 0,
+      "startedAt": "2026-05-09T00:00:00.000Z",
+      "archivedAt": "2026-05-16T17:24:00.000Z",
+      "archivedTo": "docs/archive/2026-05/fix-agent-creation-tool-bypass/"
+    },
+    "middleware": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-05-09T06:55:49.057Z",
+        "lastUpdated": "2026-05-09T06:55:49.057Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\infrastructure\\logging\\middleware\\exception_handler_middleware.py"
+    },
+    "pymupdf4llm-parser": {
+      "phase": "act",
+      "phaseNumber": 5,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-05-12T10:53:10.668Z",
+        "lastUpdated": "2026-05-12T10:53:10.669Z"
+      },
+      "previousPhase": "check",
+      "autoAdvanced": true
+    },
+    "pdf_analyzer": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-05-12T10:58:30.406Z",
+        "lastUpdated": "2026-05-12T11:02:45.960Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\application\\pdf_analyzer\\test_use_case.py"
+    },
+    "pdf-analyzer": {
+      "phase": "act",
+      "phaseNumber": 5,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-05-12T11:06:37.922Z",
+        "lastUpdated": "2026-05-12T11:06:37.924Z"
+      },
+      "previousPhase": "check",
+      "autoAdvanced": true
+    },
+    "pdf-routing": {
+      "phase": "archived",
+      "matchRate": 99,
+      "iterationCount": 0,
+      "startedAt": "2026-05-13T00:00:00Z",
+      "archivedAt": "2026-05-13T16:14:00Z",
+      "archivedTo": "docs/archive/2026-05/pdf-routing/"
+    },
+    "pdf_routing": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-05-13T04:40:23.507Z",
+        "lastUpdated": "2026-05-13T04:56:23.694Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\application\\pdf_routing\\test_use_case.py"
+    },
+    "reranker": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-05-13T05:07:00.702Z",
+        "lastUpdated": "2026-05-13T05:09:52.841Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\infrastructure\\reranker\\__init__.py"
+    },
+    "reranker-module": {
+      "phase": "act",
+      "phaseNumber": 5,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-05-13T05:30:56.587Z",
+        "lastUpdated": "2026-05-13T05:30:56.587Z"
+      },
+      "previousPhase": "check",
+      "autoAdvanced": true
+    },
+    "ragas": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-05-13T07:02:34.660Z",
+        "lastUpdated": "2026-05-13T12:37:34.177Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\application\\ragas\\test_testset_use_case.py"
+    },
+    "layout": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-05-14T03:00:44.615Z",
+        "lastUpdated": "2026-05-14T03:07:53.797Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\infrastructure\\parser\\layout\\test_layout_analyzer.py"
+    },
+    "strategies": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-05-14T03:08:49.360Z",
+        "lastUpdated": "2026-05-14T10:49:40.782Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\infrastructure\\chunking\\strategies\\parent_child_strategy.py"
+    },
+    "chunking": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-05-14T03:09:04.759Z",
+        "lastUpdated": "2026-05-14T10:50:35.974Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\infrastructure\\chunking\\test_chunking_factory.py"
+    },
+    "state": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-05-14T03:09:53.205Z",
+        "lastUpdated": "2026-05-16T09:45:32.483Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\infrastructure\\pipeline\\state\\advanced_pipeline_state.py"
+    },
+    "table_flattening": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-05-14T10:45:05.985Z",
+        "lastUpdated": "2026-05-14T10:47:32.293Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\infrastructure\\chunking\\table_flattening\\preprocessor.py"
+    },
+    "multi_query": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-05-14T13:32:34.572Z",
+        "lastUpdated": "2026-05-14T14:21:35.410Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\application\\multi_query\\use_case.py"
+    },
+    "websocket": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-05-16T08:21:30.668Z",
+        "lastUpdated": "2026-05-16T08:24:01.683Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\infrastructure\\websocket\\auth.py"
+    },
+    "advanced_ingest": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-05-16T09:43:41.674Z",
+        "lastUpdated": "2026-05-16T09:53:28.190Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\application\\advanced_ingest\\use_case.py"
+    },
+    "nodes": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-05-16T09:46:09.808Z",
+        "lastUpdated": "2026-05-17T09:12:22.660Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\infrastructure\\pipeline\\nodes\\test_analyze_node.py"
+    },
+    "graph": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-05-16T09:51:42.286Z",
+        "lastUpdated": "2026-05-17T09:10:20.234Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\infrastructure\\pipeline\\graph\\advanced_processing_graph.py"
+    },
+    "fix-agent-run-session-save — Gap Analysis 완료 (83%)": {
+      "phase": "act",
+      "phaseNumber": 5,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-05-18T09:07:32.650Z",
+        "lastUpdated": "2026-05-18T09:07:32.681Z"
+      },
+      "previousPhase": "check",
+      "autoAdvanced": true
     }
   },
   "pipeline": {
@@ -807,7 +1277,7 @@
   "session": {
     "startedAt": "2026-03-04T10:49:14.367Z",
     "onboardingCompleted": false,
-    "lastActivity": "2026-04-29T06:57:21.771Z"
+    "lastActivity": "2026-05-18T09:07:32.682Z"
   },
   "history": [
     {
@@ -4696,6 +5166,2382 @@
       "timestamp": "2026-04-29T06:57:21.771Z",
       "feature": "retriever",
       "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T11:54:30.690Z",
+      "feature": "doc_browse",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T11:55:02.064Z",
+      "feature": "doc_browse",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T11:55:18.278Z",
+      "feature": "doc_browse",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T11:55:44.811Z",
+      "feature": "doc_browse",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T11:56:10.932Z",
+      "feature": "doc_browse",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T11:56:40.869Z",
+      "feature": "doc_browse",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T11:57:25.337Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T11:57:32.485Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T11:57:48.004Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T11:58:02.616Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T11:58:50.613Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T12:05:02.895Z",
+      "feature": "doc_browse",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T12:05:13.863Z",
+      "feature": "doc_browse",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T12:05:29.012Z",
+      "feature": "doc_browse",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T12:05:36.806Z",
+      "feature": "doc_browse",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T12:05:44.265Z",
+      "feature": "doc_browse",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T12:05:51.724Z",
+      "feature": "doc_browse",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T12:05:59.352Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T12:06:06.517Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T12:06:28.354Z",
+      "feature": "doc_browse",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-29T12:06:42.912Z",
+      "feature": "doc_browse",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:32:18.341Z",
+      "feature": "persistence",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:32:32.455Z",
+      "feature": "persistence",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:32:42.367Z",
+      "feature": "conversation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:32:51.024Z",
+      "feature": "conversation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:33:03.152Z",
+      "feature": "conversation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:33:08.033Z",
+      "feature": "conversation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:33:18.164Z",
+      "feature": "conversation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:33:24.255Z",
+      "feature": "conversation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:33:33.863Z",
+      "feature": "mappers",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:33:41.761Z",
+      "feature": "mappers",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:33:49.120Z",
+      "feature": "mappers",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:33:56.059Z",
+      "feature": "mappers",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:34:03.581Z",
+      "feature": "mappers",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:34:10.654Z",
+      "feature": "repositories",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:34:19.733Z",
+      "feature": "repositories",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:34:25.319Z",
+      "feature": "repositories",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:34:41.893Z",
+      "feature": "repositories",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:34:50.004Z",
+      "feature": "conversation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:34:55.336Z",
+      "feature": "conversation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:35:12.980Z",
+      "feature": "conversation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:35:34.353Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:35:54.216Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:36:04.803Z",
+      "feature": "conversation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:36:19.170Z",
+      "feature": "conversation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:36:25.279Z",
+      "feature": "conversation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:36:39.341Z",
+      "feature": "conversation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:36:50.213Z",
+      "feature": "conversation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:36:55.353Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:37:04.970Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:37:20.032Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:37:34.362Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:38:03.139Z",
+      "feature": "domain",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:38:04.439Z",
+      "feature": "domain",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:38:05.901Z",
+      "feature": "infrastructure",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:38:13.001Z",
+      "feature": "domain",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:38:20.676Z",
+      "feature": "domain",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:38:27.254Z",
+      "feature": "domain",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:38:35.913Z",
+      "feature": "domain",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:38:41.587Z",
+      "feature": "domain",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:38:51.651Z",
+      "feature": "domain",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:39:06.344Z",
+      "feature": "domain",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:39:13.436Z",
+      "feature": "domain",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:39:21.171Z",
+      "feature": "domain",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:39:27.608Z",
+      "feature": "domain",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:39:36.205Z",
+      "feature": "infrastructure",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:39:41.880Z",
+      "feature": "infrastructure",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:39:51.572Z",
+      "feature": "infrastructure",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:39:58.470Z",
+      "feature": "infrastructure",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:40:07.166Z",
+      "feature": "infrastructure",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:40:13.455Z",
+      "feature": "infrastructure",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:40:22.824Z",
+      "feature": "infrastructure",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:41:05.444Z",
+      "feature": "conversation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:41:11.883Z",
+      "feature": "conversation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:41:22.365Z",
+      "feature": "conversation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:41:28.249Z",
+      "feature": "conversation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:41:38.109Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:41:43.471Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:41:53.464Z",
+      "feature": "infrastructure",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:42:01.683Z",
+      "feature": "infrastructure",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:42:08.380Z",
+      "feature": "infrastructure",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:42:15.457Z",
+      "feature": "infrastructure",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:42:24.386Z",
+      "feature": "infrastructure",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:42:30.951Z",
+      "feature": "infrastructure",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:42:37.959Z",
+      "feature": "infrastructure",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:42:45.954Z",
+      "feature": "infrastructure",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:42:53.941Z",
+      "feature": "infrastructure",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:43:08.940Z",
+      "feature": "infrastructure",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:43:16.182Z",
+      "feature": "infrastructure",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:43:25.712Z",
+      "feature": "infrastructure",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:43:33.967Z",
+      "feature": "persistence",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:43:42.257Z",
+      "feature": "persistence",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:43:52.564Z",
+      "feature": "persistence",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:43:57.592Z",
+      "feature": "conversation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:44:09.211Z",
+      "feature": "conversation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:45:59.679Z",
+      "feature": "conversation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-04-30T04:46:37.631Z",
+      "feature": "conversation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-01T08:47:11.454Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-01T08:47:31.200Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-04T07:07:41.729Z",
+      "feature": "domain",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-04T07:13:34.855Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-04T07:13:42.957Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-04T07:13:53.675Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-04T07:14:03.648Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-04T07:14:17.104Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-05T12:18:24.259Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-05T12:32:24.036Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-08T03:43:24.182Z",
+      "feature": "llm",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-08T03:43:28.648Z",
+      "feature": "llm",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-08T03:43:43.916Z",
+      "feature": "llm",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-08T03:43:55.616Z",
+      "feature": "llm",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-08T03:44:07.902Z",
+      "feature": "llm",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-08T03:45:12.540Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-08T03:45:28.196Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-08T03:45:36.927Z",
+      "feature": "rag_agent",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-08T03:45:44.632Z",
+      "feature": "rag_agent",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-08T03:45:52.290Z",
+      "feature": "rag_agent",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-08T03:45:55.754Z",
+      "feature": "elasticsearch",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-08T03:46:22.910Z",
+      "feature": "elasticsearch",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-08T03:46:34.312Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-08T03:46:52.494Z",
+      "feature": "elasticsearch",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-08T03:46:55.596Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-08T03:47:11.475Z",
+      "feature": "elasticsearch",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-08T03:47:18.895Z",
+      "feature": "elasticsearch",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-08T03:47:19.814Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-08T03:47:30.567Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-08T03:47:37.963Z",
+      "feature": "hybrid_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-08T03:47:44.124Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-08T03:47:52.869Z",
+      "feature": "hybrid_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-08T03:48:01.974Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-08T03:48:18.400Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-08T03:48:29.093Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-08T03:48:42.249Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-08T03:48:56.287Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-08T03:49:05.288Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-08T03:49:15.408Z",
+      "feature": "scripts",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-08T03:49:50.293Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-08T03:50:03.461Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-08T03:50:15.562Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-08T03:50:29.402Z",
+      "feature": "rag_agent",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-08T03:50:36.764Z",
+      "feature": "rag_agent",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-08T03:50:45.583Z",
+      "feature": "rag_agent",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-08T03:50:50.945Z",
+      "feature": "rag_agent",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-08T05:34:43.492Z",
+      "feature": "llm",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-09T06:54:27.532Z",
+      "feature": "logging",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-09T06:54:34.903Z",
+      "feature": "logging",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-09T06:55:49.057Z",
+      "feature": "middleware",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-10T14:43:34.735Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-11T00:13:13.535Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-11T01:01:58.013Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-11T01:05:38.615Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-11T07:18:55.330Z",
+      "feature": "hybrid_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-11T07:19:20.179Z",
+      "feature": "hybrid_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-11T07:19:49.353Z",
+      "feature": "vector",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-11T07:20:18.816Z",
+      "feature": "vector",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-11T07:20:28.039Z",
+      "feature": "vector",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-11T07:22:00.126Z",
+      "feature": "hybrid_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-11T07:22:21.358Z",
+      "feature": "hybrid_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-11T07:22:26.523Z",
+      "feature": "hybrid_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-11T07:22:54.623Z",
+      "feature": "hybrid_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-11T07:23:24.460Z",
+      "feature": "rag_agent",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-11T07:23:50.046Z",
+      "feature": "rag_agent",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-11T10:51:56.567Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-11T10:52:01.794Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-11T12:01:52.575Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-11T12:02:18.822Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-11T12:02:27.932Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-12T10:47:23.498Z",
+      "feature": "parser",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-12T10:47:42.755Z",
+      "feature": "parser",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-12T10:48:01.516Z",
+      "feature": "parser",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-12T10:48:06.907Z",
+      "feature": "parser",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-12T10:48:28.314Z",
+      "feature": "parser",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-12T10:48:35.506Z",
+      "feature": "parser",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-12T10:48:43.013Z",
+      "feature": "parser",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-12T10:48:48.526Z",
+      "feature": "parser",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-12T10:48:54.820Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-12T10:49:00.955Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-12T10:53:10.669Z",
+      "feature": "pymupdf4llm-parser",
+      "phase": "act",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-12T10:58:30.406Z",
+      "feature": "pdf_analyzer",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-12T10:58:31.182Z",
+      "feature": "pdf_analyzer",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-12T10:58:32.047Z",
+      "feature": "pdf_analyzer",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-12T10:58:32.927Z",
+      "feature": "pdf_analyzer",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-12T10:58:33.875Z",
+      "feature": "pdf_analyzer",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-12T10:58:34.508Z",
+      "feature": "pdf_analyzer",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-12T10:58:53.765Z",
+      "feature": "pdf_analyzer",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-12T10:59:13.203Z",
+      "feature": "pdf_analyzer",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-12T10:59:32.947Z",
+      "feature": "pdf_analyzer",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-12T10:59:40.256Z",
+      "feature": "pdf_analyzer",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-12T10:59:53.990Z",
+      "feature": "pdf_analyzer",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-12T11:00:20.979Z",
+      "feature": "pdf_analyzer",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-12T11:00:37.613Z",
+      "feature": "pdf_analyzer",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-12T11:01:06.960Z",
+      "feature": "pdf_analyzer",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-12T11:01:22.922Z",
+      "feature": "pdf_analyzer",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-12T11:01:47.115Z",
+      "feature": "pdf_analyzer",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-12T11:02:11.156Z",
+      "feature": "pdf_analyzer",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-12T11:02:23.317Z",
+      "feature": "pdf_analyzer",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-12T11:02:45.960Z",
+      "feature": "pdf_analyzer",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-12T11:06:37.924Z",
+      "feature": "pdf-analyzer",
+      "phase": "act",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T04:40:23.507Z",
+      "feature": "pdf_routing",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T04:40:24.510Z",
+      "feature": "pdf_routing",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T04:40:25.473Z",
+      "feature": "pdf_routing",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T04:40:26.088Z",
+      "feature": "pdf_routing",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T04:40:26.622Z",
+      "feature": "pdf_routing",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T04:40:27.141Z",
+      "feature": "pdf_routing",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T04:40:40.747Z",
+      "feature": "pdf_routing",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T04:43:29.994Z",
+      "feature": "pdf_routing",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T04:43:50.873Z",
+      "feature": "pdf_routing",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T04:43:58.353Z",
+      "feature": "pdf_routing",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T04:46:59.308Z",
+      "feature": "pdf_routing",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T04:47:09.270Z",
+      "feature": "pdf_routing",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T04:47:27.520Z",
+      "feature": "pdf_routing",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T04:47:35.921Z",
+      "feature": "pdf_routing",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T04:48:42.876Z",
+      "feature": "pdf_routing",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T04:48:49.227Z",
+      "feature": "pdf_routing",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T04:55:38.653Z",
+      "feature": "pdf_routing",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T04:55:53.760Z",
+      "feature": "pdf_routing",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T04:56:23.694Z",
+      "feature": "pdf_routing",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T05:07:00.702Z",
+      "feature": "reranker",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T05:07:10.893Z",
+      "feature": "reranker",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T05:07:25.791Z",
+      "feature": "reranker",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T05:07:29.156Z",
+      "feature": "reranker",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T05:07:50.996Z",
+      "feature": "reranker",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T05:08:26.143Z",
+      "feature": "reranker",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T05:08:52.931Z",
+      "feature": "reranker",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T05:09:52.841Z",
+      "feature": "reranker",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T05:30:56.587Z",
+      "feature": "reranker-module",
+      "phase": "act",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T07:02:34.660Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T07:02:35.099Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T07:02:35.705Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T07:02:36.362Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T07:02:36.850Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T07:02:37.382Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T07:02:53.071Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T07:16:47.786Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T07:20:21.029Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T07:20:29.583Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T07:25:18.743Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T07:25:29.313Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T07:34:48.190Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T12:33:01.699Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T12:33:19.510Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T12:33:32.543Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T12:34:35.933Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T12:34:58.043Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T12:35:13.790Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T12:35:35.819Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T12:35:49.266Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T12:36:06.329Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T12:36:22.027Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T12:36:44.283Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T12:36:59.817Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T12:37:18.289Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T12:37:34.177Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T13:32:55.498Z",
+      "feature": "parser",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T13:33:44.583Z",
+      "feature": "parser",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T13:42:17.792Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T13:48:20.647Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T13:57:04.929Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T13:57:18.873Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T13:57:33.327Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-13T13:57:40.940Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T02:42:41.484Z",
+      "feature": "parser",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T02:59:49.146Z",
+      "feature": "parser",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T02:59:58.654Z",
+      "feature": "parser",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T03:00:16.185Z",
+      "feature": "parser",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T03:00:44.615Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T03:00:45.617Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T03:01:03.093Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T03:01:31.331Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T03:01:48.578Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T03:02:19.118Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T03:02:39.460Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T03:02:45.076Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T03:03:19.833Z",
+      "feature": "parser",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T03:03:34.817Z",
+      "feature": "parser",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T03:03:48.274Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T03:04:02.219Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T03:04:18.731Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T03:04:33.812Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T03:04:47.508Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T03:05:02.784Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T03:06:48.751Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T03:07:06.146Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T03:07:33.815Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T03:07:53.797Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T03:08:08.760Z",
+      "feature": "parser",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T03:08:26.512Z",
+      "feature": "parser",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T03:08:49.360Z",
+      "feature": "strategies",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T03:09:04.759Z",
+      "feature": "chunking",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T03:09:11.433Z",
+      "feature": "parser",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T03:09:16.830Z",
+      "feature": "chunking",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T03:09:26.157Z",
+      "feature": "chunking",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T03:09:35.875Z",
+      "feature": "chunking",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T03:09:46.842Z",
+      "feature": "chunking",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T03:09:53.205Z",
+      "feature": "state",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T10:44:51.896Z",
+      "feature": "chunking",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T10:45:05.985Z",
+      "feature": "table_flattening",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T10:45:06.905Z",
+      "feature": "table_flattening",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T10:45:28.207Z",
+      "feature": "table_flattening",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T10:46:13.362Z",
+      "feature": "table_flattening",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T10:46:54.758Z",
+      "feature": "table_flattening",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T10:47:32.293Z",
+      "feature": "table_flattening",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T10:48:05.948Z",
+      "feature": "chunking",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T10:48:43.082Z",
+      "feature": "chunking",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T10:49:40.782Z",
+      "feature": "strategies",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T10:50:13.999Z",
+      "feature": "chunking",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T10:50:35.974Z",
+      "feature": "chunking",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T13:32:34.572Z",
+      "feature": "multi_query",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T13:32:35.468Z",
+      "feature": "multi_query",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T13:32:36.004Z",
+      "feature": "multi_query",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T13:32:36.571Z",
+      "feature": "multi_query",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T13:32:37.010Z",
+      "feature": "multi_query",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T13:32:37.526Z",
+      "feature": "multi_query",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T13:33:15.827Z",
+      "feature": "multi_query",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T13:33:28.970Z",
+      "feature": "multi_query",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T13:39:27.683Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T13:39:37.920Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T13:39:45.341Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T13:39:49.931Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T13:58:27.519Z",
+      "feature": "multi_query",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T13:58:45.428Z",
+      "feature": "multi_query",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T14:13:08.876Z",
+      "feature": "multi_query",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T14:17:40.721Z",
+      "feature": "multi_query",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T14:17:54.289Z",
+      "feature": "multi_query",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T14:18:08.087Z",
+      "feature": "multi_query",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T14:20:39.023Z",
+      "feature": "multi_query",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T14:21:24.959Z",
+      "feature": "multi_query",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T14:21:35.410Z",
+      "feature": "multi_query",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-14T14:23:41.470Z",
+      "feature": "rag_agent",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T08:21:30.668Z",
+      "feature": "websocket",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T08:21:42.286Z",
+      "feature": "websocket",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T08:21:57.223Z",
+      "feature": "websocket",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T08:22:02.215Z",
+      "feature": "websocket",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T08:22:05.167Z",
+      "feature": "websocket",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T08:22:20.079Z",
+      "feature": "websocket",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T08:22:20.910Z",
+      "feature": "websocket",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T08:22:21.607Z",
+      "feature": "websocket",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T08:22:37.502Z",
+      "feature": "websocket",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T08:22:53.788Z",
+      "feature": "websocket",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T08:23:07.821Z",
+      "feature": "websocket",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T08:23:16.651Z",
+      "feature": "websocket",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T08:23:45.410Z",
+      "feature": "websocket",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T08:24:01.684Z",
+      "feature": "websocket",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T08:24:24.276Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T08:24:42.533Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T08:24:51.146Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T08:25:01.597Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:43:41.674Z",
+      "feature": "advanced_ingest",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:44:02.825Z",
+      "feature": "advanced_ingest",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:44:15.456Z",
+      "feature": "advanced_ingest",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:44:20.096Z",
+      "feature": "advanced_ingest",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:44:45.316Z",
+      "feature": "state",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:45:01.631Z",
+      "feature": "state",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:45:24.079Z",
+      "feature": "state",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:45:32.483Z",
+      "feature": "state",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:46:09.808Z",
+      "feature": "nodes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:46:21.192Z",
+      "feature": "nodes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:46:32.971Z",
+      "feature": "nodes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:46:48.585Z",
+      "feature": "nodes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:47:05.162Z",
+      "feature": "nodes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:47:12.230Z",
+      "feature": "nodes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:47:16.689Z",
+      "feature": "nodes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:47:52.947Z",
+      "feature": "nodes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:48:02.263Z",
+      "feature": "nodes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:48:16.019Z",
+      "feature": "nodes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:48:45.584Z",
+      "feature": "nodes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:48:51.260Z",
+      "feature": "nodes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:48:54.895Z",
+      "feature": "nodes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:49:12.667Z",
+      "feature": "nodes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:49:38.353Z",
+      "feature": "nodes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:50:24.919Z",
+      "feature": "nodes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:50:37.208Z",
+      "feature": "nodes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:50:55.110Z",
+      "feature": "nodes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:51:08.297Z",
+      "feature": "nodes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:51:42.286Z",
+      "feature": "graph",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:52:03.044Z",
+      "feature": "graph",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:52:29.377Z",
+      "feature": "graph",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:52:49.650Z",
+      "feature": "advanced_ingest",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:53:03.382Z",
+      "feature": "advanced_ingest",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:53:13.450Z",
+      "feature": "advanced_ingest",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:53:28.190Z",
+      "feature": "advanced_ingest",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:53:54.393Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:54:03.514Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:54:12.952Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:54:21.739Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:54:43.861Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:56:41.256Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:56:46.923Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:56:50.680Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:56:55.063Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-16T09:56:58.731Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-17T09:10:20.234Z",
+      "feature": "graph",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-17T09:12:02.731Z",
+      "feature": "nodes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-17T09:12:22.660Z",
+      "feature": "nodes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-18T05:53:11.598Z",
+      "feature": "fix-quality-gate-infinite-loop",
+      "phase": "act",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-05-18T09:07:32.681Z",
+      "feature": "fix-agent-run-session-save — Gap Analysis 완료 (83%)",
+      "phase": "act",
       "action": "updated"
     }
   ]

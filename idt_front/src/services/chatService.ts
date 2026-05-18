@@ -10,10 +10,14 @@ import type {
   ConversationChatResponse,
   GeneralChatRequest,
   GeneralChatResponse,
+  AgentChatRequest,
+  AgentChatResponse,
   SessionSummary,
   SessionSummaryListResponse,
   HistoryMessageItem,
   SessionMessagesResponse,
+  AgentSessionListResponse,
+  AgentSessionMessagesResponse,
 } from '@/types/chat';
 import type { ApiResponse, PaginatedResponse } from '@/types/api';
 
@@ -36,6 +40,10 @@ export const chatService = {
   /** CHAT-001: General Chat (LangGraph ReAct) — authClient 사용 */
   generalChat: (payload: GeneralChatRequest) =>
     authClient.post<GeneralChatResponse>(API_ENDPOINTS.GENERAL_CHAT, payload),
+
+  /** AGENT-RUN: 특정 에이전트로 채팅 전송 */
+  agentChat: (agentId: string, payload: AgentChatRequest) =>
+    authClient.post<AgentChatResponse>(API_ENDPOINTS.AGENT_CHAT_RUN(agentId), payload),
 
   /** CONV-001: 멀티턴 대화 API */
   conversationChat: (payload: ConversationChatRequest) =>
@@ -66,6 +74,28 @@ export const chatService = {
   ): Promise<Message[]> => {
     const res = await apiClient.get<SessionMessagesResponse>(
       API_ENDPOINTS.CONVERSATION_SESSION_MESSAGES(sessionId),
+      { params: { user_id: userId } },
+    );
+    return res.data.messages.map(toMessage);
+  },
+
+  /** 에이전트별 세션 목록 조회 */
+  getAgentSessions: async (agentId: string, userId: string): Promise<ChatSession[]> => {
+    const res = await apiClient.get<AgentSessionListResponse>(
+      API_ENDPOINTS.CONVERSATION_AGENT_SESSIONS(agentId),
+      { params: { user_id: userId } },
+    );
+    return res.data.sessions.map(toChatSession);
+  },
+
+  /** 에이전트 세션의 메시지 조회 */
+  getAgentSessionMessages: async (
+    agentId: string,
+    sessionId: string,
+    userId: string,
+  ): Promise<Message[]> => {
+    const res = await apiClient.get<AgentSessionMessagesResponse>(
+      API_ENDPOINTS.CONVERSATION_AGENT_SESSION_MESSAGES(agentId, sessionId),
       { params: { user_id: userId } },
     );
     return res.data.messages.map(toMessage);

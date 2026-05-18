@@ -17,10 +17,17 @@ export const API_ENDPOINTS = {
   CONVERSATION_SESSION_MESSAGES: (sessionId: string) =>
     `/api/v1/conversations/sessions/${sessionId}/messages`,
 
+  // Conversation History — Agent-scoped
+  CONVERSATION_AGENT_SESSIONS: (agentId: string) =>
+    `/api/v1/conversations/agents/${agentId}/sessions`,
+  CONVERSATION_AGENT_SESSION_MESSAGES: (agentId: string, sessionId: string) =>
+    `/api/v1/conversations/agents/${agentId}/sessions/${sessionId}/messages`,
+
   // Agent
   AGENT_RUN: '/api/agent/run',
   AGENT_RUN_STATUS: (runId: string) => `/api/agent/run/${runId}`,
   AGENT_STREAM: (runId: string) => `/api/agent/run/${runId}/stream`,
+  AGENT_CHAT_RUN: (agentId: string) => `/api/v1/agents/${agentId}/run`,
 
   // RAG / Documents
   DOCUMENTS: '/api/rag/documents',
@@ -83,6 +90,12 @@ export const API_ENDPOINTS = {
   ADMIN_USER_DEPT_ASSIGN: (userId: number) => `/api/v1/users/${userId}/departments`,
   ADMIN_USER_DEPT_REMOVE: (userId: number, deptId: string) =>
     `/api/v1/users/${userId}/departments/${deptId}`,
+
+  // Agent Builder (CRUD)
+  AGENT_BUILDER_CREATE: '/api/v1/agents',
+  AGENT_BUILDER_DETAIL: (agentId: string) => `/api/v1/agents/${agentId}`,
+  AGENT_BUILDER_UPDATE: (agentId: string) => `/api/v1/agents/${agentId}`,
+  AGENT_BUILDER_DELETE: (agentId: string) => `/api/v1/agents/${agentId}`,
 
   // Embedding Models
   EMBEDDING_MODELS: '/api/v1/embedding-models',

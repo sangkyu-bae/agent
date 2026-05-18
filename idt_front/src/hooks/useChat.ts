@@ -5,6 +5,7 @@ import type {
   SendMessageRequest,
   ConversationChatRequest,
   GeneralChatRequest,
+  AgentChatRequest,
 } from '@/types/chat';
 
 /** 채팅 세션 목록 조회 */
@@ -47,6 +48,20 @@ export const useGeneralChat = () => {
   });
 };
 
+/** 에이전트 전용 채팅 뮤테이션 — POST /api/v1/agents/{agent_id}/run */
+export const useAgentChat = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ agentId, ...payload }: AgentChatRequest & { agentId: string }) =>
+      chatService.agentChat(agentId, payload).then((r) => r.data),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.chat.agentHistory(data.agent_id, ''),
+      });
+    },
+  });
+};
+
 /** @deprecated Use useGeneralChat instead */
 export const useConversationChat = () =>
   useMutation({
@@ -74,5 +89,34 @@ export const useSessionMessages = (
     queryFn: () =>
       chatService.getSessionMessages(sessionId as string, userId as string),
     enabled: !!sessionId && !!userId && (options?.enabled ?? true),
+    staleTime: 60_000,
+  });
+
+/** 에이전트별 세션 목록 (에이전트 전환 시 자동 재요청) */
+export const useAgentSessions = (
+  agentId: string | null,
+  userId: string | undefined,
+) =>
+  useQuery({
+    queryKey: queryKeys.chat.agentHistory(agentId ?? '', userId ?? ''),
+    queryFn: () => chatService.getAgentSessions(agentId!, userId!),
+    enabled: !!agentId && !!userId,
+    staleTime: 60_000,
+  });
+
+/** 에이전트별 세션 메시지 */
+export const useAgentSessionMessages = (
+  agentId: string | null,
+  sessionId: string | null,
+  userId: string | undefined,
+  options?: { enabled?: boolean },
+) =>
+  useQuery({
+    queryKey: queryKeys.chat.agentSessionMessages(
+      agentId ?? '', sessionId ?? '', userId ?? '',
+    ),
+    queryFn: () =>
+      chatService.getAgentSessionMessages(agentId!, sessionId!, userId!),
+    enabled: !!agentId && !!sessionId && !!userId && (options?.enabled ?? true),
     staleTime: 60_000,
   });
