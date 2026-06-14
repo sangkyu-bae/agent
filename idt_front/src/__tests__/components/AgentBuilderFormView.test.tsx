@@ -69,6 +69,88 @@ describe('AgentBuilderPage — FormView 도구 연결', () => {
     expect(toolButton.className).not.toContain('border-violet-300');
   });
 
+  it('도구를 선택하고 저장하면 tool_ids 로 서버에 전송된다', async () => {
+    let capturedBody: Record<string, unknown> | null = null;
+    server.use(
+      http.post(`*${API_ENDPOINTS.AGENT_BUILDER_CREATE}`, async ({ request }) => {
+        capturedBody = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json(
+          {
+            agent_id: 'new-agent-1',
+            name: capturedBody.name,
+            system_prompt: '',
+            tool_ids: (capturedBody.tool_ids as string[]) ?? [],
+            workers: [],
+            flow_hint: '',
+            llm_model_id: 'm-1',
+            visibility: 'private',
+            visibility_clamped: false,
+            max_visibility: null,
+            department_id: null,
+            temperature: 0.7,
+            created_at: '2026-05-31T00:00:00Z',
+          },
+          { status: 201 },
+        );
+      }),
+    );
+
+    renderWithProviders(<AgentBuilderPage />);
+    await userEvent.click(screen.getByRole('button', { name: /새 에이전트/ }));
+
+    const nameInput = await screen.findByPlaceholderText('예: 문서 분석가');
+    await userEvent.type(nameInput, '엑셀 도우미');
+
+    const excelTool = (await screen.findByText('Excel 파일 생성')).closest('button')!;
+    await userEvent.click(excelTool);
+
+    await userEvent.click(screen.getByRole('button', { name: /^저장$/ }));
+
+    await vi.waitFor(() => {
+      expect(capturedBody).not.toBeNull();
+    });
+    expect(capturedBody!.tool_ids).toEqual(['internal:excel_export']);
+  });
+
+  it('도구를 선택하지 않으면 tool_ids 가 전송되지 않는다 (AI 자동 선택)', async () => {
+    let capturedBody: Record<string, unknown> | null = null;
+    server.use(
+      http.post(`*${API_ENDPOINTS.AGENT_BUILDER_CREATE}`, async ({ request }) => {
+        capturedBody = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json(
+          {
+            agent_id: 'new-agent-2', name: capturedBody.name, system_prompt: '',
+            tool_ids: [], workers: [], flow_hint: '', llm_model_id: 'm-1',
+            visibility: 'private', visibility_clamped: false, max_visibility: null,
+            department_id: null, temperature: 0.7, created_at: '2026-05-31T00:00:00Z',
+          },
+          { status: 201 },
+        );
+      }),
+    );
+
+    renderWithProviders(<AgentBuilderPage />);
+    await userEvent.click(screen.getByRole('button', { name: /새 에이전트/ }));
+
+    const nameInput = await screen.findByPlaceholderText('예: 문서 분석가');
+    await userEvent.type(nameInput, 'AI 자동 에이전트');
+
+    await userEvent.click(screen.getByRole('button', { name: /^저장$/ }));
+
+    await vi.waitFor(() => {
+      expect(capturedBody).not.toBeNull();
+    });
+    expect(capturedBody!.tool_ids).toBeUndefined();
+  });
+
+  it('생성 모드에서 MCP 도구는 선택이 비활성화된다', async () => {
+    renderWithProviders(<AgentBuilderPage />);
+    await userEvent.click(screen.getByRole('button', { name: /새 에이전트/ }));
+
+    const mcpTool = (await screen.findByText('search')).closest('button')!;
+    expect(mcpTool).toBeDisabled();
+  });
+
   it('에러 상태에서 다시 시도 버튼을 표시한다', async () => {
     server.use(
       http.get(`*${API_ENDPOINTS.TOOL_CATALOG}`, () =>

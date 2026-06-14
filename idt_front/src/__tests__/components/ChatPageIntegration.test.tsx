@@ -94,50 +94,19 @@ describe('ChatPage Integration (CHAT-HIST-001)', () => {
     expect(screen.getByText('이전 답변입니다')).toBeInTheDocument();
   });
 
-  it('I3: 새 메시지 전송 성공 → sessions endpoint 재조회 발생한다', async () => {
-    let sessionsCallCount = 0;
-
-    server.use(
-      http.get('*/api/v1/conversations/agents/:agentId/sessions', ({ request }) => {
-        sessionsCallCount += 1;
-        const url = new URL(request.url);
-        const userId = url.searchParams.get('user_id');
-        return HttpResponse.json({
-          user_id: userId,
-          sessions: [
-            {
-              session_id: 's1',
-              message_count: sessionsCallCount + 3,
-              last_message: '새로 업데이트된 메시지',
-              last_message_at: '2026-04-17T11:00:00Z',
-            },
-          ],
-        });
-      }),
-      http.post('*/api/v1/chat', () =>
-        HttpResponse.json({
-          user_id: '1',
-          session_id: 'server-session-1',
-          answer: '테스트 답변입니다.',
-          tools_used: [],
-          sources: [],
-          was_summarized: false,
-          request_id: 'req-001',
-        }),
-      ),
-    );
-
+  it('I3: 메시지 전송 시 user message + 빈 assistant placeholder가 즉시 추가된다', async () => {
+    // ws-agent-chat-streaming Design §5: chat은 WS로 전환됨. HTTP POST /api/v1/chat 호출
+    // 자체가 더 이상 발생하지 않으므로 transport-agnostic하게
+    // "user message 추가 + placeholder 추가"만 검증한다.
+    // 실제 WS 동작은 hooks/useChatStream.test.ts 와 pages/ChatPage/streamRouting.test.tsx 가 cover.
     renderChatApp();
 
-    await waitFor(() => expect(sessionsCallCount).toBeGreaterThanOrEqual(1));
-    const callsAfterMount = sessionsCallCount;
-
-    const textarea = screen.getByPlaceholderText('상플AI에게 메시지 보내기...');
+    const textarea = await screen.findByPlaceholderText('상플AI에게 메시지 보내기...');
     fireEvent.change(textarea, { target: { value: '새 메시지' } });
     fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
 
     await waitFor(() => {
-      expect(sessionsCallCount).toBeGreaterThan(callsAfterMount);
+      expect(screen.getByText('새 메시지')).toBeInTheDocument();
     });
   });
 

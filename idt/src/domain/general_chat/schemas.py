@@ -40,3 +40,5 @@ class GeneralChatResponse(BaseModel):
     sources: list[DocumentSource]
     was_summarized: bool
     request_id: str
+    # chart-builder: Chart.js config 리스트 (기본 [] → 하위호환)
+    charts: list[dict] = []

@@ -332,3 +332,39 @@ class TestClaudeClientStream:
 async def _async_iter(items):
     for item in items:
         yield item
+
+
+class TestBuildMessagesPrefillGuard:
+    """fix-anthropic-prefill-error TC-13~14: assistant-last 방어 가드."""
+
+    @pytest.fixture
+    def client(self, mock_logger):
+        from src.infrastructure.llm.claude_client import ClaudeClient
+
+        return ClaudeClient(api_key="test-key", logger=mock_logger)
+
+    def test_tc13_assistant_last_appends_continuation(
+        self, client, make_request, mock_logger,
+    ):
+        """TC-13: assistant-last → continuation HumanMessage append + warning."""
+        request = make_request(messages=[
+            {"role": "user", "content": "질문"},
+            {"role": "assistant", "content": "이전 응답"},
+        ])
+        messages = client._build_messages(request)
+
+        assert isinstance(messages[-1], HumanMessage)
+        # 기존 메시지는 보존
+        assert isinstance(messages[-2], AIMessage)
+        assert mock_logger.warning.call_count == 1
+
+    def test_tc14_user_last_no_guard(self, client, make_request, mock_logger):
+        """TC-14: user-last(통상) → 가드 미발동, warning 없음."""
+        request = make_request(messages=[
+            {"role": "user", "content": "질문"},
+        ])
+        messages = client._build_messages(request)
+
+        assert isinstance(messages[-1], HumanMessage)
+        assert len(messages) == 1
+        mock_logger.warning.assert_not_called()

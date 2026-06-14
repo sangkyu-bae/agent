@@ -27,14 +27,30 @@ class TestRegisterEndpoint:
         app = make_app()
         mock_uc = AsyncMock()
         mock_uc.execute.return_value = RegisterResult(
-            user_id=1, email="a@b.com", role="user", status="pending"
+            user_id=1, email="a@b.com", display_name="tester", role="user", status="pending"
         )
         app.dependency_overrides[get_register_use_case] = lambda: mock_uc
         client = TestClient(app, raise_server_exceptions=False)
 
-        resp = client.post("/api/v1/auth/register", json={"email": "a@b.com", "password": "secure1234"})
+        resp = client.post(
+            "/api/v1/auth/register",
+            json={"email": "a@b.com", "password": "secure1234", "display_name": "tester"},
+        )
         assert resp.status_code == 201
         assert resp.json()["status"] == "pending"
+
+    def test_register_422_missing_display_name(self) -> None:
+        """display_name 누락 시 422 반환 (agent-user-context G-04)."""
+        app = make_app()
+        mock_uc = AsyncMock()
+        app.dependency_overrides[get_register_use_case] = lambda: mock_uc
+        client = TestClient(app, raise_server_exceptions=False)
+
+        resp = client.post(
+            "/api/v1/auth/register",
+            json={"email": "a@b.com", "password": "secure1234"},
+        )
+        assert resp.status_code == 422
 
     def test_register_409_duplicate(self) -> None:
         app = make_app()
@@ -43,7 +59,10 @@ class TestRegisterEndpoint:
         app.dependency_overrides[get_register_use_case] = lambda: mock_uc
         client = TestClient(app, raise_server_exceptions=False)
 
-        resp = client.post("/api/v1/auth/register", json={"email": "a@b.com", "password": "secure1234"})
+        resp = client.post(
+            "/api/v1/auth/register",
+            json={"email": "a@b.com", "password": "secure1234", "display_name": "tester"},
+        )
         assert resp.status_code == 409
 
     def test_register_422_short_password(self) -> None:
@@ -51,7 +70,10 @@ class TestRegisterEndpoint:
         mock_uc = AsyncMock()
         app.dependency_overrides[get_register_use_case] = lambda: mock_uc
         client = TestClient(app, raise_server_exceptions=False)
-        resp = client.post("/api/v1/auth/register", json={"email": "a@b.com", "password": "short"})
+        resp = client.post(
+            "/api/v1/auth/register",
+            json={"email": "a@b.com", "password": "short", "display_name": "tester"},
+        )
         assert resp.status_code == 422
 
 

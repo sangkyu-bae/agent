@@ -77,6 +77,16 @@ class TestHybridSearchRequest:
         assert req.collection_name == "finance"
         assert req.es_index == "finance_idx"
 
+    def test_default_vector_score_threshold_is_zero(self):
+        from src.domain.hybrid_search.schemas import HybridSearchRequest
+        req = HybridSearchRequest(query="q")
+        assert req.vector_score_threshold == 0.0
+
+    def test_explicit_vector_score_threshold(self):
+        from src.domain.hybrid_search.schemas import HybridSearchRequest
+        req = HybridSearchRequest(query="q", vector_score_threshold=0.3)
+        assert req.vector_score_threshold == 0.3
+
 
 class TestHybridSearchResult:
     def test_create_full(self):

@@ -1,7 +1,7 @@
 """Conversation History API: 저장된 대화 세션/메시지 조회 (CHAT-HIST-001)."""
 import uuid
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
@@ -37,6 +37,9 @@ class MessageItemAPI(BaseModel):
     content: str
     turn_index: int
     created_at: datetime
+    charts: Optional[List[dict]] = Field(
+        None, description="Chart.js config 배열 (chat-chart-persistence, 없으면 null)"
+    )
 
 
 class MessageListAPIResponse(BaseModel):
@@ -131,6 +134,7 @@ async def get_messages(
                 content=m.content,
                 turn_index=m.turn_index,
                 created_at=m.created_at,
+                charts=m.charts,
             )
             for m in result.messages
         ],
@@ -219,6 +223,7 @@ async def get_agent_session_messages(
                 content=m.content,
                 turn_index=m.turn_index,
                 created_at=m.created_at,
+                charts=m.charts,
             )
             for m in result.messages
         ],

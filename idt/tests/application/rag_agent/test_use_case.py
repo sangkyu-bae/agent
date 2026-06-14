@@ -4,6 +4,7 @@ from datetime import datetime
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from src.domain.agent_run.auth_context import AuthContext
 from src.domain.hybrid_search.schemas import (
     HybridSearchResponse,
     HybridSearchResult,
@@ -11,6 +12,17 @@ from src.domain.hybrid_search.schemas import (
 from src.domain.llm.interfaces import LLMFactoryInterface
 from src.domain.llm_model.entity import LlmModel
 from src.domain.rag_agent.schemas import RAGAgentRequest
+
+
+# agent-user-context: 검색 동작 자체를 검증하는 테스트 — admin auth_ctx 주입.
+_FULL_PERM_CTX = AuthContext(
+    user_id=1, display_name="admin", role="admin",
+    primary_department_id="dept-001", primary_department_name="DX팀",
+    department_ids=("dept-001",), department_names=("DX팀",),
+    permissions=frozenset({
+        "USE_RAG_SEARCH", "READ_DEPARTMENT_DOCS", "READ_PUBLIC_DOCS",
+    }),
+)
 
 
 def _make_llm_model() -> LlmModel:
@@ -74,7 +86,8 @@ class TestInternalDocumentSearchTool:
         )
 
         tool = InternalDocumentSearchTool(
-            hybrid_search_use_case=mock_uc, top_k=5, request_id="req-1"
+            hybrid_search_use_case=mock_uc, top_k=5, request_id="req-1",
+            auth_ctx=_FULL_PERM_CTX,
         )
         output = await tool._arun("금융 정책")
 
@@ -91,7 +104,8 @@ class TestInternalDocumentSearchTool:
         )
 
         tool = InternalDocumentSearchTool(
-            hybrid_search_use_case=mock_uc, top_k=3, request_id="req-1"
+            hybrid_search_use_case=mock_uc, top_k=3, request_id="req-1",
+            auth_ctx=_FULL_PERM_CTX,
         )
         await tool._arun("질문")
 
@@ -108,7 +122,8 @@ class TestInternalDocumentSearchTool:
         mock_uc.execute.return_value = _make_hybrid_response([])
 
         tool = InternalDocumentSearchTool(
-            hybrid_search_use_case=mock_uc, top_k=5, request_id="req-1"
+            hybrid_search_use_case=mock_uc, top_k=5, request_id="req-1",
+            auth_ctx=_FULL_PERM_CTX,
         )
         await tool._arun("질문")
 
@@ -123,7 +138,8 @@ class TestInternalDocumentSearchTool:
         mock_uc.execute.return_value = _make_hybrid_response([])
 
         tool = InternalDocumentSearchTool(
-            hybrid_search_use_case=mock_uc, top_k=5, request_id="req-1"
+            hybrid_search_use_case=mock_uc, top_k=5, request_id="req-1",
+            auth_ctx=_FULL_PERM_CTX,
         )
         output = await tool._arun("찾을 수 없는 질문")
         assert "찾지 못" in output

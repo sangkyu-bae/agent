@@ -11,6 +11,17 @@ TOOL_REGISTRY: dict[str, ToolMeta] = {
         ),
         requires_env=[],
     ),
+    "data_analysis": ToolMeta(
+        tool_id="data_analysis",
+        name="데이터 분석",
+        description=(
+            "수집된 검색 결과나 첨부된 엑셀 데이터를 사용자의 질문 기준으로 분석하고 "
+            "분석 결과만 반환합니다. 검색 결과가 있으면 그것을, 없으면 전체 대화 문맥을 "
+            "분석 대상으로 삼습니다. 엑셀 첨부 시 자가교정 분석 워크플로우를 사용합니다."
+        ),
+        requires_env=[],
+        category="analysis",
+    ),
     "internal_document_search": ToolMeta(
         tool_id="internal_document_search",
         name="내부 문서 검색",

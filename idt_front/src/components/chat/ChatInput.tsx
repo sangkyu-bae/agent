@@ -1,15 +1,38 @@
-import { useState, useRef, type KeyboardEvent } from 'react';
+import { useState, useRef, type ChangeEvent, type KeyboardEvent } from 'react';
 
 interface ChatInputProps {
   onSend: (content: string) => void;
   isLoading?: boolean;
   useRag?: boolean;
   onToggleRag?: () => void;
+  // ws-agent-excel-attachment: 엑셀 첨부 (agent 선택 시에만 노출)
+  attachmentEnabled?: boolean;
+  attachmentName?: string | null;
+  attachmentUploading?: boolean;
+  onAttachFile?: (file: File) => void;
+  onRemoveAttachment?: () => void;
 }
 
-const ChatInput = ({ onSend, isLoading = false, useRag = false, onToggleRag }: ChatInputProps) => {
+const ChatInput = ({
+  onSend,
+  isLoading = false,
+  useRag = false,
+  onToggleRag,
+  attachmentEnabled = false,
+  attachmentName = null,
+  attachmentUploading = false,
+  onAttachFile,
+  onRemoveAttachment,
+}: ChatInputProps) => {
   const [value, setValue] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handlePickFile = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && onAttachFile) onAttachFile(file);
+    e.target.value = ''; // 같은 파일 재선택 허용
+  };
 
   const handleSend = () => {
     const trimmed = value.trim();
@@ -44,6 +67,30 @@ const ChatInput = ({ onSend, isLoading = false, useRag = false, onToggleRag }: C
         <div
           className="overflow-hidden rounded-2xl border border-zinc-300 bg-white shadow-xl shadow-zinc-200/50 transition-all duration-200 focus-within:border-violet-400 focus-within:shadow-violet-100/60"
         >
+          {/* ws-agent-excel-attachment: 첨부 칩 */}
+          {attachmentEnabled && (attachmentName || attachmentUploading) && (
+            <div className="flex items-center gap-2 px-5 pt-3">
+              <span className="inline-flex max-w-xs items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-[13px] text-violet-700">
+                <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94A3 3 0 1 1 19.5 7.372L8.552 18.32m.009-.01-.01.01m5.699-9.941-7.81 7.81a1.5 1.5 0 0 0 2.112 2.13" />
+                </svg>
+                <span className="truncate">
+                  {attachmentUploading ? '업로드 중…' : attachmentName}
+                </span>
+                {!attachmentUploading && onRemoveAttachment && (
+                  <button
+                    type="button"
+                    onClick={onRemoveAttachment}
+                    className="shrink-0 text-violet-400 hover:text-violet-700"
+                    aria-label="첨부 제거"
+                  >
+                    ✕
+                  </button>
+                )}
+              </span>
+            </div>
+          )}
+
           {/* 텍스트 입력 */}
           <div className="px-5 pt-4 pb-2">
             <textarea
@@ -78,6 +125,31 @@ const ChatInput = ({ onSend, isLoading = false, useRag = false, onToggleRag }: C
                 </svg>
                 문서 검색
               </button>
+
+              {/* ws-agent-excel-attachment: 엑셀 첨부 (agent 모드에서만) */}
+              {attachmentEnabled && (
+                <>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".xlsx,.xls"
+                    className="hidden"
+                    onChange={handlePickFile}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isLoading || attachmentUploading}
+                    title="엑셀 첨부 (데이터 분석)"
+                    className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2 text-[13px] font-medium text-zinc-500 transition-all duration-150 hover:border-zinc-300 hover:bg-zinc-100 hover:text-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94A3 3 0 1 1 19.5 7.372L8.552 18.32m.009-.01-.01.01m5.699-9.941-7.81 7.81a1.5 1.5 0 0 0 2.112 2.13" />
+                    </svg>
+                    엑셀
+                  </button>
+                </>
+              )}
             </div>
 
             {/* 오른쪽: 힌트 + 전송 */}

@@ -3,8 +3,18 @@
 LLM-MODEL-REG-001 §6-1.
 """
 from datetime import datetime
+from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.infrastructure.persistence.models.base import Base
@@ -28,3 +38,7 @@ class LlmModelModel(Base):
     is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    # AGENT-OBS-001 §5-0: 가격 컬럼 (V022 마이그레이션과 매핑)
+    input_price_per_1k_usd: Mapped[Decimal | None] = mapped_column(Numeric(10, 6))
+    output_price_per_1k_usd: Mapped[Decimal | None] = mapped_column(Numeric(10, 6))
+    pricing_updated_at: Mapped[datetime | None] = mapped_column(DateTime)

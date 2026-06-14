@@ -281,6 +281,30 @@ class TestRunAgent:
         assert data["agent_id"] == agent_id
         assert data["answer"] == "AI 뉴스를 수집했습니다."
 
+    def test_run_agent_general_conversation_returns_proper_answer(self):
+        agent_id = str(uuid.uuid4())
+        mock_uc = MagicMock()
+        response = RunAgentResponse(
+            agent_id=agent_id,
+            query="고마워",
+            answer="천만에요! 다른 도움이 필요하시면 말씀해주세요.",
+            tools_used=[],
+            request_id=str(uuid.uuid4()),
+            session_id=str(uuid.uuid4()),
+        )
+        mock_uc.execute = AsyncMock(return_value=response)
+        client = _make_client({get_run_agent_use_case: lambda: mock_uc})
+
+        resp = client.post(f"/api/v1/agents/{agent_id}/run", json={
+            "query": "고마워",
+            "user_id": "user-1",
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["answer"] != data["query"]
+        assert len(data["answer"]) > 0
+        assert data["tools_used"] == []
+
     def test_run_agent_not_found_returns_404(self):
         mock_uc = MagicMock()
         mock_uc.execute = AsyncMock(side_effect=ValueError("찾을 수 없습니다"))

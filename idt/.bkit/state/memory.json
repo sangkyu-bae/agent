@@ -1,12 +1,17 @@
 {
-  "sessionCount": 226,
+  "sessionCount": 309,
   "lastSession": {
-    "startedAt": "2026-05-18T08:57:45.247Z",
+    "startedAt": "2026-06-11T06:19:16.495Z",
     "platform": "claude",
     "level": "Starter"
   },
-  "currentFeature": "advanced-document-parser",
-  "currentPhase": "archived",
-  "matchRate": 93,
-  "archivedTo": "docs/archive/2026-05/advanced-document-parser/"
+  "currentFeature": "agent-run-observability",
+  "currentPhase": "check",
+  "matchRate": 96,
+  "milestones": {
+    "M1": "completed",
+    "M2": "pending",
+    "M3": "pending",
+    "M4": "pending"
+  }
 }

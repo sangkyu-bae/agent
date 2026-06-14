@@ -39,6 +39,7 @@ class CreateAgentRequest(BaseModel):
     visibility: str = Field("private", pattern="^(private|department|public)$")
     department_id: str | None = None
     temperature: float = Field(0.70, ge=0.0, le=2.0)
+    tool_ids: list[str] | None = None
     tool_configs: dict[str, RagToolConfigRequest] | None = None
     sub_agent_configs: list[SubAgentConfigRequest] | None = None
 
@@ -100,6 +101,9 @@ class RunAgentRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=2000)
     user_id: str
     session_id: str | None = None
+    # analysis-node-agent: 분석 노드 입력용 첨부(엑셀 파일 경로 등).
+    # 예: [{"type": "excel", "file_path": "/tmp/x.xlsx", "user_id": "u1"}]
+    attachments: list[dict] | None = None
 
 
 class RunAgentResponse(BaseModel):
@@ -109,6 +113,7 @@ class RunAgentResponse(BaseModel):
     tools_used: list[str]
     request_id: str
     session_id: str
+    run_id: str | None = None  # AGENT-OBS-001: ai_run.id (관측성)
 
 
 class ToolMetaResponse(BaseModel):

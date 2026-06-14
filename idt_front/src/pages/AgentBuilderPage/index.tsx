@@ -141,12 +141,20 @@ const AgentBuilderPage = () => {
       const selectedModel = models?.find(m => m.model_name === form.model);
       const toolConfigs = Object.keys(form.toolConfigs).length > 0 ? form.toolConfigs : undefined;
 
+      // 생성 단계는 내부 도구만 지원 → MCP 도구는 전송에서 제외 (UI에서도 선택 차단)
+      const selectedToolIds = form.tools.filter((id) => {
+        const tool = catalogTools?.find((t) => t.tool_id === id);
+        return tool?.source !== 'mcp';
+      });
+      const toolIds = selectedToolIds.length > 0 ? selectedToolIds : undefined;
+
       createMutation.mutate(
         {
           user_request: form.description || form.name,
           name: form.name,
           llm_model_id: selectedModel?.id,
           temperature: form.temperature,
+          tool_ids: toolIds,
           tool_configs: toolConfigs,
         },
         {
@@ -648,14 +656,20 @@ const FormView = ({ form, onChange, onToolToggle, onRagConfigChange, catalogTool
             <div className="grid grid-cols-2 gap-2">
               {catalogTools.map((tool) => {
                 const isSelected = form.tools.includes(tool.tool_id);
+                // 생성 단계는 내부 도구만 지원 → MCP 도구는 선택 비활성화
+                const mcpDisabled = !isEditMode && tool.source === 'mcp';
                 return (
                   <button
                     key={tool.tool_id}
-                    onClick={() => onToolToggle(tool.tool_id)}
+                    onClick={() => !mcpDisabled && onToolToggle(tool.tool_id)}
+                    disabled={mcpDisabled}
+                    title={mcpDisabled ? '생성 후 편집에서 연결할 수 있습니다' : undefined}
                     className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition-all ${
-                      isSelected
-                        ? 'border-violet-300 bg-violet-50'
-                        : 'border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50'
+                      mcpDisabled
+                        ? 'cursor-not-allowed border-zinc-200 bg-zinc-50 opacity-50'
+                        : isSelected
+                          ? 'border-violet-300 bg-violet-50'
+                          : 'border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50'
                     }`}
                   >
                     <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${isSelected ? 'bg-violet-100' : 'bg-zinc-100'}`}>

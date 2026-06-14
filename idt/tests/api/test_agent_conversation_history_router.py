@@ -157,6 +157,34 @@ class TestGetAgentSessionMessages:
         assert body["messages"][0]["role"] == "user"
         assert body["messages"][1]["role"] == "assistant"
 
+    def test_charts_serialized_in_response(self):
+        """chat-chart-persistence: 에이전트 세션 메시지 응답에도 charts 직렬화."""
+        charts = [{"type": "bar"}, {"type": "line"}, {"type": "pie"}]
+        mock_uc = AsyncMock()
+        mock_uc.get_messages_by_agent.return_value = AgentMessageListResponse(
+            user_id="u-1",
+            agent_id="agent-x",
+            session_id="s-abc",
+            messages=[
+                MessageItem(
+                    id=2,
+                    role="assistant",
+                    content="차트 3개 답변",
+                    turn_index=2,
+                    created_at=datetime(2026, 6, 10, 9, 1),
+                    charts=charts,
+                ),
+            ],
+        )
+        client = TestClient(_build_app(mock_uc))
+
+        resp = client.get(
+            "/api/v1/conversations/agents/agent-x/sessions/s-abc/messages?user_id=u-1"
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["messages"][0]["charts"] == charts
+
     def test_empty_messages_returns_200(self):
         mock_uc = AsyncMock()
         mock_uc.get_messages_by_agent.return_value = AgentMessageListResponse(

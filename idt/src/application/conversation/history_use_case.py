@@ -70,6 +70,7 @@ class ConversationHistoryUseCase:
                     content=m.content,
                     turn_index=m.turn_index.value,
                     created_at=m.created_at,
+                    charts=m.charts,
                 )
                 for m in messages
             ]
@@ -183,6 +184,7 @@ class ConversationHistoryUseCase:
                     content=m.content,
                     turn_index=m.turn_index.value,
                     created_at=m.created_at,
+                    charts=m.charts,
                 )
                 for m in messages
             ]

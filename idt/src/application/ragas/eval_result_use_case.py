@@ -71,6 +71,7 @@ class EvalResultUseCase:
                 question=r.question,
                 answer=r.answer,
                 ground_truth=r.ground_truth,
+                contexts=r.contexts,
                 scores=r.metrics,
                 created_at=r.created_at,
             )
@@ -103,6 +104,7 @@ class EvalResultUseCase:
                         question=r.question,
                         answer=r.answer,
                         ground_truth=r.ground_truth,
+                        contexts=r.contexts,
                         scores=r.metrics,
                         created_at=r.created_at,
                     )

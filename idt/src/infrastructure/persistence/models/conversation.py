@@ -3,8 +3,9 @@
 These models map to the conversation_message and conversation_summary tables.
 """
 from datetime import datetime
+from typing import Optional
 
-from sqlalchemy import DateTime, Index, Integer, String, Text
+from sqlalchemy import JSON, DateTime, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.infrastructure.persistence.models.base import Base
@@ -25,6 +26,8 @@ class ConversationMessageModel(Base):
     role: Mapped[str] = mapped_column(String(20), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     turn_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    # chat-chart-persistence: Chart.js config 배열 (NULL = 차트 없음)
+    charts: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
     __table_args__ = (

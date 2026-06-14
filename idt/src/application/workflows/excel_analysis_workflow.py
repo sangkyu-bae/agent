@@ -2,20 +2,39 @@
 
 엑셀 파일을 파싱하여 Claude AI로 분석하고,
 할루시네이션 검증 후 최대 N회 재시도하는 Self-Corrective 워크플로우.
+
+시각화는 분리된 chart_router로 일원화하며(viz_decision 기록), 웹 검색 필요 판단은
+freeform 태그 파싱이 아닌 structured 결정(SearchDecisionInterface)으로 수행한다.
+분석 답변(analysis_text)은 자연어 텍스트로 유지한다.
 """
 
-import re
 from datetime import datetime
 from typing import Annotated, Sequence, TypedDict
 
 import operator
 from langgraph.graph import END, StateGraph
 
+from src.application.visualization.chart_builder_node import (
+    create_chart_builder_node,
+)
+from src.application.visualization.analysis_prompt import ANALYSIS_OUTPUT_GUIDE
+from src.application.agent_run.auth_context import get_current_auth_context
+from src.application.agent_run.prompt_rendering import render_user_context_block
+from src.application.visualization.chart_router import (
+    create_chart_router_node,
+    route_after_chart_router,
+)
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
+from src.domain.visualization.analysis_output_policy import (
+    ANALYSIS_OUTPUT_SANITIZER,
+)
 from src.domain.policies.analysis_policy import (
     AnalysisQualityThreshold,
     AnalysisRetryPolicy,
 )
+from src.domain.search_decision.interfaces import SearchDecisionInterface
+from src.domain.visualization.interfaces import ChartBuilderInterface
+from src.domain.visualization.policies import VisualizationRoutingPolicy
 from src.infrastructure.llm.schemas import ClaudeModel, ClaudeRequest
 
 
@@ -36,15 +55,21 @@ class ExcelAnalysisState(TypedDict):
     needs_web_search: bool
     web_search_results: str
 
-    needs_code_execution: bool
-    code_to_execute: str
-    code_output: dict
-
     attempts_history: Annotated[Sequence[dict], operator.add]
 
     is_complete: bool
     final_status: str
     error_message: str
+
+    # analysis-chart-router: 분석 직후 라우터 판단 결과 ("visualize" | "text" | "").
+    viz_decision: str
+
+    # supervisor-chart-builder-node: chart_builder가 생성한 Chart.js config 리스트.
+    charts: list
+
+    # analyze-user-context: 분석 프롬프트 앞에 prepend할 렌더 완료 사용자 컨텍스트 블록.
+    # 빈 문자열이면 미인증/미주입 → 프롬프트 변화 없음(회귀 0).
+    user_context_block: str
 
 
 class ExcelAnalysisWorkflow:
@@ -56,19 +81,27 @@ class ExcelAnalysisWorkflow:
         claude_client,
         tavily_search,
         hallucination_evaluator,
-        code_executor,
+        search_decision: SearchDecisionInterface,
         logger: LoggerInterface,
         retry_policy: AnalysisRetryPolicy,
         quality_threshold: AnalysisQualityThreshold,
+        chart_builder: ChartBuilderInterface | None = None,
+        enable_visualization: bool = True,
     ) -> None:
         self._excel_parser = excel_parser
         self._claude = claude_client
         self._search = tavily_search
         self._evaluator = hallucination_evaluator
-        self._executor = code_executor
+        self._search_decision = search_decision
         self._logger = logger
         self._retry_policy = retry_policy
         self._quality_threshold = quality_threshold
+        # supervisor-chart-builder-node: None이면 chart_router→END 하위호환.
+        self._chart_builder = chart_builder
+        # excel-chart-routing-dedup: False면 차트 서브그래프(chart_router/chart_builder)를
+        # 아예 등록하지 않고 evaluate_hallucination 완료 시 바로 END로 종료한다.
+        # Supervisor 재사용 경로에서 시각화는 상위 chart_router가 전담하므로 중복 제거.
+        self._enable_visualization = enable_visualization
 
         self._graph = self._build_graph()
 
@@ -80,7 +113,22 @@ class ExcelAnalysisWorkflow:
         workflow.add_node("analyze_with_claude", self._analyze_node)
         workflow.add_node("web_search", self._web_search_node)
         workflow.add_node("evaluate_hallucination", self._evaluate_node)
-        workflow.add_node("execute_code", self._execute_code_node)
+        # excel-chart-routing-dedup: 시각화 비활성 시 차트 노드를 등록하지 않는다.
+        if self._enable_visualization:
+            # analysis-chart-router: 품질 통과(complete) 직후 시각화/텍스트 판단.
+            # Excel은 classifier=None → 휴리스틱만 사용(애매구간은 보수적으로 text).
+            workflow.add_node(
+                "chart_router",
+                create_chart_router_node(
+                    VisualizationRoutingPolicy(), self._logger, classifier=None
+                ),
+            )
+            # supervisor-chart-builder-node: 빌더 주입 시에만 차트 생성 노드 등록.
+            if self._chart_builder is not None:
+                workflow.add_node(
+                    "chart_builder",
+                    create_chart_builder_node(self._chart_builder, self._logger),
+                )
 
         workflow.set_entry_point("parse_excel")
         workflow.add_edge("parse_excel", "analyze_with_claude")
@@ -93,13 +141,25 @@ class ExcelAnalysisWorkflow:
 
         workflow.add_edge("web_search", "analyze_with_claude")
 
+        # excel-chart-routing-dedup: complete 목적지는 시각화 ON이면 chart_router, OFF면 END.
+        complete_target = "chart_router" if self._enable_visualization else END
         workflow.add_conditional_edges(
             "evaluate_hallucination",
-            self._should_retry_or_execute,
-            {"retry": "web_search", "execute": "execute_code", "complete": END},
+            self._should_retry_or_complete,
+            {"retry": "web_search", "complete": complete_target},
         )
 
-        workflow.add_edge("execute_code", END)
+        if self._enable_visualization:
+            # supervisor-chart-builder-node: 빌더 주입 시 visualize 분기에서 차트 생성.
+            if self._chart_builder is not None:
+                workflow.add_conditional_edges(
+                    "chart_router",
+                    route_after_chart_router,
+                    {"visualize": "chart_builder", "text": END},
+                )
+                workflow.add_edge("chart_builder", END)
+            else:
+                workflow.add_edge("chart_router", END)  # 하위호환
 
         return workflow.compile()
 
@@ -120,7 +180,12 @@ class ExcelAnalysisWorkflow:
         }
 
     async def _analyze_node(self, state: ExcelAnalysisState) -> dict:
-        """Claude 분석 노드."""
+        """Claude 분석 노드.
+
+        답변은 자연어 텍스트(analysis_text)로 받고, 웹 검색 필요 여부는
+        아직 검색 전(web_search_results 미존재)일 때만 1회 structured 결정으로 판단한다.
+        (재시도 경로는 retry_policy가 web_search를 강제하므로 중복 판단 불필요.)
+        """
         request_id = state["request_id"]
         attempt = state["current_attempt"] + 1
 
@@ -129,10 +194,17 @@ class ExcelAnalysisWorkflow:
             request_id=request_id,
         )
 
+        web_results = state.get("web_search_results", "")
+        # analyze-user-context: state 명시 주입 우선, 없으면 ContextVar 폴백.
+        # render_user_context_block(None|anonymous) → "" → 프롬프트 변화 없음.
+        user_block = state.get("user_context_block") or render_user_context_block(
+            get_current_auth_context()
+        )
         prompt = self._build_analysis_prompt(
             state["user_query"],
             state["excel_data"],
-            state.get("web_search_results", ""),
+            web_results,
+            user_block=user_block,
         )
 
         claude_request = ClaudeRequest(
@@ -143,17 +215,21 @@ class ExcelAnalysisWorkflow:
         )
 
         response = await self._claude.complete(claude_request)
-        response_text = response.content
+        # 분석 노드는 자연어 텍스트만 유지. 새어 나온 코드블록/JSON을 제거해
+        # 하류(evaluate_hallucination / chart_router)가 깨끗한 텍스트만 받게 한다.
+        response_text = ANALYSIS_OUTPUT_SANITIZER.strip(response.content)
 
-        needs_code = self._detect_code_in_response(response_text)
-        code = self._extract_code(response_text) if needs_code else ""
+        needs_search = False
+        if not web_results:
+            decision = await self._search_decision.decide(
+                state["user_query"], response_text, request_id
+            )
+            needs_search = decision.needs_web_search
 
         return {
             "analysis_text": response_text,
             "current_attempt": attempt,
-            "needs_code_execution": needs_code,
-            "code_to_execute": code,
-            "needs_web_search": False,
+            "needs_web_search": needs_search,
         }
 
     async def _web_search_node(self, state: ExcelAnalysisState) -> dict:
@@ -207,43 +283,18 @@ class ExcelAnalysisWorkflow:
             "attempts_history": [attempt_record],
         }
 
-    async def _execute_code_node(self, state: ExcelAnalysisState) -> dict:
-        """코드 실행 노드."""
-        request_id = state["request_id"]
-        self._logger.info("Executing code", request_id=request_id)
-
-        result = self._executor.execute(
-            state["code_to_execute"],
-            request_id,
-        )
-
-        return {
-            "code_output": {
-                "status": result.status.value,
-                "output": result.output,
-                "error_message": result.error_message,
-            },
-            "is_complete": True,
-            "final_status": "completed",
-        }
-
     def _should_search(self, state: ExcelAnalysisState) -> str:
-        """웹 검색 필요 여부 판단."""
-        text = state.get("analysis_text", "")
-        if "[SEARCH]" in text or "웹에서 확인" in text:
-            return "search"
-        return "evaluate"
+        """웹 검색 필요 여부 판단 (structured 결정 결과 기반)."""
+        return "search" if state.get("needs_web_search") else "evaluate"
 
-    def _should_retry_or_execute(self, state: ExcelAnalysisState) -> str:
-        """재시도/코드실행/완료 판단."""
+    def _should_retry_or_complete(self, state: ExcelAnalysisState) -> str:
+        """재시도/완료 판단."""
         quality_ok = self._quality_threshold.is_acceptable(
             state["confidence_score"],
             state["hallucination_score"],
         )
 
         if quality_ok:
-            if state["needs_code_execution"]:
-                return "execute"
             return "complete"
 
         has_hallucination = (
@@ -258,10 +309,19 @@ class ExcelAnalysisWorkflow:
         return "complete"
 
     def _build_analysis_prompt(
-        self, query: str, excel_data: dict, web_context: str
+        self, query: str, excel_data: dict, web_context: str, user_block: str = ""
     ) -> str:
-        """분석 프롬프트 생성."""
-        return f"""당신은 데이터 분석 전문가입니다.
+        """분석 프롬프트 생성.
+
+        분석 노드는 자연어 분석 텍스트만 생성한다(차트 생성은 chart_builder 전담).
+        출력 형식·범위 제약은 공용 ANALYSIS_OUTPUT_GUIDE로 일원화한다.
+
+        analyze-user-context: user_block(렌더 완료 사용자 컨텍스트)이 있으면 맨 앞에
+        prepend한다. render_user_context_block 반환값은 끝에 '---' 구분자를 포함하므로
+        추가 개행이 필요 없다. user_block이 ''이면(미인증) 기존 프롬프트와 동일.
+        """
+        return f"""{user_block}당신은 데이터 분석 결과를 자연어 텍스트로만 작성하는 분석가입니다.
+차트·그래프·시각화의 "생성"은 당신의 역할이 아닙니다.
 
 ## 사용자 질문
 {query}
@@ -269,23 +329,10 @@ class ExcelAnalysisWorkflow:
 ## 엑셀 데이터
 {excel_data}
 
-## 웹 검색 결과 (있는 경우)
+## 웹 검색 결과
 {web_context if web_context else "없음"}
 
-## 지침
-1. 데이터를 기반으로 정확하게 분석하세요
-2. 추가 정보가 필요하면 [SEARCH] 태그를 포함하세요
-3. 그래프/차트가 필요하면 Python 코드를 ```python ``` 블록에 작성하세요
-4. 추측하지 말고 데이터에 근거하세요"""
-
-    def _detect_code_in_response(self, response: str) -> bool:
-        """응답에 코드 포함 여부."""
-        return "```python" in response
-
-    def _extract_code(self, response: str) -> str:
-        """코드 블록 추출."""
-        match = re.search(r"```python\n(.*?)\n```", response, re.DOTALL)
-        return match.group(1) if match else ""
+{ANALYSIS_OUTPUT_GUIDE}"""
 
     async def run(self, state: ExcelAnalysisState) -> ExcelAnalysisState:
         """워크플로우 실행."""

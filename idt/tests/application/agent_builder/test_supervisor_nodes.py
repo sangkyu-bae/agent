@@ -81,6 +81,7 @@ class TestSupervisorNode:
         decision = MagicMock()
         decision.next = "FINISH"
         decision.reasoning = "done"
+        decision.answer = ""
         mock_structured = AsyncMock(return_value=decision)
         mock_llm.with_structured_output.return_value.ainvoke = mock_structured
 
@@ -90,6 +91,50 @@ class TestSupervisorNode:
         )
         result = await fn(_make_state())
         assert result["next_worker"] == "__end__"
+        assert "messages" not in result
+
+    @pytest.mark.asyncio
+    async def test_finish_with_answer_creates_ai_message(self):
+        """FINISH + answer 필드 → messages에 AIMessage 포함."""
+        from src.application.agent_builder.supervisor_nodes import create_supervisor_node
+
+        mock_llm = MagicMock()
+        decision = MagicMock()
+        decision.next = "FINISH"
+        decision.reasoning = "일반 대화이므로 직접 응답"
+        decision.answer = "천만에요! 다른 도움이 필요하시면 말씀해주세요."
+        mock_structured = AsyncMock(return_value=decision)
+        mock_llm.with_structured_output.return_value.ainvoke = mock_structured
+
+        fn = create_supervisor_node(
+            llm=mock_llm, workers=_make_workers(),
+            supervisor_prompt="test", hooks=DefaultHooks(), logger=MagicMock(),
+        )
+        result = await fn(_make_state())
+        assert result["next_worker"] == "__end__"
+        assert len(result["messages"]) == 1
+        assert result["messages"][0].content == "천만에요! 다른 도움이 필요하시면 말씀해주세요."
+
+    @pytest.mark.asyncio
+    async def test_worker_selection_ignores_answer(self):
+        """워커 선택 시 answer 필드가 있어도 messages에 포함되지 않음."""
+        from src.application.agent_builder.supervisor_nodes import create_supervisor_node
+
+        mock_llm = MagicMock()
+        decision = MagicMock()
+        decision.next = "worker_0"
+        decision.reasoning = "search needed"
+        decision.answer = "이 answer는 무시되어야 함"
+        mock_structured = AsyncMock(return_value=decision)
+        mock_llm.with_structured_output.return_value.ainvoke = mock_structured
+
+        fn = create_supervisor_node(
+            llm=mock_llm, workers=_make_workers(),
+            supervisor_prompt="test", hooks=DefaultHooks(), logger=MagicMock(),
+        )
+        result = await fn(_make_state())
+        assert result["next_worker"] == "worker_0"
+        assert "messages" not in result
 
     @pytest.mark.asyncio
     async def test_valid_worker_selected(self):
@@ -378,3 +423,146 @@ class TestRoutingFunctions:
 
         state = _make_state(next_worker="__end__")
         assert route_after_quality(state) == "supervisor"
+
+
+class TestRouteToWorkerOrFinal:
+    """final-answer-node Design §3-1: depth=0 전용 라우팅 (TC-R01~R03)."""
+
+    def test_end_without_worker_history_goes_to_end(self):
+        """TC-R01: FINISH + 워커 미실행 → __end__ (단순 대화 즉시 종료)."""
+        from src.application.agent_builder.supervisor_nodes import (
+            route_to_worker_or_final,
+        )
+
+        state = _make_state(next_worker="__end__", last_worker_id="")
+        assert route_to_worker_or_final(state) == "__end__"
+
+    def test_end_with_worker_history_goes_to_final_answer(self):
+        """TC-R02: FINISH + 워커 실행됨 → final_answer 필수 경유."""
+        from src.application.agent_builder.supervisor_nodes import (
+            route_to_worker_or_final,
+        )
+
+        state = _make_state(next_worker="__end__", last_worker_id="worker_0")
+        assert route_to_worker_or_final(state) == "final_answer"
+
+    def test_worker_selection_unchanged(self):
+        """TC-R03: 워커 라우팅은 기존 route_to_worker와 동일."""
+        from src.application.agent_builder.supervisor_nodes import (
+            route_to_worker_or_final,
+        )
+
+        state = _make_state(next_worker="worker_1", last_worker_id="worker_0")
+        assert route_to_worker_or_final(state) == "worker_1"
+
+
+class TestSupervisorFinishAnswerGuard:
+    """final-answer-node Design §3-2 (DQ1): FINISH draft answer 가드 (TC-S01~S02)."""
+
+    def _finish_decision(self, answer: str) -> MagicMock:
+        decision = MagicMock()
+        decision.next = "FINISH"
+        decision.reasoning = "done"
+        decision.answer = answer
+        return decision
+
+    @pytest.mark.asyncio
+    async def test_finish_answer_discarded_when_workers_ran(self):
+        """TC-S01: FINISH + answer + 워커 실행됨 → answer 메시지 미추가."""
+        from src.application.agent_builder.supervisor_nodes import create_supervisor_node
+
+        mock_llm = MagicMock()
+        mock_llm.with_structured_output.return_value.ainvoke = AsyncMock(
+            return_value=self._finish_decision("이 초안은 폐기되어야 함"),
+        )
+
+        fn = create_supervisor_node(
+            llm=mock_llm, workers=_make_workers(),
+            supervisor_prompt="test", hooks=DefaultHooks(), logger=MagicMock(),
+        )
+        result = await fn(_make_state(last_worker_id="worker_0"))
+        assert result["next_worker"] == "__end__"
+        assert "messages" not in result
+
+    @pytest.mark.asyncio
+    async def test_finish_answer_kept_when_no_workers_ran(self):
+        """TC-S02: FINISH + answer + 워커 미실행 → answer 추가 (기존 동작 보존)."""
+        from src.application.agent_builder.supervisor_nodes import create_supervisor_node
+
+        mock_llm = MagicMock()
+        mock_llm.with_structured_output.return_value.ainvoke = AsyncMock(
+            return_value=self._finish_decision("직접 응답입니다."),
+        )
+
+        fn = create_supervisor_node(
+            llm=mock_llm, workers=_make_workers(),
+            supervisor_prompt="test", hooks=DefaultHooks(), logger=MagicMock(),
+        )
+        result = await fn(_make_state(last_worker_id=""))
+        assert result["next_worker"] == "__end__"
+        assert len(result["messages"]) == 1
+        assert result["messages"][0].content == "직접 응답입니다."
+
+
+class TestSupervisorPrefillSafety:
+    """fix-anthropic-prefill-error TC-08~09: LLM 입력이 assistant로 끝나지 않아야 함."""
+
+    def _capture_llm(self) -> tuple[MagicMock, AsyncMock]:
+        mock_llm = MagicMock()
+        decision = MagicMock()
+        decision.next = "worker_0"
+        decision.reasoning = "search needed"
+        decision.answer = ""
+        captured = AsyncMock(return_value=decision)
+        mock_llm.with_structured_output.return_value.ainvoke = captured
+        return mock_llm, captured
+
+    @staticmethod
+    def _role(msg) -> str:
+        if isinstance(msg, dict):
+            return str(msg.get("role", ""))
+        return str(getattr(msg, "type", ""))
+
+    @pytest.mark.asyncio
+    async def test_tc08_first_decision_system_first_user_last(self):
+        """TC-08: 1차 판단 — 결정 프롬프트는 선두 system, 마지막은 user."""
+        from src.application.agent_builder.supervisor_nodes import create_supervisor_node
+
+        mock_llm, captured = self._capture_llm()
+        fn = create_supervisor_node(
+            llm=mock_llm, workers=_make_workers(),
+            supervisor_prompt="SUPERVISOR_PROMPT", hooks=DefaultHooks(), logger=MagicMock(),
+        )
+        await fn(_make_state(messages=[{"role": "user", "content": "질문"}]))
+
+        sent = captured.call_args.args[0]
+        assert self._role(sent[0]) == "system"
+        assert "SUPERVISOR_PROMPT" in (
+            sent[0]["content"] if isinstance(sent[0], dict) else sent[0].content
+        )
+        assert self._role(sent[-1]) in ("user", "human")
+
+    @pytest.mark.asyncio
+    async def test_tc09_second_decision_not_assistant_last(self):
+        """TC-09: 워커 AIMessage-last 상태의 2차 판단 — 마지막이 assistant가 아님."""
+        from langchain_core.messages import AIMessage
+
+        from src.application.agent_builder.supervisor_nodes import create_supervisor_node
+
+        mock_llm, captured = self._capture_llm()
+        fn = create_supervisor_node(
+            llm=mock_llm, workers=_make_workers(),
+            supervisor_prompt="test", hooks=DefaultHooks(), logger=MagicMock(),
+        )
+        await fn(_make_state(
+            messages=[
+                {"role": "user", "content": "질문"},
+                AIMessage(content="워커 결과", name="worker_0"),
+            ],
+            last_worker_id="worker_0",
+        ))
+
+        sent = captured.call_args.args[0]
+        assert self._role(sent[-1]) in ("user", "human")
+        # 워커 결과 메시지는 보존되어야 함
+        assert any(getattr(m, "name", None) == "worker_0" for m in sent)

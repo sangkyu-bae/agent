@@ -1,11 +1,11 @@
 """UserRepository: MySQL implementation."""
 from typing import Optional
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.auth.entities import User, UserRole, UserStatus
-from src.domain.auth.interfaces import UserRepositoryInterface
+from src.domain.auth.interfaces import UserListFilters, UserRepositoryInterface
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.infrastructure.auth.models import UserModel
 
@@ -69,3 +69,29 @@ class UserRepository(UserRepositoryInterface):
             .values(status=status.value)
         )
         self._logger.info("User status updated", user_id=user_id, status=status.value)
+
+    async def find_all(
+        self, filters: UserListFilters, request_id: str
+    ) -> tuple[list[User], int]:
+        # admin-user-registration Design §5.1
+        stmt = select(UserModel)
+        count_stmt = select(func.count()).select_from(UserModel)
+
+        if filters.status is not None:
+            cond = UserModel.status == filters.status.value
+            stmt = stmt.where(cond)
+            count_stmt = count_stmt.where(cond)
+        if filters.query:
+            cond = UserModel.email.like(f"%{filters.query}%")
+            stmt = stmt.where(cond)
+            count_stmt = count_stmt.where(cond)
+
+        stmt = (
+            stmt.order_by(UserModel.created_at.desc())
+            .limit(filters.limit)
+            .offset(filters.offset)
+        )
+
+        rows = (await self._session.execute(stmt)).scalars().all()
+        total = (await self._session.execute(count_stmt)).scalar_one()
+        return [_to_entity(m) for m in rows], int(total)

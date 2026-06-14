@@ -2,12 +2,12 @@
   "version": "1.0",
   "enabled": false,
   "teamName": "",
-  "feature": "table-retrieval-enhancer",
-  "pdcaPhase": "archived",
+  "feature": "idt_front",
+  "pdcaPhase": "do",
   "orchestrationPattern": "leader",
   "ctoAgent": "opus",
-  "startedAt": "2026-05-18T09:11:30.150Z",
-  "lastUpdated": "2026-05-18T09:13:32.480Z",
+  "startedAt": "2026-06-11T07:19:18.777Z",
+  "lastUpdated": "2026-06-11T07:23:16.090Z",
   "teammates": [],
   "progress": {
     "totalTasks": 0,
@@ -17,5 +17,5 @@
     "pendingTasks": 0
   },
   "recentMessages": [],
-  "sessionId": "d9de4486-e685-4137-a833-c254a87e841e"
+  "sessionId": "a98ac6e1-d471-47c0-8880-59b85a34d554"
 }

@@ -43,7 +43,7 @@ class TestRegisterUseCase:
         )
 
         result = await use_case.execute(
-            RegisterRequest(email="new@example.com", password="secure1234"),
+            RegisterRequest(email="new@example.com", password="secure1234", display_name="배상규"),
             request_id="req-1",
         )
 
@@ -62,7 +62,7 @@ class TestRegisterUseCase:
 
         with pytest.raises(ValueError, match="already registered"):
             await use_case.execute(
-                RegisterRequest(email="dup@example.com", password="secure1234"),
+                RegisterRequest(email="dup@example.com", password="secure1234", display_name="dup"),
                 request_id="req-2",
             )
 
@@ -72,7 +72,7 @@ class TestRegisterUseCase:
     ) -> None:
         with pytest.raises(ValueError):
             await use_case.execute(
-                RegisterRequest(email="not-an-email", password="secure1234"),
+                RegisterRequest(email="not-an-email", password="secure1234", display_name="x"),
                 request_id="req-3",
             )
 
@@ -84,6 +84,6 @@ class TestRegisterUseCase:
 
         with pytest.raises(ValueError, match="at least"):
             await use_case.execute(
-                RegisterRequest(email="ok@example.com", password="short"),
+                RegisterRequest(email="ok@example.com", password="short", display_name="x"),
                 request_id="req-4",
             )

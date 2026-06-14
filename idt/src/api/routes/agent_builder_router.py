@@ -1,10 +1,24 @@
-"""Agent Builder Router: 에이전트 생성/조회/수정/실행 API."""
+"""Agent Builder Router: 에이전트 생성/조회/수정/실행 API.
+
+agent-run-streaming-sse Design §5.5 (2026-05-24):
+GET /{agent_id}/run/stream — SSE 엔드포인트. RunAgentUseCase.stream()의
+AgentRunEvent를 EventSource API 호환 wire 라인으로 송출.
+"""
+import asyncio
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import StreamingResponse
 
 from src.domain.auth.entities import User
-from src.interfaces.dependencies.auth import get_current_user, require_role
+from src.infrastructure.agent_run.sse_formatter import AgentRunEventSseFormatter
+from src.domain.agent_run.auth_context import AuthContext
+from src.interfaces.dependencies.auth import (
+    get_current_user,
+    get_current_user_from_query_token,
+    get_auth_context,
+    get_auth_context_from_query_token,
+)
 
 from src.application.agent_builder.schemas import (
     AvailableSubAgentsResponse,
@@ -248,7 +262,7 @@ async def update_agent(
 async def run_agent(
     agent_id: str,
     body: RunAgentRequest,
-    current_user: User = Depends(get_current_user),
+    auth_ctx: AuthContext = Depends(get_auth_context),
     use_case=Depends(get_run_agent_use_case),
 ):
     """에이전트 실행 (DB에서 워크플로우 로드 → LangGraph 동적 컴파일 → 응답)."""
@@ -258,7 +272,9 @@ async def run_agent(
             agent_id,
             body,
             request_id,
-            viewer_user_id=str(current_user.id),
+            auth_ctx=auth_ctx,
+            viewer_user_id=str(auth_ctx.user_id),
+            viewer_department_ids=list(auth_ctx.department_ids),
         )
     except PermissionError:
         raise HTTPException(
@@ -266,6 +282,87 @@ async def run_agent(
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+_SSE_HEARTBEAT_INTERVAL_SEC = 15.0
+
+
+@router.get(
+    "/{agent_id}/run/stream",
+    responses={200: {"content": {"text/event-stream": {}}}},
+)
+async def run_agent_stream(
+    agent_id: str,
+    request: Request,
+    query: str = Query(..., min_length=1, max_length=2000),
+    user_id: str = Query(...),
+    session_id: str | None = Query(None),
+    auth_ctx: AuthContext = Depends(get_auth_context_from_query_token),
+    use_case=Depends(get_run_agent_use_case),
+):
+    """에이전트 실행 (SSE 스트리밍).
+
+    이벤트 시퀀스: run_started → (node_*|tool_*|token)* → answer_completed
+    → run_completed | run_failed
+    """
+    if user_id != str(auth_ctx.user_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="user_id mismatch with token sub",
+        )
+
+    request_id = str(uuid.uuid4())
+    body = RunAgentRequest(query=query, user_id=user_id, session_id=session_id)
+    formatter = AgentRunEventSseFormatter
+
+    async def _generator():
+        last_seq = 0
+        aiter = use_case.stream(
+            agent_id, body, request_id,
+            auth_ctx=auth_ctx,
+            viewer_user_id=str(auth_ctx.user_id),
+            viewer_department_ids=list(auth_ctx.department_ids),
+        ).__aiter__()
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    event = await asyncio.wait_for(
+                        aiter.__anext__(),
+                        timeout=_SSE_HEARTBEAT_INTERVAL_SEC,
+                    )
+                except asyncio.TimeoutError:
+                    yield formatter.format_heartbeat()
+                    continue
+                except StopAsyncIteration:
+                    break
+                last_seq = event.seq
+                yield formatter.format(event)
+        except ValueError as e:
+            yield formatter.format_error(
+                "AGENT_NOT_FOUND", str(e), last_seq + 1,
+            )
+        except PermissionError as e:
+            yield formatter.format_error(
+                "PERMISSION_DENIED", str(e), last_seq + 1,
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            yield formatter.format_error(
+                "STREAM_GENERATOR_FAILED", str(e)[:512], last_seq + 1,
+            )
+
+    return StreamingResponse(
+        _generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.delete("/{agent_id}", status_code=status.HTTP_204_NO_CONTENT)

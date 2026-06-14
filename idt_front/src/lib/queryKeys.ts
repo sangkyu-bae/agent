@@ -145,9 +145,65 @@ export const queryKeys = {
     all: ['admin'] as const,
     /** 승인 대기 사용자 목록 */
     pendingUsers: () => [...queryKeys.admin.all, 'pendingUsers'] as const,
+    /** 전체 사용자 목록 (admin-user-registration) */
+    allUsers: (params?: import('@/types/auth').AdminUserListParams) =>
+      [...queryKeys.admin.all, 'allUsers', params] as const,
     /** 부서 목록 */
     departments: () => [...queryKeys.admin.all, 'departments'] as const,
     /** 특정 부서 상세 */
     department: (deptId: string) => [...queryKeys.admin.departments(), deptId] as const,
+    /** RAGAS 대시보드 통계 */
+    ragasDashboard: () => [...queryKeys.admin.all, 'ragasDashboard'] as const,
+    /** RAGAS 실행 목록 */
+    ragasRuns: (params?: import('@/types/adminRagas').AdminRagasRunsParams) =>
+      [...queryKeys.admin.all, 'ragasRuns', params] as const,
+    /** RAGAS 실행 상세 */
+    ragasRunDetail: (runId: string) =>
+      [...queryKeys.admin.all, 'ragasRunDetail', runId] as const,
+    /** RAGAS 테스트셋 목록 */
+    ragasTestsets: (params?: { limit?: number; offset?: number }) =>
+      [...queryKeys.admin.all, 'ragasTestsets', params] as const,
+  },
+
+  // ── Agent Run Admin Dashboard (M5) ────────────────────
+  agentRunAdmin: {
+    /** 도메인 전체 키 */
+    all: ['agentRunAdmin'] as const,
+    /** 카드 4종 요약 */
+    summary: (from?: string, to?: string) =>
+      [...queryKeys.agentRunAdmin.all, 'summary', { from, to }] as const,
+    /** 일자별 시계열 */
+    timeseries: (from?: string, to?: string) =>
+      [...queryKeys.agentRunAdmin.all, 'timeseries', { from, to }] as const,
+    /** Run 목록 + 필터 */
+    runs: (params?: import('@/types/agentRunAdmin').AdminRunsParams) =>
+      [...queryKeys.agentRunAdmin.all, 'runs', params] as const,
+    /** Run 상세 */
+    runDetail: (runId: string) =>
+      [...queryKeys.agentRunAdmin.all, 'runDetail', runId] as const,
+    /** 사용자별 집계 */
+    byUser: (from?: string, to?: string) =>
+      [...queryKeys.agentRunAdmin.all, 'byUser', { from, to }] as const,
+    /** LLM별 집계 */
+    byLlm: (from?: string, to?: string) =>
+      [...queryKeys.agentRunAdmin.all, 'byLlm', { from, to }] as const,
+    /** 노드별 집계 */
+    byNode: (from?: string, to?: string) =>
+      [...queryKeys.agentRunAdmin.all, 'byNode', { from, to }] as const,
+  },
+
+  // ── My Usage (M5) ────────────────────────────────────
+  usageMe: {
+    /** 도메인 전체 키 */
+    all: ['usageMe'] as const,
+    /** 본인 LLM 모델별 집계 (M4 reuse) */
+    summary: (from?: string, to?: string) =>
+      [...queryKeys.usageMe.all, 'summary', { from, to }] as const,
+    /** 본인 시계열 */
+    timeseries: (from?: string, to?: string) =>
+      [...queryKeys.usageMe.all, 'timeseries', { from, to }] as const,
+    /** 본인 Run 목록 */
+    runs: (params?: import('@/types/usageMe').MyRunsParams) =>
+      [...queryKeys.usageMe.all, 'runs', params] as const,
   },
 } as const;

@@ -107,6 +107,43 @@ class TestToolFactoryRagConfig:
         assert tool.name == "excel_export"
 
 
+class TestToolFactoryScoreThreshold:
+    """벡터 코사인 컷오프 임계값 주입 (에이전트값 우선 + 전역 fallback)."""
+
+    def test_uses_agent_threshold_when_set(self, monkeypatch):
+        monkeypatch.setattr(
+            "src.config.settings.rag_vector_score_threshold", 0.1
+        )
+        factory = _make_factory()
+        tool = factory.create(
+            "internal_document_search", tool_config={"score_threshold": 0.4}
+        )
+        assert tool.score_threshold == 0.4
+
+    def test_falls_back_to_global_when_none(self, monkeypatch):
+        monkeypatch.setattr(
+            "src.config.settings.rag_vector_score_threshold", 0.25
+        )
+        factory = _make_factory()
+        tool = factory.create("internal_document_search")
+        assert tool.score_threshold == 0.25
+
+    def test_explicit_zero_overrides_global(self, monkeypatch):
+        monkeypatch.setattr(
+            "src.config.settings.rag_vector_score_threshold", 0.25
+        )
+        factory = _make_factory()
+        tool = factory.create(
+            "internal_document_search", tool_config={"score_threshold": 0.0}
+        )
+        assert tool.score_threshold == 0.0
+
+    def test_default_global_zero_is_disabled(self):
+        factory = _make_factory()
+        tool = factory.create("internal_document_search")
+        assert tool.score_threshold == 0.0
+
+
 class TestToolFactoryMCPRouting:
 
     @pytest.mark.asyncio

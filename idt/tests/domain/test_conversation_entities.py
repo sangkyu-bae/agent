@@ -125,6 +125,55 @@ class TestConversationMessage:
             )
 
 
+class TestConversationMessageCharts:
+    """Tests for ConversationMessage.charts (chat-chart-persistence D2/D6)."""
+
+    @staticmethod
+    def _make(charts=None) -> ConversationMessage:
+        return ConversationMessage(
+            id=None,
+            user_id=UserId("user-123"),
+            session_id=SessionId("session-abc"),
+            agent_id=AgentId.super(),
+            role=MessageRole.ASSISTANT,
+            content="차트 답변",
+            turn_index=TurnIndex(2),
+            created_at=datetime.now(),
+            charts=charts,
+        )
+
+    def test_charts_defaults_to_none(self) -> None:
+        """기본값 None — 기존 위치 인자 호출부 하위호환 (D6)."""
+        now = datetime.now()
+        message = ConversationMessage(
+            id=None,
+            user_id=UserId("user-123"),
+            session_id=SessionId("session-abc"),
+            agent_id=AgentId.super(),
+            role=MessageRole.USER,
+            content="질문",
+            turn_index=TurnIndex(1),
+            created_at=now,
+        )
+        assert message.charts is None
+
+    def test_charts_preserves_n_configs(self) -> None:
+        """N개 차트 배열 보존."""
+        charts = [
+            {"type": "bar", "data": {"labels": ["a"], "datasets": []}},
+            {"type": "line", "data": {"labels": ["b"], "datasets": []}},
+            {"type": "pie", "data": {"labels": ["c"], "datasets": []}},
+        ]
+        message = self._make(charts=charts)
+        assert message.charts == charts
+        assert len(message.charts) == 3
+
+    def test_charts_empty_list_raises_error(self) -> None:
+        """빈 배열 금지 — 없으면 None (D2)."""
+        with pytest.raises(ValueError, match="charts must be None when empty"):
+            self._make(charts=[])
+
+
 class TestConversationSummary:
     """Tests for ConversationSummary entity."""
 

@@ -6,13 +6,16 @@
 import uuid
 from datetime import datetime
 
+from src.application.agent_run.prompt_rendering import render_user_context_block
 from src.application.workflows.excel_analysis_workflow import ExcelAnalysisWorkflow
+from src.domain.agent_run.auth_context import AuthContext
 from src.domain.entities.analysis_result import AnalysisAttempt, AnalysisResult
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.domain.policies.analysis_policy import (
     AnalysisQualityThreshold,
     AnalysisRetryPolicy,
 )
+from src.infrastructure.langsmith.langsmith import langsmith
 
 
 class AnalyzeExcelUseCase:
@@ -33,12 +36,19 @@ class AnalyzeExcelUseCase:
         self._retry_policy.validate()
         self._quality_threshold.validate()
 
+    @property
+    def workflow(self) -> ExcelAnalysisWorkflow:
+        """내부 ExcelAnalysisWorkflow 노출 (analysis-node-agent 재사용용)."""
+        return self._workflow
+
     async def execute(
         self,
         excel_file_path: str,
         user_query: str,
         user_id: str,
         request_id: str | None = None,
+        *,
+        auth_ctx: AuthContext | None = None,
     ) -> AnalysisResult:
         """엑셀 분석 실행.
 
@@ -47,11 +57,15 @@ class AnalyzeExcelUseCase:
             user_query: 사용자 질문
             user_id: 사용자 ID
             request_id: 요청 ID (선택)
+            auth_ctx: 로그인 사용자 컨텍스트 (선택). analyze-user-context —
+                전달 시 분석 프롬프트 앞에 사용자 신원 블록이 prepend된다.
+                None(기본)이면 render가 ""를 반환해 기존 동작과 동일.
 
         Returns:
             AnalysisResult: 분석 결과
         """
         request_id = request_id or str(uuid.uuid4())
+        langsmith(project_name="excel-analysis-agent")
 
         self._logger.info(
             "Starting excel analysis",
@@ -75,13 +89,14 @@ class AnalyzeExcelUseCase:
                 "hallucination_score": 0.0,
                 "needs_web_search": False,
                 "web_search_results": "",
-                "needs_code_execution": False,
-                "code_to_execute": "",
-                "code_output": {},
                 "attempts_history": [],
                 "is_complete": False,
                 "final_status": "pending",
                 "error_message": "",
+                "viz_decision": "",
+                "charts": [],
+                # analyze-user-context: 미인증이면 render가 "" 반환 → 프롬프트 변화 없음.
+                "user_context_block": render_user_context_block(auth_ctx),
             }
 
             final_state = await self._workflow.run(initial_state)
@@ -126,8 +141,6 @@ class AnalyzeExcelUseCase:
             )
         )
 
-        code_executed = state.get("needs_code_execution", False)
-
         return AnalysisResult(
             request_id=state["request_id"],
             user_query=state["user_query"],
@@ -135,8 +148,5 @@ class AnalyzeExcelUseCase:
             final_answer=state["analysis_text"],
             is_successful=is_successful,
             attempts=attempts,
-            executed_code=(
-                state.get("code_to_execute") if code_executed else None
-            ),
-            code_output=state.get("code_output") if code_executed else None,
+            charts=state.get("charts", []),
         )

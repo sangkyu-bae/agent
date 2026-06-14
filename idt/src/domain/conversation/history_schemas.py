@@ -1,7 +1,7 @@
 """대화 히스토리 조회 도메인 스키마 (CHAT-HIST-001)."""
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
 LAST_MESSAGE_MAX_LENGTH = 100
 
@@ -50,6 +50,8 @@ class MessageItem:
     content: str
     turn_index: int
     created_at: datetime
+    # chat-chart-persistence: Chart.js config 배열 (없으면 None)
+    charts: Optional[List[dict]] = None
 
 
 @dataclass(frozen=True)

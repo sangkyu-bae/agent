@@ -13,6 +13,7 @@ EXPECTED_TOOL_IDS = {
     "tavily_search",
     "excel_export",
     "python_code_executor",
+    "data_analysis",
 }
 
 
@@ -41,9 +42,9 @@ class TestToolRegistry:
         with pytest.raises(ValueError, match="Unknown tool_id"):
             get_tool_meta("non_existent_tool")
 
-    def test_get_all_tools_returns_all_four(self):
+    def test_get_all_tools_returns_all_registered(self):
         tools = get_all_tools()
-        assert len(tools) == 4
+        assert len(tools) == len(EXPECTED_TOOL_IDS)
 
     def test_get_all_tools_sorted_by_tool_id(self):
         tools = get_all_tools()
@@ -75,3 +76,7 @@ class TestToolRegistryCategory:
     def test_python_code_executor_is_action(self):
         meta = get_tool_meta("python_code_executor")
         assert meta.category == "action"
+
+    def test_data_analysis_is_analysis(self):
+        meta = get_tool_meta("data_analysis")
+        assert meta.category == "analysis"

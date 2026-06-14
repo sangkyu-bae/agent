@@ -102,7 +102,22 @@ from src.api.routes.ws_router import (
     get_connection_manager,
     get_ws_jwt_adapter,
     get_ws_user_repository,
+    get_ws_run_agent_use_case,
+    get_ws_general_chat_use_case,
+    get_chat_stream_cache,
+    get_ws_auth_context_resolver,
+    get_ws_attachment_resolver,
+    get_ws_logger,
 )
+from src.api.routes.agent_attachment_router import (
+    router as agent_attachment_router,
+    get_upload_attachment_use_case,
+)
+from src.application.agent_attachment.resolver import AttachmentResolver
+from src.application.agent_attachment.upload_use_case import UploadAttachmentUseCase
+from src.infrastructure.agent_attachment.store import AgentAttachmentStore
+from src.application.agent_run.ws_auth_context import WsAuthContextResolver
+from src.infrastructure.general_chat.stream_cache import InMemoryChatStreamCache
 from src.infrastructure.websocket.connection_manager import ConnectionManager
 from src.api.routes.department_router import (
     router as department_router,
@@ -192,6 +207,11 @@ from src.application.agent_builder.workflow_compiler import WorkflowCompiler
 from src.application.agent_builder.create_agent_use_case import CreateAgentUseCase
 from src.application.agent_builder.update_agent_use_case import UpdateAgentUseCase
 from src.application.agent_builder.run_agent_use_case import RunAgentUseCase
+from src.application.agent_run.aggregator import UsageAggregator
+from src.application.agent_run.cost_calculator import CostCalculator
+from src.application.agent_run.model_name_resolver import ModelNameResolver
+from src.application.agent_run.schemas import RunObservabilityConfig
+from src.application.agent_run.tracker import RunTracker
 from src.application.agent_builder.get_agent_use_case import GetAgentUseCase
 from src.application.agent_builder.interview_use_case import InterviewUseCase
 from src.application.agent_builder.interviewer import Interviewer
@@ -243,7 +263,7 @@ from src.infrastructure.llm.llm_factory import LLMFactory
 from src.infrastructure.web_search.tavily_tool import TavilySearchTool
 from src.application.hallucination.use_case import HallucinationEvaluatorUseCase
 from src.infrastructure.hallucination.adapter import HallucinationEvaluatorAdapter
-from src.infrastructure.tools.sandbox_executor import SandboxExecutor
+from src.infrastructure.search_decision.adapter import LLMSearchDecisionAdapter
 from src.infrastructure.persistence.database import get_session, get_session_factory
 from src.infrastructure.persistence.repositories.conversation_repository import (
     SQLAlchemyConversationMessageRepository,
@@ -297,6 +317,15 @@ from src.application.general_chat.tools import ChatToolBuilder, MCPToolCache
 from src.application.general_chat.use_case import GeneralChatUseCase
 from src.application.mcp_registry.load_mcp_tools_use_case import LoadMCPToolsUseCase
 from src.application.rag_agent.tools import InternalDocumentSearchTool
+from src.domain.visualization.chart_policy import ChartStylePolicy
+from src.domain.visualization.policies import VisualizationRoutingPolicy
+from src.infrastructure.visualization.llm_chart_builder import LangChainChartBuilder
+from src.infrastructure.visualization.llm_chart_transformer import (
+    LangChainChartTransformer,
+)
+from src.infrastructure.visualization.llm_classifier import (
+    LangChainVisualizationClassifier,
+)
 from src.infrastructure.mcp_registry.mcp_server_repository import MCPServerRepository
 from src.infrastructure.mcp_registry.mcp_tool_loader import MCPToolLoader
 from src.api.routes.auth_router import (
@@ -312,6 +341,11 @@ from src.api.routes.admin_router import (
     get_approve_use_case,
     get_reject_use_case,
 )
+from src.api.routes.admin_ragas_router import (
+    router as admin_ragas_router,
+    get_admin_eval_use_case,
+)
+from src.application.ragas.admin_eval_use_case import AdminEvalUseCase
 from src.api.routes.embedding_model_router import (
     router as embedding_model_router,
     get_list_embedding_models_use_case,
@@ -332,17 +366,91 @@ from src.api.routes.llm_model_router import (
     get_deactivate_llm_model_use_case,
     get_get_llm_model_use_case,
     get_list_llm_models_use_case,
+    get_update_llm_model_pricing_use_case,
+)
+from src.api.routes.agent_run_router import (
+    router as agent_run_router,
+    get_run_detail_use_case,
+    get_usage_by_user_use_case,
+    get_usage_by_llm_use_case,
+    get_usage_by_node_use_case,
+    get_usage_me_use_case,
+    get_list_runs_use_case,
+    get_list_my_runs_use_case,
+    get_usage_summary_use_case,
+    get_usage_timeseries_use_case,
+    get_my_usage_timeseries_use_case,
 )
 from src.application.llm_model.create_llm_model_use_case import CreateLlmModelUseCase
 from src.application.llm_model.update_llm_model_use_case import UpdateLlmModelUseCase
 from src.application.llm_model.deactivate_llm_model_use_case import DeactivateLlmModelUseCase
 from src.application.llm_model.get_llm_model_use_case import GetLlmModelUseCase
 from src.application.llm_model.list_llm_models_use_case import ListLlmModelsUseCase
+from src.application.llm_model.update_llm_model_pricing_use_case import (
+    UpdateLlmModelPricingUseCase,
+)
+from src.application.agent_run.use_cases.get_run_detail_use_case import (
+    GetRunDetailUseCase,
+)
+from src.application.agent_run.use_cases.get_usage_by_user_use_case import (
+    GetUsageByUserUseCase,
+)
+from src.application.agent_run.use_cases.get_usage_by_llm_use_case import (
+    GetUsageByLlmUseCase,
+)
+from src.application.agent_run.use_cases.get_usage_by_node_use_case import (
+    GetUsageByNodeUseCase,
+)
+from src.application.agent_run.use_cases.get_usage_me_use_case import (
+    GetUsageMeUseCase,
+)
+from src.application.agent_run.use_cases.list_runs_use_case import (
+    ListRunsUseCase,
+)
+from src.application.agent_run.use_cases.list_my_runs_use_case import (
+    ListMyRunsUseCase,
+)
+from src.application.agent_run.use_cases.get_usage_summary_use_case import (
+    GetUsageSummaryUseCase,
+)
+from src.application.agent_run.use_cases.get_usage_timeseries_use_case import (
+    GetUsageTimeseriesUseCase,
+)
+from src.application.agent_run.use_cases.get_my_usage_timeseries_use_case import (
+    GetMyUsageTimeseriesUseCase,
+)
+from src.infrastructure.persistence.repositories.agent_run_repository import (
+    SqlAlchemyAgentRunRepository,
+)
+from src.infrastructure.persistence.repositories.llm_call_repository import (
+    SqlAlchemyLlmCallRepository,
+)
 from src.domain.llm_model.entity import LlmModel
 from src.infrastructure.llm_model.llm_model_repository import LlmModelRepository
 from src.infrastructure.llm_model.seed import seed_default_models
-from src.interfaces.dependencies.auth import get_jwt_adapter, get_user_repository
+from src.interfaces.dependencies.auth import (
+    get_jwt_adapter,
+    get_user_repository,
+    get_assemble_auth_context_use_case,
+)
 from src.application.auth.register_use_case import RegisterUseCase
+from src.application.permission.assemble_auth_context import AssembleAuthContextUseCase
+from src.application.permission.grant_revoke import (
+    GrantPermissionUseCase,
+    RevokePermissionUseCase,
+)
+from src.infrastructure.user_profile.repository import UserProfileRepository
+from src.infrastructure.permission.repository import PermissionRepository
+from src.api.routes.admin_user_router import (
+    router as admin_user_router,
+    get_grant_permission_use_case,
+    get_revoke_permission_use_case,
+    get_permission_repository,
+    get_admin_create_user_use_case,
+    get_list_users_use_case,
+)
+from src.application.auth.admin_create_user_use_case import AdminCreateUserUseCase
+from src.application.auth.list_users_use_case import ListUsersUseCase
 from src.application.auth.login_use_case import LoginUseCase
 from src.application.auth.refresh_token_use_case import RefreshTokenUseCase
 from src.application.auth.logout_use_case import LogoutUseCase
@@ -362,8 +470,15 @@ _document_processor: Optional[GraphDocumentProcessor] = None
 # Global analysis use case instance (initialized on startup)
 _analyze_excel_use_case: Optional[AnalyzeExcelUseCase] = None
 
+# excel-chart-routing-dedup: Supervisor 재사용용 차트 OFF 워크플로우.
+# 시각화는 상위 Supervisor chart_router가 전담하므로 내부 차트 서브그래프 미등록(중복 제거).
+_supervisor_excel_workflow: Optional[ExcelAnalysisWorkflow] = None
+
 # Global excel upload use case instance (initialized on startup)
 _excel_upload_use_case: Optional[ExcelUploadUseCase] = None
+
+# ws-agent-excel-attachment: Global attachment store (initialized on startup)
+_attachment_store: Optional[AgentAttachmentStore] = None
 
 # Global retrieval use case instance (initialized on startup)
 _retrieval_use_case: Optional[RetrievalUseCase] = None
@@ -429,6 +544,17 @@ def get_configured_analyze_excel_use_case() -> AnalyzeExcelUseCase:
     return _analyze_excel_use_case
 
 
+def get_configured_excel_analysis_workflow():
+    """analysis-node-agent: 분석 노드의 엑셀 분기용 ExcelAnalysisWorkflow.
+
+    excel-chart-routing-dedup: 차트 OFF 인스턴스(`_supervisor_excel_workflow`)를 반환한다.
+    시각화는 상위 Supervisor chart_router/chart_builder가 전담하므로 내부 차트 노드를
+    태우지 않아 중복(폐기되는 chart_builder LLM 호출)을 제거한다.
+    미초기화 시 None 반환 → 분석 노드가 문맥 분석으로 graceful fallback.
+    """
+    return _supervisor_excel_workflow
+
+
 def get_configured_excel_upload_use_case() -> ExcelUploadUseCase:
     """Get the configured excel upload use case.
 
@@ -441,6 +567,37 @@ def get_configured_excel_upload_use_case() -> ExcelUploadUseCase:
     if _excel_upload_use_case is None:
         raise RuntimeError("Excel upload use case not initialized")
     return _excel_upload_use_case
+
+
+# ── ws-agent-excel-attachment: 첨부 저장소/유스케이스 와이어링 ──────────────
+
+def create_attachment_store() -> AgentAttachmentStore:
+    """첨부 임시 저장소 생성. config 경로가 비면 시스템 tmp 하위로 해석."""
+    import os
+    import tempfile
+
+    upload_dir = settings.agent_attachment_upload_dir or os.path.join(
+        tempfile.gettempdir(), "agent_attachments"
+    )
+    return AgentAttachmentStore(
+        upload_dir, ttl_seconds=settings.agent_attachment_ttl_seconds
+    )
+
+
+def get_configured_upload_attachment_use_case() -> UploadAttachmentUseCase:
+    if _attachment_store is None:
+        raise RuntimeError("Attachment store not initialized")
+    return UploadAttachmentUseCase(
+        store=_attachment_store,
+        max_bytes=settings.agent_attachment_max_bytes,
+        logger=get_app_logger(),
+    )
+
+
+def get_configured_ws_attachment_resolver() -> AttachmentResolver:
+    if _attachment_store is None:
+        raise RuntimeError("Attachment store not initialized")
+    return AttachmentResolver(store=_attachment_store, logger=get_app_logger())
 
 
 def get_configured_processor() -> DocumentProcessor:
@@ -506,6 +663,7 @@ def create_analyze_excel_use_case() -> AnalyzeExcelUseCase:
     Returns:
         Configured AnalyzeExcelUseCase instance.
     """
+    global _supervisor_excel_workflow
     app_logger = get_app_logger()
     analysis_config = AnalysisConfig()
     retry_policy = analysis_config.get_retry_policy()
@@ -523,17 +681,47 @@ def create_analyze_excel_use_case() -> AnalyzeExcelUseCase:
         evaluator_adapter=hallucination_adapter,
     )
 
-    code_executor = SandboxExecutor(logger=app_logger)
+    search_decision = LLMSearchDecisionAdapter(logger=app_logger)
 
+    # supervisor-chart-builder-node: 엑셀 분석 결과 시각화용 chart_builder.
+    # _default_llm_model 미로드(None) 시 빌더 비활성 → chart_router→END 하위호환.
+    excel_chart_builder = None
+    if _default_llm_model is not None:
+        excel_viz_llm = _llm_factory.create(_default_llm_model, temperature=0)
+        excel_chart_builder = LangChainChartBuilder(
+            llm=excel_viz_llm,
+            logger=app_logger,
+            style_policy=ChartStylePolicy(),
+            max_count=settings.chart_max_count,
+        )
+
+    # Standalone(analysis_router) 경로 — 차트 ON. 최종 답변+차트를 화면에 렌더.
     workflow = ExcelAnalysisWorkflow(
         excel_parser=excel_parser,
         claude_client=claude_client,
         tavily_search=tavily_search,
         hallucination_evaluator=hallucination_evaluator,
-        code_executor=code_executor,
+        search_decision=search_decision,
         logger=app_logger,
         retry_policy=retry_policy,
         quality_threshold=quality_threshold,
+        chart_builder=excel_chart_builder,
+        enable_visualization=True,
+    )
+
+    # excel-chart-routing-dedup: Supervisor 재사용 경로 — 차트 OFF.
+    # 의존성은 공유(stateless)하되 차트 서브그래프를 등록하지 않아 상위 노드와의 중복 제거.
+    _supervisor_excel_workflow = ExcelAnalysisWorkflow(
+        excel_parser=excel_parser,
+        claude_client=claude_client,
+        tavily_search=tavily_search,
+        hallucination_evaluator=hallucination_evaluator,
+        search_decision=search_decision,
+        logger=app_logger,
+        retry_policy=retry_policy,
+        quality_threshold=quality_threshold,
+        chart_builder=None,
+        enable_visualization=False,
     )
 
     return AnalyzeExcelUseCase(
@@ -1084,11 +1272,15 @@ def create_auth_factories():
     def _make_rt_repo(session: AsyncSession):
         return RefreshTokenRepository(session=session, logger=app_logger)
 
+    def _make_user_profile_repo(session: AsyncSession):
+        return UserProfileRepository(session=session, logger=app_logger)
+
     def register_factory(session: AsyncSession = Depends(get_session)):
         return RegisterUseCase(
             user_repo=_make_user_repo(session),
             password_hasher=password_hasher,
             logger=app_logger,
+            user_profile_repo=_make_user_profile_repo(session),
         )
 
     def login_factory(session: AsyncSession = Depends(get_session)):
@@ -1151,10 +1343,136 @@ def create_auth_factories():
     )
 
 
-def create_llm_model_factories():
-    """Return per-request DI factories for LLM Model registry (LLM-MODEL-REG-001).
+def create_auth_context_factories():
+    """Auth context use case per-request DI factories.
+
+    agent-user-context Design §6.1:
+    AssembleAuthContextUseCase, GrantPermissionUseCase, RevokePermissionUseCase,
+    PermissionRepository — 모두 session-scoped (요청마다 생성).
+
+    Note: DepartmentRepository는 기존 infra에서 재사용.
+    """
+    app_logger = get_app_logger()
+
+    def _make_user_profile_repo(session: AsyncSession) -> UserProfileRepository:
+        return UserProfileRepository(session=session, logger=app_logger)
+
+    def _make_permission_repo(session: AsyncSession) -> PermissionRepository:
+        return PermissionRepository(session=session, logger=app_logger)
+
+    def _make_department_repo(session: AsyncSession):
+        return DepartmentRepository(session=session, logger=app_logger)
+
+    def assemble_auth_context_factory(
+        session: AsyncSession = Depends(get_session),
+    ) -> AssembleAuthContextUseCase:
+        return AssembleAuthContextUseCase(
+            profile_repo=_make_user_profile_repo(session),
+            department_repo=_make_department_repo(session),
+            permission_repo=_make_permission_repo(session),
+            logger=app_logger,
+        )
+
+    def grant_permission_factory(
+        session: AsyncSession = Depends(get_session),
+    ) -> GrantPermissionUseCase:
+        return GrantPermissionUseCase(
+            permission_repo=_make_permission_repo(session),
+            logger=app_logger,
+        )
+
+    def revoke_permission_factory(
+        session: AsyncSession = Depends(get_session),
+    ) -> RevokePermissionUseCase:
+        return RevokePermissionUseCase(
+            permission_repo=_make_permission_repo(session),
+            logger=app_logger,
+        )
+
+    def permission_repo_factory(
+        session: AsyncSession = Depends(get_session),
+    ) -> PermissionRepository:
+        return _make_permission_repo(session)
+
+    return (
+        assemble_auth_context_factory,
+        grant_permission_factory,
+        revoke_permission_factory,
+        permission_repo_factory,
+    )
+
+
+def create_ws_auth_context_resolver() -> WsAuthContextResolver:
+    """WS 전용 AuthContext 조립기 (단기 세션 기반).
+
+    fix-ws-auth-context-missing Design §3.3.1:
+    - WS 연결은 스트리밍 동안 장시간 유지되므로 request-scoped 세션을 점유하지 않도록
+      resolver.execute() 내부에서 session_factory로 단기 세션을 연다.
+    - CLAUDE.md §6: get_session_factory()를 주입, async with로 단기 사용.
+    """
+    app_logger = get_app_logger()
+
+    def _assemble_uc_builder(session: AsyncSession) -> AssembleAuthContextUseCase:
+        return AssembleAuthContextUseCase(
+            profile_repo=UserProfileRepository(session=session, logger=app_logger),
+            department_repo=DepartmentRepository(session=session, logger=app_logger),
+            permission_repo=PermissionRepository(session=session, logger=app_logger),
+            logger=app_logger,
+        )
+
+    return WsAuthContextResolver(
+        session_factory=get_session_factory(),
+        assemble_uc_builder=_assemble_uc_builder,
+    )
+
+
+def create_admin_user_mgmt_factories():
+    """admin-user-registration Design §5.2: 사용자 생성/목록 per-request DI factories.
+
+    DB-001 §10.2: session 은 Depends(get_session) 으로 주입, User/Profile/Department
+    repo 가 동일 세션을 공유 → User+Profile+부서 배정이 단일 트랜잭션으로 commit/rollback.
+    """
+    app_logger = get_app_logger()
+    password_hasher = BcryptPasswordHasher()
+
+    def _user(session: AsyncSession) -> UserRepository:
+        return UserRepository(session=session, logger=app_logger)
+
+    def _profile(session: AsyncSession) -> UserProfileRepository:
+        return UserProfileRepository(session=session, logger=app_logger)
+
+    def _dept(session: AsyncSession) -> DepartmentRepository:
+        return DepartmentRepository(session=session, logger=app_logger)
+
+    def admin_create_user_factory(
+        session: AsyncSession = Depends(get_session),
+    ) -> AdminCreateUserUseCase:
+        return AdminCreateUserUseCase(
+            user_repo=_user(session),
+            user_profile_repo=_profile(session),
+            department_repo=_dept(session),
+            password_hasher=password_hasher,
+            logger=app_logger,
+        )
+
+    def list_users_factory(
+        session: AsyncSession = Depends(get_session),
+    ) -> ListUsersUseCase:
+        return ListUsersUseCase(
+            user_repo=_user(session),
+            user_profile_repo=_profile(session),
+            department_repo=_dept(session),
+            logger=app_logger,
+        )
+
+    return admin_create_user_factory, list_users_factory
+
+
+def create_llm_model_factories(cost_calculator: CostCalculator | None = None):
+    """Return per-request DI factories for LLM Model registry (LLM-MODEL-REG-001 + M4).
 
     DB-001 §10.2: session 은 Depends(get_session) 으로 주입. repo 는 동일 세션 공유.
+    M4: cost_calculator 주입 시 update_pricing_factory도 함께 반환 (★ M1 G1).
     """
     app_logger = get_app_logger()
 
@@ -1176,7 +1494,116 @@ def create_llm_model_factories():
     def list_factory(session: AsyncSession = Depends(get_session)) -> ListLlmModelsUseCase:
         return ListLlmModelsUseCase(repository=_make_repo(session), logger=app_logger)
 
-    return create_factory, update_factory, deactivate_factory, get_factory, list_factory
+    # M4: UpdateLlmModelPricingUseCase — cost_calculator 의무 invalidate
+    def update_pricing_factory(
+        session: AsyncSession = Depends(get_session),
+    ) -> UpdateLlmModelPricingUseCase:
+        if cost_calculator is None:
+            raise RuntimeError(
+                "CostCalculator must be wired into create_llm_model_factories for pricing PATCH"
+            )
+        return UpdateLlmModelPricingUseCase(
+            repository=_make_repo(session),
+            cost_calculator=cost_calculator,
+            logger=app_logger,
+        )
+
+    return (
+        create_factory,
+        update_factory,
+        deactivate_factory,
+        get_factory,
+        list_factory,
+        update_pricing_factory,
+    )
+
+
+def create_agent_run_factories():
+    """Return per-request DI factories for Agent Run Observability (M4).
+
+    Repository session은 request scope이므로 UsageAggregator도 request scope로 생성.
+    Aggregator는 trivial wrapper이므로 새 인스턴스 비용 0.
+    """
+    app_logger = get_app_logger()
+
+    def _aggregator(session: AsyncSession) -> UsageAggregator:
+        return UsageAggregator(llm_call_repo=SqlAlchemyLlmCallRepository(session))
+
+    def run_detail_factory(
+        session: AsyncSession = Depends(get_session),
+    ) -> GetRunDetailUseCase:
+        return GetRunDetailUseCase(
+            agent_run_repo=SqlAlchemyAgentRunRepository(session),
+            llm_call_repo=SqlAlchemyLlmCallRepository(session),
+            logger=app_logger,
+        )
+
+    def by_user_factory(
+        session: AsyncSession = Depends(get_session),
+    ) -> GetUsageByUserUseCase:
+        return GetUsageByUserUseCase(aggregator=_aggregator(session))
+
+    def by_llm_factory(
+        session: AsyncSession = Depends(get_session),
+    ) -> GetUsageByLlmUseCase:
+        return GetUsageByLlmUseCase(aggregator=_aggregator(session))
+
+    def by_node_factory(
+        session: AsyncSession = Depends(get_session),
+    ) -> GetUsageByNodeUseCase:
+        return GetUsageByNodeUseCase(aggregator=_aggregator(session))
+
+    def me_factory(
+        session: AsyncSession = Depends(get_session),
+    ) -> GetUsageMeUseCase:
+        return GetUsageMeUseCase(aggregator=_aggregator(session))
+
+    # ── M5: admin run list ──
+    def list_runs_factory(
+        session: AsyncSession = Depends(get_session),
+    ) -> ListRunsUseCase:
+        return ListRunsUseCase(
+            agent_run_repo=SqlAlchemyAgentRunRepository(session),
+            logger=app_logger,
+        )
+
+    # ── M5 dashboard: 4 new factories ──
+    def list_my_runs_factory(
+        session: AsyncSession = Depends(get_session),
+    ) -> ListMyRunsUseCase:
+        list_runs_uc = ListRunsUseCase(
+            agent_run_repo=SqlAlchemyAgentRunRepository(session),
+            logger=app_logger,
+        )
+        return ListMyRunsUseCase(list_runs_use_case=list_runs_uc)
+
+    def usage_summary_factory(
+        session: AsyncSession = Depends(get_session),
+    ) -> GetUsageSummaryUseCase:
+        return GetUsageSummaryUseCase(aggregator=_aggregator(session))
+
+    def usage_timeseries_factory(
+        session: AsyncSession = Depends(get_session),
+    ) -> GetUsageTimeseriesUseCase:
+        return GetUsageTimeseriesUseCase(aggregator=_aggregator(session))
+
+    def my_usage_timeseries_factory(
+        session: AsyncSession = Depends(get_session),
+    ) -> GetMyUsageTimeseriesUseCase:
+        return GetMyUsageTimeseriesUseCase(aggregator=_aggregator(session))
+
+    return (
+        run_detail_factory,
+        by_user_factory,
+        by_llm_factory,
+        by_node_factory,
+        me_factory,
+        list_runs_factory,            # ★ M5
+        list_my_runs_factory,         # ★ M5 dashboard
+        usage_summary_factory,        # ★ M5 dashboard
+        usage_timeseries_factory,     # ★ M5 dashboard
+        my_usage_timeseries_factory,  # ★ M5 dashboard
+    )
 
 
 def create_embedding_model_factories():
@@ -1335,6 +1762,22 @@ def create_general_chat_use_case_factory():
             logger=app_logger,
         )
 
+        # chart-builder DI (Design §6): 추출용 LLM 1개를 분류기/빌더가 공유.
+        viz_llm = _llm_factory.create(_default_llm_model, temperature=0)
+        chart_builder = LangChainChartBuilder(
+            llm=viz_llm,
+            logger=app_logger,
+            style_policy=ChartStylePolicy(),
+            max_count=settings.chart_max_count,
+        )
+        viz_classifier = LangChainVisualizationClassifier(viz_llm)
+        # chart-context-continuity §3.8: 차트 편집 변환기 — viz_llm 공유.
+        chart_transformer = LangChainChartTransformer(
+            llm=viz_llm,
+            logger=app_logger,
+            style_policy=ChartStylePolicy(),
+        )
+
         return GeneralChatUseCase(
             chat_tool_builder=tool_builder,
             message_repo=message_repo,
@@ -1344,9 +1787,48 @@ def create_general_chat_use_case_factory():
             logger=app_logger,
             llm_factory=_llm_factory,
             llm_model=_default_llm_model,
+            viz_policy=VisualizationRoutingPolicy(),
+            viz_classifier=viz_classifier,
+            chart_builder=chart_builder,
+            chart_transformer=chart_transformer,
         )
 
     return _factory
+
+
+# search-node-query-pipeline: provider별 API 키 환경변수 매핑.
+# LLMFactory는 provider/model_name/api_key_env만 사용한다 (llm_factory.py).
+_SEARCH_PIPELINE_API_KEY_ENV = {
+    "openai": "OPENAI_API_KEY",
+    "anthropic": "ANTHROPIC_API_KEY",
+    "ollama": "",  # ollama는 API 키 불필요
+}
+
+
+def _build_search_pipeline_llm_model() -> LlmModel | None:
+    """settings → search 파이프라인용 경량 LlmModel (DB 미등록 인라인 엔티티).
+
+    provider/model 미설정 시 None → WorkflowCompiler가 per-run LLM 사용 (D3).
+    API 키 부재 등 생성 실패는 compile 시점 fallback이 흡수한다.
+    """
+    provider = settings.search_pipeline_provider
+    model_name = settings.search_pipeline_model_name
+    if not provider or not model_name:
+        return None
+    now = datetime.now()
+    return LlmModel(
+        id="search-pipeline-llm",
+        provider=provider,
+        model_name=model_name,
+        display_name=f"Search Pipeline ({model_name})",
+        description=None,
+        api_key_env=_SEARCH_PIPELINE_API_KEY_ENV.get(provider, "OPENAI_API_KEY"),
+        max_tokens=None,
+        is_active=True,
+        is_default=False,
+        created_at=now,
+        updated_at=now,
+    )
 
 
 def create_agent_builder_factories():
@@ -1364,14 +1846,46 @@ def create_agent_builder_factories():
     prompt_generator = PromptGenerator(llm=llm, logger=app_logger)
     interviewer = Interviewer(llm=llm, logger=app_logger)
 
+    # AGENT-OBS-001 (M1·M4): RunTracker 등 관측성 싱글톤은 ToolFactory보다 먼저 생성
+    # M4: ToolFactory에 tracker 주입 → InternalDocumentSearchTool이 record_retrieval 호출
+    from src.infrastructure.llm_model.session_scoped_llm_model_repository import (
+        SessionScopedLlmModelRepository,
+    )
+
+    _obs_config = RunObservabilityConfig()
+    _scoped_llm_model_repo = SessionScopedLlmModelRepository(
+        session_factory=get_session_factory(),
+        logger=app_logger,
+    )
+    _cost_calculator = CostCalculator(
+        llm_model_repo=_scoped_llm_model_repo,
+        config=_obs_config,
+    )
+    _model_name_resolver = ModelNameResolver(
+        llm_model_repo=_scoped_llm_model_repo,
+        logger=app_logger,
+    )
+    run_tracker = RunTracker(
+        session_factory=get_session_factory(),
+        cost_calculator=_cost_calculator,
+        model_name_resolver=_model_name_resolver,
+        logger=app_logger,
+    )
+
     tool_factory = ToolFactory(
         logger=app_logger,
         hybrid_search_use_case_getter=get_configured_hybrid_search_use_case,
         tavily_api_key=os.environ.get("TAVILY_API_KEY"),
+        tracker=run_tracker,                # ★ M4: RAG retrieval 영속화
+        run_observability_config=_obs_config,
     )
     workflow_compiler = WorkflowCompiler(
         tool_factory=tool_factory, llm_factory=_llm_factory, logger=app_logger,
         hooks=DefaultHooks(),
+        excel_analysis_workflow_getter=get_configured_excel_analysis_workflow,
+        chart_max_count=settings.chart_max_count,
+        pipeline_llm_model=_build_search_pipeline_llm_model(),
+        search_compress_threshold=settings.search_compress_threshold,
     )
 
     # 인터뷰 세션 스토어는 앱 전체에서 공유 (싱글턴)
@@ -1423,6 +1937,9 @@ def create_agent_builder_factories():
             summary_repo=summary_repo,
             summarizer=summarizer,
             policy=policy,
+            tracker=run_tracker,
+            # AGENT-OBS-001 fix: user_message를 별도 세션 commit해 ai_run FK 락 회피
+            session_factory=get_session_factory(),
         )
 
     def get_uc_factory(session: AsyncSession = Depends(get_session)):
@@ -1503,6 +2020,7 @@ def create_agent_builder_factories():
         list_uc_factory, delete_uc_factory,
         subscribe_uc_factory, fork_uc_factory, list_my_uc_factory,
         list_available_sub_agents_uc_factory,
+        _cost_calculator,  # M4 — share singleton for pricing PATCH invalidate
     )
 
 
@@ -1562,7 +2080,10 @@ def create_ragas_factories():
     def testset_factory(session: AsyncSession = Depends(get_session)):
         return TestsetUseCase(repository=_make_repo(session), logger=app_logger)
 
-    return batch_factory, realtime_factory, result_factory, testset_factory
+    def admin_eval_factory(session: AsyncSession = Depends(get_session)):
+        return AdminEvalUseCase(repository=_make_repo(session), logger=app_logger)
+
+    return batch_factory, realtime_factory, result_factory, testset_factory, admin_eval_factory
 
 
 def create_collection_factories():
@@ -1883,10 +2404,12 @@ async def _ensure_es_index() -> None:
 async def lifespan(app: FastAPI):
     """Application lifespan handler for startup/shutdown."""
     global _document_processor, _analyze_excel_use_case, _excel_upload_use_case
+    global _supervisor_excel_workflow
     global _retrieval_use_case, _hybrid_search_use_case, _chunk_index_use_case
     global _morph_index_use_case, _rag_agent_use_case, _ingest_use_case
     global _doc_chunk_use_case
     global _advanced_ingest_use_case
+    global _attachment_store
     global _auto_build_use_case, _auto_build_reply_use_case, _auto_build_session_repository
 
     # uvicorn access log 억제 (RequestLoggingMiddleware가 중복 로깅하므로)
@@ -1896,8 +2419,8 @@ async def lifespan(app: FastAPI):
 
     # Startup: Initialize processor
     _document_processor = await create_processor()
-    _analyze_excel_use_case = create_analyze_excel_use_case()
     _excel_upload_use_case = create_excel_upload_use_case()
+    _attachment_store = create_attachment_store()
     _retrieval_use_case = create_retrieval_use_case()
     _hybrid_search_use_case = create_hybrid_search_use_case()
     _chunk_index_use_case = create_chunk_index_use_case()
@@ -1921,12 +2444,18 @@ async def lifespan(app: FastAPI):
     global _default_llm_model
     _default_llm_model = await _load_default_llm_model()
 
+    # supervisor-chart-builder-node: 엑셀 분석 워크플로우는 _default_llm_model 로드 후
+    # 생성해야 chart_builder LLM 주입이 가능하다(시각화 분기 활성화).
+    _analyze_excel_use_case = create_analyze_excel_use_case()
+
     yield
 
     # Shutdown: Cleanup (if needed)
     _document_processor = None
     _analyze_excel_use_case = None
+    _supervisor_excel_workflow = None
     _excel_upload_use_case = None
+    _attachment_store = None
     _retrieval_use_case = None
     _hybrid_search_use_case = None
     _chunk_index_use_case = None
@@ -1992,6 +2521,7 @@ def create_app() -> FastAPI:
         _list_agents_uc, _delete_agent_uc,
         _subscribe_uc, _fork_uc, _list_my_uc,
         _list_available_sub_agents_uc,
+        _cost_calculator_singleton,  # M4 — share with pricing PATCH factory
     ) = create_agent_builder_factories()
     app.dependency_overrides[get_create_agent_use_case] = _create_uc
     app.dependency_overrides[get_update_agent_use_case] = _update_uc
@@ -2045,25 +2575,89 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_jwt_adapter] = _jwt_f
     app.dependency_overrides[get_user_repository] = _user_repo_f
 
+    # Auth Context DI (agent-user-context Design §6.1 + §6.4)
+    (
+        _assemble_f, _grant_f, _revoke_f, _perm_repo_f,
+    ) = create_auth_context_factories()
+    app.dependency_overrides[get_assemble_auth_context_use_case] = _assemble_f
+    app.dependency_overrides[get_grant_permission_use_case] = _grant_f
+    app.dependency_overrides[get_revoke_permission_use_case] = _revoke_f
+    app.dependency_overrides[get_permission_repository] = _perm_repo_f
+
+    # Admin User Management DI (admin-user-registration Design §5.2)
+    _admin_create_user_f, _list_users_f = create_admin_user_mgmt_factories()
+    app.dependency_overrides[get_admin_create_user_use_case] = _admin_create_user_f
+    app.dependency_overrides[get_list_users_use_case] = _list_users_f
+
     # WebSocket DI
     _connection_manager = ConnectionManager(logger=logger, max_connections=100)
     app.dependency_overrides[get_connection_manager] = lambda: _connection_manager
     app.dependency_overrides[get_ws_jwt_adapter] = _jwt_f
     app.dependency_overrides[get_ws_user_repository] = _user_repo_f
+    # Reuse the HTTP RunAgentUseCase factory for WS /ws/agent/{run_id}
+    # (Design fe-websocket-integration-guide §4.2 — same factory, no new instance).
+    app.dependency_overrides[get_ws_run_agent_use_case] = _run_uc
 
-    # LLM Model Registry DI
+    # fix-ws-auth-context-missing Design §3.3.2: WS AuthContext 조립기 + logger
+    # — system prompt에 [현재 사용자 정보] 블록이 들어가도록 auth_ctx를 stream에 전달.
+    _ws_auth_resolver = create_ws_auth_context_resolver()
+    app.dependency_overrides[get_ws_auth_context_resolver] = lambda: _ws_auth_resolver
+    app.dependency_overrides[get_ws_logger] = lambda: logger
+
+    # ws-agent-excel-attachment: 업로드 UC + WS 첨부 resolver DI
+    app.dependency_overrides[get_upload_attachment_use_case] = (
+        get_configured_upload_attachment_use_case
+    )
+    app.dependency_overrides[get_ws_attachment_resolver] = (
+        get_configured_ws_attachment_resolver
+    )
+
+    # ws-chat-streaming Design §4.4: in-memory ChatStreamCache + reuse GeneralChat factory.
+    _chat_stream_cache = InMemoryChatStreamCache(ttl_seconds=300, max_sessions=1000)
+    app.dependency_overrides[get_chat_stream_cache] = lambda: _chat_stream_cache
+    app.dependency_overrides[get_ws_general_chat_use_case] = (
+        create_general_chat_use_case_factory()
+    )
+
+    # LLM Model Registry DI (★ M4: + pricing PATCH factory with cost_calculator)
     (
         _llm_create_f,
         _llm_update_f,
         _llm_deactivate_f,
         _llm_get_f,
         _llm_list_f,
-    ) = create_llm_model_factories()
+        _llm_pricing_f,
+    ) = create_llm_model_factories(cost_calculator=_cost_calculator_singleton)
     app.dependency_overrides[get_create_llm_model_use_case] = _llm_create_f
     app.dependency_overrides[get_update_llm_model_use_case] = _llm_update_f
     app.dependency_overrides[get_deactivate_llm_model_use_case] = _llm_deactivate_f
     app.dependency_overrides[get_get_llm_model_use_case] = _llm_get_f
     app.dependency_overrides[get_list_llm_models_use_case] = _llm_list_f
+    app.dependency_overrides[get_update_llm_model_pricing_use_case] = _llm_pricing_f
+
+    # Agent Run Observability DI (M4 + M5 + M5-dashboard)
+    (
+        _run_detail_f,
+        _usage_by_user_f,
+        _usage_by_llm_f,
+        _usage_by_node_f,
+        _usage_me_f,
+        _list_runs_f,                # ★ M5
+        _list_my_runs_f,             # ★ M5 dashboard
+        _usage_summary_f,            # ★ M5 dashboard
+        _usage_timeseries_f,         # ★ M5 dashboard
+        _my_usage_timeseries_f,      # ★ M5 dashboard
+    ) = create_agent_run_factories()
+    app.dependency_overrides[get_run_detail_use_case] = _run_detail_f
+    app.dependency_overrides[get_usage_by_user_use_case] = _usage_by_user_f
+    app.dependency_overrides[get_usage_by_llm_use_case] = _usage_by_llm_f
+    app.dependency_overrides[get_usage_by_node_use_case] = _usage_by_node_f
+    app.dependency_overrides[get_usage_me_use_case] = _usage_me_f
+    app.dependency_overrides[get_list_runs_use_case] = _list_runs_f
+    app.dependency_overrides[get_list_my_runs_use_case] = _list_my_runs_f
+    app.dependency_overrides[get_usage_summary_use_case] = _usage_summary_f
+    app.dependency_overrides[get_usage_timeseries_use_case] = _usage_timeseries_f
+    app.dependency_overrides[get_my_usage_timeseries_use_case] = _my_usage_timeseries_f
 
     # Embedding Model Registry DI
     (_emb_list_f,) = create_embedding_model_factories()
@@ -2220,17 +2814,19 @@ def create_app() -> FastAPI:
     # RAGAS Evaluation DI
     (
         _ragas_batch_f, _ragas_realtime_f,
-        _ragas_result_f, _ragas_testset_f,
+        _ragas_result_f, _ragas_testset_f, _ragas_admin_f,
     ) = create_ragas_factories()
     app.dependency_overrides[get_batch_eval_use_case] = _ragas_batch_f
     app.dependency_overrides[get_realtime_eval_use_case] = _ragas_realtime_f
     app.dependency_overrides[get_eval_result_use_case] = _ragas_result_f
     app.dependency_overrides[get_testset_use_case] = _ragas_testset_f
+    app.dependency_overrides[get_admin_eval_use_case] = _ragas_admin_f
 
     # Include routers
     app.include_router(document_router)
     app.include_router(analysis_router)
     app.include_router(excel_upload_router)
+    app.include_router(agent_attachment_router)
     app.include_router(retrieval_router)
     app.include_router(hybrid_search_router)
     app.include_router(chunk_index_router)
@@ -2248,6 +2844,7 @@ def create_app() -> FastAPI:
     app.include_router(general_chat_router)
     app.include_router(auth_router)
     app.include_router(admin_router)
+    app.include_router(admin_ragas_router)
     app.include_router(llm_model_router)
     app.include_router(embedding_model_router)
     app.include_router(mcp_registry_router)
@@ -2262,6 +2859,8 @@ def create_app() -> FastAPI:
     app.include_router(preview_router)
     app.include_router(advanced_ingest_router)
     app.include_router(ws_router)
+    app.include_router(agent_run_router)  # M4 — observability read APIs
+    app.include_router(admin_user_router)  # agent-user-context: admin permission mgmt
 
     # Health check endpoint
     @app.get("/health")

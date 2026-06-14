@@ -233,6 +233,124 @@ class EvaluationRepository(EvaluationRepositoryInterface):
         await self._session.flush()
         return result.rowcount > 0
 
+    async def get_dashboard_stats(
+        self, recent_limit: int, request_id: str
+    ) -> dict:
+        self._logger.info(
+            "Dashboard stats query", request_id=request_id,
+        )
+        total_stmt = select(func.count(EvaluationRunModel.id))
+        total = (await self._session.execute(total_stmt)).scalar() or 0
+
+        status_stmt = (
+            select(
+                EvaluationRunModel.status,
+                func.count(EvaluationRunModel.id),
+            )
+            .group_by(EvaluationRunModel.status)
+        )
+        status_rows = (await self._session.execute(status_stmt)).all()
+        status_counts = {row[0]: row[1] for row in status_rows}
+
+        tt_stmt = (
+            select(
+                EvaluationRunModel.target_type,
+                func.count(EvaluationRunModel.id),
+            )
+            .group_by(EvaluationRunModel.target_type)
+        )
+        tt_rows = (await self._session.execute(tt_stmt)).all()
+        target_type_counts = {row[0]: row[1] for row in tt_rows}
+
+        completed_ids_stmt = (
+            select(EvaluationRunModel.id)
+            .where(EvaluationRunModel.status == "completed")
+        )
+        metrics_stmt = (
+            select(EvaluationResultModel.metrics)
+            .where(EvaluationResultModel.run_id.in_(completed_ids_stmt))
+        )
+        metrics_rows = (
+            await self._session.execute(metrics_stmt)
+        ).scalars().all()
+        avg_metrics = self._calculate_avg_metrics(metrics_rows)
+
+        recent_stmt = (
+            select(EvaluationRunModel)
+            .order_by(EvaluationRunModel.created_at.desc())
+            .limit(recent_limit)
+        )
+        recent_result = await self._session.execute(recent_stmt)
+        recent_runs = [
+            self._to_run_entity(m) for m in recent_result.scalars()
+        ]
+
+        return {
+            "total_runs": total,
+            "status_counts": status_counts,
+            "target_type_counts": target_type_counts,
+            "avg_metrics": avg_metrics,
+            "recent_runs": recent_runs,
+        }
+
+    async def list_runs_with_summary(
+        self,
+        target_type: str | None,
+        eval_type: str | None,
+        status: str | None,
+        limit: int,
+        offset: int,
+        request_id: str,
+    ) -> tuple[list[dict], int]:
+        stmt = select(EvaluationRunModel)
+        count_stmt = select(func.count(EvaluationRunModel.id))
+
+        for col, val in [
+            (EvaluationRunModel.target_type, target_type),
+            (EvaluationRunModel.eval_type, eval_type),
+            (EvaluationRunModel.status, status),
+        ]:
+            if val:
+                stmt = stmt.where(col == val)
+                count_stmt = count_stmt.where(col == val)
+
+        stmt = (
+            stmt.order_by(EvaluationRunModel.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+
+        result = await self._session.execute(stmt)
+        total = (await self._session.execute(count_stmt)).scalar() or 0
+
+        items = []
+        for model in result.scalars():
+            summary = await self.get_run_summary(model.id, request_id)
+            items.append({
+                "id": model.id,
+                "eval_type": model.eval_type,
+                "target_type": model.target_type,
+                "status": model.status,
+                "total_cases": model.total_cases,
+                "created_at": model.created_at,
+                "completed_at": model.completed_at,
+                "summary": summary,
+            })
+        return items, total
+
+    @staticmethod
+    def _calculate_avg_metrics(metrics_rows: list) -> dict[str, float]:
+        totals: dict[str, float] = {}
+        counts: dict[str, int] = {}
+        for metrics in metrics_rows:
+            if not metrics:
+                continue
+            for key, value in metrics.items():
+                if isinstance(value, (int, float)):
+                    totals[key] = totals.get(key, 0.0) + value
+                    counts[key] = counts.get(key, 0) + 1
+        return {k: totals[k] / counts[k] for k in totals if counts[k] > 0}
+
     @staticmethod
     def _to_run_entity(model: EvaluationRunModel) -> EvaluationRun:
         return EvaluationRun(

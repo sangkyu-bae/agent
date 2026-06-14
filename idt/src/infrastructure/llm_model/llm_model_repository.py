@@ -158,6 +158,9 @@ class LlmModelRepository(LlmModelRepositoryInterface):
             is_default=model.is_default,
             created_at=model.created_at,
             updated_at=model.updated_at,
+            input_price_per_1k_usd=model.input_price_per_1k_usd,
+            output_price_per_1k_usd=model.output_price_per_1k_usd,
+            pricing_updated_at=model.pricing_updated_at,
         )
 
     def _to_domain(self, row: LlmModelModel) -> LlmModel:
@@ -173,4 +176,7 @@ class LlmModelRepository(LlmModelRepositoryInterface):
             is_default=row.is_default,
             created_at=row.created_at,
             updated_at=row.updated_at,
+            input_price_per_1k_usd=row.input_price_per_1k_usd,
+            output_price_per_1k_usd=row.output_price_per_1k_usd,
+            pricing_updated_at=row.pricing_updated_at,
         )

@@ -77,6 +77,7 @@ class EvalResultItemBody(BaseModel):
     question: str
     answer: str
     ground_truth: str | None
+    contexts: list[str]
     scores: dict[str, float]
     created_at: datetime
 
@@ -201,6 +202,7 @@ async def get_evaluation_results(
                 question=i.question,
                 answer=i.answer,
                 ground_truth=i.ground_truth,
+                contexts=i.contexts,
                 scores=i.scores,
                 created_at=i.created_at,
             )
@@ -261,6 +263,7 @@ async def get_recent_realtime(
             question=i.question,
             answer=i.answer,
             ground_truth=i.ground_truth,
+            contexts=i.contexts,
             scores=i.scores,
             created_at=i.created_at,
         )

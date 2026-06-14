@@ -256,6 +256,96 @@ class TestHybridSearchUseCaseExecute:
         assert "bool" not in es_query.query
 
 
+class TestHybridSearchVectorScoreThreshold:
+    """벡터 코사인 유사도 컷오프 테스트."""
+
+    @pytest.mark.asyncio
+    async def test_threshold_zero_keeps_all_hits(
+        self, use_case, mock_es_repo, mock_vector_store
+    ):
+        """임계값 0.0이면 모든 벡터 hit 통과 (기존 동작, 회귀)."""
+        from src.domain.hybrid_search.schemas import HybridSearchRequest
+
+        mock_es_repo.search.return_value = []
+        mock_vector_store.search_by_vector.return_value = [
+            make_vector_doc("v-low", score=0.2),
+            make_vector_doc("v-high", score=0.9),
+        ]
+        req = HybridSearchRequest(query="q", vector_score_threshold=0.0)
+        result = await use_case.execute(req, REQUEST_ID)
+
+        ids = {r.id for r in result.results}
+        assert ids == {"v-low", "v-high"}
+
+    @pytest.mark.asyncio
+    async def test_filters_hits_below_threshold(
+        self, use_case, mock_es_repo, mock_vector_store
+    ):
+        """코사인 0.2 hit이 threshold 0.3에서 제거된다."""
+        from src.domain.hybrid_search.schemas import HybridSearchRequest
+
+        mock_es_repo.search.return_value = []
+        mock_vector_store.search_by_vector.return_value = [
+            make_vector_doc("v-low", score=0.2),
+            make_vector_doc("v-high", score=0.9),
+        ]
+        req = HybridSearchRequest(query="q", vector_score_threshold=0.3)
+        result = await use_case.execute(req, REQUEST_ID)
+
+        ids = {r.id for r in result.results}
+        assert ids == {"v-high"}
+
+    @pytest.mark.asyncio
+    async def test_threshold_boundary_is_inclusive(
+        self, use_case, mock_es_repo, mock_vector_store
+    ):
+        """임계값과 정확히 같은 점수(0.3)는 통과한다 (>=)."""
+        from src.domain.hybrid_search.schemas import HybridSearchRequest
+
+        mock_es_repo.search.return_value = []
+        mock_vector_store.search_by_vector.return_value = [
+            make_vector_doc("v-eq", score=0.3),
+        ]
+        req = HybridSearchRequest(query="q", vector_score_threshold=0.3)
+        result = await use_case.execute(req, REQUEST_ID)
+
+        assert {r.id for r in result.results} == {"v-eq"}
+
+    @pytest.mark.asyncio
+    async def test_all_vector_filtered_falls_back_to_bm25(
+        self, use_case, mock_es_repo, mock_vector_store
+    ):
+        """벡터가 전부 컷오프돼도 BM25 결과로 RRF가 진행된다."""
+        from src.domain.hybrid_search.schemas import HybridSearchRequest
+
+        mock_es_repo.search.return_value = [make_es_result("bm-1")]
+        mock_vector_store.search_by_vector.return_value = [
+            make_vector_doc("v-low", score=0.1),
+        ]
+        req = HybridSearchRequest(query="q", vector_score_threshold=0.5)
+        result = await use_case.execute(req, REQUEST_ID)
+
+        ids = {r.id for r in result.results}
+        assert ids == {"bm-1"}
+
+    @pytest.mark.asyncio
+    async def test_none_score_treated_as_zero(
+        self, use_case, mock_es_repo, mock_vector_store
+    ):
+        """score=None hit은 0.0으로 취급되어 임계값>0에서 제거된다."""
+        from src.domain.hybrid_search.schemas import HybridSearchRequest
+
+        mock_es_repo.search.return_value = []
+        mock_vector_store.search_by_vector.return_value = [
+            make_vector_doc("v-none", score=None),
+            make_vector_doc("v-ok", score=0.8),
+        ]
+        req = HybridSearchRequest(query="q", vector_score_threshold=0.3)
+        result = await use_case.execute(req, REQUEST_ID)
+
+        assert {r.id for r in result.results} == {"v-ok"}
+
+
 class TestHybridSearchCollectionOverride:
     """컬렉션/인덱스 오버라이드 테스트."""
 

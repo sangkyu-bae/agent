@@ -2,12 +2,12 @@
   "version": "1.0",
   "enabled": false,
   "teamName": "",
-  "feature": "collection-department-dropdown",
+  "feature": "agent-session-switching",
   "pdcaPhase": "do",
   "orchestrationPattern": "leader",
   "ctoAgent": "opus",
-  "startedAt": "2026-05-09T07:43:55.306Z",
-  "lastUpdated": "2026-05-11T00:09:29.747Z",
+  "startedAt": "2026-06-05T10:50:45.395Z",
+  "lastUpdated": "2026-06-05T11:02:32.493Z",
   "teammates": [],
   "progress": {
     "totalTasks": 0,
@@ -17,5 +17,5 @@
     "pendingTasks": 0
   },
   "recentMessages": [],
-  "sessionId": "9ac747f5-122e-40d7-b494-a6745309280d"
+  "sessionId": "65a925ea-3797-4574-8487-22c0b1078cf5"
 }

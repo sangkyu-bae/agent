@@ -5,6 +5,7 @@ LLM-MODEL-REG-001: LLM 모델 레지스트리 도메인 객체.
 """
 from dataclasses import dataclass
 from datetime import datetime
+from decimal import Decimal
 
 
 @dataclass
@@ -23,6 +24,9 @@ class LlmModel:
         is_default: True 시 기본 선택 모델 (전체에서 1개만 허용)
         created_at: 생성 시각
         updated_at: 최종 수정 시각
+        input_price_per_1k_usd: 입력 토큰 1000개당 USD (AGENT-OBS-001)
+        output_price_per_1k_usd: 출력 토큰 1000개당 USD
+        pricing_updated_at: 가격 최종 갱신 시각
     """
 
     id: str
@@ -36,3 +40,6 @@ class LlmModel:
     is_default: bool
     created_at: datetime
     updated_at: datetime
+    input_price_per_1k_usd: Decimal | None = None
+    output_price_per_1k_usd: Decimal | None = None
+    pricing_updated_at: datetime | None = None

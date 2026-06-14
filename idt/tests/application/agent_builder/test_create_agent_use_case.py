@@ -395,6 +395,103 @@ class TestExplicitToolSelection:
         assert worker.tool_config["top_k"] == 10
 
 
+class TestExplicitToolIdsSelection:
+    """tool_ids 명시적 도구 선택 테스트 (사용자가 화면에서 직접 고른 도구)."""
+
+    @pytest.mark.asyncio
+    async def test_tool_ids_skips_llm_selector(self):
+        """tool_ids 존재 시 ToolSelector.select()를 호출하지 않는다."""
+        use_case, tool_selector, _, _, _ = _make_use_case()
+        request = CreateAgentRequest(
+            user_request="테스트",
+            name="테스트 에이전트",
+            user_id="user-1",
+            tool_ids=["internal:tavily_search", "internal:excel_export"],
+        )
+        await use_case.execute(request, "req-1")
+        tool_selector.select.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_tool_ids_builds_skeleton_with_selected_tools(self):
+        """선택한 도구가 그대로 워커로 구성된다."""
+        use_case, _, _, _, _ = _make_use_case()
+        request = CreateAgentRequest(
+            user_request="테스트",
+            name="테스트 에이전트",
+            user_id="user-1",
+            tool_ids=["internal:tavily_search", "internal:python_code_executor"],
+        )
+        result = await use_case.execute(request, "req-1")
+        assert set(result.tool_ids) == {"tavily_search", "python_code_executor"}
+
+    @pytest.mark.asyncio
+    async def test_tool_ids_prefix_normalized(self):
+        """'internal:tavily_search' → 'tavily_search'."""
+        use_case, _, _, _, _ = _make_use_case()
+        request = CreateAgentRequest(
+            user_request="테스트",
+            name="테스트 에이전트",
+            user_id="user-1",
+            tool_ids=["internal:tavily_search"],
+        )
+        result = await use_case.execute(request, "req-1")
+        assert result.tool_ids == ["tavily_search"]
+
+    @pytest.mark.asyncio
+    async def test_tool_ids_with_rag_config_merges_config(self):
+        """tool_ids + 매칭되는 tool_configs 시 해당 워커에 설정 주입, 나머지는 None."""
+        use_case, _, _, repo, _ = _make_use_case()
+        request = CreateAgentRequest(
+            user_request="테스트",
+            name="테스트 에이전트",
+            user_id="user-1",
+            tool_ids=["internal:internal_document_search", "internal:tavily_search"],
+            tool_configs={
+                "internal:internal_document_search": RagToolConfigRequest(
+                    collection_name="my-docs", top_k=7
+                )
+            },
+        )
+        await use_case.execute(request, "req-1")
+        saved_agent = repo.save.call_args[0][0]
+        rag_worker = next(
+            w for w in saved_agent.workers
+            if w.tool_id == "internal_document_search"
+        )
+        assert rag_worker.tool_config["collection_name"] == "my-docs"
+        assert rag_worker.tool_config["top_k"] == 7
+        tav_worker = next(
+            w for w in saved_agent.workers if w.tool_id == "tavily_search"
+        )
+        assert tav_worker.tool_config is None
+
+    @pytest.mark.asyncio
+    async def test_empty_tool_ids_falls_back_to_ai_selection(self):
+        """tool_ids 빈 리스트 시 기존 AI 자동 선택 경로 동작."""
+        use_case, tool_selector, _, _, _ = _make_use_case()
+        request = CreateAgentRequest(
+            user_request="테스트 요청",
+            name="테스트",
+            user_id="user-1",
+            tool_ids=[],
+        )
+        await use_case.execute(request, "req-1")
+        tool_selector.select.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_unknown_tool_id_in_tool_ids_raises(self):
+        """TOOL_REGISTRY에 없는 tool_id(MCP 등) → ValueError."""
+        use_case, _, _, _, _ = _make_use_case()
+        request = CreateAgentRequest(
+            user_request="테스트",
+            name="테스트 에이전트",
+            user_id="user-1",
+            tool_ids=["mcp:server-1:some_tool"],
+        )
+        with pytest.raises(ValueError, match="Unknown tool_id"):
+            await use_case.execute(request, "req-1")
+
+
 def _make_sub_agent(
     agent_id: str = "sub-agent-1",
     user_id: str = "user-1",

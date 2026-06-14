@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LLM Model Registry API</title>
+  <style>
+    :root {
+      --bg: #0d1117; --surface: #161b22; --border: #30363d;
+      --text: #e6edf3; --text-muted: #8b949e; --accent: #58a6ff;
+      --green: #3fb950; --red: #f85149; --orange: #d29922; --purple: #bc8cff;
+      --method-get: #3fb950; --method-post: #58a6ff;
+      --method-patch: #d29922; --method-delete: #f85149;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: var(--bg); color: var(--text); line-height: 1.6; }
+    .layout { display: flex; min-height: 100vh; }
+    .sidebar { width: 280px; background: var(--surface); border-right: 1px solid var(--border);
+      padding: 24px 16px; position: fixed; height: 100vh; overflow-y: auto; }
+    .sidebar h2 { font-size: 14px; color: var(--text-muted); text-transform: uppercase;
+      letter-spacing: 1px; margin-bottom: 16px; }
+    .sidebar a { display: block; color: var(--text); text-decoration: none; padding: 8px 12px;
+      border-radius: 6px; font-size: 14px; margin-bottom: 2px; transition: background 0.15s; }
+    .sidebar a:hover { background: var(--border); }
+    .sidebar .method { display: inline-block; font-size: 11px; font-weight: 700;
+      width: 52px; text-align: center; border-radius: 3px; margin-right: 8px; padding: 1px 0; }
+    .sidebar .m-get { color: var(--method-get); }
+    .sidebar .m-post { color: var(--method-post); }
+    .sidebar .m-patch { color: var(--method-patch); }
+    .sidebar .m-delete { color: var(--method-delete); }
+    .main { margin-left: 280px; padding: 48px; max-width: 900px; width: 100%; }
+    h1 { font-size: 32px; margin-bottom: 8px; }
+    .subtitle { color: var(--text-muted); font-size: 16px; margin-bottom: 32px; }
+    .info-table { width: 100%; border-collapse: collapse; margin-bottom: 32px; }
+    .info-table td { padding: 10px 16px; border: 1px solid var(--border); }
+    .info-table td:first-child { color: var(--text-muted); width: 140px; font-weight: 600; }
+    .endpoint { margin-bottom: 48px; padding-top: 24px; border-top: 1px solid var(--border); }
+    .endpoint-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+    .method-badge { font-size: 13px; font-weight: 700; padding: 4px 12px;
+      border-radius: 4px; text-transform: uppercase; }
+    .badge-get { background: rgba(63,185,80,0.15); color: var(--method-get); }
+    .badge-post { background: rgba(88,166,255,0.15); color: var(--method-post); }
+    .badge-patch { background: rgba(210,153,34,0.15); color: var(--method-patch); }
+    .badge-delete { background: rgba(248,81,73,0.15); color: var(--method-delete); }
+    .endpoint-path { font-family: 'SFMono-Regular', Consolas, monospace; font-size: 16px; }
+    .endpoint-desc { color: var(--text-muted); margin-bottom: 16px; }
+    .auth-badge { display: inline-block; font-size: 12px; padding: 2px 8px;
+      border-radius: 3px; margin-bottom: 16px; }
+    .auth-user { background: rgba(63,185,80,0.15); color: var(--green); }
+    .auth-admin { background: rgba(248,81,73,0.15); color: var(--red); }
+    h3 { font-size: 14px; color: var(--text-muted); text-transform: uppercase;
+      letter-spacing: 0.5px; margin: 20px 0 8px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 14px; }
+    th, td { padding: 8px 12px; text-align: left; border: 1px solid var(--border); }
+    th { background: var(--surface); color: var(--text-muted); font-weight: 600; }
+    code { font-family: 'SFMono-Regular', Consolas, monospace; font-size: 13px; }
+    .code-block { background: var(--surface); border: 1px solid var(--border);
+      border-radius: 6px; padding: 16px; overflow-x: auto; margin-bottom: 16px; }
+    .code-block pre { font-family: 'SFMono-Regular', Consolas, monospace;
+      font-size: 13px; line-height: 1.5; white-space: pre; }
+    .curl-block { background: #1a1f2b; border: 1px solid var(--border);
+      border-radius: 6px; padding: 16px; margin-bottom: 16px; }
+    .curl-block pre { font-family: 'SFMono-Regular', Consolas, monospace;
+      font-size: 12px; line-height: 1.5; color: var(--green); white-space: pre-wrap; word-break: break-all; }
+    .response-code { display: inline-block; font-weight: 700; margin-right: 8px; }
+    .rc-2xx { color: var(--green); }
+    .rc-4xx { color: var(--red); }
+    .tag { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 3px;
+      background: rgba(188,140,255,0.15); color: var(--purple); margin-left: 8px; }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <nav class="sidebar">
+      <h2>LLM Model API</h2>
+      <a href="#list"><span class="method m-get">GET</span>/llm-models</a>
+      <a href="#get"><span class="method m-get">GET</span>/{model_id}</a>
+      <a href="#create"><span class="method m-post">POST</span>/llm-models</a>
+      <a href="#update"><span class="method m-patch">PATCH</span>/{model_id}</a>
+      <a href="#delete"><span class="method m-delete">DELETE</span>/{model_id}</a>
+      <hr style="border-color: var(--border); margin: 16px 0;">
+      <h2>Schemas</h2>
+      <a href="#schema-create">CreateLlmModelRequest</a>
+      <a href="#schema-update">UpdateLlmModelRequest</a>
+      <a href="#schema-response">LlmModelResponse</a>
+      <a href="#schema-list">LlmModelListResponse</a>
+    </nav>
+
+    <main class="main">
+      <h1>LLM Model Registry API</h1>
+      <p class="subtitle">LLM 모델 중앙 관리 CRUD API (등록, 조회, 수정, 비활성화)</p>
+
+      <table class="info-table">
+        <tr><td>Base URL</td><td><code>/api/v1/llm-models</code></td></tr>
+        <tr><td>인증</td><td>Bearer Token (JWT)</td></tr>
+        <tr><td>조회 권한</td><td>로그인 사용자 (any role)</td></tr>
+        <tr><td>쓰기 권한</td><td>관리자 (admin role)</td></tr>
+        <tr><td>OpenAPI</td><td><code>openapi-llm-model.yaml</code></td></tr>
+      </table>
+
+      <!-- GET /api/v1/llm-models -->
+      <div class="endpoint" id="list">
+        <div class="endpoint-header">
+          <span class="method-badge badge-get">GET</span>
+          <span class="endpoint-path">/api/v1/llm-models</span>
+        </div>
+        <p class="endpoint-desc">활성 모델 목록을 조회한다. <code>include_inactive=true</code> 시 비활성 모델도 포함.</p>
+        <span class="auth-badge auth-user">Auth: Login User</span>
+
+        <h3>Query Parameters</h3>
+        <table>
+          <tr><th>Name</th><th>Type</th><th>Required</th><th>Default</th><th>Description</th></tr>
+          <tr><td><code>include_inactive</code></td><td>boolean</td><td>No</td><td><code>false</code></td><td>비활성 모델 포함 여부</td></tr>
+        </table>
+
+        <h3>curl</h3>
+        <div class="curl-block"><pre>curl -X GET "http://localhost:8000/api/v1/llm-models?include_inactive=false" \
+  -H "Authorization: Bearer &lt;token&gt;"</pre></div>
+
+        <h3>Response <span class="response-code rc-2xx">200</span></h3>
+        <div class="code-block"><pre>{
+  "models": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "provider": "openai",
+      "model_name": "gpt-4o",
+      "display_name": "GPT-4o",
+      "description": "OpenAI GPT-4o model",
+      "max_tokens": 128000,
+      "is_active": true,
+      "is_default": true
+    },
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440001",
+      "provider": "anthropic",
+      "model_name": "claude-sonnet-4-6",
+      "display_name": "Claude Sonnet 4.6",
+      "description": "Anthropic Claude Sonnet 4.6",
+      "max_tokens": 200000,
+      "is_active": true,
+      "is_default": false
+    }
+  ]
+}</pre></div>
+      </div>
+
+      <!-- GET /api/v1/llm-models/{model_id} -->
+      <div class="endpoint" id="get">
+        <div class="endpoint-header">
+          <span class="method-badge badge-get">GET</span>
+          <span class="endpoint-path">/api/v1/llm-models/{model_id}</span>
+        </div>
+        <p class="endpoint-desc">ID로 LLM 모델 단건을 조회한다.</p>
+        <span class="auth-badge auth-user">Auth: Login User</span>
+
+        <h3>Path Parameters</h3>
+        <table>
+          <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+          <tr><td><code>model_id</code></td><td>string (UUID)</td><td>Yes</td><td>모델 ID</td></tr>
+        </table>
+
+        <h3>curl</h3>
+        <div class="curl-block"><pre>curl -X GET "http://localhost:8000/api/v1/llm-models/550e8400-e29b-41d4-a716-446655440000" \
+  -H "Authorization: Bearer &lt;token&gt;"</pre></div>
+
+        <h3>Response <span class="response-code rc-2xx">200</span></h3>
+        <div class="code-block"><pre>{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "provider": "openai",
+  "model_name": "gpt-4o",
+  "display_name": "GPT-4o",
+  "description": "OpenAI GPT-4o model",
+  "max_tokens": 128000,
+  "is_active": true,
+  "is_default": true
+}</pre></div>
+
+        <h3>Errors</h3>
+        <table>
+          <tr><th>Code</th><th>Description</th></tr>
+          <tr><td><span class="response-code rc-4xx">404</span></td><td>해당 ID의 모델이 존재하지 않음</td></tr>
+        </table>
+      </div>
+
+      <!-- POST /api/v1/llm-models -->
+      <div class="endpoint" id="create">
+        <div class="endpoint-header">
+          <span class="method-badge badge-post">POST</span>
+          <span class="endpoint-path">/api/v1/llm-models</span>
+        </div>
+        <p class="endpoint-desc">신규 LLM 모델을 등록한다. <code>is_default=true</code> 시 기존 기본 모델은 자동 해제된다.</p>
+        <span class="auth-badge auth-admin">Auth: Admin Only</span>
+
+        <h3>Request Body</h3>
+        <table>
+          <tr><th>Field</th><th>Type</th><th>Required</th><th>Default</th><th>Description</th></tr>
+          <tr><td><code>provider</code></td><td>string (max 50)</td><td>Yes</td><td>-</td><td>제공사 (openai, anthropic, ollama, perplexity)</td></tr>
+          <tr><td><code>model_name</code></td><td>string (max 150)</td><td>Yes</td><td>-</td><td>API 호출용 모델명</td></tr>
+          <tr><td><code>display_name</code></td><td>string (max 150)</td><td>Yes</td><td>-</td><td>UI 표시명</td></tr>
+          <tr><td><code>description</code></td><td>string</td><td>No</td><td>null</td><td>모델 설명</td></tr>
+          <tr><td><code>api_key_env</code></td><td>string (max 100)</td><td>Yes</td><td>-</td><td>API 키 환경변수명</td></tr>
+          <tr><td><code>max_tokens</code></td><td>integer</td><td>No</td><td>null</td><td>최대 토큰 수</td></tr>
+          <tr><td><code>is_active</code></td><td>boolean</td><td>No</td><td>true</td><td>활성 여부</td></tr>
+          <tr><td><code>is_default</code></td><td>boolean</td><td>No</td><td>false</td><td>기본 모델 여부</td></tr>
+        </table>
+
+        <h3>curl</h3>
+        <div class="curl-block"><pre>curl -X POST "http://localhost:8000/api/v1/llm-models" \
+  -H "Authorization: Bearer &lt;token&gt;" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "openai",
+    "model_name": "gpt-4o",
+    "display_name": "GPT-4o",
+    "description": "OpenAI GPT-4o model",
+    "api_key_env": "OPENAI_API_KEY",
+    "max_tokens": 128000,
+    "is_active": true,
+    "is_default": false
+  }'</pre></div>
+
+        <h3>Response <span class="response-code rc-2xx">201</span></h3>
+        <div class="code-block"><pre>{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "provider": "openai",
+  "model_name": "gpt-4o",
+  "display_name": "GPT-4o",
+  "description": "OpenAI GPT-4o model",
+  "max_tokens": 128000,
+  "is_active": true,
+  "is_default": false
+}</pre></div>
+
+        <h3>Errors</h3>
+        <table>
+          <tr><th>Code</th><th>Description</th></tr>
+          <tr><td><span class="response-code rc-4xx">403</span></td><td>관리자 권한 필요</td></tr>
+          <tr><td><span class="response-code rc-4xx">409</span></td><td>provider + model_name 조합이 이미 존재</td></tr>
+          <tr><td><span class="response-code rc-4xx">422</span></td><td>model_name이 빈 문자열</td></tr>
+        </table>
+      </div>
+
+      <!-- PATCH /api/v1/llm-models/{model_id} -->
+      <div class="endpoint" id="update">
+        <div class="endpoint-header">
+          <span class="method-badge badge-patch">PATCH</span>
+          <span class="endpoint-path">/api/v1/llm-models/{model_id}</span>
+        </div>
+        <p class="endpoint-desc">기존 LLM 모델 정보를 수정한다 (partial update). <code>is_default=true</code> 시 기존 기본 모델 자동 해제.</p>
+        <span class="auth-badge auth-admin">Auth: Admin Only</span>
+
+        <h3>Path Parameters</h3>
+        <table>
+          <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+          <tr><td><code>model_id</code></td><td>string (UUID)</td><td>Yes</td><td>모델 ID</td></tr>
+        </table>
+
+        <h3>Request Body</h3>
+        <table>
+          <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+          <tr><td><code>display_name</code></td><td>string (max 150)</td><td>No</td><td>UI 표시명</td></tr>
+          <tr><td><code>description</code></td><td>string</td><td>No</td><td>모델 설명</td></tr>
+          <tr><td><code>max_tokens</code></td><td>integer</td><td>No</td><td>최대 토큰 수</td></tr>
+          <tr><td><code>is_active</code></td><td>boolean</td><td>No</td><td>활성 여부</td></tr>
+          <tr><td><code>is_default</code></td><td>boolean</td><td>No</td><td>기본 모델 여부</td></tr>
+        </table>
+
+        <h3>curl</h3>
+        <div class="curl-block"><pre>curl -X PATCH "http://localhost:8000/api/v1/llm-models/550e8400-e29b-41d4-a716-446655440000" \
+  -H "Authorization: Bearer &lt;token&gt;" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "display_name": "GPT-4o (Updated)",
+    "max_tokens": 4096,
+    "is_default": true
+  }'</pre></div>
+
+        <h3>Response <span class="response-code rc-2xx">200</span></h3>
+        <div class="code-block"><pre>{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "provider": "openai",
+  "model_name": "gpt-4o",
+  "display_name": "GPT-4o (Updated)",
+  "description": "OpenAI GPT-4o model",
+  "max_tokens": 4096,
+  "is_active": true,
+  "is_default": true
+}</pre></div>
+
+        <h3>Errors</h3>
+        <table>
+          <tr><th>Code</th><th>Description</th></tr>
+          <tr><td><span class="response-code rc-4xx">403</span></td><td>관리자 권한 필요</td></tr>
+          <tr><td><span class="response-code rc-4xx">404</span></td><td>해당 ID의 모델이 존재하지 않음</td></tr>
+        </table>
+      </div>
+
+      <!-- DELETE /api/v1/llm-models/{model_id} -->
+      <div class="endpoint" id="delete">
+        <div class="endpoint-header">
+          <span class="method-badge badge-delete">DELETE</span>
+          <span class="endpoint-path">/api/v1/llm-models/{model_id}</span>
+        </div>
+        <p class="endpoint-desc">LLM 모델을 비활성화한다 (소프트 삭제). <code>is_active=false</code>, <code>is_default=false</code>로 변경된다.</p>
+        <span class="auth-badge auth-admin">Auth: Admin Only</span>
+
+        <h3>Path Parameters</h3>
+        <table>
+          <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+          <tr><td><code>model_id</code></td><td>string (UUID)</td><td>Yes</td><td>모델 ID</td></tr>
+        </table>
+
+        <h3>curl</h3>
+        <div class="curl-block"><pre>curl -X DELETE "http://localhost:8000/api/v1/llm-models/550e8400-e29b-41d4-a716-446655440000" \
+  -H "Authorization: Bearer &lt;token&gt;"</pre></div>
+
+        <h3>Response <span class="response-code rc-2xx">200</span></h3>
+        <div class="code-block"><pre>{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "provider": "openai",
+  "model_name": "gpt-4o",
+  "display_name": "GPT-4o",
+  "description": "OpenAI GPT-4o model",
+  "max_tokens": 128000,
+  "is_active": false,
+  "is_default": false
+}</pre></div>
+
+        <h3>Errors</h3>
+        <table>
+          <tr><th>Code</th><th>Description</th></tr>
+          <tr><td><span class="response-code rc-4xx">403</span></td><td>관리자 권한 필요</td></tr>
+          <tr><td><span class="response-code rc-4xx">404</span></td><td>해당 ID의 모델이 존재하지 않음</td></tr>
+        </table>
+      </div>
+
+      <!-- Schemas -->
+      <div class="endpoint" id="schema-create">
+        <h2>Schema: CreateLlmModelRequest</h2>
+        <div class="code-block"><pre>{
+  "provider": "openai",            // required, max 50
+  "model_name": "gpt-4o",          // required, max 150
+  "display_name": "GPT-4o",        // required, max 150
+  "description": "...",            // optional
+  "api_key_env": "OPENAI_API_KEY", // required, max 100
+  "max_tokens": 128000,            // optional
+  "is_active": true,               // default: true
+  "is_default": false              // default: false
+}</pre></div>
+      </div>
+
+      <div class="endpoint" id="schema-update">
+        <h2>Schema: UpdateLlmModelRequest</h2>
+        <div class="code-block"><pre>{
+  "display_name": "GPT-4o (Updated)",  // optional, max 150
+  "description": "Updated desc",       // optional
+  "max_tokens": 4096,                  // optional
+  "is_active": true,                   // optional
+  "is_default": true                   // optional
+}</pre></div>
+      </div>
+
+      <div class="endpoint" id="schema-response">
+        <h2>Schema: LlmModelResponse</h2>
+        <div class="code-block"><pre>{
+  "id": "uuid-string",
+  "provider": "openai",
+  "model_name": "gpt-4o",
+  "display_name": "GPT-4o",
+  "description": "OpenAI GPT-4o model",
+  "max_tokens": 128000,
+  "is_active": true,
+  "is_default": true
+}</pre></div>
+      </div>
+
+      <div class="endpoint" id="schema-list">
+        <h2>Schema: LlmModelListResponse</h2>
+        <div class="code-block"><pre>{
+  "models": [ LlmModelResponse, ... ]
+}</pre></div>
+      </div>
+
+    </main>
+  </div>
+</body>
+</html>

@@ -77,6 +77,22 @@ def _make_use_case(existing_messages=None):
     mock_graph.ainvoke = AsyncMock(return_value={
         "messages": [last_msg]
     })
+
+    # stream() 어댑터: astream_events가 내부적으로 ainvoke를 호출
+    # → graph.ainvoke.call_args / side_effect 어설션 그대로 유효
+    def _astream_side_effect(*args, **kwargs):
+        async def _gen():
+            result = await mock_graph.ainvoke(*args, **kwargs)
+            messages = result.get("messages", [])
+            yield {
+                "event": "on_chain_end",
+                "name": "LangGraph",
+                "data": {"output": {"messages": messages}},
+                "metadata": {},
+                "run_id": "top",
+            }
+        return _gen()
+    mock_graph.astream_events = MagicMock(side_effect=_astream_side_effect)
     compiler.compile = AsyncMock(return_value=mock_graph)
 
     use_case = RunAgentUseCase(
@@ -345,3 +361,174 @@ class TestRunAgentMultiTurn:
         assert len(messages) == 1
         assert messages[0] == {"role": "user", "content": "단일 질문"}
         assert result.answer == "AI 뉴스를 수집했습니다."
+
+
+# agent-chat-reasoning-display Design §4.1
+class TestSupervisorStepReasoning:
+    """Supervisor on_chain_end output._step_output_summary → STEP_REASONING 이벤트."""
+
+    @staticmethod
+    def _install_supervisor_astream(mock_graph, *, step_summary, next_worker="search_agent"):
+        """supervisor on_chain_start → on_chain_end(with _step_output_summary) → top chain_end."""
+        last_msg = MagicMock()
+        last_msg.content = "최종 답변"
+        last_msg.name = None
+
+        def _side(*args, **kwargs):
+            async def _gen():
+                yield {
+                    "event": "on_chain_start",
+                    "name": "supervisor",
+                    "data": {},
+                    "metadata": {},
+                    "run_id": "sv-1",
+                }
+                yield {
+                    "event": "on_chain_end",
+                    "name": "supervisor",
+                    "data": {
+                        "output": {
+                            "next_worker": next_worker,
+                            "_step_output_summary": step_summary,
+                            "messages": [],
+                        }
+                    },
+                    "metadata": {},
+                    "run_id": "sv-1",
+                }
+                yield {
+                    "event": "on_chain_end",
+                    "name": "LangGraph",
+                    "data": {"output": {"messages": [last_msg]}},
+                    "metadata": {},
+                    "run_id": "top",
+                }
+            return _gen()
+        mock_graph.astream_events = MagicMock(side_effect=_side)
+
+    @pytest.mark.asyncio
+    async def test_reasoning_emitted_right_after_supervisor_node_completed(self):
+        """T1 — _step_output_summary가 있으면 NODE_COMPLETED(supervisor) 직후 STEP_REASONING."""
+        from src.domain.agent_run.value_objects import AgentRunEventType
+
+        use_case, _, _, _agent, _, _, _, mock_graph = _make_use_case()
+        self._install_supervisor_astream(
+            mock_graph,
+            step_summary="X 정보가 필요해 search_agent 호출",
+            next_worker="search_agent",
+        )
+
+        events = []
+        request = RunAgentRequest(query="질문", user_id="user-1")
+        async for ev in use_case.stream("agent-1", request, "req-1"):
+            events.append(ev)
+
+        types = [ev.event_type for ev in events]
+        assert AgentRunEventType.NODE_COMPLETED in types
+        assert AgentRunEventType.STEP_REASONING in types
+
+        idx_completed = types.index(AgentRunEventType.NODE_COMPLETED)
+        assert types[idx_completed + 1] == AgentRunEventType.STEP_REASONING
+
+        reasoning_ev = events[idx_completed + 1]
+        assert reasoning_ev.payload["step_name"] == "supervisor"
+        assert reasoning_ev.payload["reasoning"] == "X 정보가 필요해 search_agent 호출"
+        assert reasoning_ev.payload["next_worker"] == "search_agent"
+        # seq는 NODE_COMPLETED 직후 (단조 증가)
+        assert reasoning_ev.seq == events[idx_completed].seq + 1
+
+    @pytest.mark.asyncio
+    async def test_no_reasoning_event_when_summary_missing(self):
+        """T2 — _step_output_summary가 None/빈 문자열이면 STEP_REASONING 미발행."""
+        from src.domain.agent_run.value_objects import AgentRunEventType
+
+        use_case, _, _, _agent, _, _, _, mock_graph = _make_use_case()
+        self._install_supervisor_astream(mock_graph, step_summary="")
+
+        events = []
+        request = RunAgentRequest(query="질문", user_id="user-1")
+        async for ev in use_case.stream("agent-1", request, "req-1"):
+            events.append(ev)
+
+        types = [ev.event_type for ev in events]
+        assert AgentRunEventType.NODE_COMPLETED in types
+        assert AgentRunEventType.STEP_REASONING not in types
+
+
+class TestRunAgentAuthCtx:
+    """G-07: auth_ctx ContextVar set/reset coverage (agent-user-context Design §4.4.1)."""
+
+    @pytest.mark.asyncio
+    async def test_auth_ctx_contextvar_set_during_stream_and_reset_after(self):
+        """auth_ctx 제공 시 stream 실행 중 ContextVar가 설정되고 완료 후 초기화된다."""
+        from src.domain.agent_run.auth_context import AuthContext
+        from src.application.agent_run.auth_context import get_current_auth_context
+
+        auth_ctx = AuthContext(
+            user_id=1,
+            display_name="테스터",
+            role="user",
+            primary_department_id=None,
+            primary_department_name=None,
+            department_ids=(),
+            department_names=(),
+            permissions=frozenset({"USE_RAG_SEARCH"}),
+        )
+
+        use_case, _, _, agent, *_ = _make_use_case()
+
+        ctx_during: list = []
+
+        # Patch _execute_graph_stream to capture ContextVar value mid-execution
+        original_stream = use_case.stream
+
+        async def _capturing_stream(*args, **kwargs):
+            async for event in original_stream(*args, **kwargs):
+                ctx_during.append(get_current_auth_context())
+                yield event
+
+        request = RunAgentRequest(query="테스트", user_id="1")
+        events = []
+        async for ev in use_case.stream(agent.id, request, "req-auth-1", auth_ctx=auth_ctx):
+            events.append(ev)
+            # Capture once mid-stream (inside stream body ContextVar is set)
+            ctx_during.append(get_current_auth_context())
+
+        # After stream completes, ContextVar must be reset to None
+        assert get_current_auth_context() is None
+        # During stream, ContextVar was set to our auth_ctx
+        assert any(c is auth_ctx for c in ctx_during), (
+            "ContextVar was never set to auth_ctx during stream execution"
+        )
+
+    @pytest.mark.asyncio
+    async def test_auth_ctx_contextvar_reset_on_exception(self):
+        """stream 실행 중 예외 발생 시에도 ContextVar가 finally 블록에서 초기화된다."""
+        from src.domain.agent_run.auth_context import AuthContext
+        from src.application.agent_run.auth_context import get_current_auth_context
+
+        auth_ctx = AuthContext(
+            user_id=2,
+            display_name="예외유저",
+            role="user",
+            primary_department_id=None,
+            primary_department_name=None,
+            department_ids=(),
+            department_names=(),
+            permissions=frozenset(),
+        )
+
+        use_case, repository, _, agent, *_ = _make_use_case()
+        # Make the agent lookup raise after ContextVar is set
+        repository.find_by_id = AsyncMock(side_effect=RuntimeError("DB 장애"))
+
+        request = RunAgentRequest(query="테스트", user_id="2")
+        events = []
+        try:
+            async for ev in use_case.stream(agent.id, request, "req-auth-2", auth_ctx=auth_ctx):
+                events.append(ev)
+        except Exception:
+            pass  # RuntimeError propagates — expected
+
+        # Regardless of exception, ContextVar must be cleared
+        assert get_current_auth_context() is None

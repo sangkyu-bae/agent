@@ -46,6 +46,7 @@ class ConversationMessageMapper:
             content=model.content,
             turn_index=TurnIndex(model.turn_index),
             created_at=model.created_at,
+            charts=model.charts,
         )
 
     @staticmethod
@@ -67,6 +68,7 @@ class ConversationMessageMapper:
             content=entity.content,
             turn_index=entity.turn_index.value,
             created_at=entity.created_at,
+            charts=entity.charts,
         )
 
 

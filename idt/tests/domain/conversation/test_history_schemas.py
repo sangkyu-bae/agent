@@ -66,3 +66,33 @@ class TestMessageItem:
         assert item.role == "user"
         assert item.id == 1
         assert item.turn_index == 1
+
+    def test_charts_defaults_to_none(self):
+        """chat-chart-persistence: charts 기본값 None — 기존 호출부 호환."""
+        from src.domain.conversation.history_schemas import MessageItem
+
+        item = MessageItem(
+            id=1,
+            role="assistant",
+            content="답변",
+            turn_index=2,
+            created_at=datetime(2026, 6, 10),
+        )
+
+        assert item.charts is None
+
+    def test_charts_preserves_list(self):
+        """chat-chart-persistence: N개 차트 배열 보존."""
+        from src.domain.conversation.history_schemas import MessageItem
+
+        charts = [{"type": "bar"}, {"type": "line"}]
+        item = MessageItem(
+            id=2,
+            role="assistant",
+            content="차트 답변",
+            turn_index=2,
+            created_at=datetime(2026, 6, 10),
+            charts=charts,
+        )
+
+        assert item.charts == charts
