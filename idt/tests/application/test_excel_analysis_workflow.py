@@ -1,8 +1,7 @@
 """Tests for ExcelAnalysisWorkflow."""
 
 import pytest
-from unittest.mock import AsyncMock, Mock, MagicMock, patch
-from datetime import datetime
+from unittest.mock import AsyncMock, Mock
 
 from src.application.workflows.excel_analysis_workflow import (
     ExcelAnalysisWorkflow,
@@ -13,8 +12,50 @@ from src.domain.policies.analysis_policy import (
     AnalysisQualityThreshold,
 )
 from src.domain.hallucination.value_objects import HallucinationEvaluationResult
-from src.domain.tools.code_execution_result import CodeExecutionResult
+from src.domain.search_decision.schemas import WebSearchDecision
 from src.infrastructure.llm.schemas import ClaudeResponse
+
+
+def _make_search_decision(needs: bool = False) -> Mock:
+    decision = Mock()
+    decision.decide = AsyncMock(
+        return_value=WebSearchDecision(needs_web_search=needs)
+    )
+    return decision
+
+
+def _base_state(**overrides) -> ExcelAnalysisState:
+    state: ExcelAnalysisState = {
+        "request_id": "test-123",
+        "user_query": "분석해줘",
+        "excel_data": {"file_path": "/tmp/test.xlsx", "user_id": "user-1"},
+        "current_attempt": 0,
+        "max_attempts": 3,
+        "analysis_text": "",
+        "confidence_score": 0.0,
+        "hallucination_score": 0.0,
+        "needs_web_search": False,
+        "web_search_results": "",
+        "attempts_history": [],
+        "is_complete": False,
+        "final_status": "pending",
+        "error_message": "",
+        "viz_decision": "",
+    }
+    state.update(overrides)  # type: ignore[typeddict-item]
+    return state
+
+
+def _claude_response(content: str) -> ClaudeResponse:
+    return ClaudeResponse(
+        content=content,
+        model="claude-sonnet-4-5-20250929",
+        stop_reason="end_turn",
+        input_tokens=100,
+        output_tokens=50,
+        request_id="test-123",
+        latency_ms=500,
+    )
 
 
 class TestExcelAnalysisWorkflowNodes:
@@ -26,7 +67,7 @@ class TestExcelAnalysisWorkflowNodes:
             "claude_client": Mock(),
             "tavily_search": Mock(),
             "hallucination_evaluator": Mock(),
-            "code_executor": Mock(),
+            "search_decision": _make_search_decision(),
             "logger": Mock(),
             "retry_policy": AnalysisRetryPolicy(max_retries=3),
             "quality_threshold": AnalysisQualityThreshold(
@@ -46,26 +87,7 @@ class TestExcelAnalysisWorkflowNodes:
 
         workflow = self._create_workflow(excel_parser=mock_parser)
 
-        state: ExcelAnalysisState = {
-            "request_id": "test-123",
-            "user_query": "분석해줘",
-            "excel_data": {"file_path": "/tmp/test.xlsx", "user_id": "user-1"},
-            "current_attempt": 0,
-            "max_attempts": 3,
-            "analysis_text": "",
-            "confidence_score": 0.0,
-            "hallucination_score": 0.0,
-            "needs_web_search": False,
-            "web_search_results": "",
-            "needs_code_execution": False,
-            "code_to_execute": "",
-            "code_output": {},
-            "attempts_history": [],
-            "is_complete": False,
-            "final_status": "pending",
-            "error_message": "",
-        }
-
+        state = _base_state()
         result = await workflow._parse_excel_node(state)
 
         mock_parser.parse.assert_called_once_with("/tmp/test.xlsx", "user-1")
@@ -75,39 +97,13 @@ class TestExcelAnalysisWorkflowNodes:
     @pytest.mark.asyncio
     async def test_analyze_node(self):
         mock_claude = Mock()
-        mock_response = ClaudeResponse(
-            content="분석 결과입니다.",
-            model="claude-sonnet-4-5-20250929",
-            stop_reason="end_turn",
-            input_tokens=100,
-            output_tokens=50,
-            request_id="test-123",
-            latency_ms=500,
+        mock_claude.complete = AsyncMock(
+            return_value=_claude_response("분석 결과입니다.")
         )
-        mock_claude.complete = AsyncMock(return_value=mock_response)
 
         workflow = self._create_workflow(claude_client=mock_claude)
 
-        state: ExcelAnalysisState = {
-            "request_id": "test-123",
-            "user_query": "데이터 요약",
-            "excel_data": {"sheets": {"Sheet1": {}}},
-            "current_attempt": 0,
-            "max_attempts": 3,
-            "analysis_text": "",
-            "confidence_score": 0.0,
-            "hallucination_score": 0.0,
-            "needs_web_search": False,
-            "web_search_results": "",
-            "needs_code_execution": False,
-            "code_to_execute": "",
-            "code_output": {},
-            "attempts_history": [],
-            "is_complete": False,
-            "final_status": "pending",
-            "error_message": "",
-        }
-
+        state = _base_state(user_query="데이터 요약")
         result = await workflow._analyze_node(state)
 
         assert result["analysis_text"] == "분석 결과입니다."
@@ -115,46 +111,65 @@ class TestExcelAnalysisWorkflowNodes:
         mock_claude.complete.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_analyze_node_detects_code(self):
+    async def test_analyze_node_sanitizes_leaked_chart_json(self):
+        """LLM이 분석+차트 JSON을 함께 내보내도 analysis_text는 자연어만 남는다."""
+        leaked = '사용자별 남은 휴가 — 배상규 5일.\n```json\n{"type": "bar"}\n```'
         mock_claude = Mock()
-        response_text = "결과:\n```python\nprint('hello')\n```"
-        mock_response = ClaudeResponse(
-            content=response_text,
-            model="claude-sonnet-4-5-20250929",
-            stop_reason="end_turn",
-            input_tokens=100,
-            output_tokens=50,
-            request_id="test-123",
-            latency_ms=500,
-        )
-        mock_claude.complete = AsyncMock(return_value=mock_response)
+        mock_claude.complete = AsyncMock(return_value=_claude_response(leaked))
 
         workflow = self._create_workflow(claude_client=mock_claude)
 
-        state: ExcelAnalysisState = {
-            "request_id": "test-123",
-            "user_query": "코드 작성",
-            "excel_data": {"sheets": {}},
-            "current_attempt": 0,
-            "max_attempts": 3,
-            "analysis_text": "",
-            "confidence_score": 0.0,
-            "hallucination_score": 0.0,
-            "needs_web_search": False,
-            "web_search_results": "",
-            "needs_code_execution": False,
-            "code_to_execute": "",
-            "code_output": {},
-            "attempts_history": [],
-            "is_complete": False,
-            "final_status": "pending",
-            "error_message": "",
-        }
+        result = await workflow._analyze_node(_base_state(user_query="휴가 그래프"))
 
+        assert result["analysis_text"] == "사용자별 남은 휴가 — 배상규 5일."
+        assert "```" not in result["analysis_text"]
+        assert "type" not in result["analysis_text"]
+
+    def test_build_analysis_prompt_includes_output_guide(self):
+        """분석 프롬프트가 공용 출력 가이드 제약을 포함한다(약화 회귀 방지)."""
+        from src.application.visualization.analysis_prompt import (
+            ANALYSIS_OUTPUT_GUIDE,
+        )
+
+        workflow = self._create_workflow()
+        prompt = workflow._build_analysis_prompt("휴가 그래프", {"a": 1}, "")
+
+        assert ANALYSIS_OUTPUT_GUIDE in prompt
+        assert "차트를 직접 만들지 않는다" in prompt
+
+    @pytest.mark.asyncio
+    async def test_analyze_node_sets_needs_web_search(self):
+        """검색 결정이 True면 needs_web_search 반영."""
+        mock_claude = Mock()
+        mock_claude.complete = AsyncMock(return_value=_claude_response("분석"))
+        search_decision = _make_search_decision(needs=True)
+
+        workflow = self._create_workflow(
+            claude_client=mock_claude, search_decision=search_decision
+        )
+
+        state = _base_state(web_search_results="")
         result = await workflow._analyze_node(state)
 
-        assert result["needs_code_execution"] is True
-        assert result["code_to_execute"] == "print('hello')"
+        assert result["needs_web_search"] is True
+        search_decision.decide.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_analyze_node_skips_decision_after_search(self):
+        """이미 웹 검색을 했으면(web_search_results 존재) 결정 호출을 건너뛴다."""
+        mock_claude = Mock()
+        mock_claude.complete = AsyncMock(return_value=_claude_response("분석"))
+        search_decision = _make_search_decision(needs=True)
+
+        workflow = self._create_workflow(
+            claude_client=mock_claude, search_decision=search_decision
+        )
+
+        state = _base_state(web_search_results="이전 검색 결과")
+        result = await workflow._analyze_node(state)
+
+        assert result["needs_web_search"] is False
+        search_decision.decide.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_web_search_node(self):
@@ -163,26 +178,12 @@ class TestExcelAnalysisWorkflowNodes:
 
         workflow = self._create_workflow(tavily_search=mock_search)
 
-        state: ExcelAnalysisState = {
-            "request_id": "test-123",
-            "user_query": "2024년 매출",
-            "excel_data": {},
-            "current_attempt": 1,
-            "max_attempts": 3,
-            "analysis_text": "분석 텍스트",
-            "confidence_score": 0.0,
-            "hallucination_score": 0.0,
-            "needs_web_search": True,
-            "web_search_results": "",
-            "needs_code_execution": False,
-            "code_to_execute": "",
-            "code_output": {},
-            "attempts_history": [],
-            "is_complete": False,
-            "final_status": "pending",
-            "error_message": "",
-        }
-
+        state = _base_state(
+            user_query="2024년 매출",
+            current_attempt=1,
+            analysis_text="분석 텍스트",
+            needs_web_search=True,
+        )
         result = await workflow._web_search_node(state)
 
         assert result["web_search_results"] == "검색 결과 컨텍스트"
@@ -198,26 +199,7 @@ class TestExcelAnalysisWorkflowNodes:
 
         workflow = self._create_workflow(hallucination_evaluator=mock_evaluator)
 
-        state: ExcelAnalysisState = {
-            "request_id": "test-123",
-            "user_query": "분석",
-            "excel_data": {"sheets": {"Sheet1": {"data": []}}},
-            "current_attempt": 1,
-            "max_attempts": 3,
-            "analysis_text": "분석 결과",
-            "confidence_score": 0.0,
-            "hallucination_score": 0.0,
-            "needs_web_search": False,
-            "web_search_results": "",
-            "needs_code_execution": False,
-            "code_to_execute": "",
-            "code_output": {},
-            "attempts_history": [],
-            "is_complete": False,
-            "final_status": "pending",
-            "error_message": "",
-        }
-
+        state = _base_state(current_attempt=1, analysis_text="분석 결과")
         result = await workflow._evaluate_node(state)
 
         assert result["confidence_score"] == 1.0
@@ -234,65 +216,11 @@ class TestExcelAnalysisWorkflowNodes:
 
         workflow = self._create_workflow(hallucination_evaluator=mock_evaluator)
 
-        state: ExcelAnalysisState = {
-            "request_id": "test-123",
-            "user_query": "분석",
-            "excel_data": {"sheets": {}},
-            "current_attempt": 1,
-            "max_attempts": 3,
-            "analysis_text": "할루시네이션 결과",
-            "confidence_score": 0.0,
-            "hallucination_score": 0.0,
-            "needs_web_search": False,
-            "web_search_results": "",
-            "needs_code_execution": False,
-            "code_to_execute": "",
-            "code_output": {},
-            "attempts_history": [],
-            "is_complete": False,
-            "final_status": "pending",
-            "error_message": "",
-        }
-
+        state = _base_state(current_attempt=1, analysis_text="할루시네이션 결과")
         result = await workflow._evaluate_node(state)
 
         assert result["confidence_score"] == 0.0
         assert result["hallucination_score"] == 1.0
-
-    @pytest.mark.asyncio
-    async def test_execute_code_node(self):
-        mock_executor = Mock()
-        mock_executor.execute.return_value = CodeExecutionResult.success("hello")
-
-        workflow = self._create_workflow(code_executor=mock_executor)
-
-        state: ExcelAnalysisState = {
-            "request_id": "test-123",
-            "user_query": "분석",
-            "excel_data": {},
-            "current_attempt": 1,
-            "max_attempts": 3,
-            "analysis_text": "결과",
-            "confidence_score": 0.9,
-            "hallucination_score": 0.1,
-            "needs_web_search": False,
-            "web_search_results": "",
-            "needs_code_execution": True,
-            "code_to_execute": "print('hello')",
-            "code_output": {},
-            "attempts_history": [],
-            "is_complete": False,
-            "final_status": "pending",
-            "error_message": "",
-        }
-
-        result = await workflow._execute_code_node(state)
-
-        assert result["is_complete"] is True
-        assert result["final_status"] == "completed"
-        assert result["code_output"]["status"] == "success"
-        assert result["code_output"]["output"] == "hello"
-        mock_executor.execute.assert_called_once_with("print('hello')", "test-123")
 
 
 class TestExcelAnalysisWorkflowRouting:
@@ -304,7 +232,7 @@ class TestExcelAnalysisWorkflowRouting:
             "claude_client": Mock(),
             "tavily_search": Mock(),
             "hallucination_evaluator": Mock(),
-            "code_executor": Mock(),
+            "search_decision": _make_search_decision(),
             "logger": Mock(),
             "retry_policy": AnalysisRetryPolicy(max_retries=3),
             "quality_threshold": AnalysisQualityThreshold(
@@ -315,60 +243,40 @@ class TestExcelAnalysisWorkflowRouting:
         defaults.update(overrides)
         return ExcelAnalysisWorkflow(**defaults)
 
-    def test_should_search_with_tag(self):
+    def test_should_search_true(self):
         workflow = self._create_workflow()
-        state = {"analysis_text": "추가 정보 필요 [SEARCH] 확인"}
-        assert workflow._should_search(state) == "search"
+        assert workflow._should_search({"needs_web_search": True}) == "search"
 
-    def test_should_search_with_korean(self):
+    def test_should_search_false(self):
         workflow = self._create_workflow()
-        state = {"analysis_text": "웹에서 확인이 필요합니다"}
-        assert workflow._should_search(state) == "search"
+        assert workflow._should_search({"needs_web_search": False}) == "evaluate"
 
-    def test_should_not_search(self):
-        workflow = self._create_workflow()
-        state = {"analysis_text": "분석 완료"}
-        assert workflow._should_search(state) == "evaluate"
-
-    def test_should_retry_or_execute_quality_ok_no_code(self):
+    def test_should_retry_or_complete_quality_ok(self):
         workflow = self._create_workflow()
         state = {
             "confidence_score": 0.9,
             "hallucination_score": 0.1,
-            "needs_code_execution": False,
             "current_attempt": 1,
         }
-        assert workflow._should_retry_or_execute(state) == "complete"
+        assert workflow._should_retry_or_complete(state) == "complete"
 
-    def test_should_retry_or_execute_quality_ok_with_code(self):
-        workflow = self._create_workflow()
-        state = {
-            "confidence_score": 0.9,
-            "hallucination_score": 0.1,
-            "needs_code_execution": True,
-            "current_attempt": 1,
-        }
-        assert workflow._should_retry_or_execute(state) == "execute"
-
-    def test_should_retry_or_execute_quality_bad_retry(self):
+    def test_should_retry_or_complete_quality_bad_retry(self):
         workflow = self._create_workflow()
         state = {
             "confidence_score": 0.0,
             "hallucination_score": 1.0,
-            "needs_code_execution": False,
             "current_attempt": 1,
         }
-        assert workflow._should_retry_or_execute(state) == "retry"
+        assert workflow._should_retry_or_complete(state) == "retry"
 
-    def test_should_retry_or_execute_quality_bad_max_retries(self):
+    def test_should_retry_or_complete_quality_bad_max_retries(self):
         workflow = self._create_workflow()
         state = {
             "confidence_score": 0.0,
             "hallucination_score": 1.0,
-            "needs_code_execution": False,
             "current_attempt": 3,
         }
-        assert workflow._should_retry_or_execute(state) == "complete"
+        assert workflow._should_retry_or_complete(state) == "complete"
 
 
 class TestExcelAnalysisWorkflowIntegration:
@@ -376,23 +284,18 @@ class TestExcelAnalysisWorkflowIntegration:
 
     @pytest.mark.asyncio
     async def test_full_flow_success_first_attempt(self):
-        """첫 시도에 성공하는 흐름."""
+        """첫 시도에 성공 → complete → chart_router → END."""
         mock_parser = Mock()
         mock_excel_data = Mock()
-        mock_excel_data.to_dict.return_value = {"sheets": {"Sheet1": {"data": [{"a": 1}]}}}
+        mock_excel_data.to_dict.return_value = {
+            "sheets": {"Sheet1": {"data": [{"a": 1}]}}
+        }
         mock_parser.parse.return_value = mock_excel_data
 
         mock_claude = Mock()
-        mock_response = ClaudeResponse(
-            content="분석 결과입니다.",
-            model="claude-sonnet-4-5-20250929",
-            stop_reason="end_turn",
-            input_tokens=100,
-            output_tokens=50,
-            request_id="test-123",
-            latency_ms=500,
+        mock_claude.complete = AsyncMock(
+            return_value=_claude_response("분석 결과입니다.")
         )
-        mock_claude.complete = AsyncMock(return_value=mock_response)
 
         mock_evaluator = Mock()
         mock_evaluator.evaluate = AsyncMock(
@@ -404,7 +307,7 @@ class TestExcelAnalysisWorkflowIntegration:
             claude_client=mock_claude,
             tavily_search=Mock(),
             hallucination_evaluator=mock_evaluator,
-            code_executor=Mock(),
+            search_decision=_make_search_decision(),
             logger=Mock(),
             retry_policy=AnalysisRetryPolicy(max_retries=3),
             quality_threshold=AnalysisQualityThreshold(
@@ -413,32 +316,14 @@ class TestExcelAnalysisWorkflowIntegration:
             ),
         )
 
-        initial_state: ExcelAnalysisState = {
-            "request_id": "test-123",
-            "user_query": "데이터 요약",
-            "excel_data": {"file_path": "/tmp/test.xlsx", "user_id": "user-1"},
-            "current_attempt": 0,
-            "max_attempts": 3,
-            "analysis_text": "",
-            "confidence_score": 0.0,
-            "hallucination_score": 0.0,
-            "needs_web_search": False,
-            "web_search_results": "",
-            "needs_code_execution": False,
-            "code_to_execute": "",
-            "code_output": {},
-            "attempts_history": [],
-            "is_complete": False,
-            "final_status": "pending",
-            "error_message": "",
-        }
-
-        result = await workflow.run(initial_state)
+        result = await workflow.run(_base_state(user_query="데이터 요약"))
 
         assert result["analysis_text"] == "분석 결과입니다."
         assert result["confidence_score"] == 1.0
         assert result["hallucination_score"] == 0.0
         assert len(result["attempts_history"]) == 1
+        # complete 경로가 chart_router를 거쳐 viz_decision을 기록했는지
+        assert result["viz_decision"] in ("visualize", "text")
         mock_parser.parse.assert_called_once()
         mock_claude.complete.assert_called_once()
         mock_evaluator.evaluate.assert_called_once()
@@ -452,27 +337,10 @@ class TestExcelAnalysisWorkflowIntegration:
         mock_parser.parse.return_value = mock_excel_data
 
         mock_claude = Mock()
-        # 첫 번째: 할루시네이션, 두 번째: 성공
         mock_claude.complete = AsyncMock(
             side_effect=[
-                ClaudeResponse(
-                    content="할루시네이션 결과",
-                    model="claude-sonnet-4-5-20250929",
-                    stop_reason="end_turn",
-                    input_tokens=100,
-                    output_tokens=50,
-                    request_id="test-456",
-                    latency_ms=500,
-                ),
-                ClaudeResponse(
-                    content="개선된 분석",
-                    model="claude-sonnet-4-5-20250929",
-                    stop_reason="end_turn",
-                    input_tokens=100,
-                    output_tokens=50,
-                    request_id="test-456",
-                    latency_ms=500,
-                ),
+                _claude_response("할루시네이션 결과"),
+                _claude_response("개선된 분석"),
             ]
         )
 
@@ -492,7 +360,7 @@ class TestExcelAnalysisWorkflowIntegration:
             claude_client=mock_claude,
             tavily_search=mock_search,
             hallucination_evaluator=mock_evaluator,
-            code_executor=Mock(),
+            search_decision=_make_search_decision(needs=False),
             logger=Mock(),
             retry_policy=AnalysisRetryPolicy(
                 max_retries=3,
@@ -504,96 +372,11 @@ class TestExcelAnalysisWorkflowIntegration:
             ),
         )
 
-        initial_state: ExcelAnalysisState = {
-            "request_id": "test-456",
-            "user_query": "분석",
-            "excel_data": {"file_path": "/tmp/test.xlsx", "user_id": "user-1"},
-            "current_attempt": 0,
-            "max_attempts": 3,
-            "analysis_text": "",
-            "confidence_score": 0.0,
-            "hallucination_score": 0.0,
-            "needs_web_search": False,
-            "web_search_results": "",
-            "needs_code_execution": False,
-            "code_to_execute": "",
-            "code_output": {},
-            "attempts_history": [],
-            "is_complete": False,
-            "final_status": "pending",
-            "error_message": "",
-        }
-
-        result = await workflow.run(initial_state)
+        result = await workflow.run(_base_state(user_query="분석"))
 
         assert result["analysis_text"] == "개선된 분석"
         assert len(result["attempts_history"]) == 2
         assert result["confidence_score"] == 1.0
         assert mock_claude.complete.call_count == 2
         assert mock_search.get_search_context.call_count == 1
-
-    @pytest.mark.asyncio
-    async def test_full_flow_with_code_execution(self):
-        """코드 실행이 포함된 흐름."""
-        mock_parser = Mock()
-        mock_excel_data = Mock()
-        mock_excel_data.to_dict.return_value = {"sheets": {}}
-        mock_parser.parse.return_value = mock_excel_data
-
-        mock_claude = Mock()
-        mock_claude.complete = AsyncMock(
-            return_value=ClaudeResponse(
-                content="결과:\n```python\nprint('hello')\n```",
-                model="claude-sonnet-4-5-20250929",
-                stop_reason="end_turn",
-                input_tokens=100,
-                output_tokens=50,
-                request_id="test-789",
-                latency_ms=500,
-            )
-        )
-
-        mock_evaluator = Mock()
-        mock_evaluator.evaluate = AsyncMock(
-            return_value=HallucinationEvaluationResult(is_hallucinated=False)
-        )
-
-        mock_executor = Mock()
-        mock_executor.execute.return_value = CodeExecutionResult.success("hello")
-
-        workflow = ExcelAnalysisWorkflow(
-            excel_parser=mock_parser,
-            claude_client=mock_claude,
-            tavily_search=Mock(),
-            hallucination_evaluator=mock_evaluator,
-            code_executor=mock_executor,
-            logger=Mock(),
-            retry_policy=AnalysisRetryPolicy(max_retries=3),
-            quality_threshold=AnalysisQualityThreshold(),
-        )
-
-        initial_state: ExcelAnalysisState = {
-            "request_id": "test-789",
-            "user_query": "코드 실행",
-            "excel_data": {"file_path": "/tmp/test.xlsx", "user_id": "user-1"},
-            "current_attempt": 0,
-            "max_attempts": 3,
-            "analysis_text": "",
-            "confidence_score": 0.0,
-            "hallucination_score": 0.0,
-            "needs_web_search": False,
-            "web_search_results": "",
-            "needs_code_execution": False,
-            "code_to_execute": "",
-            "code_output": {},
-            "attempts_history": [],
-            "is_complete": False,
-            "final_status": "pending",
-            "error_message": "",
-        }
-
-        result = await workflow.run(initial_state)
-
-        assert result["is_complete"] is True
-        assert result["code_output"]["output"] == "hello"
-        mock_executor.execute.assert_called_once()
+        assert result["viz_decision"] in ("visualize", "text")

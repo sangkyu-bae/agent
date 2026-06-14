@@ -42,3 +42,50 @@ export interface PendingUser {
   role: UserRole;
   created_at: string;
 }
+
+// ── admin-user-registration ──────────────────────────────
+export interface AdminCreateUserRequest {
+  email: string;
+  password: string;
+  display_name: string;
+  position?: string;
+  employee_no?: string;
+  joined_at?: string; // YYYY-MM-DD
+  role: UserRole;
+  department_id?: string;
+}
+
+export interface AdminCreateUserResponse {
+  id: number;
+  email: string;
+  role: UserRole;
+  status: UserStatus;
+  display_name: string;
+  position: string | null;
+  employee_no: string | null;
+  joined_at: string | null;
+  department_id: string | null;
+}
+
+export interface AdminUserListItem {
+  id: number;
+  email: string;
+  role: UserRole;
+  status: UserStatus;
+  display_name: string | null;
+  position: string | null;
+  department_names: string[];
+  created_at: string | null;
+}
+
+export interface AdminUserListResponse {
+  items: AdminUserListItem[];
+  total: number;
+}
+
+export interface AdminUserListParams {
+  status?: UserStatus;
+  q?: string;
+  limit?: number;
+  offset?: number;
+}

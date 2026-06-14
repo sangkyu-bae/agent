@@ -60,6 +60,15 @@ class ClaudeClient:
                 messages.append(HumanMessage(content=msg["content"]))
             elif msg["role"] == "assistant":
                 messages.append(AIMessage(content=msg["content"]))
+        if messages and isinstance(messages[-1], AIMessage):
+            # Claude 4.6+ 는 assistant-last(=prefill) 요청을 400으로 거부한다.
+            # 호출자 버그 가시성을 위해 warning 후 정규화 (fix-anthropic-prefill-error D3)
+            self._logger.warning(
+                "message list ends with assistant; appending continuation "
+                "to avoid Anthropic prefill rejection",
+                request_id=request.request_id,
+            )
+            messages.append(HumanMessage(content="계속 진행하세요."))
         return messages
 
     async def complete(self, request: ClaudeRequest) -> ClaudeResponse:

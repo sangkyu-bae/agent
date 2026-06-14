@@ -5,7 +5,7 @@ from typing import Literal
 
 from src.domain.llm_model.entity import LlmModel
 
-ToolCategory = Literal["search", "action"]
+ToolCategory = Literal["search", "action", "analysis"]
 
 
 @dataclass(frozen=True)
@@ -86,6 +86,9 @@ class AgentDefinition:
     visibility: str = "private"
     department_id: str | None = None
     temperature: float = 0.70
+    # agent-user-context: 사용자 컨텍스트 prepend opt-out flag (default True).
+    # WorkflowCompiler.compile()에서 prepend 여부 결정에 사용.
+    include_user_context: bool = True
     llm_model: LlmModel | None = None
     forked_from: str | None = None
     forked_at: datetime | None = None

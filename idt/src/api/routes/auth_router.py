@@ -49,7 +49,11 @@ async def register(
     request_id = str(uuid.uuid4())
     try:
         result = await use_case.execute(
-            RegisterRequest(email=body.email, password=body.password),
+            RegisterRequest(
+                email=body.email,
+                password=body.password,
+                display_name=body.display_name,
+            ),
             request_id=request_id,
         )
     except ValueError as e:
@@ -58,7 +62,11 @@ async def register(
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=msg)
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=msg)
 
-    return UserResponse(id=result.user_id, email=result.email, role=result.role, status=result.status)
+    return UserResponse(
+        id=result.user_id, email=result.email,
+        role=result.role, status=result.status,
+        display_name=result.display_name,
+    )
 
 
 @router.post("/login", response_model=TokenResponse)

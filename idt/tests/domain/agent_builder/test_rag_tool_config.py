@@ -94,6 +94,31 @@ class TestRagToolConfig:
         config = RagToolConfig()
         assert config.top_k == 5
 
+    def test_score_threshold_default_is_none(self):
+        config = RagToolConfig()
+        assert config.score_threshold is None
+
+    def test_score_threshold_none_allowed(self):
+        config = RagToolConfig(score_threshold=None)
+        assert config.score_threshold is None
+
+    def test_score_threshold_valid_values(self):
+        for value in (0.0, 0.3, 0.5, 1.0):
+            config = RagToolConfig(score_threshold=value)
+            assert config.score_threshold == value
+
+    def test_score_threshold_below_zero_raises(self):
+        with pytest.raises(ValueError, match="score_threshold must be 0.0~1.0"):
+            RagToolConfig(score_threshold=-0.1)
+
+    def test_score_threshold_above_one_raises(self):
+        with pytest.raises(ValueError, match="score_threshold must be 0.0~1.0"):
+            RagToolConfig(score_threshold=1.1)
+
+    def test_score_threshold_from_dict(self):
+        config = RagToolConfig(**{"top_k": 5, "score_threshold": 0.4})
+        assert config.score_threshold == 0.4
+
 
 class TestRagToolConfigPolicy:
     def test_valid_config_passes(self):

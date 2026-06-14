@@ -31,6 +31,11 @@ class AgentDefinitionModel(Base):
         nullable=True,
     )
     temperature: Mapped[float] = mapped_column(nullable=False, default=0.70)
+    # agent-user-context V028: 향후 system bot이 user 컨텍스트 prepend를 거부하기 위한 슬롯.
+    # 현재 PR은 전역 자동 prepend (DEFAULT TRUE).
+    include_user_context: Mapped[bool] = mapped_column(
+        nullable=False, default=True
+    )
     forked_from: Mapped[str | None] = mapped_column(
         String(36), nullable=True, index=True
     )

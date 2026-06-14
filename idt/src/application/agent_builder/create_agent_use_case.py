@@ -56,7 +56,12 @@ class CreateAgentUseCase:
             )
 
             # Step 1: 도구 선택 + 플로우 결정
-            if request.tool_configs:
+            # 우선순위: 명시적 tool_ids → tool_configs → AI 자동 선택
+            if request.tool_ids:
+                skeleton = self._build_skeleton_from_tool_ids(
+                    request.tool_ids, request.tool_configs, request_id
+                )
+            elif request.tool_configs:
                 skeleton = self._build_skeleton_from_configs(
                     request.tool_configs, request_id
                 )
@@ -171,6 +176,40 @@ class CreateAgentUseCase:
         flow_hint = " → ".join(w.tool_id for w in workers)
         self._logger.info(
             "Built skeleton from tool_configs",
+            request_id=request_id,
+            tool_ids=[w.tool_id for w in workers],
+        )
+        return WorkflowSkeleton(workers=workers, flow_hint=flow_hint)
+
+    def _build_skeleton_from_tool_ids(
+        self,
+        tool_ids: list[str],
+        tool_configs: dict[str, RagToolConfigRequest] | None,
+        request_id: str,
+    ) -> WorkflowSkeleton:
+        """사용자가 화면에서 직접 선택한 도구로 스켈레톤을 구성한다.
+
+        tool_configs가 함께 오면 normalize한 tool_id로 매칭하여 해당 워커에 설정을 주입한다.
+        """
+        configs_by_id = {
+            self._normalize_tool_id(k): v
+            for k, v in (tool_configs or {}).items()
+        }
+        workers: list[WorkerDefinition] = []
+        for i, raw_id in enumerate(tool_ids):
+            tool_id = self._normalize_tool_id(raw_id)
+            meta = get_tool_meta(tool_id)
+            config = configs_by_id.get(tool_id)
+            workers.append(WorkerDefinition(
+                tool_id=tool_id,
+                worker_id=f"{tool_id}_worker",
+                description=meta.description,
+                sort_order=i,
+                tool_config=config.model_dump() if config else None,
+            ))
+        flow_hint = " → ".join(w.tool_id for w in workers)
+        self._logger.info(
+            "Built skeleton from tool_ids",
             request_id=request_id,
             tool_ids=[w.tool_id for w in workers],
         )

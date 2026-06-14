@@ -30,9 +30,6 @@ async def test_analyze_excel_success_first_attempt():
         }],
         "is_complete": True,
         "final_status": "completed",
-        "needs_code_execution": False,
-        "code_to_execute": "",
-        "code_output": {},
     })
 
     mock_logger = Mock()
@@ -84,9 +81,6 @@ async def test_analyze_excel_retry_on_hallucination():
         ],
         "is_complete": True,
         "final_status": "completed",
-        "needs_code_execution": False,
-        "code_to_execute": "",
-        "code_output": {},
     })
 
     use_case = AnalyzeExcelUseCase(
@@ -102,46 +96,6 @@ async def test_analyze_excel_retry_on_hallucination():
 
     assert result.total_attempts == 2
     assert result.attempts[1].used_web_search is True
-
-
-@pytest.mark.asyncio
-async def test_analyze_excel_with_code_execution():
-    mock_workflow = Mock()
-    mock_workflow.run = AsyncMock(return_value={
-        "request_id": "test-789",
-        "user_query": "그래프 그려줘",
-        "excel_data": {"rows": 10},
-        "analysis_text": "결과",
-        "confidence_score": 1.0,
-        "hallucination_score": 0.0,
-        "attempts_history": [{
-            "attempt_number": 1,
-            "analysis_text": "결과",
-            "confidence_score": 1.0,
-            "hallucination_score": 0.0,
-            "used_web_search": False,
-            "timestamp": "2025-02-07T10:00:00",
-        }],
-        "is_complete": True,
-        "final_status": "completed",
-        "needs_code_execution": True,
-        "code_to_execute": "print('hello')",
-        "code_output": {"status": "success", "output": "hello"},
-    })
-
-    use_case = AnalyzeExcelUseCase(
-        workflow=mock_workflow,
-        logger=Mock(),
-    )
-
-    result = await use_case.execute(
-        excel_file_path="/tmp/test.xlsx",
-        user_query="그래프 그려줘",
-        user_id="user-1",
-    )
-
-    assert result.executed_code == "print('hello')"
-    assert result.code_output == {"status": "success", "output": "hello"}
 
 
 @pytest.mark.asyncio
@@ -164,9 +118,6 @@ async def test_analyze_excel_failed_quality():
         }],
         "is_complete": True,
         "final_status": "completed",
-        "needs_code_execution": False,
-        "code_to_execute": "",
-        "code_output": {},
     })
 
     use_case = AnalyzeExcelUseCase(
@@ -203,9 +154,6 @@ async def test_analyze_excel_logs_start_and_complete():
         }],
         "is_complete": True,
         "final_status": "completed",
-        "needs_code_execution": False,
-        "code_to_execute": "",
-        "code_output": {},
     })
 
     mock_logger = Mock()

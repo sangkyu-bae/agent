@@ -282,6 +282,7 @@ export const handlers = [
           content: '이전 질문입니다',
           turn_index: 1,
           created_at: '2026-04-17T10:00:00Z',
+          charts: null,
         },
         {
           id: 2,
@@ -289,6 +290,7 @@ export const handlers = [
           content: '이전 답변입니다',
           turn_index: 1,
           created_at: '2026-04-17T10:00:03Z',
+          charts: null,
         },
       ],
     });
@@ -307,6 +309,7 @@ export const handlers = [
           content: '이전 질문입니다',
           turn_index: 1,
           created_at: '2026-04-17T10:00:00Z',
+          charts: null,
         },
         {
           id: 2,
@@ -314,6 +317,7 @@ export const handlers = [
           content: '이전 답변입니다',
           turn_index: 1,
           created_at: '2026-04-17T10:00:03Z',
+          charts: null,
         },
       ],
     });

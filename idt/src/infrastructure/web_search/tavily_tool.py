@@ -1,13 +1,20 @@
-"""Tavily web search tool implementation."""
+"""Tavily web search tool implementation.
+
+M5 (agent-run-observability-m5):
+  - tracker DI + RunContext에서 run_id/tool_call_id 획득
+  - `_arun`이 search_as_value_object → record_retrieval (best-effort) → format 순서로 실행
+"""
 
 import json
 import os
 from typing import Any, Literal
 
 from langchain_core.tools import BaseTool
-from pydantic import Field
+from pydantic import ConfigDict, Field
 from tavily import TavilyClient
 
+from src.application.agent_run.context import get_current_run_context
+from src.application.agent_run.schemas import RunObservabilityConfig
 from src.domain.web_search.policy import WebSearchPolicy
 from src.domain.web_search.value_objects import SearchResult, SearchResultItem
 from src.infrastructure.logging import get_logger
@@ -15,11 +22,20 @@ from src.infrastructure.web_search.formatter import format_search_result_to_xml
 from src.infrastructure.web_search.schemas import TavilySearchInput
 
 
+_DEFAULT_OBS_CFG = RunObservabilityConfig()
+
+
 class TavilySearchTool(BaseTool):
     """LangChain-compatible Tavily web search tool.
 
     Provides web search capabilities using the Tavily API.
+
+    M5: tracker가 주입되면 `_arun`에서 결과 item별로 `record_retrieval`을
+    best-effort로 호출해 `ai_retrieval_source` 테이블에 collection_name='tavily_web'
+    행을 영속화한다.
     """
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     name: str = "tavily_search"
     description: str = (
@@ -31,6 +47,11 @@ class TavilySearchTool(BaseTool):
     _api_key: str
     _client: TavilyClient
     _max_results: int
+
+    # ── M5 추가 필드 (Optional — graph 외 단독 사용 시 None) ─────────────
+    tracker: Any = None  # RunTracker | None
+    logger: Any = None   # LoggerInterface | None
+    config: Any = None   # RunObservabilityConfig | None
 
     def __init__(
         self,
@@ -104,25 +125,66 @@ class TavilySearchTool(BaseTool):
     ) -> str:
         """Execute the tool asynchronously (LangChain interface).
 
-        Args:
-            query: Search query.
-            search_depth: Search depth level.
-            topic: Topic type for search.
-            max_results: Maximum number of results.
-            include_raw_content: Whether to include raw content.
-            days: Number of days to search back (news topic only).
-
-        Returns:
-            Formatted search results string.
+        M5: search_as_value_object로 SearchResult를 받은 뒤 retrieval을
+        best-effort로 영속화하고, XML로 포맷한 문자열을 반환한다.
         """
-        return self._run(
+        result = self.search_as_value_object(
             query=query,
+            request_id="langchain-run",
             search_depth=search_depth,
             topic=topic,
             max_results=max_results,
             include_raw_content=include_raw_content,
             days=days,
         )
+
+        if self.tracker is not None:
+            await self._record_retrievals_best_effort(result)
+
+        return format_search_result_to_xml(
+            result, include_raw_content=include_raw_content
+        )
+
+    async def _record_retrievals_best_effort(
+        self, result: SearchResult
+    ) -> None:
+        """M5: 각 SearchResultItem에 대해 best-effort `record_retrieval` 호출.
+
+        실패는 warning 로그 후 다음 item 진행 — 답변 흐름을 차단하지 않는다.
+        RunContext 미설정(graph 외 호출)이면 즉시 return.
+        """
+        ctx = get_current_run_context()
+        if ctx is None or ctx.run_id is None:
+            return
+        preview_max = (self.config or _DEFAULT_OBS_CFG).retrieval_preview_max_bytes
+        for rank_index, item in enumerate(result.items, start=1):
+            try:
+                url = item.url or ""
+                doc_id = url[:150] if url else None
+                preview = (item.content or "")[:preview_max] or None
+                await self.tracker.record_retrieval(
+                    run_id=ctx.run_id,
+                    tool_call_id=ctx.tool_call_id,
+                    collection_name="tavily_web",
+                    document_id=doc_id,
+                    chunk_id=None,
+                    score=item.score,
+                    rank_index=rank_index,
+                    content_preview=preview,
+                    metadata={
+                        "title": item.title,
+                        "url_full": item.url,
+                        "raw_score": item.score,
+                    },
+                )
+            except Exception as e:
+                if self.logger is not None:
+                    self.logger.warning(
+                        "tavily record_retrieval failed (best-effort)",
+                        exception=e,
+                        url=(item.url or "")[:80],
+                    )
+                # continue 다음 item
 
     def search(
         self,

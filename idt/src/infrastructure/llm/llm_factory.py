@@ -31,10 +31,12 @@ class LLMFactory(LLMFactoryInterface):
         self, llm_model: LlmModel, temperature: float
     ) -> ChatOpenAI:
         api_key = self._resolve_api_key(llm_model)
+        # AGENT-OBS-001 §14-3: streaming 응답에서도 usage_metadata 보장.
         return ChatOpenAI(
             model=llm_model.model_name,
             api_key=api_key,
             temperature=temperature,
+            stream_usage=True,
         )
 
     def _create_anthropic(

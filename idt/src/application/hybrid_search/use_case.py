@@ -148,7 +148,8 @@ class HybridSearchUseCase:
                 filter=vector_filter,
                 collection_name=request.collection_name,
             )
-            return [
+            threshold = request.vector_score_threshold
+            hits = [
                 SearchHit(
                     id=doc.id.value if hasattr(doc.id, "value") else str(doc.id),
                     content=doc.content,
@@ -156,7 +157,17 @@ class HybridSearchUseCase:
                     raw_score=doc.score or 0.0,
                 )
                 for doc in vector_docs
+                if (doc.score or 0.0) >= threshold
             ]
+            if threshold > 0.0 and len(hits) < len(vector_docs):
+                self._logger.debug(
+                    "Vector hits filtered by score_threshold",
+                    request_id=request_id,
+                    threshold=threshold,
+                    before=len(vector_docs),
+                    after=len(hits),
+                )
+            return hits
         except Exception as e:
             self._logger.warning(
                 "Vector search failed, falling back to empty",

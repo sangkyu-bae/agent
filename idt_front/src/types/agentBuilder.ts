@@ -9,6 +9,7 @@ export interface CreateBuilderAgentRequest {
   visibility?: 'private' | 'department' | 'public';
   department_id?: string;
   temperature?: number;
+  tool_ids?: string[];
   tool_configs?: Record<string, RagToolConfig>;
 }
 

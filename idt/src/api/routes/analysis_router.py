@@ -2,7 +2,7 @@
 
 import tempfile
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import List
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
@@ -34,8 +34,8 @@ class AnalysisResponse(BaseModel):
     is_successful: bool
     total_attempts: int
     attempts: List[AnalysisAttemptResponse]
-    executed_code: Optional[str] = None
-    code_output: Optional[Dict[str, Any]] = None
+    # supervisor-chart-builder-node: Chart.js config 리스트 (프론트 ChartPayload).
+    charts: List[dict] = []
 
 
 def get_analyze_excel_use_case() -> AnalyzeExcelUseCase:
@@ -53,9 +53,8 @@ async def analyze_excel(
     """엑셀 파일 분석 엔드포인트.
 
     엑셀 파싱 → Claude AI 분석 → 할루시네이션 검증 →
-    필요 시 웹 검색 및 코드 실행 → 최대 3회 재시도.
+    필요 시 웹 검색 → 최대 3회 재시도.
     """
-    langsmith(project_name="excel-analysis-agent")
     try:
         with tempfile.NamedTemporaryFile(
             suffix=f"_{file.filename}", delete=False
@@ -86,8 +85,7 @@ async def analyze_excel(
                 )
                 for a in result.attempts
             ],
-            executed_code=result.executed_code,
-            code_output=result.code_output,
+            charts=result.charts,
         )
 
     except Exception as e:

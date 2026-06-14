@@ -3,7 +3,27 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock
 
 from src.application.rag_agent.tools import InternalDocumentSearchTool
+from src.domain.agent_run.auth_context import AuthContext
 from src.domain.hybrid_search.schemas import HybridSearchResponse, HybridSearchResult
+
+
+# agent-user-context: 본 테스트 파일은 검색 동작 자체를 검증하므로
+# Fail-Closed 디폴트(권한 없음 → 거부)를 우회하기 위한 admin 컨텍스트를 주입한다.
+# 권한/필터 동작 자체는 test_internal_document_search_auth.py에서 별도 검증.
+_FULL_PERM_CTX = AuthContext(
+    user_id=1,
+    display_name="admin",
+    role="admin",
+    primary_department_id="dept-001",
+    primary_department_name="DX팀",
+    department_ids=("dept-001",),
+    department_names=("DX팀",),
+    permissions=frozenset({
+        "USE_RAG_SEARCH",
+        "READ_DEPARTMENT_DOCS",
+        "READ_PUBLIC_DOCS",
+    }),
+)
 
 
 def _make_response(query: str = "q") -> HybridSearchResponse:
@@ -33,6 +53,7 @@ def _make_tool(**kwargs) -> InternalDocumentSearchTool:
     defaults = {
         "hybrid_search_use_case": mock_use_case,
         "request_id": "req-001",
+        "auth_ctx": _FULL_PERM_CTX,
     }
     defaults.update(kwargs)
     return InternalDocumentSearchTool(**defaults)
@@ -83,7 +104,9 @@ class TestSearchModeBranching:
 
             call_args = tool.hybrid_search_use_case.execute.call_args
             request = call_args[0][0]
-            assert request.metadata_filter == {"dept": "finance"}
+            # 사용자 설정 필터가 보존되어야 함 (agent-user-context 적용 후에도).
+            # viewer_department_ids 같은 권한 기반 자동 주입 키는 추가될 수 있음.
+            assert request.metadata_filter.get("dept") == "finance"
 
     @pytest.mark.asyncio
     async def test_no_results_returns_fallback_message(self):

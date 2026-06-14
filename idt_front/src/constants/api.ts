@@ -1,5 +1,16 @@
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
 
+// WebSocket base URL — VITE_WS_URL (e.g. ws://localhost:8000)
+export const WS_BASE_URL = import.meta.env.VITE_WS_URL ?? 'ws://localhost:8000';
+
+// WebSocket endpoint paths (combine with wsUrl() in @/utils/wsUrl).
+// Mirror to backend src/api/routes/ws_router.py.
+export const WS_ENDPOINTS = {
+  WS_ECHO: '/ws/echo',
+  WS_AGENT_RUN: (runId: string) => `/ws/agent/${runId}`,
+  WS_CHAT: (sessionId: string) => `/ws/chat/${sessionId}`,
+} as const;
+
 export const API_ENDPOINTS = {
   // General Chat (CHAT-001: POST /api/v1/chat)
   GENERAL_CHAT: '/api/v1/chat',
@@ -28,6 +39,9 @@ export const API_ENDPOINTS = {
   AGENT_RUN_STATUS: (runId: string) => `/api/agent/run/${runId}`,
   AGENT_STREAM: (runId: string) => `/api/agent/run/${runId}/stream`,
   AGENT_CHAT_RUN: (agentId: string) => `/api/v1/agents/${agentId}/run`,
+
+  // Agent Attachment (ws-agent-excel-attachment) — 엑셀 업로드 → file_id 발급
+  AGENT_ATTACHMENT_UPLOAD: '/api/v1/agent/attachments',
 
   // RAG / Documents
   DOCUMENTS: '/api/rag/documents',
@@ -84,12 +98,36 @@ export const API_ENDPOINTS = {
   ADMIN_USER_APPROVE: (userId: number) => `/api/v1/admin/users/${userId}/approve`,
   ADMIN_USER_REJECT: (userId: number) => `/api/v1/admin/users/${userId}/reject`,
 
+  // Admin — User management (admin-user-registration)
+  ADMIN_USERS_LIST: '/api/v1/admin/users',   // GET (?status=&q=&limit=&offset=)
+  ADMIN_USERS_CREATE: '/api/v1/admin/users', // POST
+
+  // Admin — RAGAS Evaluation
+  ADMIN_RAGAS_DASHBOARD: '/api/v1/admin/ragas/dashboard',
+  ADMIN_RAGAS_RUNS: '/api/v1/admin/ragas/runs',
+  ADMIN_RAGAS_RUN_DETAIL: (runId: string) => `/api/v1/admin/ragas/runs/${runId}`,
+  ADMIN_RAGAS_TESTSETS: '/api/v1/admin/ragas/testsets',
+
   // Admin — Department
   ADMIN_DEPARTMENTS: '/api/v1/departments',
   ADMIN_DEPARTMENT_DETAIL: (deptId: string) => `/api/v1/departments/${deptId}`,
   ADMIN_USER_DEPT_ASSIGN: (userId: number) => `/api/v1/users/${userId}/departments`,
   ADMIN_USER_DEPT_REMOVE: (userId: number, deptId: string) =>
     `/api/v1/users/${userId}/departments/${deptId}`,
+
+  // Admin — Agent Run Observability (M5 dashboard)
+  ADMIN_AGENT_RUN_DETAIL: (runId: string) => `/api/v1/agents/runs/${runId}`,
+  ADMIN_AGENT_RUNS: '/api/v1/admin/runs',
+  ADMIN_USAGE_BY_USER: '/api/v1/admin/usage/users',
+  ADMIN_USAGE_BY_LLM: '/api/v1/admin/usage/llm-models',
+  ADMIN_USAGE_BY_NODE: '/api/v1/admin/usage/by-node',
+  ADMIN_USAGE_SUMMARY: '/api/v1/admin/usage/summary',
+  ADMIN_USAGE_TIMESERIES: '/api/v1/admin/usage/timeseries',
+
+  // User — My Usage
+  USAGE_ME: '/api/v1/usage/me',
+  USAGE_ME_RUNS: '/api/v1/usage/me/runs',
+  USAGE_ME_TIMESERIES: '/api/v1/usage/me/timeseries',
 
   // Agent Builder (CRUD)
   AGENT_BUILDER_CREATE: '/api/v1/agents',

@@ -1,3 +1,5 @@
+import type { ChartPayload } from './chart';
+
 export type MessageRole = 'user' | 'assistant' | 'tool';
 
 /** General Chat API 문서 출처 */
@@ -15,6 +17,8 @@ export interface Message {
   createdAt: string;
   isStreaming?: boolean;
   sources?: DocumentSource[];
+  /** 차트 페이로드 (Chart.js config 패스스루). chat-chart-rendering */
+  charts?: ChartPayload[];
 }
 
 /** @deprecated Use DocumentSource instead */
@@ -101,6 +105,8 @@ export interface HistoryMessageItem {
   content: string;
   turn_index: number;
   created_at: string;
+  /** chat-chart-persistence: Chart.js config 배열 (없으면 null/생략) */
+  charts?: ChartPayload[] | null;
 }
 
 /** CHAT-HIST-001: GET /api/v1/conversations/sessions/{session_id}/messages 응답 */

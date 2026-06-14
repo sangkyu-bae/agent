@@ -59,6 +59,7 @@ class EvalResultItem:
     question: str
     answer: str
     ground_truth: str | None
+    contexts: list[str]
     scores: dict[str, float]
     created_at: datetime
 

@@ -93,6 +93,42 @@ class TestGetMessages:
 
         assert resp.status_code == 422
 
+    def test_charts_serialized_in_response(self):
+        """chat-chart-persistence: MessageItem.charts → 응답 JSON charts 배열."""
+        charts = [{"type": "bar", "data": {"labels": ["a"]}}]
+        mock_uc = AsyncMock()
+        mock_uc.get_messages.return_value = MessageListResponse(
+            user_id="u-1",
+            session_id="s-a",
+            messages=[
+                MessageItem(
+                    id=1,
+                    role="user",
+                    content="차트 그려줘",
+                    turn_index=1,
+                    created_at=datetime(2026, 6, 10, 9),
+                ),
+                MessageItem(
+                    id=2,
+                    role="assistant",
+                    content="차트 답변",
+                    turn_index=2,
+                    created_at=datetime(2026, 6, 10, 9, 1),
+                    charts=charts,
+                ),
+            ],
+        )
+        client = TestClient(_build_app(mock_uc))
+
+        resp = client.get(
+            "/api/v1/conversations/sessions/s-a/messages?user_id=u-1"
+        )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["messages"][0]["charts"] is None
+        assert body["messages"][1]["charts"] == charts
+
     def test_empty_messages_returns_200_with_empty_array(self):
         mock_uc = AsyncMock()
         mock_uc.get_messages.return_value = MessageListResponse(

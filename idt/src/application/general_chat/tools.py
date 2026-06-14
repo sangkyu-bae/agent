@@ -72,14 +72,22 @@ class ChatToolBuilder:
         self._load_mcp = load_mcp_use_case
         self._logger = logger
 
-    async def build(self, top_k: int, request_id: str) -> list:
+    async def build(
+        self,
+        top_k: int,
+        request_id: str,
+        auth_ctx: Any = None,
+    ) -> list:
         """[TavilyTool, InternalDocTool(top_k), *MCPTools] 반환.
 
         Args:
             top_k: 내부 문서 검색 결과 수.
             request_id: 요청 추적 ID.
+            auth_ctx: AuthContext — InternalDocumentSearchTool에 주입 (Design §4.4.3).
         """
         self._internal_doc.top_k = top_k
+        if auth_ctx is not None:
+            self._internal_doc.auth_ctx = auth_ctx
 
         mcp_tools = await self._mcp_cache.get_or_load(
             self._load_mcp,

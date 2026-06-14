@@ -20,6 +20,8 @@ class HybridSearchRequest:
     vector_weight: float = 0.5
     collection_name: str | None = None
     es_index: str | None = None
+    # 벡터 코사인 유사도 컷오프 하한 (0.0 = 비활성, 모든 hit 통과).
+    vector_score_threshold: float = 0.0
 
 
 @dataclass

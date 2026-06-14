@@ -21,6 +21,10 @@ from src.application.llm_model.schemas import (
     LlmModelListResponse,
     LlmModelResponse,
     UpdateLlmModelRequest,
+    UpdatePricingRequest,
+)
+from src.application.llm_model.update_llm_model_pricing_use_case import (
+    UpdateLlmModelPricingUseCase,
 )
 from src.application.llm_model.update_llm_model_use_case import (
     UpdateLlmModelUseCase,
@@ -52,6 +56,10 @@ def get_get_llm_model_use_case() -> GetLlmModelUseCase:
 
 def get_list_llm_models_use_case() -> ListLlmModelsUseCase:
     raise NotImplementedError("ListLlmModelsUseCase not initialized")
+
+
+def get_update_llm_model_pricing_use_case() -> UpdateLlmModelPricingUseCase:
+    raise NotImplementedError("UpdateLlmModelPricingUseCase not initialized")
 
 
 # -------- Endpoints --------
@@ -130,5 +138,25 @@ async def deactivate_llm_model(
     request_id = str(uuid.uuid4())
     try:
         return await use_case.execute(model_id, request_id=request_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.patch("/{model_id}/pricing", response_model=LlmModelResponse)
+async def update_llm_model_pricing(
+    model_id: str,
+    body: UpdatePricingRequest,
+    _: User = Depends(require_role("admin")),
+    use_case: UpdateLlmModelPricingUseCase = Depends(
+        get_update_llm_model_pricing_use_case
+    ),
+) -> LlmModelResponse:
+    """LLM 모델 가격 변경 + 캐시 무효화 (관리자 전용, ★ M4 / M1 G1).
+
+    use_case가 cost_calculator.invalidate(model_id)를 의무 호출한다.
+    """
+    request_id = str(uuid.uuid4())
+    try:
+        return await use_case.execute(model_id, body, request_id=request_id)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

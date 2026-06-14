@@ -1,14 +1,17 @@
-"""Search Node 단위 테스트 — LLM 없이 tool 직접 호출 검증 (TC-S01~S05)."""
-from unittest.mock import AsyncMock, MagicMock
+"""WorkflowCompiler search 파이프라인 wiring 테스트 (Design §4-3).
 
-import pytest
-from langchain_core.messages import AIMessage
+파이프라인 자체 동작은 test_search_pipeline.py에서 검증.
+여기서는 경량 LLM 해석(_resolve_pipeline_llm)과 하위호환 fallback만 검증한다.
+(기존 _create_search_node 직접 테스트 TC-S01~S05는 파이프라인 도입으로
+test_search_pipeline.py의 동등 케이스로 대체됨.)
+"""
+from unittest.mock import MagicMock
 
 from src.application.agent_builder.workflow_compiler import WorkflowCompiler
 from src.infrastructure.agent_builder.tool_factory import ToolFactory
 
 
-def _make_compiler() -> WorkflowCompiler:
+def _make_compiler(pipeline_llm_model=None) -> WorkflowCompiler:
     tool_factory = MagicMock(spec=ToolFactory)
     llm_factory = MagicMock()
     logger = MagicMock()
@@ -16,81 +19,45 @@ def _make_compiler() -> WorkflowCompiler:
         tool_factory=tool_factory,
         llm_factory=llm_factory,
         logger=logger,
+        pipeline_llm_model=pipeline_llm_model,
     )
 
 
-def _make_state(query: str = "AI 관련 뉴스", token_usage: int = 0) -> dict:
-    msg = MagicMock()
-    msg.content = query
-    return {
-        "messages": [msg],
-        "token_usage": token_usage,
-    }
+class TestResolvePipelineLlm:
+    def test_none_model_returns_run_llm(self):
+        """미주입 시 per-run LLM 그대로 (하위호환)."""
+        compiler = _make_compiler(pipeline_llm_model=None)
+        run_llm = object()
 
-
-class TestSearchNode:
-    @pytest.mark.asyncio
-    async def test_returns_result_with_worker_id_tag(self):
-        """TC-S01: 검색 결과를 [worker_id 검색결과] 형식으로 반환."""
-        compiler = _make_compiler()
-        mock_tool = AsyncMock()
-        mock_tool.ainvoke.return_value = "문서1: AI 기술 동향"
-
-        node = compiler._create_search_node("doc_searcher", mock_tool)
-        result = await node(_make_state())
-
-        assert len(result["messages"]) == 1
-        msg = result["messages"][0]
-        assert isinstance(msg, AIMessage)
-        assert "[doc_searcher 검색결과]" in msg.content
-        assert "문서1: AI 기술 동향" in msg.content
-
-    @pytest.mark.asyncio
-    async def test_sets_last_worker_id(self):
-        """TC-S02: last_worker_id를 올바르게 설정."""
-        compiler = _make_compiler()
-        mock_tool = AsyncMock()
-        mock_tool.ainvoke.return_value = "결과"
-
-        node = compiler._create_search_node("my_worker", mock_tool)
-        result = await node(_make_state())
-
-        assert result["last_worker_id"] == "my_worker"
-
-    @pytest.mark.asyncio
-    async def test_increments_token_usage(self):
-        """TC-S03: token_usage를 증가시킴."""
-        compiler = _make_compiler()
-        mock_tool = AsyncMock()
-        mock_tool.ainvoke.return_value = "a" * 100
-
-        node = compiler._create_search_node("w", mock_tool)
-        result = await node(_make_state(token_usage=50))
-
-        assert result["token_usage"] > 50
-
-    @pytest.mark.asyncio
-    async def test_tool_error_returns_error_message(self):
-        """TC-S04: tool 예외 시 에러 메시지로 변환 (그래프 중단 없음)."""
-        compiler = _make_compiler()
-        mock_tool = AsyncMock()
-        mock_tool.ainvoke.side_effect = RuntimeError("Connection timeout")
-
-        node = compiler._create_search_node("w", mock_tool)
-        result = await node(_make_state())
-
-        msg = result["messages"][0]
-        assert "검색 실패" in msg.content
-        assert "Connection timeout" in msg.content
-
-    @pytest.mark.asyncio
-    async def test_does_not_call_llm(self):
-        """TC-S05: Search Node가 LLM을 호출하지 않음."""
-        compiler = _make_compiler()
-        mock_tool = AsyncMock()
-        mock_tool.ainvoke.return_value = "결과"
-
-        node = compiler._create_search_node("w", mock_tool)
-        await node(_make_state())
-
+        assert compiler._resolve_pipeline_llm(run_llm) is run_llm
         compiler._llm_factory.create.assert_not_called()
+
+    def test_injected_model_creates_lightweight_llm(self):
+        model = MagicMock(provider="openai", model_name="gpt-4o-mini")
+        compiler = _make_compiler(pipeline_llm_model=model)
+        created = object()
+        compiler._llm_factory.create.return_value = created
+
+        assert compiler._resolve_pipeline_llm(object()) is created
+        compiler._llm_factory.create.assert_called_once_with(model, 0.0)
+
+    def test_created_llm_is_cached(self):
+        model = MagicMock(provider="openai", model_name="gpt-4o-mini")
+        compiler = _make_compiler(pipeline_llm_model=model)
+        compiler._llm_factory.create.return_value = object()
+
+        first = compiler._resolve_pipeline_llm(object())
+        second = compiler._resolve_pipeline_llm(object())
+
+        assert first is second
+        assert compiler._llm_factory.create.call_count == 1
+
+    def test_creation_failure_falls_back_to_run_llm(self):
+        """API 키 부재 등 생성 실패 → warning + per-run LLM fallback (D3)."""
+        model = MagicMock(provider="openai", model_name="gpt-4o-mini")
+        compiler = _make_compiler(pipeline_llm_model=model)
+        compiler._llm_factory.create.side_effect = RuntimeError("no api key")
+        run_llm = object()
+
+        assert compiler._resolve_pipeline_llm(run_llm) is run_llm
+        compiler._logger.warning.assert_called_once()

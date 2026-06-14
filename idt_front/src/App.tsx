@@ -16,6 +16,10 @@ import LoginPage from '@/pages/LoginPage';
 import RegisterPage from '@/pages/RegisterPage';
 import AdminUsersPage from '@/pages/AdminUsersPage';
 import AdminDepartmentsPage from '@/pages/AdminDepartmentsPage';
+import AdminRagasPage from '@/pages/AdminRagasPage';
+import AdminAgentRunsPage from '@/pages/AdminAgentRunsPage';
+import AgentRunDetailPage from '@/pages/AgentRunDetailPage';
+import UsageMePage from '@/pages/UsageMePage';
 import AdminLayout from '@/components/layout/AdminLayout';
 import { useInitAuth } from '@/hooks/useAuth';
 
@@ -47,6 +51,7 @@ const App = () => (
           <Route path="/agent-store" element={<AgentStorePage />} />
           <Route path="/collections" element={<CollectionPage />} />
           <Route path="/collections/:collectionName/documents" element={<CollectionDocumentsPage />} />
+          <Route path="/usage" element={<UsageMePage />} />
         </Route>
       </Route>
 
@@ -55,6 +60,9 @@ const App = () => (
         <Route element={<AdminLayout />}>
           <Route path="/admin/users" element={<AdminUsersPage />} />
           <Route path="/admin/departments" element={<AdminDepartmentsPage />} />
+          <Route path="/admin/ragas" element={<AdminRagasPage />} />
+          <Route path="/admin/agent-runs" element={<AdminAgentRunsPage />} />
+          <Route path="/admin/agent-runs/:runId" element={<AgentRunDetailPage />} />
         </Route>
       </Route>
 

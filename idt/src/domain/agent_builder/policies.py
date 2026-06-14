@@ -164,6 +164,30 @@ class QualityGatePolicy:
         return True
 
 
+class SearchPipelinePolicy:
+    """search 노드 파이프라인 도메인 규칙 (search-node-query-pipeline).
+
+    순수 규칙만 보관 — LLM/도구 호출 없음.
+    """
+
+    MAX_SEARCH_ATTEMPTS = 3            # 최초 1 + 재시도 2
+    DEFAULT_COMPRESS_THRESHOLD = 4000  # 압축 발동 임계 길이(자)
+
+    def __init__(self, compress_threshold: int | None = None) -> None:
+        self.compress_threshold = (
+            compress_threshold
+            if compress_threshold and compress_threshold > 0
+            else self.DEFAULT_COMPRESS_THRESHOLD
+        )
+
+    def is_last_attempt(self, attempt: int) -> bool:
+        """attempt(1-base)가 마지막 시도인가 — True면 validate 생략 (Design D1)."""
+        return attempt >= self.MAX_SEARCH_ATTEMPTS
+
+    def needs_compression(self, text: str) -> bool:
+        return len(text) > self.compress_threshold
+
+
 class UpdateAgentPolicy:
     @classmethod
     def validate_update(cls, status: str, system_prompt: str | None) -> None:

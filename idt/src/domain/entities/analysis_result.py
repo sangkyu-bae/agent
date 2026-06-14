@@ -3,7 +3,7 @@
 분석 시도 기록과 최종 분석 결과를 정의합니다.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -31,9 +31,9 @@ class AnalysisResult:
     final_answer: str
     is_successful: bool
     attempts: List[AnalysisAttempt]
-    executed_code: Optional[str] = None
-    code_output: Optional[Dict[str, Any]] = None
     created_at: Optional[datetime] = None
+    # supervisor-chart-builder-node: Chart.js config 리스트 (= 프론트 ChartPayload).
+    charts: List[Dict[str, Any]] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if self.created_at is None:

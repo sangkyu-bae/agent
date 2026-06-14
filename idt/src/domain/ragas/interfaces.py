@@ -61,6 +61,26 @@ class EvaluationRepositoryInterface(ABC):
     @abstractmethod
     async def delete_testset(self, testset_id: str, request_id: str) -> bool: ...
 
+    @abstractmethod
+    async def get_dashboard_stats(
+        self, recent_limit: int, request_id: str
+    ) -> dict:
+        """대시보드 통계: 상태별 수, target_type별 수, 전체 평균 메트릭, 최근 runs."""
+        ...
+
+    @abstractmethod
+    async def list_runs_with_summary(
+        self,
+        target_type: str | None,
+        eval_type: str | None,
+        status: str | None,
+        limit: int,
+        offset: int,
+        request_id: str,
+    ) -> tuple[list[dict], int]:
+        """평가 실행 목록 + 각 run의 메트릭 요약 포함."""
+        ...
+
 
 class EvaluatorInterface(ABC):
     """평가 실행 엔진 인터페이스."""

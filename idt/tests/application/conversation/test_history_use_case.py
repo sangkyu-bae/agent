@@ -34,7 +34,9 @@ def _make_use_case(sessions=None, messages=None, raise_on_sessions=None):
     return uc, repo, logger
 
 
-def _msg(turn: int, role: str, content: str, msg_id: int = None) -> ConversationMessage:
+def _msg(
+    turn: int, role: str, content: str, msg_id: int = None, charts: list = None,
+) -> ConversationMessage:
     return ConversationMessage(
         id=MessageId(msg_id) if msg_id else None,
         user_id=UserId("u-1"),
@@ -44,6 +46,7 @@ def _msg(turn: int, role: str, content: str, msg_id: int = None) -> Conversation
         content=content,
         turn_index=TurnIndex(turn),
         created_at=datetime(2026, 4, 17, 10, 0, turn),
+        charts=charts,
     )
 
 
@@ -88,6 +91,23 @@ class TestGetMessages:
         assert result.user_id == "u-1"
         assert result.session_id == "s-1"
         assert len(result.messages) == 2
+
+    @pytest.mark.asyncio
+    async def test_charts_passed_through_to_message_item(self):
+        """chat-chart-persistence: 엔티티 charts → MessageItem.charts 패스스루."""
+        charts = [{"type": "bar"}, {"type": "line"}]
+        messages = [
+            _msg(1, "user", "차트 그려줘", msg_id=1),
+            _msg(2, "assistant", "차트 답변", msg_id=2, charts=charts),
+        ]
+        uc, _, _ = _make_use_case(messages=messages)
+
+        result = await uc.get_messages(
+            user_id="u-1", session_id="s-1", request_id="req-1"
+        )
+
+        assert result.messages[0].charts is None
+        assert result.messages[1].charts == charts
         assert result.messages[0].turn_index == 1
         assert result.messages[0].role == "user"
         assert result.messages[1].role == "assistant"

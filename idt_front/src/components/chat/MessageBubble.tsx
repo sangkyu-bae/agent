@@ -1,5 +1,8 @@
+import { memo } from 'react';
 import type { Message } from '@/types/chat';
 import SourceCitation from './SourceCitation';
+import ChartRenderer from './ChartRenderer';
+import MarkdownRenderer from './MarkdownRenderer';
 
 interface MessageBubbleProps {
   message: Message;
@@ -36,12 +39,17 @@ const AssistantMessage = ({ message }: { message: Message }) => (
         상플AI
       </p>
       <div className="text-[15px] leading-[1.8] text-zinc-800">
-        <p className="whitespace-pre-wrap">
-          {message.content}
-          {message.isStreaming && (
-            <span className="ml-1 inline-block h-[18px] w-[3px] animate-pulse rounded-full bg-violet-500 align-middle" />
-          )}
-        </p>
+        <MarkdownRenderer content={message.content} />
+        {message.isStreaming && (
+          <span className="ml-1 inline-block h-[18px] w-[3px] animate-pulse rounded-full bg-violet-500 align-middle" />
+        )}
+        {message.charts && message.charts.length > 0 && (
+          <div className="flex flex-col gap-3">
+            {message.charts.map((chart, i) => (
+              <ChartRenderer key={i} payload={chart} />
+            ))}
+          </div>
+        )}
         {message.sources && message.sources.length > 0 && (
           <SourceCitation sources={message.sources} />
         )}
@@ -55,4 +63,5 @@ const MessageBubble = ({ message }: MessageBubbleProps) => {
   return <AssistantMessage message={message} />;
 };
 
-export default MessageBubble;
+// 스트리밍 중 완료된 과거 메시지의 재렌더(마크다운 재파싱) 차단
+export default memo(MessageBubble);

@@ -1,10 +1,20 @@
 """Auth domain interfaces (abstract)."""
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 
 from src.domain.auth.entities import User, UserStatus
 from src.domain.auth.value_objects import TokenPayload
+
+
+@dataclass
+class UserListFilters:
+    """admin-user-registration: 전체 사용자 목록 조회 필터."""
+    status: Optional[UserStatus] = None
+    query: Optional[str] = None  # email 부분 일치 (MVP)
+    limit: int = 20
+    offset: int = 0
 
 
 class UserRepositoryInterface(ABC):
@@ -22,6 +32,15 @@ class UserRepositoryInterface(ABC):
 
     @abstractmethod
     async def update_status(self, user_id: int, status: UserStatus) -> None: ...
+
+    @abstractmethod
+    async def find_all(
+        self, filters: "UserListFilters", request_id: str
+    ) -> tuple[list[User], int]:
+        """필터/페이지네이션 적용 사용자 목록 + 전체 건수.
+
+        admin-user-registration Design §3.1.
+        """
 
 
 class RefreshTokenRepositoryInterface(ABC):

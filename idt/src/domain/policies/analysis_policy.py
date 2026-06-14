@@ -55,7 +55,6 @@ AnalysisStatus = Literal[
     "analyzing",
     "verifying",
     "retrying",
-    "code_executing",
     "completed",
     "failed",
 ]

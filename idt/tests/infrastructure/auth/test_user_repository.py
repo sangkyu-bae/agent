@@ -3,6 +3,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock
 
 from src.domain.auth.entities import User, UserRole, UserStatus
+from src.domain.auth.interfaces import UserListFilters
 from src.infrastructure.auth.user_repository import UserRepository
 from src.infrastructure.auth.models import UserModel
 
@@ -149,3 +150,54 @@ class TestUserRepositoryUpdateStatus:
         await repo.update_status(1, UserStatus.APPROVED)
 
         session.execute.assert_awaited_once()
+
+
+class TestUserRepositoryFindAll:
+    def _mock_list_and_count(self, session, models, total):
+        list_result = MagicMock()
+        list_result.scalars.return_value.all.return_value = models
+        count_result = MagicMock()
+        count_result.scalar_one.return_value = total
+        # 첫 execute = list, 두번째 execute = count
+        session.execute = AsyncMock(side_effect=[list_result, count_result])
+
+    @pytest.mark.asyncio
+    async def test_find_all_no_filter_returns_items_and_total(self) -> None:
+        repo, session, _ = _make_repo()
+        self._mock_list_and_count(
+            session,
+            [_make_user_model(id=1), _make_user_model(id=2, email="b@b.com")],
+            total=2,
+        )
+
+        users, total = await repo.find_all(UserListFilters(), request_id="r")
+
+        assert total == 2
+        assert len(users) == 2
+        assert users[0].id == 1
+        assert session.execute.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_find_all_with_status_and_query(self) -> None:
+        repo, session, _ = _make_repo()
+        self._mock_list_and_count(
+            session, [_make_user_model(id=5, status="approved")], total=1
+        )
+
+        users, total = await repo.find_all(
+            UserListFilters(status=UserStatus.APPROVED, query="a@b", limit=10, offset=0),
+            request_id="r",
+        )
+
+        assert total == 1
+        assert users[0].status == UserStatus.APPROVED
+
+    @pytest.mark.asyncio
+    async def test_find_all_empty(self) -> None:
+        repo, session, _ = _make_repo()
+        self._mock_list_and_count(session, [], total=0)
+
+        users, total = await repo.find_all(UserListFilters(), request_id="r")
+
+        assert users == []
+        assert total == 0

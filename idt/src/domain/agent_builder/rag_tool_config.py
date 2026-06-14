@@ -33,6 +33,11 @@ class RagToolConfig:
         "내부 문서에서 관련 정보를 검색합니다. "
         "질문에 대한 내부 문서 정보가 필요할 때 사용하세요."
     )
+    # 벡터 코사인 유사도 컷오프 임계값.
+    #   None = 미설정 → ToolFactory가 전역 기본값(settings) 적용
+    #   0.0  = 명시적 비활성 (모든 hit 통과, 기존 동작)
+    #   0~1  = 코사인 유사도 하한
+    score_threshold: float | None = None
 
     def __post_init__(self) -> None:
         if not 1 <= self.top_k <= 20:
@@ -41,6 +46,12 @@ class RagToolConfig:
             raise ValueError(f"Invalid search_mode: {self.search_mode}")
         if self.rrf_k < 1:
             raise ValueError(f"rrf_k must be >= 1, got {self.rrf_k}")
+        if self.score_threshold is not None and not (
+            0.0 <= self.score_threshold <= 1.0
+        ):
+            raise ValueError(
+                f"score_threshold must be 0.0~1.0, got {self.score_threshold}"
+            )
 
 
 class RagToolConfigPolicy:

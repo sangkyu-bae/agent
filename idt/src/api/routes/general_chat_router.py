@@ -4,9 +4,9 @@ import uuid
 from fastapi import APIRouter, Depends
 
 from src.application.general_chat.use_case import GeneralChatUseCase
-from src.domain.auth.entities import User
+from src.domain.agent_run.auth_context import AuthContext
 from src.domain.general_chat.schemas import GeneralChatRequest, GeneralChatResponse
-from src.interfaces.dependencies.auth import get_current_user
+from src.interfaces.dependencies.auth import get_auth_context
 
 router = APIRouter(prefix="/api/v1", tags=["chat"])
 
@@ -19,7 +19,7 @@ def get_general_chat_use_case() -> GeneralChatUseCase:
 @router.post("/chat", response_model=GeneralChatResponse)
 async def general_chat(
     body: GeneralChatRequest,
-    current_user: User = Depends(get_current_user),
+    auth_ctx: AuthContext = Depends(get_auth_context),
     use_case: GeneralChatUseCase = Depends(get_general_chat_use_case),
 ) -> GeneralChatResponse:
     """LangGraph ReAct 에이전트 기반 범용 채팅 API.
@@ -30,11 +30,11 @@ async def general_chat(
 
     Args:
         body: user_id, session_id(optional), message, top_k(optional).
-        current_user: JWT 인증된 사용자 (AUTH-001).
+        auth_ctx: JWT 인증 + AuthContext 조립 (agent-user-context Design §6.2).
         use_case: 주입된 GeneralChatUseCase.
 
     Returns:
         에이전트 답변 + 사용 도구 목록 + 출처 + 요약 여부.
     """
     request_id = str(uuid.uuid4())
-    return await use_case.execute(body, request_id)
+    return await use_case.execute(body, request_id, auth_ctx=auth_ctx)

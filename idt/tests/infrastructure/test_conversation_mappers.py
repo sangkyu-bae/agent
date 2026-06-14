@@ -118,6 +118,81 @@ class TestConversationMessageMapper:
         assert model.role == "assistant"
 
 
+class TestConversationMessageMapperCharts:
+    """charts 매핑 테스트 (chat-chart-persistence)."""
+
+    def test_to_entity_maps_charts(self) -> None:
+        """JSON 컬럼 list → 엔티티 charts."""
+        charts = [{"type": "bar"}, {"type": "line"}, {"type": "pie"}]
+        model = ConversationMessageModel(
+            id=1,
+            user_id="user-123",
+            session_id="session-abc",
+            agent_id="super",
+            role="assistant",
+            content="차트 답변",
+            turn_index=2,
+            charts=charts,
+            created_at=datetime.now(),
+        )
+
+        entity = ConversationMessageMapper.to_entity(model)
+
+        assert entity.charts == charts
+
+    def test_to_entity_charts_null_maps_to_none(self) -> None:
+        model = ConversationMessageModel(
+            id=1,
+            user_id="user-123",
+            session_id="session-abc",
+            agent_id="super",
+            role="user",
+            content="질문",
+            turn_index=1,
+            charts=None,
+            created_at=datetime.now(),
+        )
+
+        entity = ConversationMessageMapper.to_entity(model)
+
+        assert entity.charts is None
+
+    def test_to_model_maps_charts(self) -> None:
+        """엔티티 charts → JSON 컬럼 list (round-trip)."""
+        charts = [{"type": "bar", "data": {"labels": ["a"]}}]
+        entity = ConversationMessage(
+            id=None,
+            user_id=UserId("user-123"),
+            session_id=SessionId("session-abc"),
+            agent_id=AgentId.super(),
+            role=MessageRole.ASSISTANT,
+            content="차트 답변",
+            turn_index=TurnIndex(2),
+            created_at=datetime.now(),
+            charts=charts,
+        )
+
+        model = ConversationMessageMapper.to_model(entity)
+
+        assert model.charts == charts
+
+    def test_to_model_charts_default_none(self) -> None:
+        entity = ConversationMessage(
+            id=None,
+            user_id=UserId("user-123"),
+            session_id=SessionId("session-abc"),
+            agent_id=AgentId.super(),
+            role=MessageRole.USER,
+            content="질문",
+            turn_index=TurnIndex(1),
+            created_at=datetime.now(),
+        )
+
+        model = ConversationMessageMapper.to_model(entity)
+
+        assert model.charts is None
+
+
 class TestConversationSummaryMapper:
     """Tests for ConversationSummaryMapper."""
 

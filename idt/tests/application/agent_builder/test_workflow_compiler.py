@@ -201,8 +201,8 @@ class TestCompileWithCategory:
     """카테고리 기반 분기 통합 테스트 (TC-W01~W06)."""
 
     @pytest.mark.asyncio
-    async def test_search_only_has_answer_agent(self):
-        """TC-W01: search 도구만 → answer_agent 노드 존재."""
+    async def test_search_only_has_final_answer(self):
+        """TC-W01(개정): search 도구만 → final_answer 노드 존재, answer_agent 부재."""
         compiler, _ = _make_compiler()
         workers = [
             WorkerDefinition(
@@ -218,12 +218,13 @@ class TestCompileWithCategory:
             graph = await compiler.compile(workflow, _make_llm_model(), "req-1")
 
         node_names = set(graph.get_graph().nodes.keys())
-        assert "answer_agent" in node_names
+        assert "final_answer" in node_names
+        assert "answer_agent" not in node_names
         assert "searcher" in node_names
 
     @pytest.mark.asyncio
-    async def test_action_only_no_answer_agent(self):
-        """TC-W02: action 도구만 → answer_agent 없음."""
+    async def test_action_only_also_has_final_answer(self):
+        """TC-W02(개정): action 도구만이어도 depth=0이면 final_answer 존재."""
         compiler, _ = _make_compiler()
         workers = [
             WorkerDefinition(
@@ -240,6 +241,7 @@ class TestCompileWithCategory:
 
         node_names = set(graph.get_graph().nodes.keys())
         assert "answer_agent" not in node_names
+        assert "final_answer" in node_names
         assert "coder" in node_names
 
     @pytest.mark.asyncio
@@ -264,7 +266,8 @@ class TestCompileWithCategory:
             graph = await compiler.compile(workflow, _make_llm_model(), "req-1")
 
         node_names = set(graph.get_graph().nodes.keys())
-        assert "answer_agent" in node_names
+        assert "final_answer" in node_names
+        assert "answer_agent" not in node_names
         assert "searcher" in node_names
         assert "coder" in node_names
         assert mock_react.call_count == 1
@@ -316,63 +319,152 @@ class TestCompileWithCategory:
 
         node_names = set(graph.get_graph().nodes.keys())
         assert "answer_agent" not in node_names
+        assert "final_answer" in node_names
         assert mock_react.call_count == 1
 
 
-class TestSupervisorAnswerAgentRouting:
-    """Supervisor → answer_agent 라우팅 테스트 (TC-W06~W07)."""
+class TestSupervisorWorkerExposure:
+    """final-answer-node D2: 가상 워커가 supervisor 선택지에 노출되지 않음 (TC-W06~W07 개정)."""
+
+    async def _passed_worker_ids(self, workers) -> set[str]:
+        compiler, _ = _make_compiler()
+        workflow = WorkflowDefinition(
+            supervisor_prompt="프롬프트", workers=workers, flow_hint="test",
+        )
+        with patch("src.application.agent_builder.workflow_compiler.create_react_agent",
+                   return_value=MagicMock()), \
+             patch("src.application.agent_builder.workflow_compiler.create_supervisor_node",
+                   return_value=AsyncMock()) as mock_sup:
+            await compiler.compile(workflow, _make_llm_model(), "req-1")
+
+        call_kwargs = mock_sup.call_args
+        passed_workers = call_kwargs.kwargs.get("workers") or call_kwargs[1].get("workers")
+        if passed_workers is None:
+            passed_workers = call_kwargs[0][1]
+        return {w.worker_id for w in passed_workers}
 
     @pytest.mark.asyncio
-    async def test_supervisor_knows_answer_agent_when_search_exists(self):
-        """TC-W06: search 워커 존재 시 supervisor가 answer_agent를 인식."""
-        compiler, _ = _make_compiler()
-        workers = [
+    async def test_supervisor_never_sees_virtual_workers_with_search(self):
+        """TC-W06(개정): search 워커가 있어도 answer_agent/final_answer 미노출."""
+        worker_ids = await self._passed_worker_ids([
             WorkerDefinition(
                 tool_id="internal_document_search", worker_id="searcher",
+                description="검색", sort_order=0,
+            ),
+        ])
+        assert "answer_agent" not in worker_ids
+        assert "final_answer" not in worker_ids
+        assert "searcher" in worker_ids
+
+    @pytest.mark.asyncio
+    async def test_supervisor_never_sees_virtual_workers_action_only(self):
+        """TC-W07(개정): action 전용도 동일."""
+        worker_ids = await self._passed_worker_ids([
+            WorkerDefinition(
+                tool_id="python_code_executor", worker_id="coder",
+                description="코드실행", sort_order=0,
+            ),
+        ])
+        assert "answer_agent" not in worker_ids
+        assert "final_answer" not in worker_ids
+
+
+class TestCompileWithAnalysisCategory:
+    """analysis-node-agent: category='analysis' 컴파일 통합 테스트 (GAP-1, GAP-2 회귀 방지)."""
+
+    def _analysis_workflow(self) -> WorkflowDefinition:
+        workers = [
+            WorkerDefinition(
+                tool_id="data_analysis", worker_id="analyst",
+                description="데이터 분석", sort_order=0,
+            ),
+        ]
+        return WorkflowDefinition(
+            supervisor_prompt="프롬프트", workers=workers, flow_hint="test",
+        )
+
+    @pytest.mark.asyncio
+    async def test_analysis_worker_is_function_node_not_react_agent(self):
+        """GAP-1: analysis 워커는 함수 노드로 등록되고 create_react_agent를 타지 않는다."""
+        compiler, tool_factory = _make_compiler()
+        with patch(
+            "src.application.agent_builder.workflow_compiler.create_react_agent",
+            return_value=MagicMock(),
+        ) as mock_react:
+            graph = await compiler.compile(
+                self._analysis_workflow(), _make_llm_model(), "req-1",
+            )
+
+        node_names = set(graph.get_graph().nodes.keys())
+        assert "analyst" in node_names
+        # analysis 노드는 도구를 직접 쓰지 않고 react agent도 만들지 않음
+        mock_react.assert_not_called()
+        tool_factory.create.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_analysis_node_routes_through_chart_router_to_quality_gate(self):
+        """GAP-2 + analysis-chart-router: analysis 노드 → chart_router → quality_gate.
+
+        analysis 워커 직후 chart_router를 경유하고, 라우터는 다시 quality_gate로
+        복귀한다(END 직행 아님). 전이적으로 supervisor 복귀 흐름이 보존된다.
+        """
+        compiler, _ = _make_compiler()
+        with patch(
+            "src.application.agent_builder.workflow_compiler.create_react_agent",
+            return_value=MagicMock(),
+        ):
+            graph = await compiler.compile(
+                self._analysis_workflow(), _make_llm_model(), "req-1",
+            )
+
+        edges = graph.get_graph().edges
+        analyst_targets = {e.target for e in edges if e.source == "analyst"}
+        router_targets = {e.target for e in edges if e.source == "chart_router"}
+
+        # analysis 워커는 chart_router로 진입 (quality_gate 직결 아님, END 아님)
+        assert "chart_router" in analyst_targets
+        assert "__end__" not in analyst_targets
+        # chart_router는 quality_gate로 복귀
+        assert "quality_gate" in router_targets
+
+    @pytest.mark.asyncio
+    async def test_non_analysis_worker_still_goes_to_quality_gate(self):
+        """analysis-chart-router: 비-analysis 워커는 여전히 quality_gate 직결."""
+        workers = [
+            WorkerDefinition(
+                tool_id="web_search_tavily", worker_id="searcher",
                 description="검색", sort_order=0,
             ),
         ]
         workflow = WorkflowDefinition(
             supervisor_prompt="프롬프트", workers=workers, flow_hint="test",
         )
-        with patch("src.application.agent_builder.workflow_compiler.create_react_agent",
-                   return_value=MagicMock()), \
-             patch("src.application.agent_builder.workflow_compiler.create_supervisor_node",
-                   return_value=AsyncMock()) as mock_sup:
-            await compiler.compile(workflow, _make_llm_model(), "req-1")
+        compiler, _ = _make_compiler()
+        with patch(
+            "src.application.agent_builder.workflow_compiler.create_react_agent",
+            return_value=MagicMock(),
+        ):
+            graph = await compiler.compile(workflow, _make_llm_model(), "req-1")
 
-        call_kwargs = mock_sup.call_args
-        passed_workers = call_kwargs.kwargs.get("workers") or call_kwargs[1].get("workers")
-        if passed_workers is None:
-            passed_workers = call_kwargs[0][1]
-        worker_ids = {w.worker_id for w in passed_workers}
-        assert "answer_agent" in worker_ids
+        node_names = set(graph.get_graph().nodes.keys())
+        # analysis 워커가 없으면 chart_router 노드도 만들지 않음
+        assert "chart_router" not in node_names
 
     @pytest.mark.asyncio
-    async def test_supervisor_no_answer_agent_when_action_only(self):
-        """TC-W07: action 전용 → supervisor에 answer_agent 없음."""
+    async def test_analysis_only_has_final_answer_not_answer_agent(self):
+        """analysis 전용 → answer_agent 없음, final_answer는 depth=0이라 존재."""
         compiler, _ = _make_compiler()
-        workers = [
-            WorkerDefinition(
-                tool_id="python_code_executor", worker_id="coder",
-                description="코드실행", sort_order=0,
-            ),
-        ]
-        workflow = WorkflowDefinition(
-            supervisor_prompt="프롬프트", workers=workers, flow_hint="test",
-        )
-        with patch("src.application.agent_builder.workflow_compiler.create_react_agent",
-                   return_value=MagicMock()), \
-             patch("src.application.agent_builder.workflow_compiler.create_supervisor_node",
-                   return_value=AsyncMock()) as mock_sup:
-            await compiler.compile(workflow, _make_llm_model(), "req-1")
+        with patch(
+            "src.application.agent_builder.workflow_compiler.create_react_agent",
+            return_value=MagicMock(),
+        ):
+            graph = await compiler.compile(
+                self._analysis_workflow(), _make_llm_model(), "req-1",
+            )
 
-        call_kwargs = mock_sup.call_args
-        passed_workers = call_kwargs.kwargs.get("workers") or call_kwargs[1].get("workers")
-        if passed_workers is None:
-            passed_workers = call_kwargs[0][1]
-        worker_ids = {w.worker_id for w in passed_workers}
-        assert "answer_agent" not in worker_ids
+        node_names = set(graph.get_graph().nodes.keys())
+        assert "answer_agent" not in node_names
+        assert "final_answer" in node_names
 
 
 class TestMcpToolAsync:
@@ -448,3 +540,321 @@ class TestWrapWorker:
         assert result["last_worker_id"] == "worker_0"
         assert result["token_usage"] > 0
         assert result["messages"] == [mock_ai_msg]
+
+
+def _make_analysis_workflow() -> WorkflowDefinition:
+    """analysis 카테고리 워커 1개 워크플로우 (chart_router 분기 활성화용)."""
+    return WorkflowDefinition(
+        supervisor_prompt="당신은 데이터 분석 에이전트입니다.",
+        workers=[
+            WorkerDefinition(
+                tool_id="__virtual__", worker_id="data_analysis",
+                description="데이터 분석", sort_order=0, category="analysis",
+            )
+        ],
+        flow_hint="analysis",
+    )
+
+
+class TestChartBuilderWiring:
+    """supervisor-chart-builder-node Design §11-2: chart_builder 노드 배선."""
+
+    @pytest.mark.asyncio
+    async def test_chart_builder_node_registered_when_enabled(self):
+        """chart_max_count>0 + 분석워커 → chart_router/chart_builder 노드 등록."""
+        compiler, _ = _make_compiler()
+        compiler._chart_max_count = 3
+        graph = await compiler.compile(
+            _make_analysis_workflow(), _make_llm_model(), "req-1"
+        )
+        node_names = set(graph.get_graph().nodes.keys())
+        assert "chart_router" in node_names
+        assert "chart_builder" in node_names
+
+    @pytest.mark.asyncio
+    async def test_chart_builder_node_absent_when_disabled(self):
+        """chart_max_count=0(기본) → chart_router만, chart_builder 미등록(하위호환)."""
+        compiler, _ = _make_compiler()  # chart_max_count 기본 0
+        graph = await compiler.compile(
+            _make_analysis_workflow(), _make_llm_model(), "req-1"
+        )
+        node_names = set(graph.get_graph().nodes.keys())
+        assert "chart_router" in node_names
+        assert "chart_builder" not in node_names
+
+
+def _decision(next_: str, answer: str = "") -> MagicMock:
+    d = MagicMock()
+    d.next = next_
+    d.reasoning = "test reasoning"
+    d.answer = answer
+    return d
+
+
+def _search_workflow() -> WorkflowDefinition:
+    return WorkflowDefinition(
+        supervisor_prompt="프롬프트",
+        workers=[
+            WorkerDefinition(
+                tool_id="internal_document_search", worker_id="searcher",
+                description="검색", sort_order=0,
+            ),
+        ],
+        flow_hint="test",
+    )
+
+
+class TestFinalAnswerWiring:
+    """final-answer-node Design §5-4: compile 배선 + 그래프 e2e (TC-C02~C05)."""
+
+    @pytest.mark.asyncio
+    async def test_sub_graph_depth_has_no_final_answer(self):
+        """TC-C02: depth>0 컴파일 → final_answer 미등록 (D4)."""
+        compiler, _ = _make_compiler()
+        with patch("src.application.agent_builder.workflow_compiler.create_react_agent",
+                   return_value=MagicMock()):
+            graph = await compiler.compile(
+                _search_workflow(), _make_llm_model(), "req-1", depth=1,
+            )
+
+        node_names = set(graph.get_graph().nodes.keys())
+        assert "final_answer" not in node_names
+
+    @pytest.mark.asyncio
+    async def test_final_answer_edge_goes_to_end(self):
+        """TC-D3 배선: final_answer → END 직행 (quality_gate 미경유)."""
+        compiler, _ = _make_compiler()
+        with patch("src.application.agent_builder.workflow_compiler.create_react_agent",
+                   return_value=MagicMock()):
+            graph = await compiler.compile(
+                _search_workflow(), _make_llm_model(), "req-1",
+            )
+
+        edges = graph.get_graph().edges
+        final_targets = {e.target for e in edges if e.source == "final_answer"}
+        assert final_targets == {"__end__"}
+
+    def _e2e_setup(self, decisions: list, final_answer: str = "최종 종합 답변"):
+        """e2e용 compiler + mock llm/tool 조립."""
+        from langchain_core.messages import AIMessage
+
+        mock_llm = MagicMock()
+        structured = MagicMock()
+        structured.ainvoke = AsyncMock(side_effect=decisions)
+        mock_llm.with_structured_output.return_value = structured
+        mock_llm.ainvoke = AsyncMock(return_value=AIMessage(content=final_answer))
+
+        mock_tool = MagicMock()
+        mock_tool.ainvoke = AsyncMock(return_value="검색 자료입니다")
+        tool_factory = MagicMock()
+        tool_factory.create = MagicMock(return_value=mock_tool)
+
+        llm_factory = MagicMock(spec=LLMFactoryInterface)
+        llm_factory.create.return_value = mock_llm
+
+        compiler = WorkflowCompiler(
+            tool_factory=tool_factory,
+            llm_factory=llm_factory,
+            logger=MagicMock(),
+            hooks=DefaultHooks(),
+        )
+        return compiler, mock_llm
+
+    @pytest.mark.asyncio
+    async def test_e2e_worker_run_then_final_answer(self):
+        """TC-C03: 검색 워커 실행 → FINISH → final_answer 경유 후 END."""
+        from src.application.agent_builder.supervisor_nodes import build_initial_state
+
+        compiler, mock_llm = self._e2e_setup(
+            decisions=[_decision("searcher"), _decision("FINISH")],
+        )
+        graph = await compiler.compile(_search_workflow(), _make_llm_model(), "req-1")
+
+        initial = build_initial_state(
+            messages=[{"role": "user", "content": "질문입니다"}],
+            config=SupervisorConfig(),
+            available_workers=["searcher"],
+        )
+        result = await graph.ainvoke(initial)
+
+        assert result["last_worker_id"] == "final_answer"
+        assert result["messages"][-1].content == "최종 종합 답변"
+        # final_answer LLM 호출의 system prompt에 검색결과 블록 포함
+        system_content = mock_llm.ainvoke.call_args[0][0][0]["content"]
+        assert "검색 자료입니다" in system_content
+
+    @pytest.mark.asyncio
+    async def test_e2e_direct_answer_skips_final_answer(self):
+        """TC-C04: 워커 미실행 FINISH(직접 답변) → final_answer 미경유."""
+        from src.application.agent_builder.supervisor_nodes import build_initial_state
+
+        compiler, mock_llm = self._e2e_setup(
+            decisions=[_decision("FINISH", answer="직접 답변입니다")],
+        )
+        graph = await compiler.compile(_search_workflow(), _make_llm_model(), "req-1")
+
+        initial = build_initial_state(
+            messages=[{"role": "user", "content": "안녕"}],
+            config=SupervisorConfig(),
+            available_workers=["searcher"],
+        )
+        result = await graph.ainvoke(initial)
+
+        assert result["messages"][-1].content == "직접 답변입니다"
+        # final_answer 노드의 llm.ainvoke 미호출
+        mock_llm.ainvoke.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_e2e_forced_termination_still_goes_final_answer(self):
+        """TC-C05: max_iterations 강제 종료라도 워커가 실행됐으면 final_answer 경유 (DQ2)."""
+        from src.application.agent_builder.supervisor_nodes import build_initial_state
+
+        compiler, mock_llm = self._e2e_setup(
+            decisions=[_decision("searcher")],  # 2번째 supervisor는 LLM 없이 강제 __end__
+        )
+        graph = await compiler.compile(_search_workflow(), _make_llm_model(), "req-1")
+
+        initial = build_initial_state(
+            messages=[{"role": "user", "content": "질문"}],
+            config=SupervisorConfig(max_iterations=1),
+            available_workers=["searcher"],
+        )
+        result = await graph.ainvoke(initial)
+
+        assert result["last_worker_id"] == "final_answer"
+        assert result["messages"][-1].content == "최종 종합 답변"
+
+    @pytest.mark.asyncio
+    async def test_e2e_final_answer_includes_user_context_block(self):
+        """TC-F07: effective_supervisor_prompt(사용자 컨텍스트 블록)가 final_answer에 반영 (§3-4 정정)."""
+        from src.application.agent_builder.supervisor_nodes import build_initial_state
+
+        compiler, mock_llm = self._e2e_setup(
+            decisions=[_decision("searcher"), _decision("FINISH")],
+        )
+        user_block = "[사용자 정보]\n부서: 여신팀, 이름: 배상규\n"
+        with patch(
+            "src.application.agent_builder.workflow_compiler.render_user_context_block",
+            return_value=user_block,
+        ):
+            graph = await compiler.compile(
+                _search_workflow(), _make_llm_model(), "req-1",
+                include_user_context=True,
+            )
+
+            initial = build_initial_state(
+                messages=[{"role": "user", "content": "내 부서 기준으로 알려줘"}],
+                config=SupervisorConfig(),
+                available_workers=["searcher"],
+            )
+            await graph.ainvoke(initial)
+
+        # final_answer LLM 호출의 system prompt에 사용자 컨텍스트 블록이 prepend됨
+        system_content = mock_llm.ainvoke.call_args[0][0][0]["content"]
+        assert "부서: 여신팀, 이름: 배상규" in system_content
+
+
+class TestPrefillSafety:
+    """fix-anthropic-prefill-error TC-10~12: LLM/에이전트 입력이 assistant로 끝나지 않아야 함."""
+
+    @staticmethod
+    def _role(msg) -> str:
+        if isinstance(msg, dict):
+            return str(msg.get("role", ""))
+        return str(getattr(msg, "type", ""))
+
+    def _ai_last_state(self) -> dict:
+        from langchain_core.messages import AIMessage
+
+        return {
+            "messages": [
+                {"role": "user", "content": "질문"},
+                AIMessage(content="이전 워커 결과", name="worker_prev"),
+            ],
+            "token_usage": 0,
+            "token_limit": 8000,
+            "last_worker_id": "worker_prev",
+            "charts": [],
+        }
+
+    @pytest.mark.asyncio
+    async def test_tc10_wrap_worker_not_assistant_last(self):
+        """TC-10: _wrap_worker — react agent에 전달되는 messages 마지막이 user."""
+        compiler, _ = _make_compiler()
+        worker_agent = MagicMock()
+        worker_agent.ainvoke = AsyncMock(return_value={"messages": []})
+
+        wrapped = compiler._wrap_worker("worker_0", worker_agent)
+        await wrapped(self._ai_last_state())
+
+        sent = worker_agent.ainvoke.call_args.args[0]["messages"]
+        assert self._role(sent[-1]) in ("user", "human")
+        # 이전 워커 결과는 보존
+        assert any(getattr(m, "name", None) == "worker_prev" for m in sent)
+
+    @pytest.mark.asyncio
+    async def test_tc11_analyze_context_not_assistant_last(self):
+        """TC-11: _analyze_context — 비검색 워커 AIMessage-last → 마지막이 user."""
+        from langchain_core.messages import AIMessage
+
+        compiler, _ = _make_compiler()
+        mock_llm = MagicMock()
+        mock_llm.ainvoke = AsyncMock(return_value=MagicMock(content="분석 결과"))
+
+        messages = [
+            {"role": "user", "content": "분석해줘"},
+            AIMessage(content="비검색 워커 출력", name="other_worker"),
+        ]
+        await compiler._analyze_context(mock_llm, "프롬프트", "분석해줘", messages)
+
+        sent = mock_llm.ainvoke.call_args.args[0]
+        assert self._role(sent[0]) == "system"
+        assert self._role(sent[-1]) in ("user", "human")
+
+    @pytest.mark.asyncio
+    async def test_tc12_final_answer_user_last_noop(self):
+        """TC-12: final_answer_node — 통상(user-last) conversation은 그대로 전달."""
+        compiler, _ = _make_compiler()
+        mock_llm = MagicMock()
+        mock_llm.ainvoke = AsyncMock(return_value=MagicMock(content="최종 답변"))
+
+        node = compiler._create_final_answer_node(mock_llm, "시스템 프롬프트")
+        state = {
+            "messages": [{"role": "user", "content": "질문"}],
+            "token_usage": 0,
+            "token_limit": 8000,
+            "last_worker_id": "",
+            "charts": [],
+        }
+        await node(state)
+
+        sent = mock_llm.ainvoke.call_args.args[0]
+        assert self._role(sent[0]) == "system"
+        assert self._role(sent[-1]) in ("user", "human")
+        # no-op: system + 기존 user 1건 = 2건 (지시 메시지 미추가)
+        assert len(sent) == 2
+
+    @pytest.mark.asyncio
+    async def test_tc12b_final_answer_assistant_last_guarded(self):
+        """TC-12b: final_answer_node — name 없는 assistant-last도 user로 교정."""
+        from langchain_core.messages import AIMessage
+
+        compiler, _ = _make_compiler()
+        mock_llm = MagicMock()
+        mock_llm.ainvoke = AsyncMock(return_value=MagicMock(content="최종 답변"))
+
+        node = compiler._create_final_answer_node(mock_llm, "시스템 프롬프트")
+        state = {
+            "messages": [
+                {"role": "user", "content": "질문"},
+                AIMessage(content="draft answer"),  # name 없음 → conversation에 포함
+            ],
+            "token_usage": 0,
+            "token_limit": 8000,
+            "last_worker_id": "",
+            "charts": [],
+        }
+        await node(state)
+
+        sent = mock_llm.ainvoke.call_args.args[0]
+        assert self._role(sent[-1]) in ("user", "human")

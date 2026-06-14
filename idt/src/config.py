@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     default_chunk_size: int = 1000
     default_chunk_overlap: int = 100
 
+    # RAG Retrieval
+    # 벡터 코사인 유사도 컷오프 전역 기본값 (0.0 = 비활성).
+    # 에이전트별 RagToolConfig.score_threshold가 None일 때 사용된다.
+    rag_vector_score_threshold: float = 0.0
+
     # Elasticsearch
     es_host: str = "localhost"
     es_port: int = 9200
@@ -70,6 +75,23 @@ class Settings(BaseSettings):
     ollama_max_tokens: int = 4096
     ollama_temperature: float = 0.7
     ollama_timeout: int = 120
+
+    # Chart Builder
+    # chart-builder: 한 응답에 포함할 최대 차트 개수 (Design D1).
+    chart_max_count: int = 3
+
+    # Search Pipeline (search-node-query-pipeline)
+    # search 노드 rewrite/validate/compress용 경량 LLM. 빈 값이면 per-run 에이전트 LLM 사용.
+    search_pipeline_provider: str = "openai"
+    search_pipeline_model_name: str = "gpt-4o-mini"
+    # 검색결과 압축 발동 임계 길이(자). 이하면 원문 그대로 전달.
+    search_compress_threshold: int = 4000
+
+    # Agent Attachment (ws-agent-excel-attachment Design §10.2)
+    # 빈 값이면 main.py에서 {tempdir}/agent_attachments 로 해석한다.
+    agent_attachment_upload_dir: str = ""
+    agent_attachment_max_bytes: int = 10 * 1024 * 1024  # 10 MiB
+    agent_attachment_ttl_seconds: int = 3600  # TTL 백업 정리 기준
 
     # Application
     debug: bool = False

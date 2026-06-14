@@ -122,6 +122,51 @@ describe('toMessage adapter (via getSessionMessages)', () => {
     expect(result[0].createdAt).toBe('2026-04-17T10:00:00Z');
   });
 
+  it('C6: charts 필드 매핑 — 이력 복원 시 Message.charts로 전달 (chat-chart-persistence)', async () => {
+    const charts = [
+      { type: 'bar', data: { labels: ['a'], datasets: [] } },
+      { type: 'line', data: { labels: ['b'], datasets: [] } },
+    ];
+    server.use(
+      http.get('*/api/v1/conversations/sessions/:sessionId/messages', ({ params, request }) => {
+        const url = new URL(request.url);
+        return HttpResponse.json({
+          user_id: url.searchParams.get('user_id'),
+          session_id: params.sessionId,
+          messages: [
+            { id: 1, role: 'user', content: '차트 그려줘', turn_index: 1, created_at: '2026-06-10T10:00:00Z', charts: null },
+            { id: 2, role: 'assistant', content: '차트 답변', turn_index: 2, created_at: '2026-06-10T10:00:05Z', charts },
+          ],
+        });
+      }),
+    );
+
+    const result = await chatService.getSessionMessages('session-xyz', 'user-001');
+
+    expect(result[0].charts).toBeUndefined();
+    expect(result[1].charts).toEqual(charts);
+  });
+
+  it('C7: charts 필드 부재(구버전 응답) 시에도 정상 매핑 (하위호환)', async () => {
+    server.use(
+      http.get('*/api/v1/conversations/sessions/:sessionId/messages', ({ params, request }) => {
+        const url = new URL(request.url);
+        return HttpResponse.json({
+          user_id: url.searchParams.get('user_id'),
+          session_id: params.sessionId,
+          messages: [
+            { id: 1, role: 'assistant', content: '답변', turn_index: 1, created_at: '2026-06-10T10:00:00Z' },
+          ],
+        });
+      }),
+    );
+
+    const result = await chatService.getSessionMessages('session-xyz', 'user-001');
+
+    expect(result[0].charts).toBeUndefined();
+    expect(result[0].content).toBe('답변');
+  });
+
   it('C5: 서버 응답 배열 순서 유지 (reverse 금지)', async () => {
     server.use(
       http.get('*/api/v1/conversations/sessions/:sessionId/messages', ({ params, request }) => {

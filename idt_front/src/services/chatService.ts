@@ -34,6 +34,8 @@ const toMessage = (item: HistoryMessageItem): Message => ({
   role: item.role,
   content: item.content,
   createdAt: item.created_at,
+  // chat-chart-persistence: 이력 복원 시 차트 페이로드 매핑 (null/빈 배열은 생략)
+  ...(item.charts?.length ? { charts: item.charts } : {}),
 });
 
 export const chatService = {

@@ -115,17 +115,3 @@ class TestAnalysisResult:
         )
         assert result.created_at is not None
         assert isinstance(result.created_at, datetime)
-
-    def test_optional_code_fields(self):
-        result = AnalysisResult(
-            request_id="req-6",
-            user_query="분석",
-            excel_summary={},
-            final_answer="결과",
-            is_successful=True,
-            attempts=[self._make_attempt()],
-            executed_code="print('hello')",
-            code_output={"output": "hello"},
-        )
-        assert result.executed_code == "print('hello')"
-        assert result.code_output == {"output": "hello"}
