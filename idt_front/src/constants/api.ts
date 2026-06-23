@@ -115,6 +115,11 @@ export const API_ENDPOINTS = {
   ADMIN_USER_DEPT_REMOVE: (userId: number, deptId: string) =>
     `/api/v1/users/${userId}/departments/${deptId}`,
 
+  // Admin — MCP Server Registry
+  MCP_SERVERS: '/api/v1/mcp-registry',
+  MCP_SERVER_DETAIL: (id: string) => `/api/v1/mcp-registry/${id}`,
+  MCP_SERVER_TEST: (id: string) => `/api/v1/mcp-registry/${id}/test`,
+
   // Admin — Agent Run Observability (M5 dashboard)
   ADMIN_AGENT_RUN_DETAIL: (runId: string) => `/api/v1/agents/runs/${runId}`,
   ADMIN_AGENT_RUNS: '/api/v1/admin/runs',

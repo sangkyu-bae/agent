@@ -146,6 +146,7 @@ from src.api.routes.mcp_registry_router import (
     get_list_use_case as get_mcp_list_use_case,
     get_update_use_case as get_mcp_update_use_case,
     get_delete_use_case as get_mcp_delete_use_case,
+    get_test_use_case as get_mcp_test_use_case,
 )
 from src.api.routes.middleware_agent_router import (
     router as middleware_agent_router,
@@ -286,6 +287,7 @@ from src.application.mcp_registry.register_mcp_server_use_case import RegisterMC
 from src.application.mcp_registry.list_mcp_servers_use_case import ListMCPServersUseCase
 from src.application.mcp_registry.update_mcp_server_use_case import UpdateMCPServerUseCase
 from src.application.mcp_registry.delete_mcp_server_use_case import DeleteMCPServerUseCase
+from src.application.mcp_registry.mcp_connection_test_use_case import MCPConnectionTestUseCase
 from src.application.middleware_agent.get_middleware_agent_use_case import GetMiddlewareAgentUseCase
 from src.application.middleware_agent.run_middleware_agent_use_case import RunMiddlewareAgentUseCase
 from src.application.middleware_agent.update_middleware_agent_use_case import UpdateMiddlewareAgentUseCase
@@ -328,6 +330,16 @@ from src.infrastructure.visualization.llm_classifier import (
 )
 from src.infrastructure.mcp_registry.mcp_server_repository import MCPServerRepository
 from src.infrastructure.mcp_registry.mcp_tool_loader import MCPToolLoader
+from src.infrastructure.security.secret_cipher import SecretCipher
+
+
+def _mcp_cipher() -> SecretCipher | None:
+    """settings.mcp_secret_key가 설정돼 있으면 SecretCipher를, 없으면 None을 반환한다.
+
+    빈 키면 암호화 비활성(SSE 등 시크릿 없는 서버는 그대로 동작).
+    """
+    key = settings.mcp_secret_key
+    return SecretCipher(key) if key else None
 from src.api.routes.auth_router import (
     router as auth_router,
     get_register_use_case,
@@ -1745,7 +1757,7 @@ def create_general_chat_use_case_factory():
 
         # 도구: MCP Tools (LoadMCPToolsUseCase via DB) — 동일 세션 공유
         mcp_repo = MCPServerRepository(
-            session=session, logger=app_logger
+            session=session, logger=app_logger, cipher=_mcp_cipher()
         )
         mcp_loader = MCPToolLoader(logger=app_logger)
         load_mcp_uc = LoadMCPToolsUseCase(
@@ -2267,7 +2279,7 @@ def create_tool_catalog_factories():
 
     def sync_factory(session: AsyncSession = Depends(get_session)):
         tool_catalog_repo = ToolCatalogRepository(session=session, logger=app_logger)
-        mcp_repo = MCPServerRepository(session=session, logger=app_logger)
+        mcp_repo = MCPServerRepository(session=session, logger=app_logger, cipher=_mcp_cipher())
         mcp_loader = MCPToolLoader(logger=app_logger)
         return SyncMcpToolsUseCase(
             tool_catalog_repo=tool_catalog_repo,
@@ -2284,7 +2296,7 @@ def create_mcp_registry_factories():
     app_logger = get_app_logger()
 
     def _make_repo(session: AsyncSession):
-        return MCPServerRepository(session=session, logger=app_logger)
+        return MCPServerRepository(session=session, logger=app_logger, cipher=_mcp_cipher())
 
     def register_factory(session: AsyncSession = Depends(get_session)):
         return RegisterMCPServerUseCase(repository=_make_repo(session), logger=app_logger)
@@ -2298,7 +2310,10 @@ def create_mcp_registry_factories():
     def delete_factory(session: AsyncSession = Depends(get_session)):
         return DeleteMCPServerUseCase(repository=_make_repo(session), logger=app_logger)
 
-    return register_factory, list_factory, update_factory, delete_factory
+    def test_factory(session: AsyncSession = Depends(get_session)):
+        return MCPConnectionTestUseCase(repository=_make_repo(session), logger=app_logger)
+
+    return register_factory, list_factory, update_factory, delete_factory, test_factory
 
 
 def create_middleware_agent_factories():
@@ -2352,7 +2367,7 @@ def create_load_mcp_tools_factory():
     app_logger = get_app_logger()
 
     def _factory(session: AsyncSession = Depends(get_session)):
-        mcp_repo = MCPServerRepository(session=session, logger=app_logger)
+        mcp_repo = MCPServerRepository(session=session, logger=app_logger, cipher=_mcp_cipher())
         mcp_loader = MCPToolLoader(logger=app_logger)
         return LoadMCPToolsUseCase(
             repository=mcp_repo,
@@ -2665,12 +2680,13 @@ def create_app() -> FastAPI:
 
     # MCP Registry DI
     (
-        _mcp_register_f, _mcp_list_f, _mcp_update_f, _mcp_delete_f,
+        _mcp_register_f, _mcp_list_f, _mcp_update_f, _mcp_delete_f, _mcp_test_f,
     ) = create_mcp_registry_factories()
     app.dependency_overrides[get_mcp_register_use_case] = _mcp_register_f
     app.dependency_overrides[get_mcp_list_use_case] = _mcp_list_f
     app.dependency_overrides[get_mcp_update_use_case] = _mcp_update_f
     app.dependency_overrides[get_mcp_delete_use_case] = _mcp_delete_f
+    app.dependency_overrides[get_mcp_test_use_case] = _mcp_test_f
 
     # Middleware Agent DI
     (

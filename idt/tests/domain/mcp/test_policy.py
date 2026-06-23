@@ -64,3 +64,73 @@ class TestMCPConnectionPolicy:
             assert MCPConnectionPolicy.validate_server_count(
                 MCPConnectionPolicy.MAX_SERVERS
             ) is True
+
+
+class TestMCPRetryPolicy:
+
+    class TestDefaults:
+        def test_default_values(self):
+            from src.domain.mcp.policy import MCPRetryPolicy
+            policy = MCPRetryPolicy()
+            assert policy.max_retries == 2
+            assert policy.base_backoff == 0.5
+            assert policy.factor == 2.0
+            assert policy.max_backoff == 8.0
+            assert policy.retry_tool_execution is False
+
+    class TestValidation:
+        def test_rejects_negative_max_retries(self):
+            from pydantic import ValidationError
+            from src.domain.mcp.policy import MCPRetryPolicy
+            with pytest.raises(ValidationError):
+                MCPRetryPolicy(max_retries=-1)
+
+        def test_rejects_non_positive_base_backoff(self):
+            from pydantic import ValidationError
+            from src.domain.mcp.policy import MCPRetryPolicy
+            with pytest.raises(ValidationError):
+                MCPRetryPolicy(base_backoff=0)
+
+        def test_rejects_factor_below_one(self):
+            from pydantic import ValidationError
+            from src.domain.mcp.policy import MCPRetryPolicy
+            with pytest.raises(ValidationError):
+                MCPRetryPolicy(factor=0.5)
+
+    class TestComputeBackoff:
+        def test_monotonic_increase(self):
+            from src.domain.mcp.policy import MCPRetryPolicy
+            policy = MCPRetryPolicy(base_backoff=0.5, factor=2.0, max_backoff=100.0)
+            assert policy.compute_backoff(0) == 0.5
+            assert policy.compute_backoff(1) == 1.0
+            assert policy.compute_backoff(2) == 2.0
+            assert policy.compute_backoff(3) == 4.0
+
+        def test_respects_max_backoff_cap(self):
+            from src.domain.mcp.policy import MCPRetryPolicy
+            policy = MCPRetryPolicy(base_backoff=1.0, factor=10.0, max_backoff=5.0)
+            assert policy.compute_backoff(0) == 1.0
+            assert policy.compute_backoff(5) == 5.0
+
+        def test_factor_one_is_constant(self):
+            from src.domain.mcp.policy import MCPRetryPolicy
+            policy = MCPRetryPolicy(base_backoff=2.0, factor=1.0, max_backoff=100.0)
+            assert policy.compute_backoff(0) == 2.0
+            assert policy.compute_backoff(3) == 2.0
+
+    class TestIsRetryable:
+        def test_connection_error_is_retryable(self):
+            from src.domain.mcp.policy import MCPRetryPolicy
+            assert MCPRetryPolicy.is_retryable(ConnectionError("boom")) is True
+
+        def test_timeout_error_is_retryable(self):
+            from src.domain.mcp.policy import MCPRetryPolicy
+            assert MCPRetryPolicy.is_retryable(TimeoutError()) is True
+
+        def test_os_error_is_retryable(self):
+            from src.domain.mcp.policy import MCPRetryPolicy
+            assert MCPRetryPolicy.is_retryable(OSError("net down")) is True
+
+        def test_value_error_is_not_retryable(self):
+            from src.domain.mcp.policy import MCPRetryPolicy
+            assert MCPRetryPolicy.is_retryable(ValueError("bad")) is False

@@ -51,6 +51,8 @@ dependencies = [
     "passlib[bcrypt]>=1.7.4",
     "bcrypt>=4.0,<5.0",
     "python-multipart>=0.0.9",
+    # Crypto (MCP 등록 시크릿 Fernet 암호화 — secret_cipher.py 직접 사용)
+    "cryptography>=42.0.0",
 ]
 
 [project.optional-dependencies]

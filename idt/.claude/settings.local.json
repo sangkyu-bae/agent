@@ -199,7 +199,17 @@
       "PowerShell(python -c \"import json,io,datetime; p=r'C:\\\\sangplus\\\\sangplusbot\\\\idt\\\\.bkit\\\\state\\\\pdca-status.json'; d=json.load\\(io.open\\(p,encoding='utf-8'\\)\\); f='fix-anthropic-prefill-error'; e=d['features'][f]; e['phase']='do'; now=datetime.datetime.now\\(datetime.UTC\\).strftime\\('%Y-%m-%dT%H:%M:%S.000Z'\\); e['lastUpdated']=now; d['lastUpdated']=now; json.dump\\(d,io.open\\(p,'w',encoding='utf-8'\\),ensure_ascii=False,indent=2\\); print\\('phase=do'\\)\")",
       "PowerShell(python -c \"import json,io,datetime; p=r'C:\\\\sangplus\\\\sangplusbot\\\\idt\\\\.bkit\\\\state\\\\pdca-status.json'; d=json.load\\(io.open\\(p,encoding='utf-8'\\)\\); f='fix-anthropic-prefill-error'; e=d['features'][f]; e['phase']='check'; e['matchRate']=100; now=datetime.datetime.now\\(datetime.UTC\\).strftime\\('%Y-%m-%dT%H:%M:%S.000Z'\\); e['lastUpdated']=now; e['documents']['analysis']='docs/03-analysis/fix-anthropic-prefill-error.analysis.md'; d['lastUpdated']=now; json.dump\\(d,io.open\\(p,'w',encoding='utf-8'\\),ensure_ascii=False,indent=2\\); print\\('phase=check matchRate=100'\\)\")",
       "PowerShell(python -c \"import json,io,datetime; p=r'C:\\\\sangplus\\\\sangplusbot\\\\idt\\\\.bkit\\\\state\\\\pdca-status.json'; d=json.load\\(io.open\\(p,encoding='utf-8'\\)\\); f='fix-anthropic-prefill-error'; e=d['features'][f]; e['phase']='completed'; now=datetime.datetime.now\\(datetime.UTC\\).strftime\\('%Y-%m-%dT%H:%M:%S.000Z'\\); e['lastUpdated']=now; e['documents']['report']='docs/04-report/fix-anthropic-prefill-error.report.md'; d['lastUpdated']=now; json.dump\\(d,io.open\\(p,'w',encoding='utf-8'\\),ensure_ascii=False,indent=2\\); print\\('phase=completed'\\)\")",
-      "PowerShell(python -c \"import json,io,datetime; p=r'C:\\\\sangplus\\\\sangplusbot\\\\idt\\\\.bkit\\\\state\\\\pdca-status.json'; d=json.load\\(io.open\\(p,encoding='utf-8'\\)\\); f='fix-anthropic-prefill-error'; d['features'].pop\\(f,None\\); d['activeFeatures']=[x for x in d.get\\('activeFeatures',[]\\) if x!=f]; d['lastUpdated']=datetime.datetime.now\\(datetime.UTC\\).strftime\\('%Y-%m-%dT%H:%M:%S.000Z'\\); json.dump\\(d,io.open\\(p,'w',encoding='utf-8'\\),ensure_ascii=False,indent=2\\); print\\('archived & removed from status'\\)\")"
+      "PowerShell(python -c \"import json,io,datetime; p=r'C:\\\\sangplus\\\\sangplusbot\\\\idt\\\\.bkit\\\\state\\\\pdca-status.json'; d=json.load\\(io.open\\(p,encoding='utf-8'\\)\\); f='fix-anthropic-prefill-error'; d['features'].pop\\(f,None\\); d['activeFeatures']=[x for x in d.get\\('activeFeatures',[]\\) if x!=f]; d['lastUpdated']=datetime.datetime.now\\(datetime.UTC\\).strftime\\('%Y-%m-%dT%H:%M:%S.000Z'\\); json.dump\\(d,io.open\\(p,'w',encoding='utf-8'\\),ensure_ascii=False,indent=2\\); print\\('archived & removed from status'\\)\")",
+      "WebFetch(domain:smithery.ai)",
+      "Bash(python -m ruff check src/domain/mcp/value_objects.py src/domain/mcp/policy.py src/infrastructure/mcp/client_factory.py src/infrastructure/mcp/call_client.py)",
+      "Bash(python *)",
+      "Bash(echo \"\\(exit $?\\)\")",
+      "Bash(grep -rn \"^import logging$\\\\|logging\\\\.info\\\\|logging\\\\.error\" src/domain/mcp/ src/infrastructure/mcp/call_client.py src/infrastructure/mcp/client_factory.py)",
+      "Bash(/c/sangplus/sangplusbot/idt_front/node_modules/.bin/vitest run *)",
+      "Bash(/c/sangplus/sangplusbot/idt_front/node_modules/.bin/tsc --noEmit -p /c/sangplus/sangplusbot/idt_front/tsconfig.app.json)",
+      "Read(//c/sangplus/sangplusbot/**)",
+      "Bash(ls *.md)",
+      "Bash(ls idt/*.md)"
     ]
   }
 }

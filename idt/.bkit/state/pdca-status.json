@@ -1,6 +1,6 @@
 {
   "version": "2.0",
-  "lastUpdated": "2026-06-11T07:23:15.000Z",
+  "lastUpdated": "2026-06-18T08:16:49.070Z",
   "activeFeatures": [
     "websocket-common-module",
     "agent-chat-multiturn",
@@ -95,7 +95,11 @@
     "analyze_with_claude",
     "excel-chart-routing-dedup",
     "search-node-query-pipeline",
-    "supervisor-viz-routing"
+    "supervisor-viz-routing",
+    "mcp-http-call-module",
+    "security",
+    "AdminMcpServersPage",
+    "mcp-registry-admin-ui"
   ],
   "primaryFeature": "idt_front",
   "archivedFeatures": {
@@ -239,6 +243,14 @@
     }
   },
   "features": {
+    "mcp-registry-admin-ui": {
+      "phase": "archived",
+      "matchRate": 100,
+      "iterationCount": 0,
+      "startedAt": "2026-06-18T00:00:00.000Z",
+      "archivedAt": "2026-06-18T00:00:00.000Z",
+      "archivedTo": "docs/archive/2026-06/mcp-registry-admin-ui/"
+    },
     "advanced-ingest-pipeline": {
       "phase": "archived",
       "matchRate": 98,
@@ -369,7 +381,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-04T10:53:02.380Z",
-        "lastUpdated": "2026-06-10T11:19:03.753Z"
+        "lastUpdated": "2026-06-18T07:59:28.030Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\api\\main.py"
     },
@@ -382,9 +394,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-04T10:57:06.857Z",
-        "lastUpdated": "2026-06-10T06:45:38.364Z"
+        "lastUpdated": "2026-06-18T07:58:59.505Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\api\\routes\\conversation_history_router.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\api\\routes\\mcp_registry_router.py"
     },
     "retrieval": {
       "phase": "do",
@@ -434,9 +446,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-14T08:49:05.368Z",
-        "lastUpdated": "2026-03-14T08:52:11.783Z"
+        "lastUpdated": "2026-06-16T11:29:16.576Z"
       },
-      "lastFile": "C:\\sangplus\\idt\\src\\application\\mcp\\use_case.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\infrastructure\\mcp\\call_client.py"
     },
     "elasticsearch": {
       "phase": "do",
@@ -473,7 +485,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-16T13:14:48.990Z",
-        "lastUpdated": "2026-06-10T11:18:34.446Z"
+        "lastUpdated": "2026-06-16T11:43:16.984Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\config.py"
     },
@@ -668,9 +680,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-21T07:30:16.381Z",
-        "lastUpdated": "2026-03-21T07:54:09.875Z"
+        "lastUpdated": "2026-06-18T07:58:33.962Z"
       },
-      "lastFile": "C:\\sangplus\\idt\\src\\infrastructure\\mcp_registry\\models.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\application\\mcp_registry\\test_test_connection_use_case.py"
     },
     "llm": {
       "phase": "do",
@@ -736,9 +748,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-04-01T11:13:23.704Z",
-        "lastUpdated": "2026-06-06T07:18:22.214Z"
+        "lastUpdated": "2026-06-18T08:03:21.933Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\constants\\api.ts"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\constants\\adminNav.test.ts"
     },
     "idt_front": {
       "phase": "do",
@@ -749,9 +761,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-04-01T11:13:30.494Z",
-        "lastUpdated": "2026-06-10T06:48:11.365Z"
+        "lastUpdated": "2026-06-18T08:04:06.229Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\services\\chatService.ts"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\hooks\\useMcpServers.test.ts"
     },
     "ChatPage": {
       "phase": "do",
@@ -939,7 +951,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-04-26T09:34:24.626Z",
-        "lastUpdated": "2026-06-10T06:48:34.755Z"
+        "lastUpdated": "2026-06-18T08:03:44.058Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\__tests__\\mocks\\handlers.ts"
     },
@@ -1617,6 +1629,46 @@
       },
       "previousPhase": "check",
       "autoAdvanced": true
+    },
+    "mcp-http-call-module": {
+      "phase": "act",
+      "phaseNumber": 5,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-06-16T11:27:56.618Z",
+        "lastUpdated": "2026-06-16T11:27:56.620Z"
+      },
+      "previousPhase": "check",
+      "autoAdvanced": true
+    },
+    "security": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-06-16T11:40:18.306Z",
+        "lastUpdated": "2026-06-16T11:44:41.369Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\infrastructure\\security\\test_secret_cipher.py"
+    },
+    "AdminMcpServersPage": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-06-18T08:02:48.353Z",
+        "lastUpdated": "2026-06-18T08:16:49.070Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\AdminMcpServersPage\\index.test.tsx"
     }
   },
   "pipeline": {
@@ -1627,7 +1679,7 @@
   "session": {
     "startedAt": "2026-03-04T10:49:14.367Z",
     "onboardingCompleted": false,
-    "lastActivity": "2026-06-11T07:07:40.459Z"
+    "lastActivity": "2026-06-18T08:16:49.070Z"
   },
   "history": [
     {
@@ -9779,6 +9831,498 @@
       "timestamp": "2026-06-11T07:07:40.458Z",
       "feature": "fix-anthropic-prefill-error",
       "phase": "act",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:04:34.954Z",
+      "feature": "mcp",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:04:54.064Z",
+      "feature": "mcp",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:05:11.740Z",
+      "feature": "mcp",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:05:33.748Z",
+      "feature": "mcp",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:05:50.645Z",
+      "feature": "mcp",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:05:58.811Z",
+      "feature": "mcp",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:06:10.780Z",
+      "feature": "mcp",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:06:49.186Z",
+      "feature": "mcp",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:07:22.943Z",
+      "feature": "mcp",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:09:20.170Z",
+      "feature": "mcp",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:09:29.913Z",
+      "feature": "mcp",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:10:06.852Z",
+      "feature": "mcp",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:13:05.149Z",
+      "feature": "mcp",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:13:07.163Z",
+      "feature": "mcp",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:13:12.344Z",
+      "feature": "mcp",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:13:21.140Z",
+      "feature": "mcp",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:13:25.628Z",
+      "feature": "mcp",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:13:30.403Z",
+      "feature": "mcp",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:13:51.569Z",
+      "feature": "mcp",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:13:52.908Z",
+      "feature": "mcp",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:27:56.620Z",
+      "feature": "mcp-http-call-module",
+      "phase": "act",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:28:38.929Z",
+      "feature": "mcp",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:28:45.927Z",
+      "feature": "mcp",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:29:16.576Z",
+      "feature": "mcp",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:39:39.874Z",
+      "feature": "mcp_registry",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:39:48.231Z",
+      "feature": "mcp_registry",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:39:54.828Z",
+      "feature": "mcp_registry",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:40:03.935Z",
+      "feature": "mcp_registry",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:40:18.306Z",
+      "feature": "security",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:40:25.608Z",
+      "feature": "security",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:40:41.623Z",
+      "feature": "mcp_registry",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:40:49.173Z",
+      "feature": "mcp_registry",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:41:19.624Z",
+      "feature": "mcp_registry",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:41:32.359Z",
+      "feature": "mcp_registry",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:41:50.963Z",
+      "feature": "mcp_registry",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:42:20.815Z",
+      "feature": "mcp_registry",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:42:37.161Z",
+      "feature": "mcp_registry",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:42:41.668Z",
+      "feature": "mcp_registry",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:42:52.003Z",
+      "feature": "mcp_registry",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:43:00.738Z",
+      "feature": "mcp_registry",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:43:07.207Z",
+      "feature": "mcp_registry",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:43:16.984Z",
+      "feature": "idt",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:43:36.737Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:43:47.675Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:43:56.007Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:44:00.554Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:44:17.618Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:44:35.186Z",
+      "feature": "security",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:44:41.369Z",
+      "feature": "security",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:44:48.616Z",
+      "feature": "mcp_registry",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:45:02.830Z",
+      "feature": "mcp_registry",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:45:12.871Z",
+      "feature": "mcp_registry",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-16T11:45:30.684Z",
+      "feature": "mcp_registry",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-18T07:57:11.714Z",
+      "feature": "mcp_registry",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-18T07:57:21.755Z",
+      "feature": "mcp_registry",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-18T07:57:30.790Z",
+      "feature": "mcp_registry",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-18T07:58:16.329Z",
+      "feature": "mcp_registry",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-18T07:58:27.522Z",
+      "feature": "mcp_registry",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-18T07:58:30.657Z",
+      "feature": "mcp_registry",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-18T07:58:32.535Z",
+      "feature": "mcp_registry",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-18T07:58:33.962Z",
+      "feature": "mcp_registry",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-18T07:58:53.251Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-18T07:58:54.807Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-18T07:58:59.505Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-18T07:59:18.660Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-18T07:59:20.551Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-18T07:59:23.351Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-18T07:59:28.030Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-18T08:00:15.783Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-18T08:00:22.538Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-18T08:00:28.353Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-18T08:00:39.333Z",
+      "feature": "constants",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-18T08:00:42.187Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-18T08:00:50.832Z",
+      "feature": "constants",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-18T08:01:06.855Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-18T08:01:09.074Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-18T08:02:48.353Z",
+      "feature": "AdminMcpServersPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-18T08:03:21.933Z",
+      "feature": "constants",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-18T08:03:44.058Z",
+      "feature": "mocks",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-18T08:04:06.229Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-18T08:14:13.580Z",
+      "feature": "mcp-registry-admin-ui",
+      "phase": "act",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-18T08:16:49.070Z",
+      "feature": "AdminMcpServersPage",
+      "phase": "do",
       "action": "updated"
     }
   ]

@@ -9,6 +9,7 @@ class MCPRegistrationPolicy:
     MAX_DESCRIPTION_LENGTH = 2000
     MAX_ENDPOINT_LENGTH = 512
     ALLOWED_SCHEMES = {"http", "https"}
+    ALLOWED_TRANSPORTS = {"sse", "streamable_http"}
 
     @staticmethod
     def validate_name(name: str) -> bool:
@@ -34,3 +35,22 @@ class MCPRegistrationPolicy:
             parsed.scheme in MCPRegistrationPolicy.ALLOWED_SCHEMES
             and bool(parsed.netloc)
         )
+
+    @staticmethod
+    def validate_transport(transport: str) -> bool:
+        """허용된 transport인지 검증한다."""
+        return transport in MCPRegistrationPolicy.ALLOWED_TRANSPORTS
+
+    @staticmethod
+    def validate_auth(transport: str, auth_config: dict | None) -> bool:
+        """transport별 필수 인증 필드를 검증한다.
+
+        streamable_http(Smithery)는 플랫폼 인증을 위해 api_key가 필수다.
+        sse는 별도 인증 요건이 없어 항상 통과한다.
+        """
+        if transport != "streamable_http":
+            return True
+        if not auth_config:
+            return False
+        api_key = auth_config.get("api_key")
+        return bool(api_key and str(api_key).strip())

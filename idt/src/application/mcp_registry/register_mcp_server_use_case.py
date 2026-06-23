@@ -38,6 +38,12 @@ class RegisterMCPServerUseCase:
             raise ValueError("Invalid description")
         if not MCPRegistrationPolicy.validate_endpoint(request.endpoint):
             raise ValueError(f"Invalid endpoint URL: {request.endpoint!r}")
+        if not MCPRegistrationPolicy.validate_transport(request.transport):
+            raise ValueError(f"Invalid transport: {request.transport!r}")
+        if not MCPRegistrationPolicy.validate_auth(
+            request.transport, request.auth_config
+        ):
+            raise ValueError("Invalid auth_config: api_key required for streamable_http")
 
         now = datetime.utcnow()
         registration = MCPServerRegistration(
@@ -46,11 +52,13 @@ class RegisterMCPServerUseCase:
             name=request.name,
             description=request.description,
             endpoint=request.endpoint,
-            transport=MCPTransportType.SSE,
+            transport=MCPTransportType(request.transport),
             input_schema=request.input_schema,
             is_active=True,
             created_at=now,
             updated_at=now,
+            auth_config=request.auth_config,
+            server_config=request.server_config,
         )
 
         saved = await self._repo.save(registration, request_id)

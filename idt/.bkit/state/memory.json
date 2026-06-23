@@ -1,17 +1,18 @@
 {
-  "sessionCount": 309,
+  "sessionCount": 316,
   "lastSession": {
-    "startedAt": "2026-06-11T06:19:16.495Z",
+    "startedAt": "2026-06-18T11:40:56.041Z",
     "platform": "claude",
     "level": "Starter"
   },
-  "currentFeature": "agent-run-observability",
-  "currentPhase": "check",
-  "matchRate": 96,
+  "currentFeature": "mcp-http-call-module",
+  "currentPhase": "archived",
+  "matchRate": 97,
+  "archivedTo": "docs/archive/2026-06/mcp-http-call-module/",
   "milestones": {
     "M1": "completed",
-    "M2": "pending",
-    "M3": "pending",
-    "M4": "pending"
+    "M2": "completed",
+    "M3": "completed",
+    "M4": "completed"
   }
 }

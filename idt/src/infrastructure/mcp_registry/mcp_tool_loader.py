@@ -2,19 +2,47 @@
 from langchain_core.tools import BaseTool
 
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
-from src.domain.mcp_registry.schemas import MCPServerRegistration
-from src.domain.mcp.value_objects import MCPServerConfig, MCPTransport, SSEServerConfig
+from src.domain.mcp_registry.schemas import MCPServerRegistration, MCPTransportType
+from src.domain.mcp.value_objects import (
+    MCPServerConfig,
+    MCPTransport,
+    SSEServerConfig,
+    StreamableHTTPServerConfig,
+)
 from src.infrastructure.mcp.tool_registry import MCPToolRegistry
+from src.infrastructure.mcp_registry.smithery_url import build_streamable_http
 
 
 class MCPToolLoader:
     """
-    MCPServerRegistration → MCPServerConfig(SSE) 조립 후
+    MCPServerRegistration → MCPServerConfig(SSE/Streamable HTTP) 조립 후
     MCPToolRegistry(MCP-001)로 LangChain BaseTool 목록 반환.
     """
 
     def __init__(self, logger: LoggerInterface):
         self._logger = logger
+
+    @staticmethod
+    def _build_config(registration: MCPServerRegistration) -> MCPServerConfig:
+        """transport에 맞는 MCPServerConfig를 조립한다."""
+        if registration.transport == MCPTransportType.STREAMABLE_HTTP:
+            url, headers = build_streamable_http(
+                registration.endpoint,
+                registration.auth_config,
+                registration.server_config,
+            )
+            return MCPServerConfig(
+                name=registration.tool_id,
+                transport=MCPTransport.STREAMABLE_HTTP,
+                streamable_http=StreamableHTTPServerConfig(
+                    url=url, headers=headers or None
+                ),
+            )
+        return MCPServerConfig(
+            name=registration.tool_id,  # "mcp_{uuid}"
+            transport=MCPTransport.SSE,
+            sse=SSEServerConfig(url=registration.endpoint),
+        )
 
     async def load(
         self,
@@ -27,13 +55,10 @@ class MCPToolLoader:
             request_id=request_id,
             server_id=registration.id,
             server_name=registration.name,
+            transport=registration.transport.value,
         )
 
-        config = MCPServerConfig(
-            name=registration.tool_id,  # "mcp_{uuid}"
-            transport=MCPTransport.SSE,
-            sse=SSEServerConfig(url=registration.endpoint),
-        )
+        config = self._build_config(registration)
         registry = MCPToolRegistry(configs=[config])
         tools = await registry.get_tools(request_id=request_id)
 

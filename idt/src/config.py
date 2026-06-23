@@ -93,6 +93,12 @@ class Settings(BaseSettings):
     agent_attachment_max_bytes: int = 10 * 1024 * 1024  # 10 MiB
     agent_attachment_ttl_seconds: int = 3600  # TTL 백업 정리 기준
 
+    # MCP Registry
+    # transport별 인증/서버 config(auth_config/server_config)를 DB 저장 시
+    # Fernet 대칭암호화하는 키 (urlsafe base64 32B). 빈 값이면 암호화 비활성(SSE 호환).
+    # 키 생성: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    mcp_secret_key: str = ""
+
     # Application
     debug: bool = False
 

@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from src.application.mcp_registry.schemas import (
     ListMCPServersResponse,
+    MCPConnectionTestResponse,
     MCPServerResponse,
     RegisterMCPServerRequest,
     UpdateMCPServerRequest,
@@ -28,6 +29,10 @@ def get_update_use_case():
 
 
 def get_delete_use_case():
+    raise NotImplementedError
+
+
+def get_test_use_case():
     raise NotImplementedError
 
 
@@ -99,3 +104,19 @@ async def delete_mcp_server(
     deleted = await use_case.execute(id, request_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="MCP server not found")
+
+
+@router.post("/{id}/test", response_model=MCPConnectionTestResponse)
+async def test_mcp_connection(
+    id: str,
+    use_case=Depends(get_test_use_case),
+):
+    """MCP 서버 연결 테스트 (list_tools).
+
+    연결/조회 실패는 200 + ok=False로 반환하고, 서버 미존재만 404.
+    """
+    request_id = str(uuid.uuid4())
+    result = await use_case.execute(id, request_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="MCP server not found")
+    return result

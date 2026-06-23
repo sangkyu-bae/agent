@@ -28,3 +28,4 @@
 - [ws-agent-excel-attachment Completion](project_ws-agent-excel-attachment_completion.md) — WebSocket excel attachment support (99% match, 77 tests, HTTP upload→file_id→WS ref→resolve→cleanup, Thin DDD + TTL prevention)
 - [supervisor-chart-builder-node Completion](project_supervisor-chart-builder-node_completion.md) — Chart builder node in Supervisor graph (99% match, 16/16 design points, infinite loop fix via visualization_done + skip_workers)
 - [chart-context-continuity Phase 1 Completion](project_chart-context-continuity_phase1_completion.md) — General Chat chart reference continuity (100% match, 43 tests, D7-rev1 caption injection, Phase 2/3 deferred)
+- [naver-search-mcp-integration Completion](project_naver-search-mcp-integration_completion.md) — Smithery Naver Search MCP (Streamable HTTP) integration (100% effective match, 13/13 design items, 90 tests, non-breaking back-compat)

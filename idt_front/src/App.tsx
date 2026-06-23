@@ -16,6 +16,7 @@ import LoginPage from '@/pages/LoginPage';
 import RegisterPage from '@/pages/RegisterPage';
 import AdminUsersPage from '@/pages/AdminUsersPage';
 import AdminDepartmentsPage from '@/pages/AdminDepartmentsPage';
+import AdminMcpServersPage from '@/pages/AdminMcpServersPage';
 import AdminRagasPage from '@/pages/AdminRagasPage';
 import AdminAgentRunsPage from '@/pages/AdminAgentRunsPage';
 import AgentRunDetailPage from '@/pages/AgentRunDetailPage';
@@ -60,6 +61,7 @@ const App = () => (
         <Route element={<AdminLayout />}>
           <Route path="/admin/users" element={<AdminUsersPage />} />
           <Route path="/admin/departments" element={<AdminDepartmentsPage />} />
+          <Route path="/admin/mcp-servers" element={<AdminMcpServersPage />} />
           <Route path="/admin/ragas" element={<AdminRagasPage />} />
           <Route path="/admin/agent-runs" element={<AdminAgentRunsPage />} />
           <Route path="/admin/agent-runs/:runId" element={<AgentRunDetailPage />} />
