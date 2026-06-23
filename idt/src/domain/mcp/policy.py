@@ -6,7 +6,10 @@ domain 레이어 — 외부 의존성 없음.
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
+
+from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
     from src.domain.mcp.value_objects import MCPServerConfig
@@ -62,3 +65,47 @@ class MCPConnectionPolicy:
         if len(sanitized) > MCPConnectionPolicy.MAX_TOOL_NAME_LENGTH:
             sanitized = sanitized[: MCPConnectionPolicy.MAX_TOOL_NAME_LENGTH]
         return sanitized
+
+
+class MCPRetryPolicy(BaseModel):
+    """재시도 + 지수 백오프 정책 (도메인 순수).
+
+    기본은 연결 단계 한정 재시도. tool 실행 재시도는 비멱등 부작용 위험이 있어
+    retry_tool_execution=False 기본 옵트인.
+    """
+
+    max_retries: int = Field(default=2, ge=0, description="추가 재시도 횟수")
+    base_backoff: float = Field(default=0.5, gt=0, description="첫 재시도 대기(초)")
+    factor: float = Field(default=2.0, ge=1.0, description="지수 증가 계수")
+    max_backoff: float = Field(default=8.0, gt=0, description="대기 상한(초)")
+    retry_tool_execution: bool = Field(
+        default=False,
+        description="True면 call_tool 실패도 재시도(멱등 도구 한정 옵트인)",
+    )
+
+    def compute_backoff(self, attempt: int) -> float:
+        """attempt(0-base)에 대한 대기 시간을 계산한다. 단조 증가 + 상한 보장.
+
+        Args:
+            attempt: 재시도 시도 인덱스 (0부터)
+
+        Returns:
+            대기 시간(초), max_backoff 이하
+        """
+        delay = self.base_backoff * (self.factor**attempt)
+        return min(delay, self.max_backoff)
+
+    @staticmethod
+    def is_retryable(exc: BaseException) -> bool:
+        """예외의 재시도 가능 여부를 분류한다.
+
+        연결/타임아웃/일시 네트워크 오류만 재시도 대상으로 본다.
+
+        Args:
+            exc: 발생한 예외
+
+        Returns:
+            재시도 가능하면 True
+        """
+        retryable = (ConnectionError, TimeoutError, asyncio.TimeoutError, OSError)
+        return isinstance(exc, retryable)

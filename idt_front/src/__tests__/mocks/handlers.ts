@@ -49,6 +49,74 @@ export const handlers = [
     })
   ),
 
+  // MCP-REG-UI-001: MCP 서버 레지스트리 CRUD + 연결 테스트
+  http.get(`*${API_ENDPOINTS.MCP_SERVERS}`, () =>
+    HttpResponse.json({
+      items: [
+        {
+          id: 'srv-1',
+          user_id: '1',
+          name: 'Naver Search',
+          description: '네이버 검색 MCP',
+          endpoint: 'https://server.smithery.ai/@x/y/mcp',
+          transport: 'streamable_http',
+          input_schema: null,
+          is_active: true,
+          tool_id: 'mcp_srv-1',
+          created_at: '2026-06-18T00:00:00Z',
+          updated_at: '2026-06-18T00:00:00Z',
+          auth_config: { api_key: '****' },
+          server_config: null,
+        },
+      ],
+      total: 1,
+    })
+  ),
+  http.post(`*${API_ENDPOINTS.MCP_SERVERS}`, async ({ request }) => {
+    const body = (await request.json()) as Record<string, unknown>;
+    return HttpResponse.json(
+      {
+        id: 'srv-new',
+        tool_id: 'mcp_srv-new',
+        is_active: true,
+        input_schema: null,
+        created_at: '2026-06-18T00:00:00Z',
+        updated_at: '2026-06-18T00:00:00Z',
+        auth_config: null,
+        server_config: null,
+        ...body,
+      },
+      { status: 201 },
+    );
+  }),
+  http.put('*/api/v1/mcp-registry/:id', async ({ request, params }) => {
+    const body = (await request.json()) as Record<string, unknown>;
+    return HttpResponse.json({
+      id: params.id,
+      user_id: '1',
+      name: 'updated',
+      description: 'd',
+      endpoint: 'https://e/mcp',
+      transport: 'sse',
+      input_schema: null,
+      is_active: true,
+      tool_id: `mcp_${params.id}`,
+      created_at: '2026-06-18T00:00:00Z',
+      updated_at: '2026-06-18T01:00:00Z',
+      auth_config: null,
+      server_config: null,
+      ...body,
+    });
+  }),
+  http.delete('*/api/v1/mcp-registry/:id', () => new HttpResponse(null, { status: 204 })),
+  http.post('*/api/v1/mcp-registry/:id/test', () =>
+    HttpResponse.json({
+      ok: true,
+      tools: [{ name: 'search', description: '웹 검색' }],
+      elapsed_ms: 42,
+    })
+  ),
+
   // LLM-MODEL-FRONT-001: LLM 모델 목록 조회
   http.get(`*${API_ENDPOINTS.LLM_MODELS}`, () =>
     HttpResponse.json({

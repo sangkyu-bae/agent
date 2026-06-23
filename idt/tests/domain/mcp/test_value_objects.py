@@ -16,6 +16,10 @@ class TestMCPTransport:
         from src.domain.mcp.value_objects import MCPTransport
         assert MCPTransport.WEBSOCKET.value == "websocket"
 
+    def test_streamable_http_value(self):
+        from src.domain.mcp.value_objects import MCPTransport
+        assert MCPTransport.STREAMABLE_HTTP.value == "streamable_http"
+
 
 class TestStdioServerConfig:
     def test_create_with_required_fields(self):
@@ -106,6 +110,119 @@ class TestMCPServerConfig:
         from src.domain.mcp.value_objects import MCPServerConfig, MCPTransport
         config = MCPServerConfig(name="test", transport=MCPTransport.WEBSOCKET)
         with pytest.raises(ValueError, match="websocket config is required"):
+            config.get_transport_config()
+
+
+class TestMCPTimeoutConfig:
+    def test_defaults(self):
+        from src.domain.mcp.value_objects import MCPTimeoutConfig
+        cfg = MCPTimeoutConfig()
+        assert cfg.connect == 30.0
+        assert cfg.read == 300.0
+        assert cfg.total == 300.0
+
+    def test_custom_values(self):
+        from src.domain.mcp.value_objects import MCPTimeoutConfig
+        cfg = MCPTimeoutConfig(connect=5.0, read=60.0, total=90.0)
+        assert cfg.connect == 5.0
+        assert cfg.read == 60.0
+        assert cfg.total == 90.0
+
+    def test_rejects_non_positive(self):
+        from src.domain.mcp.value_objects import MCPTimeoutConfig
+        with pytest.raises(ValidationError):
+            MCPTimeoutConfig(connect=0)
+        with pytest.raises(ValidationError):
+            MCPTimeoutConfig(read=-1.0)
+
+    def test_from_legacy_maps_to_connect(self):
+        from src.domain.mcp.value_objects import MCPTimeoutConfig
+        cfg = MCPTimeoutConfig.from_legacy(10.0)
+        assert cfg.connect == 10.0
+        assert cfg.read == 300.0
+        assert cfg.total == 300.0
+
+
+class TestMCPAuthConfig:
+    def test_to_headers_with_bearer_token(self):
+        from src.domain.mcp.value_objects import MCPAuthConfig
+        auth = MCPAuthConfig(token="abc123")
+        assert auth.to_headers() == {"Authorization": "Bearer abc123"}
+
+    def test_to_headers_custom_scheme(self):
+        from src.domain.mcp.value_objects import MCPAuthConfig
+        auth = MCPAuthConfig(scheme="Token", token="xyz")
+        assert auth.to_headers() == {"Authorization": "Token xyz"}
+
+    def test_to_headers_without_token_returns_extra_only(self):
+        from src.domain.mcp.value_objects import MCPAuthConfig
+        auth = MCPAuthConfig(extra_headers={"X-Api-Key": "k"})
+        assert auth.to_headers() == {"X-Api-Key": "k"}
+
+    def test_to_headers_merges_extra_and_authorization(self):
+        from src.domain.mcp.value_objects import MCPAuthConfig
+        auth = MCPAuthConfig(token="t", extra_headers={"X-Tenant": "acme"})
+        headers = auth.to_headers()
+        assert headers["Authorization"] == "Bearer t"
+        assert headers["X-Tenant"] == "acme"
+
+
+class TestStreamableHTTPServerConfig:
+    def test_create_with_url(self):
+        from src.domain.mcp.value_objects import StreamableHTTPServerConfig
+        cfg = StreamableHTTPServerConfig(url="http://localhost:8080/mcp")
+        assert cfg.url == "http://localhost:8080/mcp"
+        assert cfg.headers is None
+        assert cfg.timeout is None
+
+    def test_create_with_timeout_config(self):
+        from src.domain.mcp.value_objects import MCPTimeoutConfig, StreamableHTTPServerConfig
+        cfg = StreamableHTTPServerConfig(
+            url="http://test.com/mcp",
+            timeout=MCPTimeoutConfig(connect=5.0),
+        )
+        assert cfg.timeout.connect == 5.0
+
+
+class TestMCPToolDescriptor:
+    def test_create_with_required_fields(self):
+        from src.domain.mcp.value_objects import MCPToolDescriptor
+        d = MCPToolDescriptor(name="read_file")
+        assert d.name == "read_file"
+        assert d.description == ""
+        assert d.input_schema == {}
+
+    def test_create_full(self):
+        from src.domain.mcp.value_objects import MCPToolDescriptor
+        d = MCPToolDescriptor(
+            name="search",
+            description="search docs",
+            input_schema={"type": "object", "properties": {"q": {"type": "string"}}},
+        )
+        assert d.description == "search docs"
+        assert d.input_schema["type"] == "object"
+
+
+class TestMCPServerConfigStreamableHTTP:
+    def test_get_transport_config_returns_streamable_http_config(self):
+        from src.domain.mcp.value_objects import (
+            MCPServerConfig,
+            MCPTransport,
+            StreamableHTTPServerConfig,
+        )
+        config = MCPServerConfig(
+            name="http_server",
+            transport=MCPTransport.STREAMABLE_HTTP,
+            streamable_http=StreamableHTTPServerConfig(url="http://test.com/mcp"),
+        )
+        result = config.get_transport_config()
+        assert isinstance(result, StreamableHTTPServerConfig)
+        assert result.url == "http://test.com/mcp"
+
+    def test_get_transport_config_raises_when_streamable_http_missing(self):
+        from src.domain.mcp.value_objects import MCPServerConfig, MCPTransport
+        config = MCPServerConfig(name="test", transport=MCPTransport.STREAMABLE_HTTP)
+        with pytest.raises(ValueError, match="streamable_http config is required"):
             config.get_transport_config()
 
 

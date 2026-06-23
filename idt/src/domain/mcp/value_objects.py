@@ -15,6 +15,42 @@ class MCPTransport(str, Enum):
     STDIO = "stdio"
     SSE = "sse"
     WEBSOCKET = "websocket"
+    STREAMABLE_HTTP = "streamable_http"
+
+
+class MCPTimeoutConfig(BaseModel):
+    """세분화 타임아웃 설정 (초). 모두 양수여야 한다.
+
+    connect: 연결/HTTP 요청 타임아웃
+    read: SSE/스트림 읽기 타임아웃
+    total: 단일 호출 전체 상한 (호출 코어에서 wait_for로 강제)
+    """
+
+    connect: float = Field(default=30.0, gt=0, description="연결/HTTP 요청 타임아웃")
+    read: float = Field(default=300.0, gt=0, description="SSE/스트림 읽기 타임아웃")
+    total: float = Field(default=300.0, gt=0, description="단일 호출 전체 상한")
+
+    @classmethod
+    def from_legacy(cls, timeout: float) -> "MCPTimeoutConfig":
+        """SSEServerConfig.timeout 단일값을 connect로 매핑한다 (호환 규칙)."""
+        return cls(connect=timeout)
+
+
+class MCPAuthConfig(BaseModel):
+    """인증 헤더 주입 설정 (Bearer 등)."""
+
+    scheme: str = Field(default="Bearer", description="Authorization 스킴")
+    token: str | None = Field(default=None, description="토큰 값")
+    extra_headers: dict[str, str] = Field(
+        default_factory=dict, description="추가 인증 헤더"
+    )
+
+    def to_headers(self) -> dict[str, str]:
+        """주입할 헤더 dict를 생성한다. token이 있으면 Authorization을 구성한다."""
+        headers = dict(self.extra_headers)
+        if self.token:
+            headers["Authorization"] = f"{self.scheme} {self.token}".strip()
+        return headers
 
 
 class StdioServerConfig(BaseModel):
@@ -41,10 +77,20 @@ class WebSocketServerConfig(BaseModel):
     timeout: float = Field(default=30.0, description="연결 타임아웃 (초)")
 
 
+class StreamableHTTPServerConfig(BaseModel):
+    """Streamable HTTP Transport 서버 설정."""
+
+    url: str = Field(description="MCP 서버 Streamable HTTP 엔드포인트 URL")
+    headers: dict[str, str] | None = Field(default=None, description="정적 HTTP 헤더")
+    timeout: MCPTimeoutConfig | None = Field(
+        default=None, description="세분화 타임아웃. None이면 기본값 사용"
+    )
+
+
 class MCPServerConfig(BaseModel):
     """MCP 서버 설정 (transport-agnostic).
 
-    stdio / SSE / WebSocket 모두 지원하는 단일 설정 객체.
+    stdio / SSE / WebSocket / Streamable HTTP 모두 지원하는 단일 설정 객체.
     transport 필드에 따라 해당하는 설정 필드를 사용한다.
     """
 
@@ -53,10 +99,16 @@ class MCPServerConfig(BaseModel):
     stdio: StdioServerConfig | None = Field(default=None)
     sse: SSEServerConfig | None = Field(default=None)
     websocket: WebSocketServerConfig | None = Field(default=None)
+    streamable_http: StreamableHTTPServerConfig | None = Field(default=None)
 
     def get_transport_config(
         self,
-    ) -> StdioServerConfig | SSEServerConfig | WebSocketServerConfig:
+    ) -> (
+        StdioServerConfig
+        | SSEServerConfig
+        | WebSocketServerConfig
+        | StreamableHTTPServerConfig
+    ):
         """Transport 방식에 맞는 설정을 반환한다.
 
         Returns:
@@ -65,18 +117,28 @@ class MCPServerConfig(BaseModel):
         Raises:
             ValueError: 해당 transport 설정이 없을 때
         """
-        if self.transport == MCPTransport.STDIO:
-            if self.stdio is None:
-                raise ValueError("stdio config is required for STDIO transport")
-            return self.stdio
-        elif self.transport == MCPTransport.SSE:
-            if self.sse is None:
-                raise ValueError("sse config is required for SSE transport")
-            return self.sse
-        else:
-            if self.websocket is None:
-                raise ValueError("websocket config is required for WEBSOCKET transport")
-            return self.websocket
+        config_map = {
+            MCPTransport.STDIO: (self.stdio, "stdio"),
+            MCPTransport.SSE: (self.sse, "sse"),
+            MCPTransport.WEBSOCKET: (self.websocket, "websocket"),
+            MCPTransport.STREAMABLE_HTTP: (self.streamable_http, "streamable_http"),
+        }
+        cfg, label = config_map[self.transport]
+        if cfg is None:
+            raise ValueError(
+                f"{label} config is required for {self.transport.name} transport"
+            )
+        return cfg
+
+
+class MCPToolDescriptor(BaseModel):
+    """list_tools 결과 1건 (transport-agnostic, SDK 비노출 경량 VO)."""
+
+    name: str = Field(description="Tool 이름 (원본)")
+    description: str = Field(default="", description="Tool 설명")
+    input_schema: dict = Field(
+        default_factory=dict, description="JSON Schema (inputSchema)"
+    )
 
 
 class MCPToolResult(BaseModel):

@@ -9,6 +9,7 @@ from src.application.mcp_registry.schemas import (
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.domain.mcp_registry.interfaces import MCPServerRegistryRepositoryInterface
 from src.domain.mcp_registry.policies import MCPRegistrationPolicy
+from src.domain.mcp_registry.schemas import MCPTransportType
 
 
 class UpdateMCPServerUseCase:
@@ -36,7 +37,12 @@ class UpdateMCPServerUseCase:
             raise ValueError(f"Invalid name: {request.name!r}")
         if request.endpoint is not None and not MCPRegistrationPolicy.validate_endpoint(request.endpoint):
             raise ValueError(f"Invalid endpoint URL: {request.endpoint!r}")
+        if request.transport is not None and not MCPRegistrationPolicy.validate_transport(request.transport):
+            raise ValueError(f"Invalid transport: {request.transport!r}")
 
+        new_transport = (
+            MCPTransportType(request.transport) if request.transport is not None else None
+        )
         existing.apply_update(
             name=request.name,
             description=request.description,
@@ -44,6 +50,9 @@ class UpdateMCPServerUseCase:
             input_schema=request.input_schema,
             is_active=request.is_active,
             updated_at=datetime.utcnow(),
+            transport=new_transport,
+            auth_config=request.auth_config,
+            server_config=request.server_config,
         )
 
         saved = await self._repo.update(existing, request_id)

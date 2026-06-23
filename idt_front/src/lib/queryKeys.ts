@@ -152,6 +152,10 @@ export const queryKeys = {
     departments: () => [...queryKeys.admin.all, 'departments'] as const,
     /** 특정 부서 상세 */
     department: (deptId: string) => [...queryKeys.admin.departments(), deptId] as const,
+    /** MCP 서버 목록 */
+    mcpServers: () => [...queryKeys.admin.all, 'mcpServers'] as const,
+    /** 특정 MCP 서버 상세 */
+    mcpServer: (id: string) => [...queryKeys.admin.mcpServers(), id] as const,
     /** RAGAS 대시보드 통계 */
     ragasDashboard: () => [...queryKeys.admin.all, 'ragasDashboard'] as const,
     /** RAGAS 실행 목록 */
