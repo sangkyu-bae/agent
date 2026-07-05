@@ -47,6 +47,12 @@ from src.application.agent_builder.schemas import (
     WorkerInfo,
 )
 
+from src.application.agent_skill.schemas import (
+    AttachSkillRequest,
+    AttachSkillResponse,
+    ListAttachedSkillsResponse,
+)
+
 router = APIRouter(prefix="/api/v1/agents", tags=["Agent Builder"])
 
 
@@ -177,7 +183,14 @@ async def create_agent(
     """에이전트 생성 (LLM이 도구 자동 선택 + 시스템 프롬프트 자동 생성)."""
     request_id = str(uuid.uuid4())
     body.user_id = str(current_user.id)
-    return await use_case.execute(body, request_id)
+    try:
+        return await use_case.execute(
+            body, request_id, viewer_role=current_user.role.value
+        )
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except ValueError as e:
+        raise _attach_skill_http_error(e)
 
 
 @router.get("/my", response_model=ListMyAgentsResponse)
@@ -206,7 +219,7 @@ async def list_available_sub_agents(
     current_user: User = Depends(get_current_user),
     use_case=Depends(get_list_available_sub_agents_use_case),
 ):
-    """서브 에이전트로 사용 가능한 에이전트 목록 (본인 소유 + 구독)."""
+    """서브 에이전트로 사용 가능한 에이전트 목록 (본인 소유 + 전체공개 + 부서공개)."""
     request_id = str(uuid.uuid4())
     return await use_case.execute(
         user_id=str(current_user.id),
@@ -246,6 +259,7 @@ async def update_agent(
         return await use_case.execute(
             agent_id, body, request_id,
             viewer_user_id=str(current_user.id),
+            viewer_role=current_user.role.value,
         )
     except PermissionError:
         raise HTTPException(
@@ -255,6 +269,8 @@ async def update_agent(
         msg = str(e)
         if "찾을 수 없" in msg:
             raise HTTPException(status_code=404, detail=msg)
+        if ("이미 부착" in msg) or ("최대" in msg):
+            raise HTTPException(status_code=409, detail=msg)
         raise HTTPException(status_code=422, detail=msg)
 
 
@@ -586,3 +602,92 @@ async def get_fork_stats(
         fork_count=fork_count,
         subscriber_count=subscriber_count,
     )
+
+
+# ── Skill 부착 (skill-agent-integration Phase A) ──────────────────
+
+def get_attach_skill_use_case():
+    raise NotImplementedError
+
+
+def get_detach_skill_use_case():
+    raise NotImplementedError
+
+
+def get_list_attached_skills_use_case():
+    raise NotImplementedError
+
+
+def _attach_skill_http_error(e: ValueError) -> HTTPException:
+    msg = str(e)
+    if "찾을 수 없" in msg:
+        return HTTPException(status_code=404, detail=msg)
+    if ("이미 부착" in msg) or ("최대" in msg):
+        return HTTPException(status_code=409, detail=msg)
+    return HTTPException(status_code=422, detail=msg)
+
+
+@router.get("/{agent_id}/skills", response_model=ListAttachedSkillsResponse)
+async def list_attached_skills(
+    agent_id: str,
+    current_user: User = Depends(get_current_user),
+    use_case=Depends(get_list_attached_skills_use_case),
+):
+    """에이전트에 부착된 Skill 목록 조회."""
+    request_id = str(uuid.uuid4())
+    try:
+        return await use_case.execute(
+            agent_id, request_id,
+            viewer_user_id=str(current_user.id),
+            viewer_role=current_user.role.value,
+        )
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post(
+    "/{agent_id}/skills",
+    response_model=AttachSkillResponse,
+    status_code=201,
+)
+async def attach_skill(
+    agent_id: str,
+    body: AttachSkillRequest,
+    current_user: User = Depends(get_current_user),
+    use_case=Depends(get_attach_skill_use_case),
+):
+    """에이전트에 Skill 부착 (instruction만 주입, script는 실행되지 않음)."""
+    request_id = str(uuid.uuid4())
+    try:
+        return await use_case.execute(
+            agent_id, body.skill_id, request_id,
+            viewer_user_id=str(current_user.id),
+            viewer_role=current_user.role.value,
+        )
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
+        raise _attach_skill_http_error(e)
+
+
+@router.delete("/{agent_id}/skills/{skill_id}", status_code=204)
+async def detach_skill(
+    agent_id: str,
+    skill_id: str,
+    current_user: User = Depends(get_current_user),
+    use_case=Depends(get_detach_skill_use_case),
+):
+    """에이전트에서 Skill 부착 해제 (멱등)."""
+    request_id = str(uuid.uuid4())
+    try:
+        await use_case.execute(
+            agent_id, skill_id, request_id,
+            viewer_user_id=str(current_user.id),
+            viewer_role=current_user.role.value,
+        )
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))

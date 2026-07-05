@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Modal from '@/components/common/Modal';
 
 interface RenameCollectionModalProps {
   isOpen: boolean;
@@ -49,22 +50,14 @@ const RenameCollectionModal = ({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      onClick={handleClose}
+    <Modal
+      onClose={handleClose}
+      title="컬렉션 이름 변경"
+      subtitle={<>&ldquo;{currentName}&rdquo; &rarr; 새 이름:</>}
+      size="md"
+      showCloseButton={false}
     >
-      <div
-        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 className="text-[15px] font-semibold text-zinc-900">
-          컬렉션 이름 변경
-        </h2>
-        <p className="mt-1.5 text-[13px] text-zinc-500">
-          &ldquo;{currentName}&rdquo; &rarr; 새 이름:
-        </p>
-
-        <form onSubmit={handleSubmit} className="mt-5 space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <input
               type="text"
@@ -127,8 +120,7 @@ const RenameCollectionModal = ({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 };
 

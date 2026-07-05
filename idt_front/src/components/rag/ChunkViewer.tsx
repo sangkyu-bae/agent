@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Layers, Hash, X, FileText, Info } from 'lucide-react';
+import { Layers, Hash, FileText, Info } from 'lucide-react';
+import Modal from '@/components/common/Modal';
 import type { Document, DocumentChunk } from '@/types/rag';
 
 interface ChunkViewerProps {
@@ -38,96 +39,83 @@ const ChunkMetaModal = ({ chunk, onClose }: ChunkMetaModalProps) => {
   const extraMeta = chunk.metadata ? Object.entries(chunk.metadata) : [];
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
-      onClick={onClose}
-    >
-      <div
-        className="relative w-full max-w-lg rounded-2xl bg-white shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* 모달 헤더 */}
-        <div className="flex items-center justify-between rounded-t-2xl border-b border-zinc-100 px-5 py-4">
-          <div className="flex items-center gap-3">
-            <div
-              className="flex h-8 w-8 items-center justify-center rounded-xl shadow-sm"
-              style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)' }}
-            >
-              <Info className="h-4 w-4 text-white" />
-            </div>
-            <div>
-              <p className="text-[11.5px] font-semibold uppercase tracking-widest text-violet-500">
-                청크 메타데이터
-              </p>
-              <p className="text-[14px] font-semibold text-zinc-900">
-                청크 #{chunk.chunkIndex}
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-xl text-zinc-400 transition-all hover:bg-zinc-100 hover:text-zinc-600"
+    <Modal
+      size="lg"
+      onClose={onClose}
+      title={
+        <span className="flex items-center gap-3">
+          <span
+            className="flex h-8 w-8 items-center justify-center rounded-xl shadow-sm"
+            style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)' }}
           >
-            <X className="h-4 w-4" />
-          </button>
+            <Info className="h-4 w-4 text-white" />
+          </span>
+          <span>
+            <span className="block text-[11.5px] font-semibold uppercase tracking-widest text-violet-500">
+              청크 메타데이터
+            </span>
+            <span className="block text-[14px] font-semibold text-zinc-900">
+              청크 #{chunk.chunkIndex}
+            </span>
+          </span>
+        </span>
+      }
+    >
+      {/* 시스템 메타데이터 */}
+      <div>
+        <p className="mb-2 flex items-center gap-1.5 text-[11.5px] font-semibold uppercase tracking-widest text-zinc-400">
+          <Hash className="h-3 w-3" />
+          시스템 정보
+        </p>
+        <div className="overflow-hidden rounded-xl border border-zinc-100 bg-zinc-50">
+          {systemMeta.map(({ label, value }, idx) => (
+            <div
+              key={label}
+              className={`flex items-start gap-4 px-4 py-2.5 ${idx !== systemMeta.length - 1 ? 'border-b border-zinc-100' : ''}`}
+            >
+              <span className="w-28 shrink-0 text-[12px] font-medium text-zinc-400">{label}</span>
+              <span className="break-all text-[12px] font-mono text-zinc-700">{String(value)}</span>
+            </div>
+          ))}
         </div>
+      </div>
 
-        {/* 시스템 메타데이터 */}
-        <div className="px-5 pt-4">
+      {/* 추가 메타데이터 (있을 경우) */}
+      {extraMeta.length > 0 && (
+        <div className="mt-3">
           <p className="mb-2 flex items-center gap-1.5 text-[11.5px] font-semibold uppercase tracking-widest text-zinc-400">
-            <Hash className="h-3 w-3" />
-            시스템 정보
+            <Info className="h-3 w-3" />
+            추가 메타데이터
           </p>
           <div className="overflow-hidden rounded-xl border border-zinc-100 bg-zinc-50">
-            {systemMeta.map(({ label, value }, idx) => (
+            {extraMeta.map(([key, val], idx) => (
               <div
-                key={label}
-                className={`flex items-start gap-4 px-4 py-2.5 ${idx !== systemMeta.length - 1 ? 'border-b border-zinc-100' : ''}`}
+                key={key}
+                className={`flex items-start gap-4 px-4 py-2.5 ${idx !== extraMeta.length - 1 ? 'border-b border-zinc-100' : ''}`}
               >
-                <span className="w-28 shrink-0 text-[12px] font-medium text-zinc-400">{label}</span>
-                <span className="break-all text-[12px] font-mono text-zinc-700">{String(value)}</span>
+                <span className="w-28 shrink-0 text-[12px] font-medium text-zinc-400">{key}</span>
+                <span className="break-all text-[12px] font-mono text-zinc-700">
+                  {typeof val === 'object' ? JSON.stringify(val, null, 2) : String(val)}
+                </span>
               </div>
             ))}
           </div>
         </div>
+      )}
 
-        {/* 추가 메타데이터 (있을 경우) */}
-        {extraMeta.length > 0 && (
-          <div className="px-5 pt-3">
-            <p className="mb-2 flex items-center gap-1.5 text-[11.5px] font-semibold uppercase tracking-widest text-zinc-400">
-              <Info className="h-3 w-3" />
-              추가 메타데이터
-            </p>
-            <div className="overflow-hidden rounded-xl border border-zinc-100 bg-zinc-50">
-              {extraMeta.map(([key, val], idx) => (
-                <div
-                  key={key}
-                  className={`flex items-start gap-4 px-4 py-2.5 ${idx !== extraMeta.length - 1 ? 'border-b border-zinc-100' : ''}`}
-                >
-                  <span className="w-28 shrink-0 text-[12px] font-medium text-zinc-400">{key}</span>
-                  <span className="break-all text-[12px] font-mono text-zinc-700">
-                    {typeof val === 'object' ? JSON.stringify(val, null, 2) : String(val)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* 청크 내용 전문 */}
-        <div className="px-5 pt-3 pb-5">
-          <p className="mb-2 flex items-center gap-1.5 text-[11.5px] font-semibold uppercase tracking-widest text-zinc-400">
-            <FileText className="h-3 w-3" />
-            내용 전문
+      {/* 청크 내용 전문 */}
+      <div className="mt-3">
+        <p className="mb-2 flex items-center gap-1.5 text-[11.5px] font-semibold uppercase tracking-widest text-zinc-400">
+          <FileText className="h-3 w-3" />
+          내용 전문
+        </p>
+        <div className="max-h-48 overflow-y-auto rounded-xl border border-zinc-100 bg-zinc-50 px-4 py-3">
+          <p className="whitespace-pre-wrap text-[13px] leading-[1.7] text-zinc-700">
+            {chunk.content}
           </p>
-          <div className="max-h-48 overflow-y-auto rounded-xl border border-zinc-100 bg-zinc-50 px-4 py-3">
-            <p className="whitespace-pre-wrap text-[13px] leading-[1.7] text-zinc-700">
-              {chunk.content}
-            </p>
-          </div>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };
 

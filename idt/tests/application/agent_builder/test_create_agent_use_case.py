@@ -496,6 +496,7 @@ def _make_sub_agent(
     agent_id: str = "sub-agent-1",
     user_id: str = "user-1",
     name: str = "서브 에이전트",
+    visibility: str = "private",
 ) -> AgentDefinition:
     now = datetime.now(timezone.utc)
     return AgentDefinition(
@@ -508,6 +509,7 @@ def _make_sub_agent(
         workers=[WorkerDefinition("tavily_search", "search_worker", "검색", 0)],
         llm_model_id="model-default",
         status="active",
+        visibility=visibility,
         created_at=now,
         updated_at=now,
     )
@@ -615,12 +617,10 @@ class TestSubAgentComposition:
             await use_case.execute(request, "req-1")
 
     @pytest.mark.asyncio
-    async def test_sub_agent_access_denied_for_other_user_without_subscription(self):
-        """타인 소유 에이전트에 구독 없이 접근 시 PermissionError."""
-        sub = _make_sub_agent("sub-1", user_id="other-user")
-        use_case, _, _ = _make_use_case_with_sub_agent(
-            sub_agent=sub, is_subscribed=False
-        )
+    async def test_sub_agent_access_denied_for_private_other_user(self):
+        """타인 소유 비공개(private) 에이전트는 사용 불가 (가시성 기반)."""
+        sub = _make_sub_agent("sub-1", user_id="other-user", visibility="private")
+        use_case, _, _ = _make_use_case_with_sub_agent(sub_agent=sub)
         request = CreateAgentRequest(
             user_request="테스트",
             name="복합 에이전트",
@@ -633,12 +633,12 @@ class TestSubAgentComposition:
             await use_case.execute(request, "req-1")
 
     @pytest.mark.asyncio
-    async def test_sub_agent_access_allowed_with_subscription(self):
-        """타인 에이전트도 구독 시 사용 가능."""
-        sub = _make_sub_agent("sub-1", user_id="other-user", name="공유봇")
-        use_case, _, _ = _make_use_case_with_sub_agent(
-            sub_agent=sub, is_subscribed=True
+    async def test_sub_agent_access_allowed_for_public_other_user(self):
+        """타인 소유라도 전체공개(public) 에이전트는 구독 없이 사용 가능."""
+        sub = _make_sub_agent(
+            "sub-1", user_id="other-user", name="공개봇", visibility="public"
         )
+        use_case, _, _ = _make_use_case_with_sub_agent(sub_agent=sub)
         request = CreateAgentRequest(
             user_request="테스트",
             name="복합 에이전트",
@@ -682,3 +682,35 @@ class TestSubAgentComposition:
         result = await use_case.execute(request, "req-1")
         assert result.has_sub_agents is False
         assert all(w.worker_type == "tool" for w in result.workers)
+
+
+class TestCreateAgentSkillSync:
+    """agent-skill-toggle: 등록 시점 부착 스킬 동기화."""
+
+    @pytest.mark.asyncio
+    async def test_skill_ids_trigger_sync(self):
+        use_case, _, _, repository, _ = _make_use_case()
+        use_case._skill_sync = MagicMock()
+        use_case._skill_sync.sync = AsyncMock()
+        request = CreateAgentRequest(
+            user_request="뉴스 수집기", name="A", user_id="user-1",
+            skill_ids=["s1", "s2"],
+        )
+        await use_case.execute(request, "req-1", viewer_role="admin")
+        use_case._skill_sync.sync.assert_awaited_once()
+        _, kwargs = use_case._skill_sync.sync.call_args
+        args = use_case._skill_sync.sync.call_args.args
+        assert args[1] == ["s1", "s2"]           # desired_skill_ids
+        assert kwargs["viewer_user_id"] == "user-1"
+        assert kwargs["viewer_role"] == "admin"
+
+    @pytest.mark.asyncio
+    async def test_no_skill_ids_skips_sync(self):
+        use_case, _, _, _, _ = _make_use_case()
+        use_case._skill_sync = MagicMock()
+        use_case._skill_sync.sync = AsyncMock()
+        request = CreateAgentRequest(
+            user_request="뉴스 수집기", name="A", user_id="user-1",
+        )
+        await use_case.execute(request, "req-1")
+        use_case._skill_sync.sync.assert_not_awaited()

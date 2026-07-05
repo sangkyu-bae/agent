@@ -57,6 +57,7 @@ class CreateLlmModelUseCase:
                 is_default=request.is_default,
                 created_at=now,
                 updated_at=now,
+                base_url=request.base_url or None,
             )
             saved = await self._repository.save(model, request_id)
             self._logger.info(

@@ -2,10 +2,22 @@ import { memo } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
+import { documentExtractorService } from '@/services/documentExtractorService';
 
 interface MarkdownRendererProps {
   content: string;
 }
+
+// document-template-extractor GB3: 산출 파일 링크는 JWT가 필요해
+// <a href> 직행 대신 인증 클라이언트로 blob 다운로드한다.
+const DOC_EXTRACTOR_FILE_PREFIX = '/api/v1/document-extractor/files/';
+
+const extractText = (children: unknown): string =>
+  typeof children === 'string'
+    ? children
+    : Array.isArray(children)
+      ? children.filter((c) => typeof c === 'string').join('')
+      : '';
 
 /** 어시스턴트 말풍선 디자인 톤(text-[15px] leading-[1.8] zinc-800)에 맞춘 요소 매핑 */
 const components: Components = {
@@ -53,16 +65,36 @@ const components: Components = {
     </th>
   ),
   td: ({ children }) => <td className="border border-zinc-200 px-3 py-2">{children}</td>,
-  a: ({ href, children }) => (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="font-medium text-violet-600 underline underline-offset-2 hover:text-violet-700"
-    >
-      {children}
-    </a>
-  ),
+  a: ({ href, children }) => {
+    if (href?.startsWith(DOC_EXTRACTOR_FILE_PREFIX)) {
+      const fileId = href.slice(DOC_EXTRACTOR_FILE_PREFIX.length);
+      return (
+        <a
+          href={href}
+          onClick={(e) => {
+            e.preventDefault();
+            void documentExtractorService.downloadGeneratedFile(
+              fileId,
+              extractText(children),
+            );
+          }}
+          className="font-medium text-violet-600 underline underline-offset-2 hover:text-violet-700"
+        >
+          📄 {children}
+        </a>
+      );
+    }
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="font-medium text-violet-600 underline underline-offset-2 hover:text-violet-700"
+      >
+        {children}
+      </a>
+    );
+  },
   hr: () => <hr className="my-4 border-zinc-200" />,
   strong: ({ children }) => <strong className="font-semibold text-zinc-900">{children}</strong>,
 };

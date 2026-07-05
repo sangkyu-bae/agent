@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Modal from '@/components/common/Modal';
 import {
   useAgentDetail,
   useForkStats,
@@ -61,17 +62,14 @@ const AgentDetailModal = ({ agentId, isOpen, onClose }: AgentDetailModalProps) =
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      onClick={onClose}
+    <Modal
+      size="2xl"
+      scroll="content"
+      showCloseButton={false}
+      onClose={onClose}
+      contentClassName="relative p-0!"
     >
-      <div
-        role="dialog"
-        className="relative mx-4 max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={(e) => e.key === 'Escape' && onClose()}
-      >
-        {/* Close button */}
+      {/* Close button */}
         <button
           onClick={onClose}
           className="absolute right-4 top-4 rounded-lg p-1.5 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600"
@@ -253,8 +251,7 @@ const AgentDetailModal = ({ agentId, isOpen, onClose }: AgentDetailModalProps) =
             )}
           </div>
         )}
-      </div>
-    </div>
+    </Modal>
   );
 };
 

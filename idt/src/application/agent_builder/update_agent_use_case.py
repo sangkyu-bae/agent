@@ -1,9 +1,25 @@
-"""UpdateAgentUseCase: 시스템 프롬프트 / 이름 수정."""
+"""UpdateAgentUseCase: 시스템 프롬프트 / 이름 / 서브에이전트 / 문서 템플릿 수정."""
+from src.application.agent_builder.document_template_binding import (
+    build_document_template_plan,
+    ensure_template_wiring,
+    persist_document_template,
+)
 from src.application.agent_builder.schemas import UpdateAgentRequest, UpdateAgentResponse
+from src.domain.document_extractor.policies import DEFAULT_MAX_SLOTS
+from src.application.agent_builder.sub_agent_worker_builder import SubAgentWorkerBuilder
+from src.application.agent_skill.sync_agent_skills_use_case import (
+    SyncAgentSkillsUseCase,
+)
 from src.domain.agent_builder.interfaces import AgentDefinitionRepositoryInterface
-from src.domain.agent_builder.policies import AccessCheckInput, UpdateAgentPolicy, VisibilityPolicy
+from src.domain.agent_builder.policies import (
+    AccessCheckInput,
+    AgentBuilderPolicy,
+    UpdateAgentPolicy,
+    VisibilityPolicy,
+)
 from src.domain.agent_builder.schemas import WorkerDefinition
 from src.domain.collection.permission_interfaces import CollectionPermissionRepositoryInterface
+from src.domain.department.interfaces import DepartmentRepositoryInterface
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 
 
@@ -13,10 +29,22 @@ class UpdateAgentUseCase:
         repository: AgentDefinitionRepositoryInterface,
         perm_repo: CollectionPermissionRepositoryInterface,
         logger: LoggerInterface,
+        dept_repo: DepartmentRepositoryInterface | None = None,
+        skill_sync: "SyncAgentSkillsUseCase | None" = None,
+        document_template_repo=None,
+        source_archiver=None,
+        max_template_slots: int = DEFAULT_MAX_SLOTS,
     ) -> None:
         self._repository = repository
         self._perm_repo = perm_repo
         self._logger = logger
+        self._dept_repo = dept_repo
+        self._skill_sync = skill_sync
+        # document-template-extractor Design §3-4 (미주입 시 템플릿 요청은 에러)
+        self._document_template_repo = document_template_repo
+        self._source_archiver = source_archiver
+        self._max_template_slots = max_template_slots
+        self._sub_agent_builder = SubAgentWorkerBuilder(repository, logger)
 
     async def execute(
         self,
@@ -24,6 +52,7 @@ class UpdateAgentUseCase:
         request: UpdateAgentRequest,
         request_id: str,
         viewer_user_id: str | None = None,
+        viewer_role: str = "user",
     ) -> UpdateAgentResponse:
         self._logger.info(
             "UpdateAgentUseCase start", request_id=request_id, agent_id=agent_id
@@ -61,6 +90,29 @@ class UpdateAgentUseCase:
                 department_id=request.department_id,
                 temperature=request.temperature,
             )
+
+            if request.sub_agent_configs is not None:
+                await self._apply_sub_agents(
+                    agent=agent,
+                    configs=request.sub_agent_configs,
+                    viewer_user_id=viewer_user_id,
+                    request_id=request_id,
+                )
+
+            # 부착 스킬 동기화 (agent-skill-toggle): None = 변경 안 함.
+            if request.skill_ids is not None and self._skill_sync is not None:
+                await self._skill_sync.sync(
+                    agent.id, request.skill_ids, request_id,
+                    viewer_user_id=viewer_user_id or agent.user_id,
+                    viewer_role=viewer_role,
+                )
+
+            # 문서 템플릿 교체 (document-template-extractor D4): None = 변경 안 함.
+            # 기존 active soft-delete → 신규 저장 → worker tool_config 갱신
+            # (repository.update의 _sync_workers가 영속).
+            if request.document_template is not None:
+                await self._replace_document_template(agent, request, request_id)
+
             updated = await self._repository.update(agent, request_id)
 
             self._logger.info(
@@ -77,6 +129,62 @@ class UpdateAgentUseCase:
                 "UpdateAgentUseCase failed", exception=e, request_id=request_id
             )
             raise
+
+    async def _replace_document_template(
+        self,
+        agent,
+        request: UpdateAgentRequest,
+        request_id: str,
+    ) -> None:
+        """확정 템플릿 교체: 기존 active soft-delete + 신규 저장 (D4 앱 레벨 정합)."""
+        ensure_template_wiring(self._document_template_repo, self._source_archiver)
+        plan = build_document_template_plan(
+            request.document_template, agent.workers, self._max_template_slots
+        )
+        existing = await self._document_template_repo.find_active_by_agent_worker(
+            agent.id, plan.worker_id, request_id
+        )
+        if existing is not None:
+            await self._document_template_repo.soft_delete(existing.id, request_id)
+        await persist_document_template(
+            plan, agent.id,
+            self._document_template_repo, self._source_archiver, request_id,
+        )
+
+    async def _apply_sub_agents(
+        self,
+        agent,
+        configs,
+        viewer_user_id: str | None,
+        request_id: str,
+    ) -> None:
+        """서브에이전트 워커를 재구성하여 교체한다 (도구 워커는 보존)."""
+        owner_id = viewer_user_id or agent.user_id
+        dept_ids = await self._resolve_department_ids(owner_id, request_id)
+        tool_count = sum(1 for w in agent.workers if w.worker_type == "tool")
+        sub_workers = await self._sub_agent_builder.build(
+            configs=configs,
+            parent_user_id=owner_id,
+            parent_department_ids=dept_ids,
+            existing_tool_count=tool_count,
+            request_id=request_id,
+            parent_agent_id=agent.id,
+        )
+        agent.replace_sub_agents(sub_workers)
+        AgentBuilderPolicy.validate_worker_count(agent.workers)
+
+    async def _resolve_department_ids(
+        self, user_id: str, request_id: str
+    ) -> list[str]:
+        if self._dept_repo is None:
+            return []
+        try:
+            memberships = await self._dept_repo.find_departments_by_user(
+                int(user_id), request_id
+            )
+        except (TypeError, ValueError):
+            return []
+        return [m.department_id for m in memberships]
 
     async def _validate_visibility_scope(
         self,

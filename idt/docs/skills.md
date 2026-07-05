@@ -14,4 +14,5 @@ AI가 사용할 수 있는 검증 스킬 목록입니다.
 | `verify-logging` | LOG-001 로깅 규칙 준수 검증 |
 | `verify-tdd` | 프로덕션 모듈 테스트 파일 존재 여부 검증 |
 | `verify-implementation` | 모든 verify 스킬을 순차 실행하여 통합 검증 보고서 생성 |
+| `verify-mcp-connections` | 로컬 DB 등록 MCP 서버를 열거해 실제 연결(list_tools) 테스트 (읽기 전용 진단) |
 | `manage-skills` | 세션 변경사항 분석으로 검증 스킬 누락 탐지, 스킬 생성/업데이트 |

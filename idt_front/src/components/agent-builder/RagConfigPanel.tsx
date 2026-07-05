@@ -1,5 +1,7 @@
 import { useCollections, useMetadataKeys } from '@/hooks/useRagToolConfig';
 import type { RagToolConfig, CollectionScope } from '@/types/ragToolConfig';
+import { SEARCH_MODES } from '@/types/ragToolConfig';
+import Dropdown from '@/components/common/Dropdown';
 
 const SCOPE_LABELS: Record<CollectionScope, { label: string; color: string }> = {
   PERSONAL: { label: '개인', color: 'text-violet-600 bg-violet-50' },
@@ -11,12 +13,6 @@ interface RagConfigPanelProps {
   config: RagToolConfig;
   onChange: (config: RagToolConfig) => void;
 }
-
-const SEARCH_MODES = [
-  { value: 'hybrid', label: '하이브리드' },
-  { value: 'vector_only', label: '벡터' },
-  { value: 'bm25_only', label: 'BM25' },
-] as const;
 
 const MAX_FILTERS = 10;
 const MAX_TOOL_NAME = 100;
@@ -53,7 +49,8 @@ const RagConfigPanel = ({ config, onChange }: RagConfigPanelProps) => {
   };
 
   const handleRemoveFilter = (key: string) => {
-    const { [key]: _, ...rest } = config.metadata_filter;
+    const rest = { ...config.metadata_filter };
+    delete rest[key];
     onChange({ ...config, metadata_filter: rest });
   };
 
@@ -77,21 +74,21 @@ const RagConfigPanel = ({ config, onChange }: RagConfigPanelProps) => {
             </button>
           </div>
         ) : (
-          <select
+          <Dropdown
             value={config.collection_name ?? ''}
-            onChange={(e) => handleCollectionChange(e.target.value)}
-            className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-2.5 text-[14px] text-zinc-900 outline-none transition-all focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
-          >
-            <option value="">전체 (기본)</option>
-            {collections?.map((c) => {
-              const scopeLabel = c.scope ? SCOPE_LABELS[c.scope]?.label : null;
-              return (
-                <option key={c.name} value={c.name}>
-                  {scopeLabel ? `[${scopeLabel}] ` : ''}{c.display_name}{c.vectors_count != null ? ` (${c.vectors_count}건)` : ''}
-                </option>
-              );
-            })}
-          </select>
+            onChange={handleCollectionChange}
+            options={[
+              { value: '', label: '전체 (기본)' },
+              ...(collections ?? []).map((c) => {
+                const scopeLabel = c.scope ? SCOPE_LABELS[c.scope]?.label : null;
+                return {
+                  value: c.name,
+                  label: `${scopeLabel ? `[${scopeLabel}] ` : ''}${c.display_name}${c.vectors_count != null ? ` (${c.vectors_count}건)` : ''}`,
+                };
+              }),
+            ]}
+            className="w-full"
+          />
         )}
         {(() => {
           const selected = collections?.find((c) => c.name === config.collection_name);
@@ -114,16 +111,13 @@ const RagConfigPanel = ({ config, onChange }: RagConfigPanelProps) => {
           {filterEntries.map(([key, value], idx) => (
             <div key={idx} className="flex items-center gap-2">
               {metadataKeys && metadataKeys.length > 0 ? (
-                <select
+                <Dropdown
                   value={key}
-                  onChange={(e) => handleFilterChange(key, e.target.value, value, idx)}
-                  className="flex-1 rounded-xl border border-zinc-300 bg-white px-3 py-2 text-[13px] text-zinc-900 outline-none transition-all focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
-                >
-                  <option value="">키 선택</option>
-                  {metadataKeys.map((mk) => (
-                    <option key={mk.key} value={mk.key}>{mk.key}</option>
-                  ))}
-                </select>
+                  onChange={(v) => handleFilterChange(key, v, value, idx)}
+                  placeholder="키 선택"
+                  options={metadataKeys.map((mk) => ({ value: mk.key, label: mk.key }))}
+                  className="flex-1"
+                />
               ) : (
                 <input
                   type="text"
@@ -135,16 +129,13 @@ const RagConfigPanel = ({ config, onChange }: RagConfigPanelProps) => {
               )}
 
               {metadataKeys?.find((mk) => mk.key === key)?.sample_values ? (
-                <select
+                <Dropdown
                   value={value}
-                  onChange={(e) => handleFilterChange(key, key, e.target.value, idx)}
-                  className="flex-1 rounded-xl border border-zinc-300 bg-white px-3 py-2 text-[13px] text-zinc-900 outline-none transition-all focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
-                >
-                  <option value="">값 선택</option>
-                  {metadataKeys.find((mk) => mk.key === key)!.sample_values.map((sv) => (
-                    <option key={sv} value={sv}>{sv}</option>
-                  ))}
-                </select>
+                  onChange={(v) => handleFilterChange(key, key, v, idx)}
+                  placeholder="값 선택"
+                  options={metadataKeys.find((mk) => mk.key === key)!.sample_values.map((sv) => ({ value: sv, label: sv }))}
+                  className="flex-1"
+                />
               ) : (
                 <input
                   type="text"
@@ -222,6 +213,28 @@ const RagConfigPanel = ({ config, onChange }: RagConfigPanelProps) => {
             <span>10</span>
             <span>20</span>
           </div>
+        </div>
+
+        {/* 위키 우선 검색 토글 (LLM-WIKI-001) */}
+        <div className="mt-4 rounded-xl border border-zinc-200 bg-white/60 p-3">
+          <label className="flex cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              checked={config.use_wiki_first ?? false}
+              onChange={(e) =>
+                onChange({ ...config, use_wiki_first: e.target.checked })
+              }
+              className="mt-0.5 h-4 w-4 accent-violet-600"
+            />
+            <span>
+              <span className="block text-[13px] font-semibold text-zinc-700">
+                위키 우선 검색
+              </span>
+              <span className="mt-0.5 block text-[12px] text-zinc-400">
+                승인된 위키 지식을 먼저 검색하고, 부족하면 원본 문서로 폴백합니다
+              </span>
+            </span>
+          </label>
         </div>
       </div>
 

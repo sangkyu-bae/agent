@@ -1,7 +1,8 @@
 {
   "version": "2.0",
-  "lastUpdated": "2026-06-10T07:53:27.359Z",
+  "lastUpdated": "2026-07-05T06:36:51.668Z",
   "activeFeatures": [
+    "fix-agent-composer",
     "unified-pdf-upload",
     "collection-management-ui",
     "tools",
@@ -32,10 +33,64 @@
     "AdminDepartmentsPage",
     "AdminUsersPage",
     "agent-builder-api-integration",
-    "agent-session-switching"
+    "agent-session-switching",
+    "AdminAgentRunsPage",
+    "AdminRagasPage",
+    "AdminSkillsPage",
+    "AdminMcpServersPage",
+    "admin",
+    "tool-config-modal",
+    "WikiPage",
+    "agent-schedule",
+    "agent_composer"
   ],
-  "primaryFeature": "agent-session-switching",
+  "primaryFeature": "fix-agent-composer",
   "features": {
+    "fix-agent-composer": {
+      "phase": "archived",
+      "matchRate": 93,
+      "iterationCount": 0,
+      "startedAt": "2026-07-04T00:00:00.000Z",
+      "completedAt": "2026-07-05T06:36:51.666Z",
+      "archivedAt": "2026-07-05T07:00:00.000Z",
+      "archivedTo": "docs/archive/2026-07/fix-agent-composer/"
+    },
+    "agent-schedule": {
+      "phase": "report",
+      "phaseNumber": 6,
+      "matchRate": 100,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {
+        "plan": "docs/01-plan/features/agent-schedule.plan.md",
+        "design": "docs/02-design/features/agent-schedule.design.md",
+        "analysis": "docs/03-analysis/features/agent-schedule.analysis.md"
+      },
+      "timestamps": {
+        "started": "2026-07-03T00:00:00.000Z",
+        "lastUpdated": "2026-07-03T07:01:23.763Z"
+      },
+      "planPath": "docs/01-plan/features/agent-schedule.plan.md",
+      "lastFile": "src/components/agent-builder/schedule/SchedulePanel.tsx",
+      "previousPhase": "check",
+      "autoAdvanced": true
+    },
+    "tool-config-modal": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {
+        "plan": "docs/01-plan/features/tool-config-modal.plan.md",
+        "design": "docs/02-design/features/tool-config-modal.design.md"
+      },
+      "timestamps": {
+        "started": "2026-07-02T00:00:00.000Z",
+        "lastUpdated": "2026-07-02T01:00:00.000Z"
+      },
+      "planPath": "docs/01-plan/features/tool-config-modal.plan.md"
+    },
     "collection-department-dropdown": {
       "phase": "do",
       "matchRate": null,
@@ -265,9 +320,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-17T02:00:46.710Z",
-        "lastUpdated": "2026-06-05T10:34:52.364Z"
+        "lastUpdated": "2026-07-05T05:53:08.797Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\types\\websocket.ts"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\hooks\\useAgentComposer.test.ts"
     },
     "store": {
       "phase": "do",
@@ -291,7 +346,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-17T14:39:41.105Z",
-        "lastUpdated": "2026-05-11T00:04:42.082Z"
+        "lastUpdated": "2026-07-05T05:40:07.933Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\constants\\api.ts"
     },
@@ -304,7 +359,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-17T14:40:33.713Z",
-        "lastUpdated": "2026-05-09T07:57:04.644Z"
+        "lastUpdated": "2026-07-05T05:40:44.726Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\__tests__\\mocks\\handlers.ts"
     },
@@ -317,9 +372,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-17T14:41:11.780Z",
-        "lastUpdated": "2026-03-24T06:16:18.170Z"
+        "lastUpdated": "2026-07-02T10:54:23.590Z"
       },
-      "lastFile": "C:\\sangplus\\idt_front\\src\\components\\rag\\VectorSearchPanel.tsx"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\components\\rag\\ChunkViewer.tsx"
     },
     "DocumentPage": {
       "phase": "do",
@@ -356,7 +411,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-20T05:20:57.277Z",
-        "lastUpdated": "2026-05-09T06:18:23.854Z"
+        "lastUpdated": "2026-07-05T06:00:13.869Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\AgentBuilderPage\\index.tsx"
     },
@@ -395,7 +450,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-21T06:08:11.869Z",
-        "lastUpdated": "2026-04-29T03:00:37.940Z"
+        "lastUpdated": "2026-07-02T10:56:06.748Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\ToolAdminPage\\index.tsx"
     },
@@ -421,9 +476,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-04-12T07:57:56.857Z",
-        "lastUpdated": "2026-05-09T08:08:42.311Z"
+        "lastUpdated": "2026-07-05T06:01:46.061Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\__tests__\\components\\ChatPageIntegration.test.tsx"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\__tests__\\components\\AgentBuilderStudio.test.tsx"
     },
     "collection": {
       "phase": "do",
@@ -434,9 +489,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-04-22T04:41:44.838Z",
-        "lastUpdated": "2026-05-08T02:07:06.506Z"
+        "lastUpdated": "2026-07-02T10:53:44.402Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\components\\collection\\UpdateScopeModal.tsx"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\components\\collection\\ChunkDetailModal.tsx"
     },
     "CollectionPage": {
       "phase": "do",
@@ -460,7 +515,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-04-23T07:39:17.249Z",
-        "lastUpdated": "2026-04-30T02:23:54.255Z"
+        "lastUpdated": "2026-07-03T05:41:56.758Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\services\\api\\authClient.ts"
     },
@@ -500,12 +555,17 @@
       "autoAdvanced": true
     },
     "agent-store": {
-      "phase": "archived",
+      "phase": "do",
       "matchRate": 96,
       "iterationCount": 1,
       "startedAt": "2026-05-04T13:26:15.264Z",
       "archivedAt": "2026-05-04T13:51:00.000Z",
-      "archivedTo": "docs/archive/2026-05/agent-store/"
+      "archivedTo": "docs/archive/2026-05/agent-store/",
+      "phaseNumber": 3,
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\components\\agent-store\\AgentDetailModal.tsx",
+      "timestamps": {
+        "lastUpdated": "2026-07-02T10:53:43.944Z"
+      }
     },
     "AgentStorePage": {
       "phase": "do",
@@ -529,7 +589,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-05-05T08:32:53.032Z",
-        "lastUpdated": "2026-05-05T08:32:53.032Z"
+        "lastUpdated": "2026-07-02T10:54:36.955Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\AdminDepartmentsPage\\index.tsx"
     },
@@ -595,6 +655,97 @@
         "report": "docs/archive/2026-06/agent-store-nav/agent-store-nav.report.md"
       },
       "note": "Design/Analysis skipped (lightweight NAV item); verified via TDD 6/6"
+    },
+    "AdminAgentRunsPage": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-06-28T05:49:31.305Z",
+        "lastUpdated": "2026-06-28T05:49:33.920Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\AdminAgentRunsPage\\index.tsx"
+    },
+    "AdminRagasPage": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-06-28T05:49:38.908Z",
+        "lastUpdated": "2026-06-28T05:49:46.810Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\AdminRagasPage\\index.tsx"
+    },
+    "AdminSkillsPage": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-06-28T05:49:55.804Z",
+        "lastUpdated": "2026-07-02T10:54:58.833Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\AdminSkillsPage\\index.tsx"
+    },
+    "AdminMcpServersPage": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-06-28T05:50:02.880Z",
+        "lastUpdated": "2026-07-02T10:55:22.593Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\AdminMcpServersPage\\index.tsx"
+    },
+    "admin": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-06-28T05:50:47.514Z",
+        "lastUpdated": "2026-07-02T10:54:12.650Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\components\\admin\\UserRegisterModal.tsx"
+    },
+    "WikiPage": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-07-02T10:54:30.539Z",
+        "lastUpdated": "2026-07-02T10:54:58.244Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\WikiPage\\WikiDetailPanel.tsx"
+    },
+    "agent_composer": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-07-05T05:36:25.244Z",
+        "lastUpdated": "2026-07-05T05:38:40.477Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\application\\agent_composer\\compose_agent_use_case.py"
     }
   },
   "pipeline": {
@@ -605,7 +756,7 @@
   "session": {
     "startedAt": "2026-03-16T14:41:16.262Z",
     "onboardingCompleted": false,
-    "lastActivity": "2026-06-05T10:34:52.365Z"
+    "lastActivity": "2026-07-05T06:36:51.668Z"
   },
   "history": [
     {
@@ -3943,6 +4094,870 @@
       "feature": "agent-store-nav",
       "phase": "archived",
       "action": "archived"
+    },
+    {
+      "timestamp": "2026-06-28T05:42:19.146Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-28T05:42:41.890Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-28T05:49:31.305Z",
+      "feature": "AdminAgentRunsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-28T05:49:33.920Z",
+      "feature": "AdminAgentRunsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-28T05:49:38.908Z",
+      "feature": "AdminRagasPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-28T05:49:46.810Z",
+      "feature": "AdminRagasPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-28T05:49:55.804Z",
+      "feature": "AdminSkillsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-28T05:49:58.101Z",
+      "feature": "AdminSkillsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-28T05:50:00.960Z",
+      "feature": "AdminSkillsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-28T05:50:02.880Z",
+      "feature": "AdminMcpServersPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-28T05:50:07.893Z",
+      "feature": "AdminMcpServersPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-28T05:50:24.778Z",
+      "feature": "ToolAdminPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-28T05:50:28.060Z",
+      "feature": "ToolAdminPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-28T05:50:31.877Z",
+      "feature": "ToolAdminPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-28T05:50:35.132Z",
+      "feature": "ToolAdminPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-28T05:50:39.940Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-28T05:50:45.645Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-28T05:50:47.514Z",
+      "feature": "admin",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-28T05:50:50.387Z",
+      "feature": "admin",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-28T05:50:53.206Z",
+      "feature": "admin",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-28T05:51:09.879Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-28T05:51:13.183Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-28T05:51:16.022Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-28T05:51:19.266Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-28T05:51:24.723Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-28T05:51:28.055Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-28T05:54:32.548Z",
+      "feature": "admin",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-28T05:54:36.314Z",
+      "feature": "admin",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-28T05:54:40.568Z",
+      "feature": "admin",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-28T05:54:48.706Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-28T05:54:55.820Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-28T05:54:58.640Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-28T05:55:00.723Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-28T11:01:43.993Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-28T11:11:27.086Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-28T11:11:28.907Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-28T11:11:31.405Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-28T11:11:32.926Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-28T11:11:34.161Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-06-28T11:11:44.491Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:35:17.284Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:35:34.606Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:47:20.203Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:47:22.859Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:50:02.218Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:52:34.996Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:52:37.314Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:52:43.206Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:52:49.359Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:52:50.807Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:52:58.055Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:53:02.087Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:53:03.415Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:53:12.244Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:53:16.572Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:53:18.039Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:53:19.782Z",
+      "feature": "agent-store",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:53:23.673Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:53:26.904Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:53:27.132Z",
+      "feature": "agent-store",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:53:28.663Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:53:35.525Z",
+      "feature": "agent-store",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:53:36.668Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:53:40.957Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:53:42.944Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:53:43.944Z",
+      "feature": "agent-store",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:53:44.402Z",
+      "feature": "collection",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:53:47.914Z",
+      "feature": "admin",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:53:55.435Z",
+      "feature": "admin",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:53:57.140Z",
+      "feature": "rag",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:54:06.412Z",
+      "feature": "admin",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:54:12.650Z",
+      "feature": "admin",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:54:22.248Z",
+      "feature": "AdminDepartmentsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:54:23.590Z",
+      "feature": "rag",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:54:29.748Z",
+      "feature": "AdminDepartmentsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:54:30.539Z",
+      "feature": "WikiPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:54:36.955Z",
+      "feature": "AdminDepartmentsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:54:44.197Z",
+      "feature": "AdminSkillsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:54:52.250Z",
+      "feature": "AdminSkillsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:54:58.244Z",
+      "feature": "WikiPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:54:58.833Z",
+      "feature": "AdminSkillsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:55:05.134Z",
+      "feature": "AdminMcpServersPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:55:08.950Z",
+      "feature": "AdminMcpServersPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:55:10.535Z",
+      "feature": "AdminMcpServersPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:55:22.593Z",
+      "feature": "AdminMcpServersPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:55:30.750Z",
+      "feature": "ToolAdminPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:55:43.984Z",
+      "feature": "ToolAdminPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:55:58.429Z",
+      "feature": "ToolAdminPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T10:56:06.748Z",
+      "feature": "ToolAdminPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-02T11:17:46.588Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-03T05:35:49.128Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-03T05:36:01.206Z",
+      "feature": "constants",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-03T05:36:07.121Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-03T05:36:20.186Z",
+      "feature": "mocks",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-03T05:36:38.745Z",
+      "feature": "mocks",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-03T05:37:11.247Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-03T05:37:36.743Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-03T05:38:40.866Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-03T05:38:49.425Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-03T05:39:27.704Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-03T05:41:56.758Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-03T05:42:00.175Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-03T05:42:01.982Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-03T05:48:29.107Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-03T05:48:31.949Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-03T05:49:19.698Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-03T05:49:21.709Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-03T05:49:24.044Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-03T05:49:25.866Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-03T05:49:38.407Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-03T05:49:40.764Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-03T05:49:43.259Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-03T05:50:37.861Z",
+      "feature": "__tests__",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-03T05:54:49.794Z",
+      "feature": "constants",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-03T06:57:38.790Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-03T06:58:05.075Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-03T07:01:23.765Z",
+      "feature": "agent-schedule",
+      "phase": "report",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-05T05:36:25.244Z",
+      "feature": "agent_composer",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-05T05:36:35.758Z",
+      "feature": "agent_composer",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-05T05:36:55.159Z",
+      "feature": "agent_composer",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-05T05:37:06.509Z",
+      "feature": "agent_composer",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-05T05:37:14.056Z",
+      "feature": "agent_composer",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-05T05:37:23.240Z",
+      "feature": "agent_composer",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-05T05:37:57.055Z",
+      "feature": "agent_composer",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-05T05:38:01.152Z",
+      "feature": "agent_composer",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-05T05:38:11.488Z",
+      "feature": "agent_composer",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-05T05:38:16.119Z",
+      "feature": "agent_composer",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-05T05:38:28.871Z",
+      "feature": "agent_composer",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-05T05:38:31.758Z",
+      "feature": "agent_composer",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-05T05:38:40.477Z",
+      "feature": "agent_composer",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-05T05:39:43.705Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-05T05:39:48.364Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-05T05:39:50.564Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-05T05:40:07.933Z",
+      "feature": "constants",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-05T05:40:44.726Z",
+      "feature": "mocks",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-05T05:42:42.637Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-05T05:53:08.797Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-05T06:00:00.687Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-05T06:00:04.979Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-05T06:00:11.985Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-05T06:00:13.869Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-05T06:01:30.792Z",
+      "feature": "__tests__",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-05T06:01:46.061Z",
+      "feature": "__tests__",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-05T06:36:51.668Z",
+      "feature": "fix-agent-composer",
+      "phase": "report",
+      "action": "updated"
     }
   ]
 }

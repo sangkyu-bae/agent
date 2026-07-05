@@ -6,6 +6,7 @@ import type {
   CreateBuilderAgentResponse,
   UpdateBuilderAgentRequest,
   UpdateBuilderAgentResponse,
+  AvailableSubAgentsResponse,
 } from '@/types/agentBuilder';
 
 export const agentBuilderService = {
@@ -31,4 +32,9 @@ export const agentBuilderService = {
 
   delete: (agentId: string) =>
     authApiClient.delete(API_ENDPOINTS.AGENT_BUILDER_DELETE(agentId)),
+
+  listAvailableSubAgents: () =>
+    authApiClient.get<AvailableSubAgentsResponse>(
+      API_ENDPOINTS.AGENT_AVAILABLE_SUB_AGENTS,
+    ),
 };

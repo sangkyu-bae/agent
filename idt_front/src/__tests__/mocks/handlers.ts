@@ -1,5 +1,42 @@
 import { http, HttpResponse } from 'msw';
 import { API_ENDPOINTS } from '@/constants/api';
+import type { ScheduleResponse } from '@/types/agentSchedule';
+
+// ── Agent Schedule (agent-schedule) — stateful in-memory store ──
+const scheduleStore = new Map<string, ScheduleResponse[]>();
+let scheduleSeq = 0;
+
+export const resetScheduleStore = () => {
+  scheduleStore.clear();
+  scheduleSeq = 0;
+};
+
+export const seedSchedules = (agentId: string, items: ScheduleResponse[]) => {
+  scheduleStore.set(agentId, [...items]);
+};
+
+export const mockSchedule = (
+  overrides: Partial<ScheduleResponse> = {},
+): ScheduleResponse => ({
+  id: `sch-${++scheduleSeq}`,
+  agent_id: 'agent-1',
+  name: '매일 09:00 실행',
+  spec: {
+    schedule_type: 'cron',
+    run_date: null,
+    time_of_day: null,
+    days_of_week: null,
+    cron_expr: '0 9 * * *',
+  },
+  instruction: '{today} 기준 주요 뉴스를 요약해줘',
+  enabled: true,
+  timezone: 'Asia/Seoul',
+  next_run_at: '2026-07-04T00:00:00Z',
+  last_run_at: null,
+  created_at: '2026-07-03T00:00:00Z',
+  updated_at: '2026-07-03T00:00:00Z',
+  ...overrides,
+});
 
 export const handlers = [
   http.post(`*${API_ENDPOINTS.GENERAL_CHAT}`, () =>
@@ -117,6 +154,115 @@ export const handlers = [
     })
   ),
 
+  // SKILL-001: Skill Builder
+  http.post(`*${API_ENDPOINTS.SKILLS_LIST}`, () =>
+    HttpResponse.json({
+      skills: [
+        {
+          id: 'skill-1',
+          name: '환율 계산기',
+          description: '통화 환율 변환',
+          script_type: 'python',
+          visibility: 'private',
+          owner_user_id: '1',
+          forked_from: null,
+          can_edit: true,
+          can_delete: true,
+          created_at: '2026-06-20T00:00:00Z',
+        },
+        {
+          id: 'skill-2',
+          name: '공용 요약기',
+          description: '문서 요약',
+          script_type: 'none',
+          visibility: 'public',
+          owner_user_id: '2',
+          forked_from: null,
+          can_edit: false,
+          can_delete: false,
+          created_at: '2026-06-20T00:00:00Z',
+        },
+      ],
+      total: 2,
+      page: 1,
+      size: 50,
+    })
+  ),
+  http.get('*/api/v1/skills/:id', ({ params }) =>
+    HttpResponse.json({
+      id: params.id,
+      user_id: '1',
+      name: '환율 계산기',
+      description: '통화 환율 변환',
+      instruction: '환율 변환 요청 시 ...',
+      trigger: '환율',
+      script_type: 'python',
+      script_content: 'def convert(): ...',
+      status: 'active',
+      visibility: 'private',
+      department_id: null,
+      forked_from: null,
+      forked_at: null,
+      created_at: '2026-06-20T00:00:00Z',
+      updated_at: '2026-06-20T00:00:00Z',
+    })
+  ),
+  http.post(`*${API_ENDPOINTS.SKILLS}`, async ({ request }) => {
+    const body = (await request.json()) as Record<string, unknown>;
+    return HttpResponse.json(
+      {
+        id: 'skill-new',
+        user_id: '1',
+        status: 'active',
+        trigger: null,
+        script_content: null,
+        department_id: null,
+        forked_from: null,
+        forked_at: null,
+        created_at: '2026-06-20T00:00:00Z',
+        updated_at: '2026-06-20T00:00:00Z',
+        ...body,
+      },
+      { status: 201 },
+    );
+  }),
+  http.put('*/api/v1/skills/:id', async ({ request, params }) => {
+    const body = (await request.json()) as Record<string, unknown>;
+    return HttpResponse.json({
+      id: params.id,
+      user_id: '1',
+      status: 'active',
+      forked_from: null,
+      forked_at: null,
+      created_at: '2026-06-20T00:00:00Z',
+      updated_at: '2026-06-20T01:00:00Z',
+      ...body,
+    });
+  }),
+  http.delete('*/api/v1/skills/:id', () => new HttpResponse(null, { status: 204 })),
+  http.post('*/api/v1/skills/:id/fork', ({ params }) =>
+    HttpResponse.json(
+      {
+        id: 'skill-forked',
+        user_id: '1',
+        name: '공용 요약기',
+        description: '문서 요약',
+        instruction: 'i',
+        trigger: null,
+        script_type: 'none',
+        script_content: null,
+        status: 'active',
+        visibility: 'private',
+        department_id: null,
+        forked_from: params.id,
+        forked_at: '2026-06-21T00:00:00Z',
+        created_at: '2026-06-21T00:00:00Z',
+        updated_at: '2026-06-21T00:00:00Z',
+      },
+      { status: 201 },
+    )
+  ),
+
   // LLM-MODEL-FRONT-001: LLM 모델 목록 조회
   http.get(`*${API_ENDPOINTS.LLM_MODELS}`, () =>
     HttpResponse.json({
@@ -130,6 +276,7 @@ export const handlers = [
           max_tokens: null,
           is_active: true,
           is_default: true,
+          base_url: null,
         },
         {
           id: 'uuid-2',
@@ -140,6 +287,7 @@ export const handlers = [
           max_tokens: null,
           is_active: true,
           is_default: false,
+          base_url: null,
         },
       ],
     })
@@ -535,4 +683,204 @@ export const handlers = [
     }),
   ),
 
+  // ── Agent-Skill 부착 (skill-agent-integration Phase A) ──
+  http.get('*/api/v1/agents/:agentId/skills', ({ params }) =>
+    HttpResponse.json({
+      agent_id: params.agentId as string,
+      skills: [
+        {
+          skill_id: 'skill-1',
+          name: '환율 계산기',
+          description: '통화 변환',
+          script_type: 'python',
+          sort_order: 0,
+          has_script: true,
+        },
+      ],
+      total: 1,
+      max_attachable: 3,
+    }),
+  ),
+  http.post('*/api/v1/agents/:agentId/skills', async ({ request }) => {
+    const body = (await request.json()) as { skill_id: string };
+    return HttpResponse.json(
+      {
+        skill_id: body.skill_id,
+        name: '문서 요약',
+        description: '요약',
+        script_type: 'none',
+        sort_order: 1,
+        has_script: false,
+      },
+      { status: 201 },
+    );
+  }),
+  http.delete('*/api/v1/agents/:agentId/skills/:skillId', () =>
+    new HttpResponse(null, { status: 204 }),
+  ),
+
+  // ── Agent Composer (fix-agent-composer) ─────────────────
+  http.post(`*${API_ENDPOINTS.AGENT_COMPOSE}`, () =>
+    HttpResponse.json({
+      coverage: 'partial',
+      name_suggestion: '재무 리포터',
+      system_prompt: '당신은 재무 데이터 수집·보고 에이전트입니다.',
+      tool_ids: ['tavily_search', 'mcp_srv-1'],
+      workers: [
+        {
+          tool_id: 'tavily_search',
+          worker_id: 'search_worker',
+          description: '웹에서 재무 데이터 검색',
+          sort_order: 0,
+          tool_config: null,
+          worker_type: 'tool',
+          ref_agent_id: null,
+          ref_agent_name: null,
+          instruction: '최신 재무 정보가 필요할 때 사용. 핵심 키워드로 검색.',
+        },
+      ],
+      flow_hint: 'tavily_search → mcp_srv-1',
+      llm_model_id: 'model-default',
+      temperature: 0.7,
+      missing_capabilities: [
+        {
+          capability: '사내 ERP 조회',
+          reason: '매칭되는 내부/MCP 도구 없음',
+          suggestion: 'ERP MCP 서버 등록 필요',
+        },
+      ],
+      notes: '웹 수집은 Tavily로 대체했습니다.',
+    }),
+  ),
+
+  // ── Agent Schedule (agent-schedule) ─────────────────────
+  http.get('*/api/v1/agents/:agentId/schedules', ({ params }) =>
+    HttpResponse.json(scheduleStore.get(params.agentId as string) ?? []),
+  ),
+  http.post('*/api/v1/agents/:agentId/schedules', async ({ params, request }) => {
+    const agentId = params.agentId as string;
+    const list = scheduleStore.get(agentId) ?? [];
+    if (list.length >= 10) {
+      return HttpResponse.json(
+        { detail: '에이전트당 스케줄은 최대 10개까지 등록할 수 있습니다.' },
+        { status: 400 },
+      );
+    }
+    const body = (await request.json()) as Record<string, unknown>;
+    const created = mockSchedule({
+      agent_id: agentId,
+      ...(body as Partial<ScheduleResponse>),
+    });
+    scheduleStore.set(agentId, [...list, created]);
+    return HttpResponse.json(created, { status: 201 });
+  }),
+  http.put('*/api/v1/agents/:agentId/schedules/:scheduleId', async ({ params, request }) => {
+    const agentId = params.agentId as string;
+    const list = scheduleStore.get(agentId) ?? [];
+    const target = list.find((s) => s.id === params.scheduleId);
+    if (!target) return HttpResponse.json({ detail: 'not found' }, { status: 404 });
+    const body = (await request.json()) as Partial<ScheduleResponse>;
+    const updated = { ...target, ...body, updated_at: '2026-07-03T01:00:00Z' };
+    scheduleStore.set(agentId, list.map((s) => (s.id === updated.id ? updated : s)));
+    return HttpResponse.json(updated);
+  }),
+  http.delete('*/api/v1/agents/:agentId/schedules/:scheduleId', ({ params }) => {
+    const agentId = params.agentId as string;
+    const list = scheduleStore.get(agentId) ?? [];
+    if (!list.some((s) => s.id === params.scheduleId)) {
+      return HttpResponse.json({ detail: 'not found' }, { status: 404 });
+    }
+    scheduleStore.set(agentId, list.filter((s) => s.id !== params.scheduleId));
+    return new HttpResponse(null, { status: 204 });
+  }),
+  http.patch('*/api/v1/agents/:agentId/schedules/:scheduleId/enabled', async ({ params, request }) => {
+    const agentId = params.agentId as string;
+    const list = scheduleStore.get(agentId) ?? [];
+    const target = list.find((s) => s.id === params.scheduleId);
+    if (!target) return HttpResponse.json({ detail: 'not found' }, { status: 404 });
+    const body = (await request.json()) as { enabled: boolean };
+    const updated = { ...target, enabled: body.enabled };
+    scheduleStore.set(agentId, list.map((s) => (s.id === updated.id ? updated : s)));
+    return HttpResponse.json(updated);
+  }),
+  http.get('*/api/v1/agents/:agentId/schedules/:scheduleId/runs', ({ params }) =>
+    HttpResponse.json([
+      {
+        id: 'run-1',
+        schedule_id: params.scheduleId as string,
+        status: 'success',
+        scheduled_for: '2026-07-03T00:00:00Z',
+        started_at: '2026-07-03T00:00:01Z',
+        finished_at: '2026-07-03T00:00:14Z',
+        session_id: 'sess-1',
+        run_id: 'airun-1',
+        error_message: null,
+      },
+      {
+        id: 'run-2',
+        schedule_id: params.scheduleId as string,
+        status: 'failed',
+        scheduled_for: '2026-07-02T00:00:00Z',
+        started_at: '2026-07-02T00:00:01Z',
+        finished_at: '2026-07-02T00:00:05Z',
+        session_id: null,
+        run_id: null,
+        error_message: 'LLM timeout',
+      },
+    ]),
+  ),
+
+  // ── Wiki (LLM-WIKI-001) ─────────────────────────────────
+  http.post(`*${API_ENDPOINTS.WIKI_DISTILL}`, async () =>
+    HttpResponse.json({
+      agent_id: 'agent-1',
+      created_count: 2,
+      items: [mockWikiArticle('w1'), mockWikiArticle('w2')],
+    }),
+  ),
+  http.get(`*${API_ENDPOINTS.WIKI_LIST}`, ({ request }) => {
+    const url = new URL(request.url);
+    const status = url.searchParams.get('status');
+    const items = status
+      ? [mockWikiArticle('w1', status)]
+      : [mockWikiArticle('w1'), mockWikiArticle('w2', 'approved')];
+    return HttpResponse.json({ items, total: items.length });
+  }),
+  http.get('*/api/v1/wiki/:id', ({ params }) =>
+    HttpResponse.json(mockWikiArticle(String(params.id))),
+  ),
+  http.patch('*/api/v1/wiki/:id/approve', ({ params }) =>
+    HttpResponse.json(mockWikiArticle(String(params.id), 'approved')),
+  ),
+  http.patch('*/api/v1/wiki/:id/reject', ({ params }) =>
+    HttpResponse.json(mockWikiArticle(String(params.id), 'deprecated')),
+  ),
+  http.patch('*/api/v1/wiki/:id/deprecate', ({ params }) =>
+    HttpResponse.json(mockWikiArticle(String(params.id), 'deprecated')),
+  ),
+  http.patch('*/api/v1/wiki/:id/restore', ({ params }) =>
+    HttpResponse.json(mockWikiArticle(String(params.id), 'approved')),
+  ),
+  http.put('*/api/v1/wiki/:id', ({ params }) =>
+    HttpResponse.json({ ...mockWikiArticle(String(params.id)), version: 2 }),
+  ),
 ];
+
+function mockWikiArticle(id: string, status = 'draft') {
+  return {
+    id,
+    agent_id: 'agent-1',
+    title: `위키-${id}`,
+    content: '정제된 본문',
+    source_type: 'distilled',
+    source_refs: ['doc:1'],
+    status,
+    confidence: 0.8,
+    valid_until: null,
+    version: 1,
+    editor_id: null,
+    reviewer_id: null,
+    created_at: '2026-06-30T00:00:00Z',
+    updated_at: '2026-06-30T00:00:00Z',
+  };
+}

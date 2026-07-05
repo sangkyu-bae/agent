@@ -56,7 +56,11 @@ authApiClient.interceptors.response.use(
       }
     }
 
-    const message = error.response?.data?.message ?? '알 수 없는 오류가 발생했습니다.';
+    // FastAPI 검증 에러는 detail 필드로 내려온다 (agent-schedule 등)
+    const message =
+      error.response?.data?.message ??
+      error.response?.data?.detail ??
+      '알 수 없는 오류가 발생했습니다.';
     const status = error.response?.status ?? 0;
     return Promise.reject(new ApiError(message, status));
   }

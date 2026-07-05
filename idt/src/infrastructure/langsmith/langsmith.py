@@ -52,14 +52,14 @@ def normalize_agent_project_name(agent_name: Optional[str]) -> str:
     return f"agent-{base}"[:_PROJECT_NAME_MAX]
 
 
-def make_agent_run_tracer(
-    agent_name: Optional[str],
-    tags: Optional[list[str]] = None,
-):
-    """에이전트별 프로젝트로 보내는 per-run LangChainTracer 생성 (best-effort).
+COMPOSER_PROJECT_NAME = "agent-composer"
 
-    Design §2: graph_config["callbacks"]에 주입해 전역 os.environ 변경 없이
-    run별 프로젝트를 지정한다. langchain_core는 명시적 LangChainTracer가 있으면
+
+def _make_project_tracer(project_name: str, tags: Optional[list[str]] = None):
+    """지정 프로젝트로 보내는 per-run LangChainTracer 생성 (best-effort).
+
+    graph_config["callbacks"]에 주입해 전역 os.environ 변경 없이 run별
+    프로젝트를 지정한다. langchain_core는 명시적 LangChainTracer가 있으면
     전역 auto-tracer를 추가하지 않으므로 중복/경합이 없다.
 
     - API 키 없으면 None (추적 비활성, 본 흐름 영향 없음).
@@ -72,10 +72,24 @@ def make_agent_run_tracer(
     try:
         from langchain_core.tracers import LangChainTracer
 
-        return LangChainTracer(
-            project_name=normalize_agent_project_name(agent_name),
-            tags=tags,
-        )
+        return LangChainTracer(project_name=project_name, tags=tags)
     except Exception as e:  # pragma: no cover - 방어적 best-effort
-        logger.warning("make_agent_run_tracer failed: %s", e)
+        logger.warning("make tracer failed (project=%s): %s", project_name, e)
         return None
+
+
+def make_agent_run_tracer(
+    agent_name: Optional[str],
+    tags: Optional[list[str]] = None,
+):
+    """에이전트별 프로젝트로 보내는 per-run tracer (Design §2)."""
+    return _make_project_tracer(normalize_agent_project_name(agent_name), tags)
+
+
+def make_composer_tracer(tags: Optional[list[str]] = None):
+    """Agent Composer 추적용 per-run tracer — 고정 프로젝트 'agent-composer'.
+
+    nl-agent-composer 추적: 어떤 요청으로 어떤 에이전트 초안이 조합됐는지
+    LangSmith에서 run_name/metadata로 추적한다.
+    """
+    return _make_project_tracer(COMPOSER_PROJECT_NAME, tags)

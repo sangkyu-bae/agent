@@ -17,10 +17,13 @@ class DeleteAgentUseCase:
         repository: AgentDefinitionRepositoryInterface,
         logger: LoggerInterface,
         auto_fork_service: AutoForkService | None = None,
+        document_template_repo=None,
     ) -> None:
         self._repository = repository
         self._logger = logger
         self._auto_fork_service = auto_fork_service
+        # document-template-extractor: 종속 템플릿 soft-delete (원본 파일은 보관)
+        self._document_template_repo = document_template_repo
 
     async def execute(
         self,
@@ -64,6 +67,18 @@ class DeleteAgentUseCase:
                 )
 
             await self._repository.soft_delete(agent_id, request_id)
+
+            # 종속 문서 템플릿 soft-delete (Plan 결정 7 — 원본 파일 보관).
+            if self._document_template_repo is not None:
+                deleted = await self._document_template_repo.soft_delete_by_agent(
+                    agent_id, request_id
+                )
+                self._logger.info(
+                    "DeleteAgentUseCase templates soft-deleted",
+                    request_id=request_id,
+                    agent_id=agent_id,
+                    template_count=deleted,
+                )
             self._logger.info(
                 "DeleteAgentUseCase done",
                 request_id=request_id,

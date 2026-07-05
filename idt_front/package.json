@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.21",
+    "@xyflow/react": "^12.11.1",
     "axios": "^1.13.6",
     "chart.js": "^4.5.1",
     "lucide-react": "^0.577.0",

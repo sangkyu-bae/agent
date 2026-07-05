@@ -73,6 +73,12 @@ class MCPServerRepository(
     async def _base_save(self, model: MCPServerModel, request_id: str) -> MCPServerModel:
         return await MySQLBaseRepository.save(self, model, request_id)
 
+    async def _base_merge(self, model: MCPServerModel, request_id: str) -> MCPServerModel:
+        """기존 PK 기준 UPSERT. add(INSERT)와 달리 존재하는 행은 UPDATE 한다."""
+        merged = await self._session.merge(model)
+        await self._session.flush()
+        return merged
+
     async def _base_find_by_id(self, id: str, request_id: str) -> MCPServerModel | None:
         return await MySQLBaseRepository.find_by_id(self, id, request_id)
 
@@ -115,7 +121,7 @@ class MCPServerRepository(
         self, registration: MCPServerRegistration, request_id: str
     ) -> MCPServerRegistration:
         model = _to_model(registration, self._cipher)
-        saved = await self._base_save(model, request_id)
+        saved = await self._base_merge(model, request_id)
         return _to_entity(saved, self._cipher)
 
     async def delete(self, id: str, request_id: str) -> bool:

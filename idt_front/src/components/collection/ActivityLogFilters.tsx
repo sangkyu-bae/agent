@@ -1,4 +1,5 @@
 import type { ActivityLogFilters as Filters } from '@/types/collection';
+import Dropdown from '@/components/common/Dropdown';
 
 interface ActivityLogFiltersProps {
   filters: Filters;
@@ -18,33 +19,25 @@ const ActivityLogFiltersPanel = ({
 
   return (
     <div className="mb-4 flex flex-wrap items-center gap-3">
-      <select
+      <Dropdown
         value={filters.collection_name ?? ''}
-        onChange={(e) =>
-          update({ collection_name: e.target.value || undefined })
-        }
-        className="rounded-xl border border-zinc-300 bg-white px-3 py-2 text-[13.5px] text-zinc-700 outline-none transition-all focus:border-violet-400"
-      >
-        <option value="">전체 컬렉션</option>
-        {collections.map((c) => (
-          <option key={c} value={c}>
-            {c}
-          </option>
-        ))}
-      </select>
+        onChange={(v) => update({ collection_name: v || undefined })}
+        options={[
+          { value: '', label: '전체 컬렉션' },
+          ...collections.map((c) => ({ value: c, label: c })),
+        ]}
+        className="w-48"
+      />
 
-      <select
+      <Dropdown
         value={filters.action ?? ''}
-        onChange={(e) => update({ action: e.target.value || undefined })}
-        className="rounded-xl border border-zinc-300 bg-white px-3 py-2 text-[13.5px] text-zinc-700 outline-none transition-all focus:border-violet-400"
-      >
-        <option value="">전체 액션</option>
-        {ACTION_OPTIONS.map((a) => (
-          <option key={a} value={a}>
-            {a}
-          </option>
-        ))}
-      </select>
+        onChange={(v) => update({ action: v || undefined })}
+        options={[
+          { value: '', label: '전체 액션' },
+          ...ACTION_OPTIONS.map((a) => ({ value: a, label: a })),
+        ]}
+        className="w-40"
+      />
 
       <input
         type="text"

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import Modal from '@/components/common/Modal';
 import type { ChunkDetail } from '@/types/collection';
 import { CHUNK_TYPE_BADGE } from '@/types/collection';
 
@@ -11,25 +11,16 @@ const ChunkDetailModal = ({ chunk, onClose }: ChunkDetailModalProps) => {
   const typeBadge = CHUNK_TYPE_BADGE[chunk.chunk_type];
   const metaKeys = Object.keys(chunk.metadata);
 
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', handleKey);
-    return () => document.removeEventListener('keydown', handleKey);
-  }, [onClose]);
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-      onClick={onClose}
+    <Modal
+      onClose={onClose}
+      size="4xl"
+      dim="blur"
+      contentClassName="border border-zinc-200"
     >
-      <div
-        className="relative mx-4 flex max-h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="flex max-h-[75vh] flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex shrink-0 items-center justify-between border-b border-zinc-100 px-6 py-4">
+        <div className="flex shrink-0 items-center justify-between border-b border-zinc-100 pb-4">
           <div className="flex items-center gap-3">
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-100 text-[13px] font-bold text-violet-600">
               #{chunk.chunk_index}
@@ -52,7 +43,7 @@ const ChunkDetailModal = ({ chunk, onClose }: ChunkDetailModalProps) => {
         </div>
 
         {/* Body */}
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+        <div className="min-h-0 flex-1 overflow-y-auto py-5">
           {/* Content Section */}
           <h4 className="mb-2 text-[12px] font-semibold uppercase tracking-widest text-violet-500">
             Content
@@ -91,7 +82,7 @@ const ChunkDetailModal = ({ chunk, onClose }: ChunkDetailModalProps) => {
           )}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };
 

@@ -27,6 +27,7 @@ class LlmModel:
         input_price_per_1k_usd: 입력 토큰 1000개당 USD (AGENT-OBS-001)
         output_price_per_1k_usd: 출력 토큰 1000개당 USD
         pricing_updated_at: 가격 최종 갱신 시각
+        base_url: self-host 엔드포인트(vLLM/OpenAI 호환 등). None이면 provider 기본값 (LLM-MODEL-REG-002)
     """
 
     id: str
@@ -43,3 +44,4 @@ class LlmModel:
     input_price_per_1k_usd: Decimal | None = None
     output_price_per_1k_usd: Decimal | None = None
     pricing_updated_at: datetime | None = None
+    base_url: str | None = None

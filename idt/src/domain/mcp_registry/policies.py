@@ -42,6 +42,15 @@ class MCPRegistrationPolicy:
         return transport in MCPRegistrationPolicy.ALLOWED_TRANSPORTS
 
     @staticmethod
+    def requires_secret_storage(transport: str) -> bool:
+        """해당 transport가 시크릿(api_key 등) 암호화 저장을 요구하는지 판단한다.
+
+        streamable_http(Smithery)는 api_key가 필수이므로 암호화 키 없이는
+        시크릿을 안전하게 저장할 수 없어 등록을 허용하면 안 된다.
+        """
+        return transport == "streamable_http"
+
+    @staticmethod
     def validate_auth(transport: str, auth_config: dict | None) -> bool:
         """transport별 필수 인증 필드를 검증한다.
 

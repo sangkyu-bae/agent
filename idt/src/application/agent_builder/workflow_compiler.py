@@ -103,6 +103,8 @@ class WorkflowCompiler:
         chart_max_count: int = 0,
         pipeline_llm_model: LlmModel | None = None,
         search_compress_threshold: int | None = None,
+        document_template_repository=None,
+        document_composer=None,
     ) -> None:
         self._tool_factory = tool_factory
         self._llm_factory = llm_factory
@@ -121,6 +123,9 @@ class WorkflowCompiler:
         self._pipeline_llm_model = pipeline_llm_model
         self._search_compress_threshold = search_compress_threshold
         self._pipeline_llm_cache = None
+        # document-template-extractor Design §4-1: 합성 노드 의존 (미주입 시 안내 노옵).
+        self._document_template_repository = document_template_repository
+        self._document_composer = document_composer
 
     async def compile(
         self,
@@ -192,6 +197,18 @@ class WorkflowCompiler:
                         include_user_context=include_user_context,
                     )
                     worker_map[worker_def.worker_id] = sub_node
+                    continue
+
+                # document-template-extractor Design §4-1: 전용 합성 노드.
+                # ToolFactory 미경유 (단일 툴 react agent 미채택 — Plan §3-3).
+                if worker_def.tool_id == "document_extractor":
+                    worker_map[worker_def.worker_id] = (
+                        self._create_document_extractor_node(
+                            llm, worker_def,
+                            auth_ctx=auth_ctx, request_id=request_id,
+                        )
+                    )
+                    function_node_ids.add(worker_def.worker_id)
                     continue
 
                 category = self._resolve_category(worker_def)
@@ -599,6 +616,131 @@ class WorkflowCompiler:
                 error=str(e),
             )
             return run_llm
+
+    def _create_document_extractor_node(
+        self, llm, worker_def: WorkerDefinition, *, auth_ctx, request_id: str,
+    ):
+        """문서추출기 전용 합성 노드 (document-template-extractor Design §4-2).
+
+        지정 템플릿 로드 → 누적 컨텍스트(근거+대화) → Composer(합성 LLM 1회 +
+        순수 토큰 치환 + MCP html→pdf/doc) → 다운로드 참조 AIMessage 반환.
+        가드 실패(미배선/템플릿 부재)는 안내 노옵 — 그래프 비중단 (§4-4 하위호환).
+        """
+        logger = self._logger
+        repo = self._document_template_repository
+        composer = self._document_composer
+        worker_id = worker_def.worker_id
+        tool_config = worker_def.tool_config or {}
+        owner_user_id = str(auth_ctx.user_id) if auth_ctx is not None else ""
+
+        def _reply(state: SupervisorState, content: str) -> dict:
+            from langchain_core.messages import AIMessage
+
+            return {
+                "messages": [AIMessage(content=content, name=worker_id)],
+                "last_worker_id": worker_id,
+                "token_usage": state["token_usage"] + len(content) // 4,
+            }
+
+        async def document_extractor_node(state: SupervisorState) -> dict:
+            from src.domain.document_extractor.exceptions import (
+                ComposeError,
+                McpConversionError,
+            )
+            from src.domain.document_extractor.tool_config import (
+                DocumentExtractorToolConfig,
+            )
+
+            if repo is None or composer is None:
+                return _reply(state, (
+                    "문서추출기가 아직 구성되지 않았습니다 "
+                    "(document_template_repository/composer 미배선)."
+                ))
+            template_id = tool_config.get("template_id", "")
+            if not template_id:
+                return _reply(state, (
+                    "등록된 문서 템플릿이 없습니다. "
+                    "에이전트 편집에서 양식을 업로드해 등록해주세요."
+                ))
+            template = await repo.find_by_id(template_id, request_id)
+            if template is None or template.status != "active":
+                return _reply(state, (
+                    "문서 템플릿을 찾을 수 없습니다(삭제되었을 수 있음). "
+                    "에이전트 편집에서 양식을 다시 등록해주세요."
+                ))
+
+            evidence_block, conversation_block = self._split_fill_context(
+                state["messages"]
+            )
+            try:
+                config = DocumentExtractorToolConfig(**tool_config)
+                result = await composer.compose(
+                    llm=llm,
+                    template=template,
+                    tool_config=config,
+                    evidence_block=evidence_block,
+                    conversation_block=conversation_block,
+                    owner_user_id=owner_user_id,
+                    request_id=request_id,
+                )
+            except (ComposeError, McpConversionError, ValueError) as e:
+                logger.error(
+                    "document_extractor_node compose failed",
+                    exception=e,
+                    request_id=request_id,
+                    template_id=template_id,
+                )
+                return _reply(state, f"문서 생성 실패: {e}")
+
+            logger.info(
+                "document_extractor_node done",
+                request_id=request_id,
+                template_id=template_id,
+                file_id=result.file_id,
+                unfilled_count=len(result.unfilled_labels),
+            )
+            return _reply(state, self._render_compose_summary(template, result))
+
+        return document_extractor_node
+
+    @staticmethod
+    def _split_fill_context(messages: list) -> tuple[str, str]:
+        """누적 state.messages → (근거 블록, 대화 블록) 분리 (GB2).
+
+        근거 = 상류 워커 산출물(AIMessage name=worker_id 규약), 대화 = 나머지.
+        """
+        worker_outputs = [m for m in messages if _is_worker_output(m)]
+        conversation = [m for m in messages if not _is_worker_output(m)]
+        evidence_block = "\n\n---\n\n".join(
+            f"[{getattr(m, 'name', '')}]\n{getattr(m, 'content', '')}"
+            for m in worker_outputs
+        )
+        conversation_block = "\n".join(
+            str(getattr(m, "content", m)) for m in conversation
+        )
+        return evidence_block, conversation_block
+
+    @staticmethod
+    def _render_compose_summary(template, result) -> str:
+        """합성 결과 AIMessage 본문 (Design §4-2) — 채운 값 병기(R3) + 공란 안내(GB6)."""
+        lines = [
+            f"문서 「{template.name}」 생성 완료 ({result.filename})",
+            (
+                f"다운로드: [{result.filename}]"
+                f"(/api/v1/document-extractor/files/{result.file_id})"
+            ),
+        ]
+        if result.filled_slots:
+            filled = " · ".join(
+                f"{label}={value}" for label, value in result.filled_slots.items()
+            )
+            lines.append(f"[채운 항목] {filled}")
+        if result.unfilled_labels:
+            lines.append(
+                "[공란(근거 없음 — 직접 확인 필요)] "
+                + ", ".join(result.unfilled_labels)
+            )
+        return "\n".join(lines)
 
     def _create_analysis_node(self, llm, worker_id: str, system_prompt: str):
         """분석 전용 노드.

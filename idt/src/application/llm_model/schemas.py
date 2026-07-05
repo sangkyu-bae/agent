@@ -19,6 +19,8 @@ class CreateLlmModelRequest(BaseModel):
     max_tokens: int | None = None
     is_active: bool = True
     is_default: bool = False
+    # LLM-MODEL-REG-002: self-host 엔드포인트(vLLM/OpenAI 호환). None이면 provider 기본값.
+    base_url: str | None = Field(None, max_length=500)
 
 
 class UpdateLlmModelRequest(BaseModel):
@@ -27,6 +29,7 @@ class UpdateLlmModelRequest(BaseModel):
     max_tokens: int | None = None
     is_active: bool | None = None
     is_default: bool | None = None
+    base_url: str | None = Field(None, max_length=500)
 
 
 class UpdatePricingRequest(BaseModel):
@@ -49,6 +52,7 @@ class LlmModelResponse(BaseModel):
     input_price_per_1k_usd: Decimal | None = None
     output_price_per_1k_usd: Decimal | None = None
     pricing_updated_at: datetime | None = None
+    base_url: str | None = None
 
     @classmethod
     def from_domain(cls, model: LlmModel) -> "LlmModelResponse":
@@ -64,6 +68,7 @@ class LlmModelResponse(BaseModel):
             input_price_per_1k_usd=model.input_price_per_1k_usd,
             output_price_per_1k_usd=model.output_price_per_1k_usd,
             pricing_updated_at=model.pricing_updated_at,
+            base_url=model.base_url,
         )
 
 

@@ -38,6 +38,53 @@ def _make_agent(workers: list[WorkerDefinition] | None = None) -> AgentDefinitio
     )
 
 
+def _make_sub_worker(ref_agent_id: str, sort_order: int = 1) -> WorkerDefinition:
+    return WorkerDefinition(
+        tool_id=f"sub_agent_{ref_agent_id[:8]}",
+        worker_id=f"sub_{ref_agent_id}",
+        description="서브",
+        sort_order=sort_order,
+        worker_type="sub_agent",
+        ref_agent_id=ref_agent_id,
+    )
+
+
+# ── AgentDefinition.replace_sub_agents ───────────────────────────
+
+
+class TestReplaceSubAgents:
+    def test_keeps_tool_workers_and_replaces_sub_agents(self):
+        agent = _make_agent(workers=[
+            _make_worker("tavily_search", 0),
+            _make_sub_worker("old-sub", 1),
+        ])
+        agent.replace_sub_agents([_make_sub_worker("new-sub")])
+        tools = [w for w in agent.workers if w.worker_type == "tool"]
+        subs = [w for w in agent.workers if w.worker_type == "sub_agent"]
+        assert len(tools) == 1 and tools[0].tool_id == "tavily_search"
+        assert len(subs) == 1 and subs[0].ref_agent_id == "new-sub"
+
+    def test_empty_removes_all_sub_agents(self):
+        agent = _make_agent(workers=[
+            _make_worker("tavily_search", 0),
+            _make_sub_worker("old-sub", 1),
+        ])
+        agent.replace_sub_agents([])
+        assert all(w.worker_type == "tool" for w in agent.workers)
+
+    def test_reassigns_sort_order_after_tools(self):
+        agent = _make_agent(workers=[
+            _make_worker("tavily_search", 0),
+            _make_worker("excel_export", 1),
+        ])
+        agent.replace_sub_agents([
+            _make_sub_worker("s1", 99),
+            _make_sub_worker("s2", 5),
+        ])
+        subs = [w for w in agent.workers if w.worker_type == "sub_agent"]
+        assert [w.sort_order for w in subs] == [2, 3]
+
+
 # ── WorkerDefinition ─────────────────────────────────────────────
 
 

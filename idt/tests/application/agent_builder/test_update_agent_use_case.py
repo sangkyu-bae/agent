@@ -5,7 +5,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.application.agent_builder.schemas import UpdateAgentRequest, UpdateAgentResponse
+from src.application.agent_builder.schemas import (
+    SubAgentConfigRequest,
+    UpdateAgentRequest,
+    UpdateAgentResponse,
+)
 from src.application.agent_builder.update_agent_use_case import UpdateAgentUseCase
 from src.domain.agent_builder.schemas import AgentDefinition, WorkerDefinition
 from src.domain.collection.permission_schemas import CollectionPermission, CollectionScope
@@ -91,6 +95,112 @@ class TestUpdateAgentUseCase:
         repository.update.assert_awaited_once()
 
 
+class TestUpdateSubAgents:
+    def _make_parent(self) -> AgentDefinition:
+        now = datetime.now(timezone.utc)
+        return AgentDefinition(
+            id="parent-1",
+            user_id="user-1",
+            name="부모",
+            description="설명",
+            system_prompt="프롬프트",
+            flow_hint="힌트",
+            workers=[WorkerDefinition("tavily_search", "search_worker", "검색", 0)],
+            llm_model_id="model-1",
+            status="active",
+            created_at=now,
+            updated_at=now,
+        )
+
+    def _make_sub(self, visibility: str = "public") -> AgentDefinition:
+        now = datetime.now(timezone.utc)
+        return AgentDefinition(
+            id="sub-1",
+            user_id="other",
+            name="서브봇",
+            description="서브 설명",
+            system_prompt="프롬프트",
+            flow_hint="힌트",
+            workers=[WorkerDefinition("tavily_search", "w0", "검색", 0)],
+            llm_model_id="model-1",
+            status="active",
+            visibility=visibility,
+            created_at=now,
+            updated_at=now,
+        )
+
+    def _make_use_case(self, parent, sub):
+        repository = MagicMock()
+        perm_repo = MagicMock()
+        logger = MagicMock()
+        by_id = {parent.id: parent, sub.id: sub}
+
+        async def _find(agent_id, req_id):
+            return by_id.get(agent_id)
+
+        repository.find_by_id = AsyncMock(side_effect=_find)
+        repository.update = AsyncMock(side_effect=lambda a, r: a)
+        perm_repo.find_by_collection_name = AsyncMock(return_value=None)
+        use_case = UpdateAgentUseCase(
+            repository=repository, perm_repo=perm_repo, logger=logger
+        )
+        return use_case, repository, parent
+
+    @pytest.mark.asyncio
+    async def test_adds_public_sub_agent_keeps_tools(self):
+        parent, sub = self._make_parent(), self._make_sub("public")
+        use_case, _, agent = self._make_use_case(parent, sub)
+        request = UpdateAgentRequest(
+            sub_agent_configs=[SubAgentConfigRequest(ref_agent_id="sub-1")]
+        )
+        await use_case.execute("parent-1", request, "req-1", viewer_user_id="user-1")
+        tool_workers = [w for w in agent.workers if w.worker_type == "tool"]
+        sub_workers = [w for w in agent.workers if w.worker_type == "sub_agent"]
+        assert len(tool_workers) == 1
+        assert len(sub_workers) == 1
+        assert sub_workers[0].ref_agent_id == "sub-1"
+
+    @pytest.mark.asyncio
+    async def test_empty_list_removes_all_sub_agents(self):
+        parent = self._make_parent()
+        parent.workers.append(
+            WorkerDefinition(
+                "sub_agent_x", "sub_x", "서브", 1,
+                worker_type="sub_agent", ref_agent_id="sub-1",
+            )
+        )
+        use_case, _, agent = self._make_use_case(parent, self._make_sub())
+        request = UpdateAgentRequest(sub_agent_configs=[])
+        await use_case.execute("parent-1", request, "req-1", viewer_user_id="user-1")
+        assert all(w.worker_type == "tool" for w in agent.workers)
+
+    @pytest.mark.asyncio
+    async def test_none_leaves_sub_agents_untouched(self):
+        parent = self._make_parent()
+        parent.workers.append(
+            WorkerDefinition(
+                "sub_agent_x", "sub_x", "서브", 1,
+                worker_type="sub_agent", ref_agent_id="sub-1",
+            )
+        )
+        use_case, _, agent = self._make_use_case(parent, self._make_sub())
+        request = UpdateAgentRequest(name="새 이름")
+        await use_case.execute("parent-1", request, "req-1", viewer_user_id="user-1")
+        assert any(w.worker_type == "sub_agent" for w in agent.workers)
+
+    @pytest.mark.asyncio
+    async def test_private_other_user_sub_agent_denied(self):
+        parent, sub = self._make_parent(), self._make_sub("private")
+        use_case, _, _ = self._make_use_case(parent, sub)
+        request = UpdateAgentRequest(
+            sub_agent_configs=[SubAgentConfigRequest(ref_agent_id="sub-1")]
+        )
+        with pytest.raises(PermissionError):
+            await use_case.execute(
+                "parent-1", request, "req-1", viewer_user_id="user-1"
+            )
+
+
 class TestUpdateVisibilityScope:
     def _make_rag_agent(
         self, visibility: str = "private", collection_name: str = "docs"
@@ -154,3 +264,39 @@ class TestUpdateVisibilityScope:
         request = UpdateAgentRequest(name="새 이름")
         result = await use_case.execute(agent.id, request, "req-1")
         assert result.name == "새 이름"
+
+
+class TestUpdateAgentSkillSync:
+    """agent-skill-toggle: 수정 시점 부착 스킬 동기화."""
+
+    @pytest.mark.asyncio
+    async def test_skill_ids_none_skips_sync(self):
+        use_case, _, agent = _make_use_case()
+        use_case._skill_sync = MagicMock()
+        use_case._skill_sync.sync = AsyncMock()
+        await use_case.execute(agent.id, UpdateAgentRequest(name="x"), "req-1")
+        use_case._skill_sync.sync.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_skill_ids_empty_triggers_sync(self):
+        use_case, _, agent = _make_use_case()
+        use_case._skill_sync = MagicMock()
+        use_case._skill_sync.sync = AsyncMock()
+        await use_case.execute(
+            agent.id, UpdateAgentRequest(skill_ids=[]), "req-1",
+            viewer_user_id="user-1",
+        )
+        use_case._skill_sync.sync.assert_awaited_once()
+        assert use_case._skill_sync.sync.call_args.args[1] == []
+
+    @pytest.mark.asyncio
+    async def test_skill_ids_list_triggers_sync(self):
+        use_case, _, agent = _make_use_case()
+        use_case._skill_sync = MagicMock()
+        use_case._skill_sync.sync = AsyncMock()
+        await use_case.execute(
+            agent.id, UpdateAgentRequest(skill_ids=["s1", "s2"]), "req-1",
+            viewer_user_id="user-1", viewer_role="user",
+        )
+        use_case._skill_sync.sync.assert_awaited_once()
+        assert use_case._skill_sync.sync.call_args.args[1] == ["s1", "s2"]

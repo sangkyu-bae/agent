@@ -42,3 +42,5 @@ class LlmModelModel(Base):
     input_price_per_1k_usd: Mapped[Decimal | None] = mapped_column(Numeric(10, 6))
     output_price_per_1k_usd: Mapped[Decimal | None] = mapped_column(Numeric(10, 6))
     pricing_updated_at: Mapped[datetime | None] = mapped_column(DateTime)
+    # LLM-MODEL-REG-002 §2-2: self-host 엔드포인트(vLLM/OpenAI 호환). V035 매핑.
+    base_url: Mapped[str | None] = mapped_column(String(500))

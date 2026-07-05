@@ -26,6 +26,7 @@ class ToolFactory:
         mcp_tool_loader=None,
         tracker: Any = None,                       # ★ M4: RunTracker | None
         run_observability_config: Any = None,      # ★ M4: RunObservabilityConfig | None
+        wiki_search: Any = None,                   # ★ LLM-WIKI-001: RunScopedWikiSearch | None
     ) -> None:
         self._logger = logger
         self._hybrid_search = hybrid_search_use_case
@@ -34,6 +35,8 @@ class ToolFactory:
         self._mcp_tool_loader = mcp_tool_loader
         self._tracker = tracker
         self._obs_config = run_observability_config
+        # use_wiki_first=True인 RAG 도구에 주입할 위키 우선 검색 어댑터(없으면 hybrid 폴백).
+        self._wiki_search = wiki_search
         # agent-user-context Design §7.1:
         # WorkflowCompiler.compile() 시점에 갱신되는 현재 요청의 AuthContext.
         # None이면 Tool은 ContextVar fallback 또는 public_anonymous 동작.
@@ -54,6 +57,12 @@ class ToolFactory:
             return self._hybrid_search_getter()
         return None
 
+    def _select_search(self, rag_config: RagToolConfig) -> object | None:
+        """use_wiki_first=True이고 위키 어댑터가 있으면 위키 우선 검색을, 아니면 hybrid를 반환."""
+        if rag_config.use_wiki_first and self._wiki_search is not None:
+            return self._wiki_search
+        return self._get_hybrid_search()
+
     def create(
         self, tool_id: str, request_id: str = "", tool_config: dict | None = None
     ) -> BaseTool:
@@ -66,8 +75,9 @@ class ToolFactory:
 
                 rag_config = self._parse_rag_config(tool_config)
                 effective_threshold = self._resolve_score_threshold(rag_config)
+                search_use_case = self._select_search(rag_config)
                 return InternalDocumentSearchTool(
-                    hybrid_search_use_case=self._get_hybrid_search(),
+                    hybrid_search_use_case=search_use_case,
                     request_id=request_id,
                     top_k=rag_config.top_k,
                     search_mode=rag_config.search_mode,

@@ -117,6 +117,14 @@ export const queryKeys = {
       [...queryKeys.collections.all, 'searchHistory', name, params] as const,
   },
 
+  // ── Wiki (LLM-WIKI-001) ─────────────────────────────────
+  wiki: {
+    all: ['wiki'] as const,
+    list: (params?: { agent_id?: string; status?: string }) =>
+      [...queryKeys.wiki.all, 'list', params] as const,
+    detail: (id: string) => [...queryKeys.wiki.all, 'detail', id] as const,
+  },
+
   // ── Agent Builder ──────────────────────────────────────
   agentBuilder: {
     all: ['agentBuilder'] as const,
@@ -124,6 +132,20 @@ export const queryKeys = {
       [...queryKeys.agentBuilder.all, 'list', params] as const,
     detail: (agentId: string) =>
       [...queryKeys.agentBuilder.all, 'detail', agentId] as const,
+    /** 에이전트에 부착된 Skill 목록 */
+    skills: (agentId: string) =>
+      [...queryKeys.agentBuilder.all, 'skills', agentId] as const,
+  },
+
+  // ── Agent Schedules (agent-schedule) ───────────────────
+  agentSchedules: {
+    all: ['agentSchedules'] as const,
+    /** 에이전트별 스케줄 목록 */
+    list: (agentId: string) =>
+      [...queryKeys.agentSchedules.all, 'list', agentId] as const,
+    /** 스케줄 실행 이력 */
+    runs: (agentId: string, scheduleId: string) =>
+      [...queryKeys.agentSchedules.all, 'runs', agentId, scheduleId] as const,
   },
 
   // ── Agent Store ────────────────────────────────────────
@@ -156,6 +178,11 @@ export const queryKeys = {
     mcpServers: () => [...queryKeys.admin.all, 'mcpServers'] as const,
     /** 특정 MCP 서버 상세 */
     mcpServer: (id: string) => [...queryKeys.admin.mcpServers(), id] as const,
+    /** Skill 목록 (scope 별) */
+    skills: (params?: import('@/types/skill').ListSkillsRequest) =>
+      [...queryKeys.admin.all, 'skills', params] as const,
+    /** 특정 Skill 상세 */
+    skill: (id: string) => [...queryKeys.admin.all, 'skill', id] as const,
     /** RAGAS 대시보드 통계 */
     ragasDashboard: () => [...queryKeys.admin.all, 'ragasDashboard'] as const,
     /** RAGAS 실행 목록 */

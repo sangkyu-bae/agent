@@ -495,6 +495,7 @@ npm run coverage     # 커버리지 리포트 생성
 | AUTH-001 | docs/01-plan/features/auth.plan.md | JWT 인증 + 관리자 승인 흐름 (Design 완료 / 구현 예정) |
 | DOC-DEL-001 | docs/01-plan/features/document-delete-api.plan.md | 컬렉션 문서 삭제 API 연동 (Design 완료 / 구현 예정) |
 | AGENT-STORE-001 | docs/01-plan/features/agent-store.plan.md | 에이전트 스토어 마켓플레이스 (구현 완료) |
+| FIX-COMPOSER-001 | docs/archive/2026-07/fix-agent-composer/fix-agent-composer.plan.md | Fix 에이전트 탭 — 채팅→compose(current_config/history 확장)→초안 카드→폼 셋팅, MCP 저장 필터 제거 (구현 완료, Match 93%) |
 
 ### 완료된 주요 파일 참조
 

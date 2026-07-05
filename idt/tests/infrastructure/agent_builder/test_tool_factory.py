@@ -43,6 +43,39 @@ class TestToolFactory:
         assert isinstance(tool, BaseTool)
         assert tool.name == "internal_document_search"
 
+    def test_default_uses_plain_hybrid_search(self):
+        logger = MagicMock()
+        hybrid = MagicMock()
+        wiki = MagicMock()
+        factory = ToolFactory(
+            logger=logger, hybrid_search_use_case=hybrid, wiki_search=wiki
+        )
+        tool = factory.create("internal_document_search")  # use_wiki_first 기본 False
+        assert tool.hybrid_search_use_case is hybrid
+
+    def test_use_wiki_first_selects_wiki_adapter(self):
+        logger = MagicMock()
+        hybrid = MagicMock()
+        wiki = MagicMock()
+        factory = ToolFactory(
+            logger=logger, hybrid_search_use_case=hybrid, wiki_search=wiki
+        )
+        tool = factory.create(
+            "internal_document_search", tool_config={"use_wiki_first": True}
+        )
+        assert tool.hybrid_search_use_case is wiki
+
+    def test_use_wiki_first_without_adapter_falls_back_to_hybrid(self):
+        logger = MagicMock()
+        hybrid = MagicMock()
+        factory = ToolFactory(
+            logger=logger, hybrid_search_use_case=hybrid, wiki_search=None
+        )
+        tool = factory.create(
+            "internal_document_search", tool_config={"use_wiki_first": True}
+        )
+        assert tool.hybrid_search_use_case is hybrid
+
     def test_create_unknown_tool_raises(self):
         factory = _make_factory()
         with pytest.raises(ValueError, match="Unknown tool_id"):

@@ -21,17 +21,35 @@ const renderWithQuery = (ui: ReactNode) => {
   );
 };
 
+describe('RagConfigPanel — 위키 우선 검색 토글', () => {
+  it('체크 시 use_wiki_first=true로 onChange가 호출된다', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    renderWithQuery(
+      <RagConfigPanel
+        config={{ ...DEFAULT_RAG_CONFIG, use_wiki_first: false }}
+        onChange={onChange}
+      />,
+    );
+
+    const toggle = await screen.findByRole('checkbox', { name: /위키 우선 검색/ });
+    await user.click(toggle);
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ use_wiki_first: true }),
+    );
+  });
+});
+
 describe('RagConfigPanel — scope 뱃지', () => {
   it('컬렉션 드롭다운 옵션에 scope 라벨이 포함된다', async () => {
+    const user = userEvent.setup();
     const onChange = vi.fn();
     renderWithQuery(
       <RagConfigPanel config={{ ...DEFAULT_RAG_CONFIG }} onChange={onChange} />,
     );
 
-    const select = await screen.findByRole('combobox');
-    const options = select.querySelectorAll('option');
-
-    const optionTexts = Array.from(options).map((o) => o.textContent);
+    await user.click(await screen.findByRole('combobox'));
+    const optionTexts = screen.getAllByRole('option').map((o) => o.textContent);
     expect(optionTexts.some((t) => t?.includes('[공개]'))).toBe(true);
     expect(optionTexts.some((t) => t?.includes('[부서]'))).toBe(true);
     expect(optionTexts.some((t) => t?.includes('[개인]'))).toBe(true);

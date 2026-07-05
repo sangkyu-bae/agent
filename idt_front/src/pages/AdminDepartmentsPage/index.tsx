@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useDepartments, useCreateDepartment, useUpdateDepartment, useDeleteDepartment } from '@/hooks/useDepartments';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
+import Modal from '@/components/common/Modal';
 import type { Department, CreateDepartmentRequest, UpdateDepartmentRequest } from '@/types/department';
 
 interface DepartmentFormModalProps {
@@ -38,11 +39,8 @@ const DepartmentFormModal = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-[15px] font-semibold text-zinc-900">{title}</h2>
-
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+    <Modal onClose={onClose} title={title} size="md" showCloseButton={false}>
+      <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label htmlFor="dept-name" className="mb-1.5 block text-[13px] font-medium text-zinc-700">
               부서명 <span className="text-red-400">*</span>
@@ -101,9 +99,8 @@ const DepartmentFormModal = ({
               )}
             </button>
           </div>
-        </form>
-      </div>
-    </div>
+      </form>
+    </Modal>
   );
 };
 

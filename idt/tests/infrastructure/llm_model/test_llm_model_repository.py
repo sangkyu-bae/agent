@@ -147,6 +147,33 @@ async def test_seed_default_models_inserts_three(session: AsyncSession) -> None:
 
 
 @pytest.mark.asyncio
+async def test_base_url_round_trip(session: AsyncSession) -> None:
+    """LLM-MODEL-REG-002: base_url save→find 왕복 + update 반영."""
+    repo = LlmModelRepository(session=session, logger=MagicMock())
+    m = _make_model(model_id="q", provider="openai", model_name="Qwen2.5")
+    m.base_url = "http://10.0.0.5:8000/v1"
+    await repo.save(m, "req-1")
+
+    fetched = await repo.find_by_id("q", "req-1")
+    assert fetched is not None
+    assert fetched.base_url == "http://10.0.0.5:8000/v1"
+
+    fetched.base_url = "http://10.0.0.6:8000/v1"
+    await repo.update(fetched, "req-1")
+    updated = await repo.find_by_id("q", "req-1")
+    assert updated.base_url == "http://10.0.0.6:8000/v1"
+
+
+@pytest.mark.asyncio
+async def test_base_url_defaults_none(session: AsyncSession) -> None:
+    repo = LlmModelRepository(session=session, logger=MagicMock())
+    await repo.save(_make_model(model_id="n"), "req-1")
+
+    fetched = await repo.find_by_id("n", "req-1")
+    assert fetched.base_url is None
+
+
+@pytest.mark.asyncio
 async def test_seed_is_idempotent(session: AsyncSession) -> None:
     repo = LlmModelRepository(session=session, logger=MagicMock())
     await seed_default_models(repo, MagicMock(), "req-1")

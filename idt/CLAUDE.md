@@ -79,6 +79,7 @@
 | 로깅 & 에러 추적 | `docs/rules/logging.md` | 새 모듈 개발, 에러 처리 시 |
 | 대화 메모리 정책 | `docs/rules/conversation-memory.md` | 대화 기능 개발 시 |
 | RAG & 문서 규칙 | `docs/rules/rag-retrieval.md` | RAG/검색 관련 작업 시 |
+| **도구 & MCP 개발** | `docs/rules/tool-and-mcp.md` | **도구(내부/MCP) 추가·변경·조회 시 필수 확인** |
 | 테스트 & 작업 절차 | `docs/rules/testing.md` | 기능 추가, 버그 수정 시 |
 | Task 파일 목록 | `docs/task-registry.md` | Task 조회, 새 task 추가 시 |
 | Skills 목록 | `docs/skills.md` | 검증/개발 스킬 확인 시 |
