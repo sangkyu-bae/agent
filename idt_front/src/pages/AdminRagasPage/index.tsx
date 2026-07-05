@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import Dropdown from '@/components/common/Dropdown';
 import { adminRagasService } from '@/services/adminRagasService';
 import { queryKeys } from '@/lib/queryKeys';
 import type { AdminRagasRunsParams, EvalRunDetail } from '@/types/adminRagas';
@@ -145,36 +146,39 @@ const AdminRagasPage = () => {
 
       {/* Filters */}
       <div className="mb-4 flex items-center gap-3">
-        <select
+        <Dropdown
           value={filters.target_type ?? ''}
-          onChange={(e) => handleFilterChange('target_type', e.target.value)}
-          className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-[13px] text-zinc-700 outline-none focus:border-violet-300"
-        >
-          <option value="">전체 대상</option>
-          <option value="rag">RAG</option>
-          <option value="agent">Agent</option>
-          <option value="retrieval">Retrieval</option>
-        </select>
-        <select
+          onChange={(v) => handleFilterChange('target_type', v)}
+          options={[
+            { value: '', label: '전체 대상' },
+            { value: 'rag', label: 'RAG' },
+            { value: 'agent', label: 'Agent' },
+            { value: 'retrieval', label: 'Retrieval' },
+          ]}
+          className="w-36"
+        />
+        <Dropdown
           value={filters.eval_type ?? ''}
-          onChange={(e) => handleFilterChange('eval_type', e.target.value)}
-          className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-[13px] text-zinc-700 outline-none focus:border-violet-300"
-        >
-          <option value="">전체 유형</option>
-          <option value="batch">Batch</option>
-          <option value="realtime">Realtime</option>
-        </select>
-        <select
+          onChange={(v) => handleFilterChange('eval_type', v)}
+          options={[
+            { value: '', label: '전체 유형' },
+            { value: 'batch', label: 'Batch' },
+            { value: 'realtime', label: 'Realtime' },
+          ]}
+          className="w-36"
+        />
+        <Dropdown
           value={filters.status ?? ''}
-          onChange={(e) => handleFilterChange('status', e.target.value)}
-          className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-[13px] text-zinc-700 outline-none focus:border-violet-300"
-        >
-          <option value="">전체 상태</option>
-          <option value="completed">완료</option>
-          <option value="running">실행 중</option>
-          <option value="pending">대기</option>
-          <option value="failed">실패</option>
-        </select>
+          onChange={(v) => handleFilterChange('status', v)}
+          options={[
+            { value: '', label: '전체 상태' },
+            { value: 'completed', label: '완료' },
+            { value: 'running', label: '실행 중' },
+            { value: 'pending', label: '대기' },
+            { value: 'failed', label: '실패' },
+          ]}
+          className="w-36"
+        />
         {runsData && (
           <span className="ml-auto text-[12px] text-zinc-400">
             총 {runsData.total}건

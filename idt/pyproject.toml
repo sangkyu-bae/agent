@@ -53,6 +53,8 @@ dependencies = [
     "python-multipart>=0.0.9",
     # Crypto (MCP 등록 시크릿 Fernet 암호화 — secret_cipher.py 직접 사용)
     "cryptography>=42.0.0",
+    # Cron 표현식 파싱/다음 발화 계산 (agent-schedule)
+    "croniter>=2.0",
 ]
 
 [project.optional-dependencies]

@@ -21,7 +21,19 @@
       "PowerShell(Get-ChildItem -Path \"C:\\\\sangplus\\\\sangplusbot\" -Directory -Name | ForEach-Object { \"$_\" })",
       "PowerShell(Move-Item *)",
       "PowerShell(Copy-Item *)",
-      "PowerShell(Remove-Item *)"
+      "PowerShell(Remove-Item *)",
+      "PowerShell(npm run *)",
+      "PowerShell(npx eslint src/components/common/Dropdown.tsx src/components/common/Dropdown.test.tsx 2>&1 | Select-Object -First 40)",
+      "PowerShell(npx tsc --noEmit)",
+      "PowerShell(npx vitest run --pool=threads src/utils/scheduleCron.test.ts)",
+      "PowerShell(npx vitest run --pool=threads src/hooks/useAgentSchedules.test.tsx)",
+      "PowerShell(npx vitest run --pool=threads src/components/agent-builder/schedule/ScheduleForm.test.tsx)",
+      "PowerShell(npx vitest run --pool=threads src/components/agent-builder/schedule/SchedulePanel.test.tsx)",
+      "PowerShell(npx vitest run --pool=threads src/__tests__/components/AgentBuilderStudio.test.tsx)",
+      "PowerShell(npx vitest run --pool=threads src/components/agent-builder/DocumentExtractorConfigModal.test.tsx src/components/agent-builder/DocumentExtractorConfigPanel.test.tsx src/components/agent-builder/LeftConfigPanel.test.tsx)",
+      "Read(//c/sangplus/sangplusbot/docs/archive/2026-07/**)",
+      "Read(//c/sangplus/sangplusbot/idt/docs/archive/2026-07/**)",
+      "PowerShell(Select-String -Path \"C:\\\\Users\\\\tkdrb\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--sangplus-sangplusbot-idt-front\\\\b649649b-7dba-4b56-982b-ce9c92a77ec5\\\\tasks\\\\bokwmgfo2.output\" -Pattern \"failed\" | Select-Object -First 12 | ForEach-Object { $_.Line })"
     ]
   }
 }

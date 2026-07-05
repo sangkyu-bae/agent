@@ -18,9 +18,12 @@ class UpdateMCPServerUseCase:
         self,
         repository: MCPServerRegistryRepositoryInterface,
         logger: LoggerInterface,
+        secrets_enabled: bool = True,
     ):
         self._repo = repository
         self._logger = logger
+        # MCP_SECRET_KEY(암호화 키) 설정 여부. False면 시크릿 저장이 불가능하다.
+        self._secrets_enabled = secrets_enabled
 
     async def execute(
         self, id: str, request: UpdateMCPServerRequest, request_id: str
@@ -39,6 +42,33 @@ class UpdateMCPServerUseCase:
             raise ValueError(f"Invalid endpoint URL: {request.endpoint!r}")
         if request.transport is not None and not MCPRegistrationPolicy.validate_transport(request.transport):
             raise ValueError(f"Invalid transport: {request.transport!r}")
+        # transport/auth가 바뀌는 경우에만 병합 후 상태로 인증 필수 필드 검증
+        # (api_key 누락 → Smithery 404 → 'Session terminated' 사전 차단)
+        if request.transport is not None or request.auth_config is not None:
+            effective_transport = (
+                request.transport
+                if request.transport is not None
+                else existing.transport.value
+            )
+            effective_auth = (
+                request.auth_config
+                if request.auth_config is not None
+                else existing.auth_config
+            )
+            if not MCPRegistrationPolicy.validate_auth(
+                effective_transport, effective_auth
+            ):
+                raise ValueError(
+                    "Invalid auth_config: api_key required for streamable_http"
+                )
+            if (
+                MCPRegistrationPolicy.requires_secret_storage(effective_transport)
+                and not self._secrets_enabled
+            ):
+                raise ValueError(
+                    "MCP_SECRET_KEY가 설정되지 않아 streamable_http 시크릿을 저장할 수 "
+                    "없습니다. .env에 MCP_SECRET_KEY를 설정하세요"
+                )
 
         new_transport = (
             MCPTransportType(request.transport) if request.transport is not None else None

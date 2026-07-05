@@ -78,6 +78,43 @@ class TestMCPConnectionTest:
         logger.error.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_session_terminated_in_group_returns_diagnostic_hint(self):
+        # SDK는 404를 ExceptionGroup으로 감싼 McpError("Session terminated")로 올린다
+        repo = AsyncMock(spec=MCPServerRegistryRepositoryInterface)
+        repo.find_by_id.return_value = _registration()
+        uc = MCPConnectionTestUseCase(repository=repo, logger=MagicMock())
+
+        inner = RuntimeError("Session terminated")
+        group = ExceptionGroup("unhandled errors in a TaskGroup", [inner])
+        fake_client = MagicMock()
+        fake_client.list_tools = AsyncMock(side_effect=group)
+        with patch(_CLIENT_PATH, return_value=fake_client):
+            result = await uc.execute("srv-1", "req-1")
+
+        assert result.ok is False
+        assert "api_key" in result.error
+        assert "/mcp" in result.error
+
+    @pytest.mark.asyncio
+    async def test_session_terminated_via_cause_chain_returns_hint(self):
+        repo = AsyncMock(spec=MCPServerRegistryRepositoryInterface)
+        repo.find_by_id.return_value = _registration()
+        uc = MCPConnectionTestUseCase(repository=repo, logger=MagicMock())
+
+        try:
+            raise RuntimeError("Session terminated")
+        except RuntimeError as inner:
+            outer = RuntimeError("unhandled errors in a TaskGroup")
+            outer.__cause__ = inner
+        fake_client = MagicMock()
+        fake_client.list_tools = AsyncMock(side_effect=outer)
+        with patch(_CLIENT_PATH, return_value=fake_client):
+            result = await uc.execute("srv-1", "req-1")
+
+        assert result.ok is False
+        assert "api_key" in result.error
+
+    @pytest.mark.asyncio
     async def test_returns_none_when_not_found(self):
         repo = AsyncMock(spec=MCPServerRegistryRepositoryInterface)
         repo.find_by_id.return_value = None

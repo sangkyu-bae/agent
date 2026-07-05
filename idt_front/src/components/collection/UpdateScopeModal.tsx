@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import Modal from '@/components/common/Modal';
+import Dropdown from '@/components/common/Dropdown';
 import { COLLECTION_SCOPES, SCOPE_LABELS } from '@/types/collection';
 import type { CollectionScope, UpdateScopeRequest } from '@/types/collection';
 import { useDepartments } from '@/hooks/useDepartments';
@@ -50,19 +52,13 @@ const UpdateScopeModal = ({
   const currentInfo = SCOPE_LABELS[currentScope];
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      onClick={handleClose}
+    <Modal
+      onClose={handleClose}
+      title="접근 범위 변경"
+      size="md"
+      showCloseButton={false}
     >
-      <div
-        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 className="text-[15px] font-semibold text-zinc-900">
-          접근 범위 변경
-        </h2>
-
-        <div className="mt-3 rounded-xl bg-zinc-50 px-4 py-3">
+        <div className="rounded-xl bg-zinc-50 px-4 py-3">
           <p className="text-[12px] text-zinc-400">컬렉션</p>
           <p className="text-[13.5px] font-medium text-zinc-800">
             {collectionName}
@@ -112,18 +108,13 @@ const UpdateScopeModal = ({
                 ) : !deptData?.departments.length ? (
                   <p className="text-[13px] text-amber-600">등록된 부서가 없습니다. 관리자 페이지에서 부서를 먼저 등록해주세요.</p>
                 ) : (
-                  <select
+                  <Dropdown
                     value={departmentId}
-                    onChange={(e) => setDepartmentId(e.target.value)}
-                    className="w-full rounded-xl border border-zinc-300 px-4 py-2.5 text-[15px] text-zinc-900 outline-none transition-all focus:border-violet-400"
-                  >
-                    <option value="">부서를 선택하세요</option>
-                    {deptData.departments.map((dept) => (
-                      <option key={dept.id} value={dept.id}>
-                        {dept.name}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setDepartmentId}
+                    placeholder="부서를 선택하세요"
+                    options={deptData.departments.map((dept) => ({ value: dept.id, label: dept.name }))}
+                    className="w-full"
+                  />
                 )}
               </div>
             )}
@@ -174,8 +165,7 @@ const UpdateScopeModal = ({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 };
 

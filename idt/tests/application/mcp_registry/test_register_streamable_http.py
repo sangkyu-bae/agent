@@ -60,6 +60,37 @@ class TestRegisterStreamableHttp:
             await uc.execute(request, "req-1")
 
     @pytest.mark.asyncio
+    async def test_streamable_http_rejected_when_secrets_disabled(self):
+        # MCP_SECRET_KEY 미설정(secrets_enabled=False) 시 시크릿이 NULL로 버려지므로 거부
+        repo = AsyncMock(spec=MCPServerRegistryRepositoryInterface)
+        uc = RegisterMCPServerUseCase(
+            repository=repo, logger=MagicMock(), secrets_enabled=False
+        )
+        request = RegisterMCPServerRequest(
+            user_id="u1", name="T", description="d",
+            endpoint="https://server.smithery.ai/@x/y",
+            transport="streamable_http",
+            auth_config={"api_key": "K"},
+        )
+        with pytest.raises(ValueError, match="MCP_SECRET_KEY"):
+            await uc.execute(request, "req-1")
+        repo.save.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_sse_allowed_when_secrets_disabled(self):
+        repo = AsyncMock(spec=MCPServerRegistryRepositoryInterface)
+        repo.save.side_effect = _echo_save()
+        uc = RegisterMCPServerUseCase(
+            repository=repo, logger=MagicMock(), secrets_enabled=False
+        )
+        request = RegisterMCPServerRequest(
+            user_id="u1", name="T", description="d",
+            endpoint="https://e/sse", transport="sse",
+        )
+        result = await uc.execute(request, "req-1")
+        assert result.transport == "sse"
+
+    @pytest.mark.asyncio
     async def test_invalid_transport_rejected(self):
         uc = RegisterMCPServerUseCase(repository=AsyncMock(), logger=MagicMock())
         request = RegisterMCPServerRequest(

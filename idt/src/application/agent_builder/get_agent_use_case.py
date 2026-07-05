@@ -2,6 +2,7 @@
 from src.application.agent_builder.schemas import GetAgentResponse, WorkerInfo
 from src.domain.agent_builder.interfaces import AgentDefinitionRepositoryInterface
 from src.domain.agent_builder.policies import AccessCheckInput, VisibilityPolicy
+from src.domain.agent_skill.interfaces import AgentSkillRepositoryInterface
 from src.domain.department.interfaces import DepartmentRepositoryInterface
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 
@@ -12,10 +13,12 @@ class GetAgentUseCase:
         repository: AgentDefinitionRepositoryInterface,
         dept_repository: DepartmentRepositoryInterface,
         logger: LoggerInterface,
+        agent_skill_repo: AgentSkillRepositoryInterface | None = None,
     ) -> None:
         self._repository = repository
         self._dept_repository = dept_repository
         self._logger = logger
+        self._agent_skill_repo = agent_skill_repo
 
     async def execute(
         self,
@@ -73,12 +76,20 @@ class GetAgentUseCase:
                     ref_agent_name=ref_name,
                 ))
 
+            skill_ids: list[str] = []
+            if self._agent_skill_repo is not None:
+                links = await self._agent_skill_repo.list_links(
+                    agent_id, request_id
+                )
+                skill_ids = [l.skill_id for l in links]
+
             return GetAgentResponse(
                 agent_id=agent.id,
                 name=agent.name,
                 description=agent.description,
                 system_prompt=agent.system_prompt,
                 tool_ids=[w.tool_id for w in agent.workers if w.worker_type == "tool"],
+                skill_ids=skill_ids,
                 workers=workers_info,
                 flow_hint=agent.flow_hint,
                 llm_model_id=agent.llm_model_id,

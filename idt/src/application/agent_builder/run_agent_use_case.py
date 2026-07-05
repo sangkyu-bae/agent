@@ -14,7 +14,7 @@ agent-run-streaming-sse Design §5.2 (2026-05-24):
 import asyncio
 import json
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from typing import Any, AsyncIterator, Optional
 
@@ -44,6 +44,8 @@ from src.application.repositories.conversation_summary_repository import (
 )
 from src.domain.agent_builder.interfaces import AgentDefinitionRepositoryInterface
 from src.domain.agent_builder.policies import AccessCheckInput, VisibilityPolicy
+from src.domain.agent_skill.interfaces import AgentSkillRepositoryInterface
+from src.domain.agent_skill.policies import InjectableSkill, SkillInjectionPolicy
 from src.domain.agent_builder.schemas import (
     AgentDefinition,
     SupervisorConfig,
@@ -149,6 +151,7 @@ class RunAgentUseCase:
         policy: SummarizationPolicy,
         tracker: Optional[RunTracker] = None,
         session_factory: Optional[async_sessionmaker[AsyncSession]] = None,
+        agent_skill_repo: Optional[AgentSkillRepositoryInterface] = None,
     ) -> None:
         self._repository = repository
         self._llm_model_repository = llm_model_repository
@@ -159,6 +162,9 @@ class RunAgentUseCase:
         self._summarizer = summarizer
         self._policy = policy
         self._tracker = tracker  # None이면 관측성 비활성 (개발/테스트)
+        # skill-agent-integration Phase A: 부착 Skill instruction 주입용 저장소.
+        # None이면 주입 비활성 → 기존 동작 100% 유지.
+        self._agent_skill_repo = agent_skill_repo
         # AGENT-OBS-001 fix: user_message는 별도 세션에서 즉시 commit해야
         # Tracker의 별도 세션 ai_run INSERT가 FK 락 대기에 빠지지 않는다.
         self._session_factory = session_factory
@@ -446,6 +452,7 @@ class RunAgentUseCase:
             )
 
         workflow = agent.to_workflow_definition()
+        workflow = await self._inject_attached_skills(workflow, agent, request_id)
         sv_config = SupervisorConfig()
         graph = await self._compiler.compile(
             workflow=workflow,
@@ -474,6 +481,35 @@ class RunAgentUseCase:
             user_id=request.user_id, callback=callback,
         )
         return graph, initial_state, graph_config
+
+    async def _inject_attached_skills(
+        self,
+        workflow: WorkflowDefinition,
+        agent: AgentDefinition,
+        request_id: str,
+    ) -> WorkflowDefinition:
+        """부착 Skill instruction을 supervisor_prompt에 병합 (Design §2.3/D3).
+
+        agent_skill_repo 미주입(None)이거나 부착 0개면 workflow를 그대로 반환한다.
+        compile 내부의 user_context_block prepend는 병합 결과 위에 최외곽으로 적용된다.
+        """
+        if self._agent_skill_repo is None:
+            return workflow
+        skills = await self._agent_skill_repo.list_attached_skills(
+            agent.id, request_id
+        )
+        if not skills:
+            return workflow
+        injectables = [
+            InjectableSkill(name=s.name, instruction=s.instruction, sort_order=i)
+            for i, s in enumerate(skills)
+        ]
+        merged = SkillInjectionPolicy.merge(workflow.supervisor_prompt, injectables)
+        self._logger.info(
+            "skill injection applied",
+            request_id=request_id, agent_id=agent.id, attached=len(skills),
+        )
+        return replace(workflow, supervisor_prompt=merged)
 
     @staticmethod
     def _build_graph_config(

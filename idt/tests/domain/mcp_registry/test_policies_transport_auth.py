@@ -42,6 +42,17 @@ class TestValidateAuth:
         )
 
 
+class TestRequiresSecretStorage:
+
+    def test_streamable_http_requires_secret_storage(self):
+        assert (
+            MCPRegistrationPolicy.requires_secret_storage("streamable_http") is True
+        )
+
+    def test_sse_does_not_require_secret_storage(self):
+        assert MCPRegistrationPolicy.requires_secret_storage("sse") is False
+
+
 class TestMaskSecrets:
 
     def test_mask_values_keep_keys(self):

@@ -240,7 +240,13 @@ class NestingDepthPolicy:
 
 
 class SubAgentAccessPolicy:
-    """서브 에이전트 사용 권한 정책. 본인 소유 + 구독 에이전트만 허용."""
+    """[DEPRECATED] 구독 기반 서브에이전트 사용 권한 정책.
+
+    DD-1(agent-subagent-management) 이후 서브에이전트 접근은 가시성 기반
+    `VisibilityPolicy.can_access`로 일원화되었다. 이 정책은 더 이상 호출되지 않으며
+    (dead code), 하위 호환/회귀 테스트 보존 목적으로만 남겨 둔다. 신규 코드에서
+    사용하지 말 것.
+    """
 
     @staticmethod
     def can_use_as_sub_agent(

@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import Dropdown from '@/components/common/Dropdown';
+import Modal from '@/components/common/Modal';
 import type { AdminTool, ToolSchemaParam, ToolEndpoint, AdminToolFormData } from '@/types/toolAdmin';
 import {
   TOOL_PARAM_TYPE,
@@ -111,21 +113,14 @@ interface DeleteConfirmProps {
 }
 
 const DeleteConfirm = ({ toolName, onConfirm, onCancel }: DeleteConfirmProps) => (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-    <div className="w-[360px] overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl">
-      <div className="p-6">
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50">
-          <svg className="h-6 w-6 text-red-500" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
-          </svg>
-        </div>
-        <h3 className="mt-4 text-[15px] font-semibold text-zinc-900">도구 삭제</h3>
-        <p className="mt-1.5 text-[13.5px] leading-relaxed text-zinc-500">
-          <span className="font-medium text-zinc-800">"{toolName}"</span>을(를) 삭제하시겠습니까?
-          이 작업은 되돌릴 수 없습니다.
-        </p>
-      </div>
-      <div className="flex gap-2 border-t border-zinc-100 p-4">
+  <Modal
+    onClose={onCancel}
+    size="sm"
+    dim="blur"
+    closeOnBackdrop={false}
+    contentClassName="w-[360px]"
+    footer={
+      <>
         <button
           onClick={onCancel}
           className="flex-1 rounded-xl border border-zinc-200 bg-zinc-50 py-2.5 text-[13.5px] font-medium text-zinc-600 hover:bg-zinc-100 transition-all"
@@ -138,9 +133,20 @@ const DeleteConfirm = ({ toolName, onConfirm, onCancel }: DeleteConfirmProps) =>
         >
           삭제
         </button>
-      </div>
+      </>
+    }
+  >
+    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50">
+      <svg className="h-6 w-6 text-red-500" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+      </svg>
     </div>
-  </div>
+    <h3 className="mt-4 text-[15px] font-semibold text-zinc-900">도구 삭제</h3>
+    <p className="mt-1.5 text-[13.5px] leading-relaxed text-zinc-500">
+      <span className="font-medium text-zinc-800">"{toolName}"</span>을(를) 삭제하시겠습니까?
+      이 작업은 되돌릴 수 없습니다.
+    </p>
+  </Modal>
 );
 
 // ─── Tool Form Modal ─────────────────────────────────────────────────────────
@@ -201,30 +207,38 @@ const ToolFormModal = ({ mode, initialData, onSave, onClose }: ToolFormModalProp
   const isValid = form.name.trim() !== '' && form.description.trim() !== '';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="flex h-full max-h-[720px] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl">
-        {/* 모달 헤더 */}
-        <div className="flex shrink-0 items-center justify-between border-b border-zinc-100 px-6 py-4">
-          <div>
-            <h2 className="text-[15px] font-semibold text-zinc-900">
-              {mode === 'create' ? '도구 추가' : '도구 수정'}
-            </h2>
-            <p className="text-[11.5px] font-semibold uppercase tracking-widest text-violet-500">
-              {mode === 'create' ? 'Add Tool' : 'Edit Tool'}
-            </p>
-          </div>
+    <Modal
+      onClose={onClose}
+      title={mode === 'create' ? '도구 추가' : '도구 수정'}
+      subtitle={
+        <span className="text-[11.5px] font-semibold uppercase tracking-widest text-violet-500">
+          {mode === 'create' ? 'Add Tool' : 'Edit Tool'}
+        </span>
+      }
+      size="2xl"
+      dim="blur"
+      scroll="body"
+      closeOnBackdrop={false}
+      contentClassName="h-full max-h-[720px]"
+      footer={
+        <>
           <button
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 transition-all"
+            className="flex-1 rounded-xl border border-zinc-200 bg-zinc-50 py-2.5 text-[13.5px] font-medium text-zinc-600 hover:bg-zinc-100 transition-all"
           >
-            <svg className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-            </svg>
+            취소
           </button>
-        </div>
-
-        {/* 모달 본문 (스크롤) */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          <button
+            onClick={handleSubmit}
+            disabled={!isValid}
+            className="flex-1 rounded-xl bg-violet-600 py-2.5 text-[13.5px] font-medium text-white shadow-sm hover:bg-violet-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 transition-all"
+          >
+            {mode === 'create' ? '도구 추가' : '변경 저장'}
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-6">
 
           {/* 기본 정보 */}
           <section>
@@ -258,15 +272,12 @@ const ToolFormModal = ({ mode, initialData, onSave, onClose }: ToolFormModalProp
               </div>
               <div>
                 <label className="mb-1.5 block text-[12.5px] font-medium text-zinc-700">카테고리</label>
-                <select
+                <Dropdown
                   value={form.category}
-                  onChange={(e) => updateField('category', e.target.value)}
-                  className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-2.5 text-[13.5px] text-zinc-900 outline-none transition-all focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
-                >
-                  {CATEGORIES.map((cat) => (
-                    <option key={cat} value={cat}>{CATEGORY_LABEL[cat]}</option>
-                  ))}
-                </select>
+                  onChange={(v) => updateField('category', v)}
+                  options={CATEGORIES.map((cat) => ({ value: cat, label: CATEGORY_LABEL[cat] }))}
+                  className="w-full"
+                />
               </div>
             </div>
           </section>
@@ -305,15 +316,12 @@ const ToolFormModal = ({ mode, initialData, onSave, onClose }: ToolFormModalProp
                         className="w-32 shrink-0 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-[12.5px] font-mono text-zinc-900 placeholder-zinc-400 outline-none focus:border-violet-400"
                       />
                       {/* 타입 */}
-                      <select
+                      <Dropdown
                         value={param.type}
-                        onChange={(e) => updateParam(idx, { type: e.target.value as ToolSchemaParam['type'] })}
-                        className="w-28 shrink-0 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-[12.5px] text-zinc-700 outline-none focus:border-violet-400"
-                      >
-                        {Object.values(TOOL_PARAM_TYPE).map((t) => (
-                          <option key={t} value={t}>{TOOL_PARAM_TYPE_LABEL[t]}</option>
-                        ))}
-                      </select>
+                        onChange={(v) => updateParam(idx, { type: v as ToolSchemaParam['type'] })}
+                        options={Object.values(TOOL_PARAM_TYPE).map((t) => ({ value: t, label: TOOL_PARAM_TYPE_LABEL[t] }))}
+                        className="w-28 shrink-0"
+                      />
                       {/* 설명 */}
                       <input
                         type="text"
@@ -374,15 +382,12 @@ const ToolFormModal = ({ mode, initialData, onSave, onClose }: ToolFormModalProp
                   <div key={idx} className="rounded-xl border border-zinc-200 bg-zinc-50/50 p-3.5">
                     <div className="flex items-start gap-2.5">
                       {/* HTTP 메서드 */}
-                      <select
+                      <Dropdown
                         value={ep.method}
-                        onChange={(e) => updateEndpoint(idx, { method: e.target.value as ToolEndpoint['method'] })}
-                        className="w-24 shrink-0 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-[12.5px] font-semibold text-zinc-800 outline-none focus:border-violet-400"
-                      >
-                        {Object.values(HTTP_METHOD).map((m) => (
-                          <option key={m} value={m}>{m}</option>
-                        ))}
-                      </select>
+                        onChange={(v) => updateEndpoint(idx, { method: v as ToolEndpoint['method'] })}
+                        options={Object.values(HTTP_METHOD).map((m) => ({ value: m, label: m }))}
+                        className="w-24 shrink-0"
+                      />
                       {/* 경로 */}
                       <input
                         type="text"
@@ -414,26 +419,8 @@ const ToolFormModal = ({ mode, initialData, onSave, onClose }: ToolFormModalProp
               </div>
             )}
           </section>
-        </div>
-
-        {/* 모달 푸터 */}
-        <div className="flex shrink-0 gap-2 border-t border-zinc-100 px-6 py-4">
-          <button
-            onClick={onClose}
-            className="flex-1 rounded-xl border border-zinc-200 bg-zinc-50 py-2.5 text-[13.5px] font-medium text-zinc-600 hover:bg-zinc-100 transition-all"
-          >
-            취소
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={!isValid}
-            className="flex-1 rounded-xl bg-violet-600 py-2.5 text-[13.5px] font-medium text-white shadow-sm hover:bg-violet-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 transition-all"
-          >
-            {mode === 'create' ? '도구 추가' : '변경 저장'}
-          </button>
-        </div>
       </div>
-    </div>
+    </Modal>
   );
 };
 

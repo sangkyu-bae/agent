@@ -14,6 +14,7 @@ EXPECTED_TOOL_IDS = {
     "excel_export",
     "python_code_executor",
     "data_analysis",
+    "document_extractor",
 }
 
 
@@ -80,3 +81,9 @@ class TestToolRegistryCategory:
     def test_data_analysis_is_analysis(self):
         meta = get_tool_meta("data_analysis")
         assert meta.category == "analysis"
+
+    def test_document_extractor_is_action(self):
+        """document-template-extractor GA1: action 카테고리 + env 불필요."""
+        meta = get_tool_meta("document_extractor")
+        assert meta.category == "action"
+        assert meta.requires_env == []

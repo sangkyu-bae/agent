@@ -14,6 +14,8 @@ class AttachmentType(str, Enum):
     """
 
     EXCEL = "excel"
+    # document-template-extractor Design §4-4: 원본(빌드타임)·산출물(런타임) 문서 파일
+    DOCUMENT = "document"
 
 
 @dataclass(frozen=True)

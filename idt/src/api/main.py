@@ -90,6 +90,21 @@ from src.api.routes.agent_builder_router import (
     get_fork_agent_use_case,
     get_list_my_agents_use_case,
     get_list_available_sub_agents_use_case,
+    get_attach_skill_use_case,
+    get_detach_skill_use_case,
+    get_list_attached_skills_use_case,
+)
+from src.api.routes.agent_schedule_router import (
+    router as agent_schedule_router,
+    trigger_router as agent_schedule_trigger_router,
+    get_create_schedule_use_case,
+    get_list_schedules_use_case,
+    get_get_schedule_use_case,
+    get_update_schedule_use_case,
+    get_delete_schedule_use_case,
+    get_toggle_schedule_use_case,
+    get_list_schedule_runs_use_case,
+    get_trigger_due_schedules_use_case,
 )
 from src.api.routes.rag_tool_router import (
     router as rag_tool_router,
@@ -112,6 +127,33 @@ from src.api.routes.ws_router import (
 from src.api.routes.agent_attachment_router import (
     router as agent_attachment_router,
     get_upload_attachment_use_case,
+)
+from src.api.routes.document_extractor_router import (
+    router as document_extractor_router,
+    get_extract_document_use_case,
+    get_refine_slots_use_case,
+    get_document_attachment_store,
+)
+from src.application.document_extractor.extract_use_case import (
+    ExtractDocumentUseCase,
+)
+from src.application.document_extractor.refine_use_case import RefineSlotsUseCase
+from src.infrastructure.document_extractor.composer import DocumentComposer
+from src.infrastructure.document_extractor.document_conversion_adapter import (
+    DocumentConversionAdapter,
+)
+from src.infrastructure.document_extractor.document_template_repository import (
+    DocumentTemplateRepository,
+)
+from src.infrastructure.document_extractor.session_scoped_repository import (
+    SessionScopedDocumentTemplateRepository,
+)
+from src.infrastructure.document_extractor.slot_extractor import SlotExtractor
+from src.infrastructure.document_extractor.source_file_archiver import (
+    SourceFileArchiver,
+)
+from src.infrastructure.mcp_registry.session_scoped_repository import (
+    SessionScopedMcpServerRepository,
 )
 from src.application.agent_attachment.resolver import AttachmentResolver
 from src.application.agent_attachment.upload_use_case import UploadAttachmentUseCase
@@ -147,6 +189,31 @@ from src.api.routes.mcp_registry_router import (
     get_update_use_case as get_mcp_update_use_case,
     get_delete_use_case as get_mcp_delete_use_case,
     get_test_use_case as get_mcp_test_use_case,
+)
+from src.api.routes.agent_composer_router import (
+    router as agent_composer_router,
+    get_compose_agent_use_case,
+)
+from src.api.routes.wiki_router import (
+    router as wiki_router,
+    get_distill_use_case as get_wiki_distill_use_case,
+    get_query_use_case as get_wiki_query_use_case,
+    get_review_use_case as get_wiki_review_use_case,
+)
+from src.application.wiki.distill_use_case import DistillToWikiUseCase
+from src.application.wiki.query_use_case import WikiQueryUseCase
+from src.application.wiki.review_use_case import WikiReviewUseCase
+from src.infrastructure.wiki.wiki_repository import WikiArticleRepository
+from src.infrastructure.wiki.wiki_distiller import WikiDistiller
+from src.infrastructure.wiki.wiki_source_provider import ElasticsearchWikiSourceProvider
+from src.api.routes.skill_builder_router import (
+    router as skill_builder_router,
+    get_create_skill_use_case,
+    get_get_skill_use_case,
+    get_list_skills_use_case,
+    get_update_skill_use_case,
+    get_delete_skill_use_case,
+    get_fork_skill_use_case,
 )
 from src.api.routes.middleware_agent_router import (
     router as middleware_agent_router,
@@ -232,6 +299,7 @@ from src.application.department.remove_user_department_use_case import RemoveUse
 from src.application.tool_catalog.list_tool_catalog_use_case import ListToolCatalogUseCase
 from src.application.tool_catalog.sync_mcp_tools_use_case import SyncMcpToolsUseCase
 from src.infrastructure.agent_builder.agent_definition_repository import AgentDefinitionRepository
+from src.infrastructure.agent_skill.agent_skill_repository import AgentSkillRepository
 from src.infrastructure.agent_builder.subscription_repository import SubscriptionRepository
 from src.infrastructure.department.department_repository import DepartmentRepository
 from src.infrastructure.tool_catalog.tool_catalog_repository import ToolCatalogRepository
@@ -594,6 +662,64 @@ def create_attachment_store() -> AgentAttachmentStore:
     return AgentAttachmentStore(
         upload_dir, ttl_seconds=settings.agent_attachment_ttl_seconds
     )
+
+
+def _document_template_archive_dir() -> str:
+    """원본 영구 보관 디렉토리 (document-template-extractor D3). 빈 값이면 기본 경로."""
+    import os
+
+    return settings.document_template_dir or os.path.join(
+        "uploads", "document_templates"
+    )
+
+
+def create_document_extractor_factories():
+    """document-template-extractor Design §6: extract/refine per-request DI 팩토리."""
+    from src.infrastructure.llm_model.session_scoped_llm_model_repository import (
+        SessionScopedLlmModelRepository,
+    )
+
+    app_logger = get_app_logger()
+    slot_extractor = SlotExtractor(
+        llm_factory=_llm_factory,
+        llm_model_repository=SessionScopedLlmModelRepository(
+            session_factory=get_session_factory(), logger=app_logger
+        ),
+        logger=app_logger,
+    )
+
+    def extract_factory(session: AsyncSession = Depends(get_session)):
+        adapter = DocumentConversionAdapter(
+            mcp_tool_loader=MCPToolLoader(logger=app_logger),
+            mcp_repository=MCPServerRepository(
+                session=session, logger=app_logger, cipher=_mcp_cipher()
+            ),
+            logger=app_logger,
+        )
+        return ExtractDocumentUseCase(
+            attachment_store=_attachment_store,
+            conversion_adapter=adapter,
+            slot_extractor=slot_extractor,
+            logger=app_logger,
+            max_file_mb=settings.document_extractor_max_file_mb,
+            default_pdf_to_html_tool_id=(
+                settings.document_extractor_pdf_to_html_tool_id
+            ),
+            default_html_to_doc_tool_id=(
+                settings.document_extractor_html_to_doc_tool_id
+            ),
+            preview_mode=settings.document_extractor_preview_mode,
+            preview_dpi=settings.document_extractor_preview_dpi,
+        )
+
+    def refine_factory():
+        return RefineSlotsUseCase(
+            slot_extractor=slot_extractor,
+            logger=app_logger,
+            max_regen=settings.document_extractor_max_regen,
+        )
+
+    return extract_factory, refine_factory
 
 
 def get_configured_upload_attachment_use_case() -> UploadAttachmentUseCase:
@@ -1884,13 +2010,69 @@ def create_agent_builder_factories():
         logger=app_logger,
     )
 
+    # LLM-WIKI-001 Step6: 승인 위키 우선 검색 어댑터(run-scoped 세션). use_wiki_first=True 도구에만 적용.
+    from src.application.wiki.run_scoped_wiki_search import RunScopedWikiSearch
+
+    _wiki_collection = getattr(settings, "wiki_collection_name", "wiki_knowledge")
+    _wiki_embedding = OpenAIEmbedding(model_name=settings.openai_embedding_model)
+    _wiki_qdrant = AsyncQdrantClient(
+        host=settings.qdrant_host, port=settings.qdrant_port
+    )
+    _wiki_vector_store = QdrantVectorStore(
+        client=_wiki_qdrant,
+        embedding=_wiki_embedding,
+        collection_name=_wiki_collection,
+    )
+
+    def _wiki_repo_builder(session: AsyncSession):
+        return WikiArticleRepository(
+            session=session,
+            logger=app_logger,
+            embedding=_wiki_embedding,
+            vector_store=_wiki_vector_store,
+            collection_name=_wiki_collection,
+        )
+
+    _wiki_search = RunScopedWikiSearch(
+        session_factory=get_session_factory(),
+        repo_builder=_wiki_repo_builder,
+        inner_search_getter=get_configured_hybrid_search_use_case,
+        logger=app_logger,
+    )
+
     tool_factory = ToolFactory(
         logger=app_logger,
         hybrid_search_use_case_getter=get_configured_hybrid_search_use_case,
         tavily_api_key=os.environ.get("TAVILY_API_KEY"),
         tracker=run_tracker,                # ★ M4: RAG retrieval 영속화
         run_observability_config=_obs_config,
+        wiki_search=_wiki_search,           # ★ LLM-WIKI-001 Step6
     )
+    # document-template-extractor Design §6: 합성 노드 의존(싱글톤).
+    # 컴파일러/컴포저는 앱 싱글톤이라 per-request 세션 대신 session-scoped 어댑터 사용.
+    _dt_runtime_template_repo = SessionScopedDocumentTemplateRepository(
+        session_factory=get_session_factory(), logger=app_logger,
+    )
+    _dt_conversion_adapter = DocumentConversionAdapter(
+        mcp_tool_loader=MCPToolLoader(logger=app_logger),
+        mcp_repository=SessionScopedMcpServerRepository(
+            session_factory=get_session_factory(),
+            logger=app_logger,
+            cipher=_mcp_cipher(),
+        ),
+        logger=app_logger,
+    )
+    _dt_composer = DocumentComposer(
+        conversion_adapter=_dt_conversion_adapter,
+        attachment_store=_attachment_store or create_attachment_store(),
+        logger=app_logger,
+    )
+    _dt_archiver = SourceFileArchiver(
+        attachment_store=_attachment_store or create_attachment_store(),
+        archive_dir=_document_template_archive_dir(),
+        logger=app_logger,
+    )
+
     workflow_compiler = WorkflowCompiler(
         tool_factory=tool_factory, llm_factory=_llm_factory, logger=app_logger,
         hooks=DefaultHooks(),
@@ -1898,6 +2080,8 @@ def create_agent_builder_factories():
         chart_max_count=settings.chart_max_count,
         pipeline_llm_model=_build_search_pipeline_llm_model(),
         search_compress_threshold=settings.search_compress_threshold,
+        document_template_repository=_dt_runtime_template_repo,
+        document_composer=_dt_composer,
     )
 
     # 인터뷰 세션 스토어는 앱 전체에서 공유 (싱글턴)
@@ -1907,12 +2091,30 @@ def create_agent_builder_factories():
     def _make_repo(session: AsyncSession):
         return AgentDefinitionRepository(session=session, logger=app_logger)
 
+    def _make_agent_skill_repo(session: AsyncSession):
+        return AgentSkillRepository(session=session, logger=app_logger)
+
+    def _make_skill_sync(session: AsyncSession):
+        from src.application.agent_skill.sync_agent_skills_use_case import (
+            SyncAgentSkillsUseCase,
+        )
+        from src.infrastructure.skill_builder.skill_repository import SkillRepository
+        return SyncAgentSkillsUseCase(
+            agent_skill_repo=_make_agent_skill_repo(session),
+            skill_repo=SkillRepository(session=session, logger=app_logger),
+            dept_repo=DepartmentRepository(session=session, logger=app_logger),
+            logger=app_logger,
+        )
+
     def _make_llm_model_repo(session: AsyncSession):
         return LlmModelRepository(session=session, logger=app_logger)
 
     def _make_perm_repo(session: AsyncSession):
         from src.infrastructure.collection.permission_repository import CollectionPermissionRepository
         return CollectionPermissionRepository(session, app_logger)
+
+    def _make_document_template_repo(session: AsyncSession):
+        return DocumentTemplateRepository(session=session, logger=app_logger)
 
     def create_uc_factory(session: AsyncSession = Depends(get_session)):
         return CreateAgentUseCase(
@@ -1922,6 +2124,15 @@ def create_agent_builder_factories():
             llm_model_repository=_make_llm_model_repo(session),
             perm_repo=_make_perm_repo(session),
             logger=app_logger,
+            dept_repo=DepartmentRepository(session=session, logger=app_logger),
+            skill_sync=_make_skill_sync(session),
+            document_template_repo=_make_document_template_repo(session),
+            source_archiver=_dt_archiver,
+            max_template_slots=settings.document_extractor_max_slots,
+            # nl-agent-composer FR-08: mcp_* tool_id 메타 해석
+            mcp_server_repo=MCPServerRepository(
+                session=session, logger=app_logger, cipher=_mcp_cipher()
+            ),
         )
 
     def update_uc_factory(session: AsyncSession = Depends(get_session)):
@@ -1929,9 +2140,16 @@ def create_agent_builder_factories():
             repository=_make_repo(session),
             perm_repo=_make_perm_repo(session),
             logger=app_logger,
+            dept_repo=DepartmentRepository(session=session, logger=app_logger),
+            skill_sync=_make_skill_sync(session),
+            document_template_repo=_make_document_template_repo(session),
+            source_archiver=_dt_archiver,
+            max_template_slots=settings.document_extractor_max_slots,
         )
 
-    def run_uc_factory(session: AsyncSession = Depends(get_session)):
+    # agent-schedule Design §6.2: RunAgentUseCase 조립 본문을 함수로 추출해
+    # 기존 run 엔드포인트와 스케줄 트리거(TriggerDueSchedulesUseCase)가 공유.
+    def _build_run_agent_uc(session: AsyncSession):
         message_repo = SQLAlchemyConversationMessageRepository(session)
         summary_repo = SQLAlchemyConversationSummaryRepository(session)
         summarizer = LangChainSummarizer(
@@ -1952,7 +2170,12 @@ def create_agent_builder_factories():
             tracker=run_tracker,
             # AGENT-OBS-001 fix: user_message를 별도 세션 commit해 ai_run FK 락 회피
             session_factory=get_session_factory(),
+            # skill-agent-integration Phase A: 부착 Skill instruction 주입
+            agent_skill_repo=_make_agent_skill_repo(session),
         )
+
+    def run_uc_factory(session: AsyncSession = Depends(get_session)):
+        return _build_run_agent_uc(session)
 
     def get_uc_factory(session: AsyncSession = Depends(get_session)):
         from src.infrastructure.department.department_repository import DepartmentRepository as DeptRepo
@@ -1961,6 +2184,7 @@ def create_agent_builder_factories():
             repository=_make_repo(session),
             dept_repository=dept_repo,
             logger=app_logger,
+            agent_skill_repo=_make_agent_skill_repo(session),
         )
 
     def interview_uc_factory(session: AsyncSession = Depends(get_session)):
@@ -1994,6 +2218,7 @@ def create_agent_builder_factories():
                 subscription_repo=_make_sub_repo(session),
                 logger=app_logger,
             ),
+            document_template_repo=_make_document_template_repo(session),
         )
 
     def subscribe_uc_factory(session: AsyncSession = Depends(get_session)):
@@ -2022,7 +2247,7 @@ def create_agent_builder_factories():
         )
         return ListAvailableSubAgentsUseCase(
             agent_repo=_make_repo(session),
-            subscription_repo=_make_sub_repo(session),
+            dept_repo=DepartmentRepository(session=session, logger=app_logger),
             logger=app_logger,
         )
 
@@ -2033,6 +2258,98 @@ def create_agent_builder_factories():
         subscribe_uc_factory, fork_uc_factory, list_my_uc_factory,
         list_available_sub_agents_uc_factory,
         _cost_calculator,  # M4 — share singleton for pricing PATCH invalidate
+        _build_run_agent_uc,  # agent-schedule: 트리거 UC 와 공유
+    )
+
+
+def create_agent_schedule_factories(build_run_agent_uc):
+    """agent-schedule DI: CRUD 요청-스코프 팩토리 + 트리거 싱글턴.
+
+    트리거 싱글턴은 AsyncSession 을 보유하지 않는다(session_factory 만) — DB-001.
+    """
+    from src.application.agent_schedule.create_schedule_use_case import (
+        CreateScheduleUseCase,
+    )
+    from src.application.agent_schedule.delete_schedule_use_case import (
+        DeleteScheduleUseCase,
+    )
+    from src.application.agent_schedule.get_schedule_use_case import (
+        GetScheduleUseCase,
+    )
+    from src.application.agent_schedule.list_schedule_runs_use_case import (
+        ListScheduleRunsUseCase,
+    )
+    from src.application.agent_schedule.list_schedules_use_case import (
+        ListSchedulesUseCase,
+    )
+    from src.application.agent_schedule.toggle_schedule_use_case import (
+        ToggleScheduleUseCase,
+    )
+    from src.application.agent_schedule.trigger_due_schedules_use_case import (
+        TriggerDueSchedulesUseCase,
+    )
+    from src.application.agent_schedule.update_schedule_use_case import (
+        UpdateScheduleUseCase,
+    )
+    from src.infrastructure.agent_schedule.run_sink import DbScheduleRunSink
+    from src.infrastructure.agent_schedule.schedule_repository import (
+        ScheduleRepository,
+    )
+    from src.infrastructure.agent_schedule.schedule_run_repository import (
+        ScheduleRunRepository,
+    )
+
+    app_logger = get_app_logger()
+
+    def _make_schedule_repo(session: AsyncSession):
+        return ScheduleRepository(session=session, logger=app_logger)
+
+    def _make_agent_repo(session: AsyncSession):
+        return AgentDefinitionRepository(session=session, logger=app_logger)
+
+    def create_f(session: AsyncSession = Depends(get_session)):
+        return CreateScheduleUseCase(
+            _make_schedule_repo(session), _make_agent_repo(session), app_logger
+        )
+
+    def list_f(session: AsyncSession = Depends(get_session)):
+        return ListSchedulesUseCase(
+            _make_schedule_repo(session), _make_agent_repo(session), app_logger
+        )
+
+    def get_f(session: AsyncSession = Depends(get_session)):
+        return GetScheduleUseCase(_make_schedule_repo(session), app_logger)
+
+    def update_f(session: AsyncSession = Depends(get_session)):
+        return UpdateScheduleUseCase(_make_schedule_repo(session), app_logger)
+
+    def delete_f(session: AsyncSession = Depends(get_session)):
+        return DeleteScheduleUseCase(_make_schedule_repo(session), app_logger)
+
+    def toggle_f(session: AsyncSession = Depends(get_session)):
+        return ToggleScheduleUseCase(_make_schedule_repo(session), app_logger)
+
+    def list_runs_f(session: AsyncSession = Depends(get_session)):
+        return ListScheduleRunsUseCase(
+            _make_schedule_repo(session),
+            ScheduleRunRepository(session=session, logger=app_logger),
+            app_logger,
+        )
+
+    trigger_uc = TriggerDueSchedulesUseCase(
+        session_factory=get_session_factory(),
+        schedule_repo_builder=_make_schedule_repo,
+        run_agent_uc_builder=build_run_agent_uc,
+        sink=DbScheduleRunSink(get_session_factory(), app_logger),
+        logger=app_logger,
+    )
+
+    def trigger_f():
+        return trigger_uc
+
+    return (
+        create_f, list_f, get_f, update_f, delete_f,
+        toggle_f, list_runs_f, trigger_f,
     )
 
 
@@ -2291,21 +2608,75 @@ def create_tool_catalog_factories():
     return list_factory, sync_factory
 
 
+def create_agent_composer_factories():
+    """Return per-request DI factory for Agent Composer use case (nl-agent-composer)."""
+    from langchain_openai import ChatOpenAI
+
+    from src.application.agent_composer.composer import AgentComposer
+    from src.application.agent_composer.compose_agent_use_case import (
+        ComposeAgentUseCase,
+    )
+    from src.infrastructure.llm_model.llm_model_repository import (
+        LlmModelRepository,
+    )
+
+    app_logger = get_app_logger()
+
+    llm = ChatOpenAI(
+        model=settings.openai_llm_model,
+        api_key=settings.openai_api_key,
+        temperature=0,
+    )
+    composer = AgentComposer(
+        llm=llm,
+        logger=app_logger,
+        max_candidates=settings.composer_max_candidates,
+    )
+
+    def compose_factory(session: AsyncSession = Depends(get_session)):
+        return ComposeAgentUseCase(
+            composer=composer,
+            tool_catalog_repo=ToolCatalogRepository(
+                session=session, logger=app_logger
+            ),
+            mcp_server_repo=MCPServerRepository(
+                session=session, logger=app_logger, cipher=_mcp_cipher()
+            ),
+            llm_model_repository=LlmModelRepository(
+                session=session, logger=app_logger
+            ),
+            logger=app_logger,
+        )
+
+    return compose_factory
+
+
 def create_mcp_registry_factories():
     """Return per-request DI factories for MCP Registry use cases (MCP-REG-001)."""
     app_logger = get_app_logger()
+
+    # 암호화 키 설정 여부 — streamable_http 시크릿 저장 가능 여부를 결정한다.
+    secrets_enabled = _mcp_cipher() is not None
 
     def _make_repo(session: AsyncSession):
         return MCPServerRepository(session=session, logger=app_logger, cipher=_mcp_cipher())
 
     def register_factory(session: AsyncSession = Depends(get_session)):
-        return RegisterMCPServerUseCase(repository=_make_repo(session), logger=app_logger)
+        return RegisterMCPServerUseCase(
+            repository=_make_repo(session),
+            logger=app_logger,
+            secrets_enabled=secrets_enabled,
+        )
 
     def list_factory(session: AsyncSession = Depends(get_session)):
         return ListMCPServersUseCase(repository=_make_repo(session), logger=app_logger)
 
     def update_factory(session: AsyncSession = Depends(get_session)):
-        return UpdateMCPServerUseCase(repository=_make_repo(session), logger=app_logger)
+        return UpdateMCPServerUseCase(
+            repository=_make_repo(session),
+            logger=app_logger,
+            secrets_enabled=secrets_enabled,
+        )
 
     def delete_factory(session: AsyncSession = Depends(get_session)):
         return DeleteMCPServerUseCase(repository=_make_repo(session), logger=app_logger)
@@ -2314,6 +2685,166 @@ def create_mcp_registry_factories():
         return MCPConnectionTestUseCase(repository=_make_repo(session), logger=app_logger)
 
     return register_factory, list_factory, update_factory, delete_factory, test_factory
+
+
+def create_wiki_factories():
+    """Return per-request DI factories for Wiki use cases (LLM-WIKI-001)."""
+    app_logger = get_app_logger()
+    wiki_collection = getattr(settings, "wiki_collection_name", "wiki_knowledge")
+
+    def _make_repo(session: AsyncSession):
+        embedding = OpenAIEmbedding(model_name=settings.openai_embedding_model)
+        qdrant_client = AsyncQdrantClient(
+            host=settings.qdrant_host, port=settings.qdrant_port
+        )
+        vector_store = QdrantVectorStore(
+            client=qdrant_client,
+            embedding=embedding,
+            collection_name=wiki_collection,
+        )
+        return WikiArticleRepository(
+            session=session,
+            logger=app_logger,
+            embedding=embedding,
+            vector_store=vector_store,
+            collection_name=wiki_collection,
+        )
+
+    def _make_source_provider():
+        es_config = ElasticsearchConfig(
+            ES_HOST=settings.es_host,
+            ES_PORT=settings.es_port,
+            ES_SCHEME=settings.es_scheme,
+        )
+        es_client = ElasticsearchClient.from_config(es_config)
+        es_repo = ElasticsearchRepository(client=es_client, logger=app_logger)
+        return ElasticsearchWikiSourceProvider(es_repo=es_repo, logger=app_logger)
+
+    def _make_distiller():
+        return WikiDistiller.from_openai(
+            model_name=settings.openai_llm_model,
+            api_key=settings.openai_api_key,
+            logger=app_logger,
+        )
+
+    def distill_factory(session: AsyncSession = Depends(get_session)):
+        return DistillToWikiUseCase(
+            repository=_make_repo(session),
+            source_provider=_make_source_provider(),
+            distiller=_make_distiller(),
+            logger=app_logger,
+        )
+
+    def query_factory(session: AsyncSession = Depends(get_session)):
+        return WikiQueryUseCase(repository=_make_repo(session))
+
+    def review_factory(session: AsyncSession = Depends(get_session)):
+        return WikiReviewUseCase(repository=_make_repo(session), logger=app_logger)
+
+    return distill_factory, query_factory, review_factory
+
+
+def create_skill_builder_factories():
+    """Return per-request DI factories for Skill Builder use cases (SKILL-001)."""
+    from src.application.skill_builder.create_skill_use_case import CreateSkillUseCase
+    from src.application.skill_builder.get_skill_use_case import GetSkillUseCase
+    from src.application.skill_builder.list_skills_use_case import ListSkillsUseCase
+    from src.application.skill_builder.update_skill_use_case import UpdateSkillUseCase
+    from src.application.skill_builder.delete_skill_use_case import DeleteSkillUseCase
+    from src.application.skill_builder.fork_skill_use_case import ForkSkillUseCase
+    from src.infrastructure.skill_builder.skill_repository import SkillRepository
+
+    app_logger = get_app_logger()
+
+    def _make_repo(session: AsyncSession):
+        return SkillRepository(session=session, logger=app_logger)
+
+    def _make_dept(session: AsyncSession):
+        return DepartmentRepository(session=session, logger=app_logger)
+
+    def create_factory(session: AsyncSession = Depends(get_session)):
+        return CreateSkillUseCase(repository=_make_repo(session), logger=app_logger)
+
+    def get_factory(session: AsyncSession = Depends(get_session)):
+        return GetSkillUseCase(repository=_make_repo(session), logger=app_logger)
+
+    def list_factory(session: AsyncSession = Depends(get_session)):
+        return ListSkillsUseCase(
+            repository=_make_repo(session),
+            dept_repo=_make_dept(session),
+            logger=app_logger,
+        )
+
+    def update_factory(session: AsyncSession = Depends(get_session)):
+        return UpdateSkillUseCase(repository=_make_repo(session), logger=app_logger)
+
+    def delete_factory(session: AsyncSession = Depends(get_session)):
+        return DeleteSkillUseCase(repository=_make_repo(session), logger=app_logger)
+
+    def fork_factory(session: AsyncSession = Depends(get_session)):
+        return ForkSkillUseCase(
+            repository=_make_repo(session),
+            dept_repo=_make_dept(session),
+            logger=app_logger,
+        )
+
+    return (
+        create_factory, get_factory, list_factory,
+        update_factory, delete_factory, fork_factory,
+    )
+
+
+def create_agent_skill_factories():
+    """Return per-request DI factories for agent-skill attach use cases.
+
+    skill-agent-integration Phase A: 부착/해제/목록 UseCase.
+    """
+    from src.application.agent_skill.attach_skill_use_case import AttachSkillUseCase
+    from src.application.agent_skill.detach_skill_use_case import DetachSkillUseCase
+    from src.application.agent_skill.list_attached_skills_use_case import (
+        ListAttachedSkillsUseCase,
+    )
+    from src.infrastructure.skill_builder.skill_repository import SkillRepository
+
+    app_logger = get_app_logger()
+
+    def _links(session: AsyncSession):
+        return AgentSkillRepository(session=session, logger=app_logger)
+
+    def _agents(session: AsyncSession):
+        return AgentDefinitionRepository(session=session, logger=app_logger)
+
+    def _skills(session: AsyncSession):
+        return SkillRepository(session=session, logger=app_logger)
+
+    def _dept(session: AsyncSession):
+        return DepartmentRepository(session=session, logger=app_logger)
+
+    def attach_factory(session: AsyncSession = Depends(get_session)):
+        return AttachSkillUseCase(
+            agent_skill_repo=_links(session),
+            agent_repo=_agents(session),
+            skill_repo=_skills(session),
+            dept_repo=_dept(session),
+            logger=app_logger,
+        )
+
+    def detach_factory(session: AsyncSession = Depends(get_session)):
+        return DetachSkillUseCase(
+            agent_skill_repo=_links(session),
+            agent_repo=_agents(session),
+            logger=app_logger,
+        )
+
+    def list_factory(session: AsyncSession = Depends(get_session)):
+        return ListAttachedSkillsUseCase(
+            agent_skill_repo=_links(session),
+            agent_repo=_agents(session),
+            dept_repo=_dept(session),
+            logger=app_logger,
+        )
+
+    return attach_factory, detach_factory, list_factory
 
 
 def create_middleware_agent_factories():
@@ -2376,6 +2907,41 @@ def create_load_mcp_tools_factory():
         )
 
     return _factory
+
+
+async def seed_internal_tools_on_startup() -> None:
+    """서비스 기동 시 TOOL_REGISTRY(코드) → tool_catalog 동기화.
+
+    내부 도구의 단일 진실원은 코드다. 부팅마다 upsert하여 UI 도구 목록이
+    항상 코드와 일치한다(손수 시드 마이그레이션 불필요·드리프트 해소).
+    DB-001 §10.2: get_session_factory()로 단발성 세션 획득.
+    """
+    from src.application.tool_catalog.sync_internal_tools_use_case import (
+        SyncInternalToolsUseCase,
+    )
+    from src.infrastructure.tool_catalog.tool_catalog_repository import (
+        ToolCatalogRepository,
+    )
+
+    app_logger = get_app_logger()
+    request_id = str(uuid.uuid4())
+    factory = get_session_factory()
+    try:
+        async with factory() as session:
+            async with session.begin():
+                uc = SyncInternalToolsUseCase(
+                    repository=ToolCatalogRepository(
+                        session=session, logger=app_logger
+                    ),
+                    logger=app_logger,
+                )
+                await uc.execute(request_id)
+    except Exception as e:
+        app_logger.warning(
+            "Internal tool catalog sync skipped",
+            request_id=request_id,
+            error=str(e),
+        )
 
 
 async def _ensure_es_index() -> None:
@@ -2454,6 +3020,9 @@ async def lifespan(app: FastAPI):
     # LLM Model Registry: 기본 모델 시드 등록 (중복 스킵, 실패 시 경고)
     await seed_llm_models_on_startup()
     await seed_embedding_models_on_startup()
+
+    # 내부 도구 카탈로그 동기화 (TOOL_REGISTRY → tool_catalog, 코드가 진실원)
+    await seed_internal_tools_on_startup()
 
     # LLM Factory: 기본 모델 조회 (시드 후 실행)
     global _default_llm_model
@@ -2537,6 +3106,7 @@ def create_app() -> FastAPI:
         _subscribe_uc, _fork_uc, _list_my_uc,
         _list_available_sub_agents_uc,
         _cost_calculator_singleton,  # M4 — share with pricing PATCH factory
+        _build_run_agent_uc,  # agent-schedule: 트리거 UC 와 공유
     ) = create_agent_builder_factories()
     app.dependency_overrides[get_create_agent_use_case] = _create_uc
     app.dependency_overrides[get_update_agent_use_case] = _update_uc
@@ -2550,6 +3120,28 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_list_my_agents_use_case] = _list_my_uc
     app.dependency_overrides[get_list_available_sub_agents_use_case] = _list_available_sub_agents_uc
     app.dependency_overrides[get_load_mcp_tools_use_case] = create_load_mcp_tools_factory()
+
+    # Agent Schedule DI (agent-schedule Design §6.2)
+    (
+        _sch_create_f, _sch_list_f, _sch_get_f, _sch_update_f, _sch_delete_f,
+        _sch_toggle_f, _sch_list_runs_f, _sch_trigger_f,
+    ) = create_agent_schedule_factories(_build_run_agent_uc)
+    app.dependency_overrides[get_create_schedule_use_case] = _sch_create_f
+    app.dependency_overrides[get_list_schedules_use_case] = _sch_list_f
+    app.dependency_overrides[get_get_schedule_use_case] = _sch_get_f
+    app.dependency_overrides[get_update_schedule_use_case] = _sch_update_f
+    app.dependency_overrides[get_delete_schedule_use_case] = _sch_delete_f
+    app.dependency_overrides[get_toggle_schedule_use_case] = _sch_toggle_f
+    app.dependency_overrides[get_list_schedule_runs_use_case] = _sch_list_runs_f
+    app.dependency_overrides[get_trigger_due_schedules_use_case] = _sch_trigger_f
+
+    # document-template-extractor Design §6: extract/refine/files DI
+    _de_extract_f, _de_refine_f = create_document_extractor_factories()
+    app.dependency_overrides[get_extract_document_use_case] = _de_extract_f
+    app.dependency_overrides[get_refine_slots_use_case] = _de_refine_f
+    app.dependency_overrides[get_document_attachment_store] = (
+        lambda: _attachment_store
+    )
 
     # Department DI
     (
@@ -2567,6 +3159,10 @@ def create_app() -> FastAPI:
     _tc_list_f, _tc_sync_f = create_tool_catalog_factories()
     app.dependency_overrides[get_list_tool_catalog_use_case] = _tc_list_f
     app.dependency_overrides[get_sync_mcp_tools_use_case] = _tc_sync_f
+
+    # Agent Composer DI (nl-agent-composer)
+    _compose_f = create_agent_composer_factories()
+    app.dependency_overrides[get_compose_agent_use_case] = _compose_f
 
     # Auto Agent Builder DI
     app.dependency_overrides[get_auto_build_use_case] = get_configured_auto_build_use_case
@@ -2686,7 +3282,33 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_mcp_list_use_case] = _mcp_list_f
     app.dependency_overrides[get_mcp_update_use_case] = _mcp_update_f
     app.dependency_overrides[get_mcp_delete_use_case] = _mcp_delete_f
+
+    # Wiki DI (LLM-WIKI-001)
+    (_wiki_distill_f, _wiki_query_f, _wiki_review_f) = create_wiki_factories()
+    app.dependency_overrides[get_wiki_distill_use_case] = _wiki_distill_f
+    app.dependency_overrides[get_wiki_query_use_case] = _wiki_query_f
+    app.dependency_overrides[get_wiki_review_use_case] = _wiki_review_f
     app.dependency_overrides[get_mcp_test_use_case] = _mcp_test_f
+
+    # Skill Builder DI
+    (
+        _skill_create_f, _skill_get_f, _skill_list_f,
+        _skill_update_f, _skill_delete_f, _skill_fork_f,
+    ) = create_skill_builder_factories()
+    app.dependency_overrides[get_create_skill_use_case] = _skill_create_f
+    app.dependency_overrides[get_get_skill_use_case] = _skill_get_f
+    app.dependency_overrides[get_list_skills_use_case] = _skill_list_f
+    app.dependency_overrides[get_update_skill_use_case] = _skill_update_f
+    app.dependency_overrides[get_delete_skill_use_case] = _skill_delete_f
+    app.dependency_overrides[get_fork_skill_use_case] = _skill_fork_f
+
+    # Agent-Skill Attach DI (skill-agent-integration Phase A)
+    (
+        _agent_skill_attach_f, _agent_skill_detach_f, _agent_skill_list_f,
+    ) = create_agent_skill_factories()
+    app.dependency_overrides[get_attach_skill_use_case] = _agent_skill_attach_f
+    app.dependency_overrides[get_detach_skill_use_case] = _agent_skill_detach_f
+    app.dependency_overrides[get_list_attached_skills_use_case] = _agent_skill_list_f
 
     # Middleware Agent DI
     (
@@ -2843,6 +3465,7 @@ def create_app() -> FastAPI:
     app.include_router(analysis_router)
     app.include_router(excel_upload_router)
     app.include_router(agent_attachment_router)
+    app.include_router(document_extractor_router)
     app.include_router(retrieval_router)
     app.include_router(hybrid_search_router)
     app.include_router(chunk_index_router)
@@ -2853,9 +3476,12 @@ def create_app() -> FastAPI:
     app.include_router(ingest_router)
     app.include_router(doc_chunk_router)
     app.include_router(agent_builder_router)
+    app.include_router(agent_schedule_router)
+    app.include_router(agent_schedule_trigger_router)
     app.include_router(rag_tool_router)
     app.include_router(department_router)
     app.include_router(tool_catalog_router)
+    app.include_router(agent_composer_router)
     app.include_router(auto_agent_builder_router)
     app.include_router(general_chat_router)
     app.include_router(auth_router)
@@ -2864,6 +3490,8 @@ def create_app() -> FastAPI:
     app.include_router(llm_model_router)
     app.include_router(embedding_model_router)
     app.include_router(mcp_registry_router)
+    app.include_router(wiki_router)
+    app.include_router(skill_builder_router)
     app.include_router(middleware_agent_router)
     app.include_router(collection_router)
     app.include_router(doc_browse_router)

@@ -60,6 +60,44 @@ class TestMCPServerRepositorySave:
         assert result.tool_id == "mcp_uuid-001"
 
 
+class TestMCPServerRepositoryUpdate:
+
+    @pytest.mark.asyncio
+    async def test_update_uses_session_merge_not_insert(
+        self, mock_session, mock_logger, sample_entity
+    ):
+        """update는 새 INSERT(add)가 아니라 session.merge(UPSERT)로 저장해야 한다.
+
+        기존 PK로 add→flush 하면 중복 PK INSERT가 발생(IntegrityError 1062).
+        merge는 PK 기준으로 기존 행을 찾아 UPDATE 한다.
+        """
+        repo = MCPServerRepository(session=mock_session, logger=mock_logger)
+        from src.infrastructure.mcp_registry.models import MCPServerModel
+
+        merged_model = MagicMock(spec=MCPServerModel)
+        merged_model.id = "uuid-001"
+        merged_model.user_id = "user-1"
+        merged_model.name = "Test MCP"
+        merged_model.description = "Test description"
+        merged_model.endpoint = "https://mcp.example.com/sse"
+        merged_model.transport = "sse"
+        merged_model.input_schema = None
+        merged_model.is_active = True
+        merged_model.created_at = datetime(2026, 1, 1)
+        merged_model.updated_at = datetime(2026, 1, 1)
+        merged_model.auth_config_enc = None
+        merged_model.server_config_enc = None
+        mock_session.merge = AsyncMock(return_value=merged_model)
+        mock_session.add = MagicMock()
+
+        result = await repo.update(sample_entity, "req-001")
+
+        mock_session.merge.assert_awaited_once()
+        mock_session.flush.assert_awaited()
+        mock_session.add.assert_not_called()
+        assert result.id == "uuid-001"
+
+
 class TestMCPServerRepositoryFindAllActive:
 
     @pytest.mark.asyncio

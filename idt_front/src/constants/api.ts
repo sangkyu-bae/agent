@@ -120,6 +120,13 @@ export const API_ENDPOINTS = {
   MCP_SERVER_DETAIL: (id: string) => `/api/v1/mcp-registry/${id}`,
   MCP_SERVER_TEST: (id: string) => `/api/v1/mcp-registry/${id}/test`,
 
+  // Admin — Skill Builder
+  SKILLS: '/api/v1/skills',
+  SKILLS_LIST: '/api/v1/skills/list',
+  SKILLS_MY: '/api/v1/skills/my',
+  SKILL_DETAIL: (id: string) => `/api/v1/skills/${id}`,
+  SKILL_FORK: (id: string) => `/api/v1/skills/${id}/fork`,
+
   // Admin — Agent Run Observability (M5 dashboard)
   ADMIN_AGENT_RUN_DETAIL: (runId: string) => `/api/v1/agents/runs/${runId}`,
   ADMIN_AGENT_RUNS: '/api/v1/admin/runs',
@@ -139,6 +146,29 @@ export const API_ENDPOINTS = {
   AGENT_BUILDER_DETAIL: (agentId: string) => `/api/v1/agents/${agentId}`,
   AGENT_BUILDER_UPDATE: (agentId: string) => `/api/v1/agents/${agentId}`,
   AGENT_BUILDER_DELETE: (agentId: string) => `/api/v1/agents/${agentId}`,
+  AGENT_AVAILABLE_SUB_AGENTS: '/api/v1/agents/available-sub-agents',
+  // fix-agent-composer: 자연어 → 에이전트 초안 조합 (무저장)
+  AGENT_COMPOSE: '/api/v1/agents/compose',
+
+  // Document Extractor (document-template-extractor)
+  DOCUMENT_EXTRACTOR_EXTRACT: '/api/v1/document-extractor/extract',
+  DOCUMENT_EXTRACTOR_REFINE: '/api/v1/document-extractor/refine',
+  DOCUMENT_EXTRACTOR_FILE: (fileId: string) =>
+    `/api/v1/document-extractor/files/${fileId}`,
+
+  // Agent-Skill Attach (skill-agent-integration Phase A)
+  AGENT_SKILLS: (agentId: string) => `/api/v1/agents/${agentId}/skills`,
+  AGENT_SKILL_DETACH: (agentId: string, skillId: string) =>
+    `/api/v1/agents/${agentId}/skills/${skillId}`,
+
+  // Agent Schedule (agent-schedule)
+  AGENT_SCHEDULES: (agentId: string) => `/api/v1/agents/${agentId}/schedules`,
+  AGENT_SCHEDULE_DETAIL: (agentId: string, scheduleId: string) =>
+    `/api/v1/agents/${agentId}/schedules/${scheduleId}`,
+  AGENT_SCHEDULE_ENABLED: (agentId: string, scheduleId: string) =>
+    `/api/v1/agents/${agentId}/schedules/${scheduleId}/enabled`,
+  AGENT_SCHEDULE_RUNS: (agentId: string, scheduleId: string) =>
+    `/api/v1/agents/${agentId}/schedules/${scheduleId}/runs`,
 
   // Embedding Models
   EMBEDDING_MODELS: '/api/v1/embedding-models',
@@ -164,4 +194,14 @@ export const API_ENDPOINTS = {
   COLLECTION_ACTIVITY_LOG: '/api/v1/collections/activity-log',
   COLLECTION_ACTIVITY_LOG_BY_NAME: (name: string) =>
     `/api/v1/collections/${name}/activity-log`,
+
+  // ── Wiki (LLM-WIKI-001) ─────────────────────────────────
+  WIKI_DISTILL: '/api/v1/wiki/distill',
+  WIKI_LIST: '/api/v1/wiki',
+  WIKI_DETAIL: (id: string) => `/api/v1/wiki/${id}`,
+  WIKI_APPROVE: (id: string) => `/api/v1/wiki/${id}/approve`,
+  WIKI_REJECT: (id: string) => `/api/v1/wiki/${id}/reject`,
+  WIKI_DEPRECATE: (id: string) => `/api/v1/wiki/${id}/deprecate`,
+  WIKI_RESTORE: (id: string) => `/api/v1/wiki/${id}/restore`,
+  WIKI_UPDATE: (id: string) => `/api/v1/wiki/${id}`,
 } as const;

@@ -8,6 +8,7 @@ import type {
   CreateBuilderAgentResponse,
   UpdateBuilderAgentRequest,
   UpdateBuilderAgentResponse,
+  AvailableSubAgentsResponse,
 } from '@/types/agentBuilder';
 
 interface ListParams {
@@ -20,6 +21,14 @@ export const useMyBuilderAgents = (params?: ListParams) =>
   useQuery<AgentListResponse>({
     queryKey: queryKeys.agentBuilder.list(params),
     queryFn: () => agentBuilderService.listMine(params).then((r) => r.data),
+  });
+
+export const useAvailableSubAgents = (enabled: boolean) =>
+  useQuery<AvailableSubAgentsResponse>({
+    queryKey: ['agentBuilder', 'available-sub-agents'],
+    queryFn: () =>
+      agentBuilderService.listAvailableSubAgents().then((r) => r.data),
+    enabled,
   });
 
 export const useBuilderAgentDetail = (agentId: string | null) =>

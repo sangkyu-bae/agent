@@ -96,8 +96,10 @@ class AgentDefinitionRepository(AgentDefinitionRepositoryInterface):
             "AgentDefinition update", request_id=request_id, agent_id=agent.id
         )
         try:
-            stmt = select(AgentDefinitionModel).where(
-                AgentDefinitionModel.id == agent.id
+            stmt = (
+                select(AgentDefinitionModel)
+                .options(selectinload(AgentDefinitionModel.tools))
+                .where(AgentDefinitionModel.id == agent.id)
             )
             result = await self._session.execute(stmt)
             model = result.scalar_one()
@@ -107,6 +109,7 @@ class AgentDefinitionRepository(AgentDefinitionRepositoryInterface):
             model.department_id = agent.department_id
             model.temperature = agent.temperature
             model.updated_at = datetime.now(timezone.utc)
+            await self._sync_workers(model, agent.workers)
             await self._session.flush()
             self._logger.info(
                 "AgentDefinition update done", request_id=request_id, agent_id=agent.id
@@ -117,6 +120,32 @@ class AgentDefinitionRepository(AgentDefinitionRepositoryInterface):
                 "AgentDefinition update failed", exception=e, request_id=request_id
             )
             raise
+
+    async def _sync_workers(
+        self, model: AgentDefinitionModel, workers: list[WorkerDefinition]
+    ) -> None:
+        """모델의 워커 row를 도메인 workers와 일치하도록 재구성한다.
+
+        서브에이전트 변경(수정 경로)을 반영하기 위해 기존 row를 비우고 다시 생성한다.
+        delete-orphan + 중간 flush로 uq_agent_worker 제약 충돌을 피한다.
+        """
+        model.tools.clear()
+        await self._session.flush()
+        for w in workers:
+            model.tools.append(
+                AgentToolModel(
+                    id=str(uuid.uuid4()),
+                    agent_id=model.id,
+                    tool_id=w.tool_id,
+                    worker_id=w.worker_id,
+                    description=w.description,
+                    sort_order=w.sort_order,
+                    tool_config=w.tool_config,
+                    worker_type=w.worker_type,
+                    ref_agent_id=w.ref_agent_id,
+                    category=w.category,
+                )
+            )
 
     async def list_by_user(
         self, user_id: str, request_id: str

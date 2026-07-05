@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useCallback } from 'react';
+import Modal from '@/components/common/Modal';
 import { useUnifiedUpload } from '@/hooks/useUnifiedUpload';
 import { formatFileSize } from '@/utils/formatters';
 import type {
@@ -56,14 +57,6 @@ const UploadDocumentModal = ({ isOpen, onClose, collectionName }: UploadDocument
     onClose();
   }, [modalStatus, resetState, onClose]);
 
-  useEffect(() => {
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && modalStatus !== 'loading') handleClose();
-    };
-    if (isOpen) window.addEventListener('keydown', handleEsc);
-    return () => window.removeEventListener('keydown', handleEsc);
-  }, [isOpen, modalStatus, handleClose]);
-
   const isValidPdf = (file: File): boolean => file.name.toLowerCase().endsWith('.pdf');
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -103,32 +96,22 @@ const UploadDocumentModal = ({ isOpen, onClose, collectionName }: UploadDocument
     setErrorMessage('');
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={handleClose}>
-      <div className="relative w-full max-w-lg rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-4">
-          <div>
-            <h2 className="text-[15px] font-semibold text-zinc-900">PDF 문서 업로드</h2>
-            <p className="mt-0.5 text-[12px] text-zinc-400">
-              컬렉션: <span className="font-medium text-violet-500">{collectionName}</span>
-            </p>
-          </div>
-          <button
-            onClick={handleClose}
-            disabled={modalStatus === 'loading'}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
+    <Modal
+      isOpen={isOpen}
+      onClose={handleClose}
+      title="PDF 문서 업로드"
+      subtitle={
+        <>
+          컬렉션: <span className="font-medium text-violet-500">{collectionName}</span>
+        </>
+      }
+      size="lg"
+      scroll="content"
+      disableClose={modalStatus === 'loading'}
+    >
         {/* Body */}
-        <div className="px-6 py-5">
+        <div className="py-1">
           {/* Idle — Drop zone + options */}
           {modalStatus === 'idle' && (
             <>
@@ -321,7 +304,7 @@ const UploadDocumentModal = ({ isOpen, onClose, collectionName }: UploadDocument
         </div>
 
         {/* Footer */}
-        <div className="border-t border-zinc-200 px-6 py-4">
+        <div className="mt-5 border-t border-zinc-200 pt-4">
           {modalStatus === 'idle' && (
             <button
               disabled={!selectedFile}
@@ -347,8 +330,7 @@ const UploadDocumentModal = ({ isOpen, onClose, collectionName }: UploadDocument
             </button>
           )}
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 };
 

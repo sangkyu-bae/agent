@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useDepartments } from '@/hooks/useDepartments';
+import Dropdown from '@/components/common/Dropdown';
+import Modal from '@/components/common/Modal';
 import type { AdminCreateUserRequest, UserRole } from '@/types/auth';
 
 interface UserRegisterModalProps {
@@ -31,16 +33,6 @@ const UserRegisterModal = ({
 
   const { data: deptData, isLoading: isDeptLoading } = useDepartments();
   const departments = deptData?.departments ?? [];
-
-  // Esc 키로 닫기
-  useEffect(() => {
-    if (!isOpen) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -80,33 +72,15 @@ const UserRegisterModal = ({
   const labelCls = 'mb-1.5 block text-[13px] font-medium text-zinc-700';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="사용자 등록"
-        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl"
-      >
-        <div className="flex items-start justify-between">
-          <div>
-            <h2 className="text-[15px] font-semibold text-zinc-900">사용자 등록</h2>
-            <p className="mt-1 text-[12.5px] text-zinc-400">
-              관리자가 직원 계정을 즉시 활성 상태로 생성합니다.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="닫기"
-            className="-mr-1 -mt-1 flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition-all hover:bg-zinc-100 hover:text-zinc-600"
-          >
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} noValidate className="mt-4 space-y-4">
+    <Modal
+      onClose={onClose}
+      title="사용자 등록"
+      subtitle="관리자가 직원 계정을 즉시 활성 상태로 생성합니다."
+      size="lg"
+      scroll="content"
+      closeOnBackdrop={false}
+    >
+      <form onSubmit={handleSubmit} noValidate className="space-y-4">
           <div>
             <label htmlFor="ur-email" className={labelCls}>
               이메일 <span className="text-red-400">*</span>
@@ -199,15 +173,16 @@ const UserRegisterModal = ({
               <label htmlFor="ur-role" className={labelCls}>
                 권한 <span className="text-red-400">*</span>
               </label>
-              <select
+              <Dropdown
                 id="ur-role"
                 value={role}
-                onChange={(e) => setRole(e.target.value as UserRole)}
-                className={inputCls}
-              >
-                <option value="user">일반 사용자</option>
-                <option value="admin">관리자</option>
-              </select>
+                onChange={(v) => setRole(v as UserRole)}
+                options={[
+                  { value: 'user', label: '일반 사용자' },
+                  { value: 'admin', label: '관리자' },
+                ]}
+                className="w-full"
+              />
             </div>
           </div>
 
@@ -215,20 +190,17 @@ const UserRegisterModal = ({
             <label htmlFor="ur-dept" className={labelCls}>
               부서 <span className="text-zinc-400">(선택)</span>
             </label>
-            <select
+            <Dropdown
               id="ur-dept"
               value={departmentId}
-              onChange={(e) => setDepartmentId(e.target.value)}
+              onChange={setDepartmentId}
               disabled={isDeptLoading}
-              className={inputCls}
-            >
-              <option value="">부서 선택 안 함</option>
-              {departments.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
+              options={[
+                { value: '', label: '부서 선택 안 함' },
+                ...departments.map((d) => ({ value: d.id, label: d.name })),
+              ]}
+              className="w-full"
+            />
           </div>
 
           {(localError || error) && (
@@ -260,9 +232,8 @@ const UserRegisterModal = ({
               )}
             </button>
           </div>
-        </form>
-      </div>
-    </div>
+      </form>
+    </Modal>
   );
 };
 

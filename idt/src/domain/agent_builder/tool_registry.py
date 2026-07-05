@@ -42,6 +42,15 @@ TOOL_REGISTRY: dict[str, ToolMeta] = {
         ),
         requires_env=[],
     ),
+    "document_extractor": ToolMeta(
+        tool_id="document_extractor",
+        name="문서추출기",
+        description=(
+            "등록된 문서 양식(템플릿)을 대화와 수집된 근거로 채워 "
+            "PDF/Word 파일로 생성합니다. 정형 문서(심의서·보고서) 자동 작성에 사용하세요."
+        ),
+        requires_env=[],
+    ),
     "tavily_search": ToolMeta(
         tool_id="tavily_search",
         name="Tavily 웹 검색",

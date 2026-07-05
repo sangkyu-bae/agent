@@ -42,6 +42,9 @@ class UpdateLlmModelUseCase:
                 model.max_tokens = request.max_tokens
             if request.is_active is not None:
                 model.is_active = request.is_active
+            if request.base_url is not None:
+                # 빈 문자열은 self-host 해제로 간주 → None 정규화 (R3).
+                model.base_url = request.base_url or None
 
             if request.is_default is True and not model.is_default:
                 await self._repository.unset_all_defaults(request_id)

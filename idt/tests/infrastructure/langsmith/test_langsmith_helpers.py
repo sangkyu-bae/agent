@@ -11,6 +11,7 @@ import pytest
 from src.infrastructure.langsmith.langsmith import (
     normalize_agent_project_name,
     make_agent_run_tracer,
+    make_composer_tracer,
 )
 
 
@@ -45,3 +46,20 @@ class TestMakeTracer:
         tracer = make_agent_run_tracer("여신심사봇", tags=["agent-platform", "a-1"])
         assert tracer is not None
         assert tracer.project_name == "agent-여신심사봇"
+
+
+class TestMakeComposerTracer:
+    """nl-agent-composer 추적: 고정 프로젝트 'agent-composer'로 per-run tracer."""
+
+    def test_none_without_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("LANGCHAIN_API_KEY", raising=False)
+        monkeypatch.delenv("LANGSMITH_API_KEY", raising=False)
+        assert make_composer_tracer() is None
+
+    def test_returns_tracer_with_fixed_project(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("LANGCHAIN_API_KEY", "lsv2_dummy_key_for_test")
+        tracer = make_composer_tracer(tags=["agent-composer"])
+        assert tracer is not None
+        assert tracer.project_name == "agent-composer"

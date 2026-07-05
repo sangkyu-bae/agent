@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import Modal from '@/components/common/Modal';
+import Dropdown from '@/components/common/Dropdown';
 import { DISTANCE_METRICS, COLLECTION_SCOPES, SCOPE_LABELS } from '@/types/collection';
 import type { DistanceMetric, CollectionScope, CreateCollectionRequest } from '@/types/collection';
 import { useEmbeddingModelList } from '@/hooks/useEmbeddingModels';
@@ -78,19 +80,13 @@ const CreateCollectionModal = ({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      onClick={handleClose}
+    <Modal
+      onClose={handleClose}
+      title="새 컬렉션 생성"
+      size="md"
+      showCloseButton={false}
     >
-      <div
-        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 className="text-[15px] font-semibold text-zinc-900">
-          새 컬렉션 생성
-        </h2>
-
-        <form onSubmit={handleSubmit} className="mt-5 space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="mb-1.5 block text-[12px] font-medium text-zinc-500">
               컬렉션 이름
@@ -140,19 +136,14 @@ const CreateCollectionModal = ({
               <label htmlFor="embedding-model-select" className="mb-1.5 block text-[12px] font-medium text-zinc-500">
                 임베딩 모델
               </label>
-              <select
+              <Dropdown
                 id="embedding-model-select"
                 value={selectedModel}
-                onChange={(e) => setSelectedModel(e.target.value)}
-                className="w-full rounded-xl border border-zinc-300 px-4 py-2.5 text-[15px] text-zinc-900 outline-none transition-all focus:border-violet-400"
-              >
-                <option value="">모델을 선택하세요</option>
-                {modelData?.models.map((m) => (
-                  <option key={m.id} value={m.model_name}>
-                    {m.display_name}
-                  </option>
-                ))}
-              </select>
+                onChange={setSelectedModel}
+                placeholder="모델을 선택하세요"
+                options={(modelData?.models ?? []).map((m) => ({ value: m.model_name, label: m.display_name }))}
+                className="w-full"
+              />
               {selectedModelInfo && (
                 <p className="mt-1.5 text-[12px] text-violet-500">
                   {selectedModelInfo.vector_dimension}차원
@@ -165,17 +156,12 @@ const CreateCollectionModal = ({
             <label className="mb-1.5 block text-[12px] font-medium text-zinc-500">
               거리 메트릭
             </label>
-            <select
+            <Dropdown
               value={distance}
-              onChange={(e) => setDistance(e.target.value as DistanceMetric)}
-              className="w-full rounded-xl border border-zinc-300 px-4 py-2.5 text-[15px] text-zinc-900 outline-none transition-all focus:border-violet-400"
-            >
-              {DISTANCE_METRICS.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => setDistance(v as DistanceMetric)}
+              options={DISTANCE_METRICS.map((m) => ({ value: m, label: m }))}
+              className="w-full"
+            />
           </div>
 
           <div>
@@ -214,18 +200,13 @@ const CreateCollectionModal = ({
                 ) : !deptData?.departments.length ? (
                   <p className="text-[13px] text-amber-600">등록된 부서가 없습니다. 관리자 페이지에서 부서를 먼저 등록해주세요.</p>
                 ) : (
-                  <select
+                  <Dropdown
                     value={departmentId}
-                    onChange={(e) => setDepartmentId(e.target.value)}
-                    className="w-full rounded-xl border border-zinc-300 px-4 py-2.5 text-[15px] text-zinc-900 outline-none transition-all focus:border-violet-400"
-                  >
-                    <option value="">부서를 선택하세요</option>
-                    {deptData.departments.map((dept) => (
-                      <option key={dept.id} value={dept.id}>
-                        {dept.name}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setDepartmentId}
+                    placeholder="부서를 선택하세요"
+                    options={deptData.departments.map((dept) => ({ value: dept.id, label: dept.name }))}
+                    className="w-full"
+                  />
                 )}
               </div>
             )}
@@ -276,8 +257,7 @@ const CreateCollectionModal = ({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 };
 

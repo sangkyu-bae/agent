@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import Dropdown from '@/components/common/Dropdown';
 import PeriodFilter, {
   resolvePeriod,
   type PeriodValue,
@@ -160,20 +161,15 @@ const AdminAgentRunsPage = () => {
               }}
               className="rounded-md border border-zinc-200 px-2 py-1"
             />
-            <select
+            <Dropdown
               value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter(e.target.value as '' | RunStatus);
+              onChange={(v) => {
+                setStatusFilter(v as '' | RunStatus);
                 setOffset(0);
               }}
-              className="rounded-md border border-zinc-200 px-2 py-1"
-            >
-              {STATUS_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+              options={STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+              className="w-40"
+            />
           </div>
           <RunListTable
             data={runsQ.data}

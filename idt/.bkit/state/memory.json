@@ -1,18 +1,12 @@
 {
-  "sessionCount": 316,
+  "sessionCount": 343,
   "lastSession": {
-    "startedAt": "2026-06-18T11:40:56.041Z",
+    "startedAt": "2026-07-05T06:37:42.325Z",
     "platform": "claude",
     "level": "Starter"
   },
-  "currentFeature": "mcp-http-call-module",
-  "currentPhase": "archived",
-  "matchRate": 97,
-  "archivedTo": "docs/archive/2026-06/mcp-http-call-module/",
-  "milestones": {
-    "M1": "completed",
-    "M2": "completed",
-    "M3": "completed",
-    "M4": "completed"
-  }
+  "currentFeature": "skill-progressive-loading",
+  "currentPhase": "plan",
+  "matchRate": 0,
+  "milestones": {}
 }

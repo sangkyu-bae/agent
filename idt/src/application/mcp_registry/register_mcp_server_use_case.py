@@ -19,9 +19,12 @@ class RegisterMCPServerUseCase:
         self,
         repository: MCPServerRegistryRepositoryInterface,
         logger: LoggerInterface,
+        secrets_enabled: bool = True,
     ):
         self._repo = repository
         self._logger = logger
+        # MCP_SECRET_KEY(암호화 키) 설정 여부. False면 시크릿 저장이 불가능하다.
+        self._secrets_enabled = secrets_enabled
 
     async def execute(
         self, request: RegisterMCPServerRequest, request_id: str
@@ -44,6 +47,14 @@ class RegisterMCPServerUseCase:
             request.transport, request.auth_config
         ):
             raise ValueError("Invalid auth_config: api_key required for streamable_http")
+        if (
+            MCPRegistrationPolicy.requires_secret_storage(request.transport)
+            and not self._secrets_enabled
+        ):
+            raise ValueError(
+                "MCP_SECRET_KEY가 설정되지 않아 streamable_http 시크릿을 저장할 수 "
+                "없습니다. .env에 MCP_SECRET_KEY를 설정하세요"
+            )
 
         now = datetime.utcnow()
         registration = MCPServerRegistration(

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Dropdown from '@/components/common/Dropdown';
 import {
   useMcpServers,
   useCreateMcpServer,
@@ -8,6 +9,7 @@ import {
 } from '@/hooks/useMcpServers';
 import { useAuthStore } from '@/store/authStore';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
+import Modal from '@/components/common/Modal';
 import type {
   McpServer,
   McpTransport,
@@ -171,16 +173,14 @@ const McpServerFormModal = ({
   const isStreamable = form.transport === 'streamable_http';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
-      <div
-        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 className="text-[15px] font-semibold text-zinc-900">
-          {isEdit ? 'MCP 서버 수정' : 'MCP 서버 등록'}
-        </h2>
-
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+    <Modal
+      onClose={onClose}
+      title={isEdit ? 'MCP 서버 수정' : 'MCP 서버 등록'}
+      size="lg"
+      scroll="content"
+      showCloseButton={false}
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className={labelCls}>
               이름 <span className="text-red-400">*</span>
@@ -226,14 +226,15 @@ const McpServerFormModal = ({
           <div className="flex items-center gap-4">
             <div className="flex-1">
               <label className={labelCls}>Transport</label>
-              <select
+              <Dropdown
                 value={form.transport}
-                onChange={(e) => set('transport', e.target.value as McpTransport)}
-                className={inputCls}
-              >
-                <option value="sse">SSE</option>
-                <option value="streamable_http">Streamable HTTP</option>
-              </select>
+                onChange={(v) => set('transport', v as McpTransport)}
+                options={[
+                  { value: 'sse', label: 'SSE' },
+                  { value: 'streamable_http', label: 'Streamable HTTP' },
+                ]}
+                className="w-full"
+              />
             </div>
             {isEdit && (
               <label className="mt-6 flex items-center gap-2 text-[13px] text-zinc-700">
@@ -349,9 +350,8 @@ const McpServerFormModal = ({
               {isPending ? '저장 중...' : isEdit ? '저장' : '등록'}
             </button>
           </div>
-        </form>
-      </div>
-    </div>
+      </form>
+    </Modal>
   );
 };
 
@@ -582,26 +582,26 @@ const AdminMcpServersPage = () => {
 
       {/* 행 단위 테스트 결과 모달 */}
       {rowTest && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setRowTest(null)}>
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-[15px] font-semibold text-zinc-900">
-              연결 테스트 — {rowTest.server.name}
-            </h2>
-            {rowTest.result ? (
-              <TestResultView result={rowTest.result} />
-            ) : (
-              <p className="mt-3 text-[13px] text-zinc-400">테스트 중...</p>
-            )}
-            <div className="mt-4 flex justify-end">
-              <button
-                onClick={() => setRowTest(null)}
-                className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2 text-[13px] font-medium text-zinc-600 transition-all hover:bg-zinc-100"
-              >
-                닫기
-              </button>
-            </div>
-          </div>
-        </div>
+        <Modal
+          onClose={() => setRowTest(null)}
+          title={`연결 테스트 — ${rowTest.server.name}`}
+          size="md"
+          showCloseButton={false}
+          footer={
+            <button
+              onClick={() => setRowTest(null)}
+              className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2 text-[13px] font-medium text-zinc-600 transition-all hover:bg-zinc-100"
+            >
+              닫기
+            </button>
+          }
+        >
+          {rowTest.result ? (
+            <TestResultView result={rowTest.result} />
+          ) : (
+            <p className="text-[13px] text-zinc-400">테스트 중...</p>
+          )}
+        </Modal>
       )}
 
       {/* 삭제 확인 */}

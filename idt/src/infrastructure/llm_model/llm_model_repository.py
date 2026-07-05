@@ -119,6 +119,7 @@ class LlmModelRepository(LlmModelRepositoryInterface):
             row.max_tokens = model.max_tokens
             row.is_active = model.is_active
             row.is_default = model.is_default
+            row.base_url = model.base_url
             row.updated_at = model.updated_at
             await self._session.flush()
             return model
@@ -161,6 +162,7 @@ class LlmModelRepository(LlmModelRepositoryInterface):
             input_price_per_1k_usd=model.input_price_per_1k_usd,
             output_price_per_1k_usd=model.output_price_per_1k_usd,
             pricing_updated_at=model.pricing_updated_at,
+            base_url=model.base_url,
         )
 
     def _to_domain(self, row: LlmModelModel) -> LlmModel:
@@ -179,4 +181,5 @@ class LlmModelRepository(LlmModelRepositoryInterface):
             input_price_per_1k_usd=row.input_price_per_1k_usd,
             output_price_per_1k_usd=row.output_price_per_1k_usd,
             pricing_updated_at=row.pricing_updated_at,
+            base_url=row.base_url,
         )

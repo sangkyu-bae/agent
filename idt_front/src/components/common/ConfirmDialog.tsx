@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import Modal from './Modal';
 
 interface ConfirmDialogProps {
   isOpen: boolean;
@@ -34,26 +35,11 @@ const ConfirmDialog = ({
   if (!isOpen) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 className="text-[15px] font-semibold text-zinc-900">{title}</h2>
-        <div className="mt-3 text-[14px] leading-relaxed text-zinc-600">
-          {description}
-        </div>
-
-        {error && (
-          <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-[13px] text-red-600">
-            {error}
-          </p>
-        )}
-
-        <div className="mt-5 flex justify-end gap-2">
+    <Modal
+      size="sm"
+      onClose={onClose}
+      footer={
+        <>
           <button
             onClick={onClose}
             className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-[13.5px] font-medium text-zinc-600 transition-all hover:border-zinc-300 hover:bg-zinc-100"
@@ -89,9 +75,20 @@ const ConfirmDialog = ({
               confirmLabel
             )}
           </button>
-        </div>
+        </>
+      }
+    >
+      <h2 className="text-[15px] font-semibold text-zinc-900">{title}</h2>
+      <div className="mt-3 text-[14px] leading-relaxed text-zinc-600">
+        {description}
       </div>
-    </div>
+
+      {error && (
+        <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-[13px] text-red-600">
+          {error}
+        </p>
+      )}
+    </Modal>
   );
 };
 

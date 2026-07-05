@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   beforeAll,
@@ -46,20 +46,22 @@ describe('CreateCollectionModal — 임베딩 모델 드롭다운', () => {
   });
 
   it('모델 목록 조회 성공 시 드롭다운에 모델이 표시된다', async () => {
+    const user = userEvent.setup();
     renderModal();
     await waitFor(() => expect(getModelSelect()).toBeInTheDocument());
-    const select = getModelSelect();
-    const options = within(select).getAllByRole('option');
-    expect(options).toHaveLength(3); // placeholder + 2 models
-    expect(options[1].textContent).toBe('OpenAI Embedding 3 Small');
-    expect(options[2].textContent).toBe('OpenAI Embedding 3 Large');
+    await user.click(getModelSelect());
+    const options = screen.getAllByRole('option');
+    expect(options).toHaveLength(2); // placeholder는 옵션이 아님
+    expect(options[0].textContent).toContain('OpenAI Embedding 3 Small');
+    expect(options[1].textContent).toContain('OpenAI Embedding 3 Large');
   });
 
   it('모델 선택 시 vector_dimension이 참고 표시된다', async () => {
     const user = userEvent.setup();
     renderModal();
     await waitFor(() => expect(getModelSelect()).toBeInTheDocument());
-    await user.selectOptions(getModelSelect(), 'text-embedding-3-small');
+    await user.click(getModelSelect());
+    await user.click(screen.getByRole('option', { name: /OpenAI Embedding 3 Small/ }));
     expect(screen.getByText('1536차원')).toBeInTheDocument();
   });
 
@@ -71,7 +73,8 @@ describe('CreateCollectionModal — 임베딩 모델 드롭다운', () => {
     await waitFor(() => expect(getModelSelect()).toBeInTheDocument());
 
     await user.type(screen.getByPlaceholderText('my-collection'), 'test-col');
-    await user.selectOptions(getModelSelect(), 'text-embedding-3-small');
+    await user.click(getModelSelect());
+    await user.click(screen.getByRole('option', { name: /OpenAI Embedding 3 Small/ }));
     await user.click(screen.getByRole('button', { name: '생성' }));
 
     expect(onSubmit).toHaveBeenCalledWith({
@@ -91,7 +94,8 @@ describe('CreateCollectionModal — 임베딩 모델 드롭다운', () => {
     await waitFor(() => expect(getModelSelect()).toBeInTheDocument());
 
     await user.type(screen.getByPlaceholderText('my-collection'), 'dept-col');
-    await user.selectOptions(getModelSelect(), 'text-embedding-3-small');
+    await user.click(getModelSelect());
+    await user.click(screen.getByRole('option', { name: /OpenAI Embedding 3 Small/ }));
 
     expect(screen.queryByPlaceholderText('dept-uuid')).not.toBeInTheDocument();
 

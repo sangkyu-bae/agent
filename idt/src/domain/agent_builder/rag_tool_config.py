@@ -38,6 +38,8 @@ class RagToolConfig:
     #   0.0  = 명시적 비활성 (모든 hit 통과, 기존 동작)
     #   0~1  = 코사인 유사도 하한
     score_threshold: float | None = None
+    # LLM-WIKI-001 Step6: True면 승인 위키를 우선 검색(WikiFirstSearch) 후 원본 폴백.
+    use_wiki_first: bool = False
 
     def __post_init__(self) -> None:
         if not 1 <= self.top_k <= 20:

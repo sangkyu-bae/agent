@@ -34,6 +34,9 @@ export interface WorkerInfo {
   description: string;
   sort_order: number;
   tool_config: Record<string, unknown> | null;
+  worker_type?: 'tool' | 'sub_agent';
+  ref_agent_id?: string | null;
+  ref_agent_name?: string | null;
 }
 
 export interface AgentDetail {
@@ -42,6 +45,8 @@ export interface AgentDetail {
   description: string;
   system_prompt: string;
   tool_ids: string[];
+  // agent-skill-toggle: 부착된 스킬 id 목록(edit 폼 프라임용)
+  skill_ids?: string[];
   workers: WorkerInfo[];
   flow_hint: string;
   llm_model_id: string;

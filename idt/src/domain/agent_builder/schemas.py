@@ -41,6 +41,8 @@ class WorkerDefinition:
     worker_type: str = "tool"
     ref_agent_id: str | None = None
     category: str | None = None
+    # compose-tool-instructions: 도구별 사용 지침 (초안 조합 전달용, 저장 스키마 아님)
+    instruction: str = ""
 
     def __post_init__(self) -> None:
         if self.worker_type not in ("tool", "sub_agent"):
@@ -127,3 +129,14 @@ class AgentDefinition:
         if temperature is not None:
             self.temperature = temperature
         self.__post_init__()
+
+    def replace_sub_agents(self, sub_workers: list["WorkerDefinition"]) -> None:
+        """tool 워커는 보존하고 sub_agent 워커만 교체. sort_order를 재정렬한다.
+
+        수정(edit) 경로에서 서브에이전트 구성만 갱신할 때 사용. 도구(tool) 워커는
+        불변으로 유지된다.
+        """
+        tool_workers = [w for w in self.workers if w.worker_type == "tool"]
+        for i, worker in enumerate(sub_workers):
+            worker.sort_order = len(tool_workers) + i
+        self.workers = tool_workers + sub_workers

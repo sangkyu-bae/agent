@@ -88,6 +88,10 @@ class TestAgentDefinitionRepositoryFindById:
         mock_tool.worker_id = "search_worker"
         mock_tool.description = "검색"
         mock_tool.sort_order = 0
+        mock_tool.tool_config = None
+        mock_tool.worker_type = "tool"
+        mock_tool.ref_agent_id = None
+        mock_tool.category = None
 
         mock_model = MagicMock()
         mock_model.id = "agent-1"
@@ -120,9 +124,9 @@ class TestAgentDefinitionRepositoryUpdate:
     @pytest.mark.asyncio
     async def test_update_modifies_system_prompt_and_name(self):
         repo, session = _make_repo()
-        now = datetime.now(timezone.utc)
 
         mock_model = MagicMock()
+        mock_model.tools = []
         mock_result = MagicMock()
         mock_result.scalar_one.return_value = mock_model
         session.execute.return_value = mock_result
@@ -130,8 +134,27 @@ class TestAgentDefinitionRepositoryUpdate:
         agent = _make_agent()
         agent.system_prompt = "수정된 프롬프트"
         agent.name = "수정된 이름"
-        result = await repo.update(agent, "req-1")
+        await repo.update(agent, "req-1")
 
         assert mock_model.system_prompt == "수정된 프롬프트"
         assert mock_model.name == "수정된 이름"
-        session.flush.assert_awaited_once()
+        assert session.flush.await_count >= 1
+
+    @pytest.mark.asyncio
+    async def test_update_syncs_worker_rows(self):
+        """update는 도메인 workers와 일치하도록 tool row를 재구성한다."""
+        repo, session = _make_repo()
+
+        mock_model = MagicMock()
+        mock_model.tools = []
+        mock_result = MagicMock()
+        mock_result.scalar_one.return_value = mock_model
+        session.execute.return_value = mock_result
+
+        agent = _make_agent()  # 2 tool workers
+        await repo.update(agent, "req-1")
+
+        # clear() 후 workers 수만큼 append
+        assert len(mock_model.tools) == 2
+        tool_ids = {t.tool_id for t in mock_model.tools}
+        assert tool_ids == {"tavily_search", "excel_export"}

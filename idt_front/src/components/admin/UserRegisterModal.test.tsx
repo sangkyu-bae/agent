@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeAll, afterEach, afterAll, describe, it, expect, vi } from 'vitest';
 import { http, HttpResponse } from 'msw';
@@ -50,12 +50,12 @@ describe('UserRegisterModal', () => {
 
   it('부서 목록을 드롭다운에 표시한다', async () => {
     mockDepartments();
+    const user = userEvent.setup();
     renderModal();
-    const select = screen.getByLabelText(/부서/);
+    await user.click(screen.getByLabelText(/부서/));
     await waitFor(() => {
-      const options = within(select).getAllByRole('option');
-      // placeholder + 2 부서
-      expect(options).toHaveLength(3);
+      // placeholder(부서 선택 안 함) + 2 부서
+      expect(screen.getAllByRole('option')).toHaveLength(3);
     });
     expect(screen.getByRole('option', { name: '여신팀' })).toBeInTheDocument();
   });
@@ -96,15 +96,17 @@ describe('UserRegisterModal', () => {
     const user = userEvent.setup();
     renderModal({ onSubmit });
 
-    const select = screen.getByLabelText(/부서/);
-    await waitFor(() => expect(within(select).getAllByRole('option')).toHaveLength(3));
-
     await user.type(screen.getByLabelText(/이메일/), 'new@example.com');
     await user.type(screen.getByLabelText(/비밀번호/), 'secure1234');
     await user.type(screen.getByLabelText(/이름/), '배상규');
     await user.type(screen.getByLabelText(/직급/), '대리');
-    await user.selectOptions(screen.getByLabelText(/권한/), 'admin');
-    await user.selectOptions(select, 'd1');
+
+    await user.click(screen.getByLabelText(/권한/));
+    await user.click(screen.getByRole('option', { name: '관리자' }));
+
+    await user.click(screen.getByLabelText(/부서/));
+    await user.click(await screen.findByRole('option', { name: '여신팀' }));
+
     await user.click(screen.getByRole('button', { name: '등록' }));
 
     expect(onSubmit).toHaveBeenCalledTimes(1);

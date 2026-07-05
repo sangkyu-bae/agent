@@ -1,6 +1,25 @@
 """애플리케이션 레이어 요청/응답 스키마."""
 from pydantic import BaseModel, Field
 
+from src.application.document_extractor.schemas import TemplateSlotDto
+
+
+class DocumentTemplateRequest(BaseModel):
+    """document-template-extractor Design §3-4: 확정 템플릿 저장 요청.
+
+    프론트가 확정 시 sample_value를 {{key}}로 치환한 html_skeleton을 보낸다(D2).
+    백엔드는 TemplateTokenPolicy로 검증만 수행. tool_configs와 분리된 전용 필드
+    (기존 RAG 경로 무회귀).
+    """
+
+    name: str = Field(..., max_length=200)
+    html_skeleton: str
+    slots: list[TemplateSlotDto] = Field(..., min_length=1)
+    source_file_id: str = Field(..., description="extract가 발급한 임시 file_id")
+    source_format: str = Field(..., pattern="^(pdf|docx)$")
+    mcp_pdf_to_html_tool_id: str
+    mcp_html_to_doc_tool_id: str
+
 
 class RagToolConfigRequest(BaseModel):
     """RAG 도구 설정 요청 스키마."""
@@ -12,6 +31,8 @@ class RagToolConfigRequest(BaseModel):
     rrf_k: int = Field(60, ge=1)
     tool_name: str = Field("내부 문서 검색", max_length=100)
     tool_description: str = Field("", max_length=500)
+    # LLM-WIKI-001 Step6: 승인 위키 우선 검색 사용 여부
+    use_wiki_first: bool = False
 
 
 class WorkerInfo(BaseModel):
@@ -23,6 +44,8 @@ class WorkerInfo(BaseModel):
     worker_type: str = "tool"
     ref_agent_id: str | None = None
     ref_agent_name: str | None = None
+    # compose-tool-instructions FR-03: 도구별 사용 지침 (compose 초안 전달용)
+    instruction: str = ""
 
 
 class SubAgentConfigRequest(BaseModel):
@@ -42,6 +65,12 @@ class CreateAgentRequest(BaseModel):
     tool_ids: list[str] | None = None
     tool_configs: dict[str, RagToolConfigRequest] | None = None
     sub_agent_configs: list[SubAgentConfigRequest] | None = None
+    # agent-skill-toggle: 등록 시점 부착 스킬(목표 상태). None/[] = 부착 없음.
+    skill_ids: list[str] | None = None
+    # document-template-extractor GA4: 확정 템플릿 (document_extractor 도구 필요)
+    document_template: DocumentTemplateRequest | None = None
+    # nl-agent-composer D1: 초안 프리필 프롬프트. None이면 기존대로 LLM 자동 생성.
+    system_prompt: str | None = Field(None, max_length=4000)
 
 
 class CreateAgentResponse(BaseModel):
@@ -67,6 +96,12 @@ class UpdateAgentRequest(BaseModel):
     visibility: str | None = Field(None, pattern="^(private|department|public)$")
     department_id: str | None = None
     temperature: float | None = Field(None, ge=0.0, le=2.0)
+    # None = 서브에이전트 변경 안 함, [] = 모든 서브에이전트 제거
+    sub_agent_configs: list[SubAgentConfigRequest] | None = None
+    # agent-skill-toggle: None = 스킬 변경 안 함, [] = 전부 해제, [...] = 목표 상태
+    skill_ids: list[str] | None = None
+    # document-template-extractor: None = 템플릿 변경 안 함, 값 = 교체(기존 soft-delete)
+    document_template: DocumentTemplateRequest | None = None
 
 
 class UpdateAgentResponse(BaseModel):
@@ -82,6 +117,8 @@ class GetAgentResponse(BaseModel):
     description: str
     system_prompt: str
     tool_ids: list[str]
+    # agent-skill-toggle: 부착된 스킬 id 목록(sort_order ASC) — edit 폼 프라임용
+    skill_ids: list[str] = []
     workers: list[WorkerInfo]
     flow_hint: str
     llm_model_id: str
@@ -135,9 +172,11 @@ class SubAgentCandidate(BaseModel):
     agent_id: str
     name: str
     description: str
-    source_type: str  # "owned" | "subscribed"
+    source_type: str  # "owned" | "public" | "department"
     tool_ids: list[str]
     has_sub_agents: bool = False
+    llm_model_id: str | None = None  # 프론트가 provider:model_name 배지로 변환
+    visibility: str | None = None    # 배지/필터 표시용
 
 
 class AvailableSubAgentsResponse(BaseModel):
