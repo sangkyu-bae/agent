@@ -3,7 +3,15 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 
 
-VALID_CHUNK_TYPES = {"parent", "child", "full", "semantic"}
+# section_summary/document_summary: 요약 계층 청크 (card-section-summary D18,
+# document-summary-routing D13) — 기존 검색 경로에서는 제외되고
+# 후속 라우팅 검색이 명시 필터로 조회한다.
+VALID_CHUNK_TYPES = {
+    "parent", "child", "full", "semantic",
+    "section_summary", "document_summary",
+}
+SECTION_SUMMARY_CHUNK_TYPE = "section_summary"
+DOCUMENT_SUMMARY_CHUNK_TYPE = "document_summary"
 
 
 @dataclass(frozen=True)

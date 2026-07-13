@@ -97,6 +97,36 @@ const renderPanel = (formOverrides: Partial<AgentBuilderFormData> = {}, onChange
   return { ...utils, onChange };
 };
 
+describe('LeftConfigPanel — 지침 필수 (agent-instruction-required)', () => {
+  it('지침 placeholder에 자동 생성 안내 문구가 없다 (생성 모드)', () => {
+    renderPanel({}, vi.fn(), { isEditMode: false });
+    const textarea = screen.getByLabelText('지침');
+    expect(textarea).toHaveAttribute(
+      'placeholder',
+      '에이전트의 시스템 프롬프트/지침을 입력하세요...',
+    );
+    expect(screen.queryByPlaceholderText(/자동 생성/)).toBeNull();
+  });
+
+  it('지침 섹션에 "필수" 뱃지가 표시된다', () => {
+    renderPanel();
+    expect(screen.getByText('필수')).toBeInTheDocument();
+  });
+
+  it('systemPromptError 전달 시 role=alert 에러 메시지를 표시한다', () => {
+    renderPanel({}, vi.fn(), { systemPromptError: '지침을 입력해주세요.' });
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent('지침을 입력해주세요.');
+    expect(screen.getByLabelText('지침')).toHaveAttribute('aria-invalid', 'true');
+  });
+
+  it('에러가 없으면 글자 수 카운터를 표시한다', () => {
+    renderPanel({ systemPrompt: '안녕' });
+    expect(screen.getByText('2자')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+});
+
 describe('LeftConfigPanel — 인라인 패널 제거', () => {
   it('RAG 도구 선택 시 인라인 설정 패널이 렌더되지 않는다', () => {
     renderPanel({

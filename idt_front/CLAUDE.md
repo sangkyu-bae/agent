@@ -496,6 +496,8 @@ npm run coverage     # 커버리지 리포트 생성
 | DOC-DEL-001 | docs/01-plan/features/document-delete-api.plan.md | 컬렉션 문서 삭제 API 연동 (Design 완료 / 구현 예정) |
 | AGENT-STORE-001 | docs/01-plan/features/agent-store.plan.md | 에이전트 스토어 마켓플레이스 (구현 완료) |
 | FIX-COMPOSER-001 | docs/archive/2026-07/fix-agent-composer/fix-agent-composer.plan.md | Fix 에이전트 탭 — 채팅→compose(current_config/history 확장)→초안 카드→폼 셋팅, MCP 저장 필터 제거 (구현 완료, Match 93%) |
+| FIX-SLOT-ADD-001 | docs/archive/2026-07/doc-extractor-slot-add-fix/doc-extractor-slot-add-fix.plan.md | 문서추출기 슬롯 직접 추가 무반응 수정 — 원시 includes → 정규화 매칭(htmlContainsText) + 버튼 인접 인라인 피드백 + 공백 무시 폴백 매칭(layout 미리보기 하이라이트 대응) (구현 완료, Match 98%) |
+| LLM-REGISTER-001 | docs/archive/2026-07/llm-register/llm-register.plan.md | LLM 모델 관리 어드민 페이지 — /admin/llm-models (등록/수정/가격변경/비활성화 + 뮤테이션 훅 4종, ADMIN_NAV 7번째 항목) (구현 완료, Match 100%) |
 
 ### 완료된 주요 파일 참조
 

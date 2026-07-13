@@ -57,6 +57,8 @@ const AgentBuilderPage = () => {
   const [form, setForm] = useState<AgentBuilderFormData>(DEFAULT_FORM);
   const [deleteTarget, setDeleteTarget] = useState<StoreAgentSummary | null>(null);
   const [saveResult, setSaveResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  // agent-instruction-required: 지침 미입력 시 저장 차단 + 인라인 에러
+  const [promptError, setPromptError] = useState<string | null>(null);
 
   const { data: agentsData, isLoading: isAgentsLoading, isError: isAgentsError, refetch: refetchAgents } = useMyBuilderAgents();
   const { data: editDetail } = useBuilderAgentDetail(editingId && view === 'edit' ? editingId : null);
@@ -104,14 +106,22 @@ const AgentBuilderPage = () => {
     }
   }, [editDetail, view]);
 
+  // 폼 변경 시 지침이 채워지면 인라인 에러 해제 (effect 내 setState 지양)
+  const handleFormChange = (next: AgentBuilderFormData) => {
+    if (promptError && next.systemPrompt.trim()) setPromptError(null);
+    setForm(next);
+  };
+
   const handleNew = () => {
     setForm(DEFAULT_FORM);
     setEditingId(null);
+    setPromptError(null);
     setView('create');
   };
 
   const handleEdit = (agent: StoreAgentSummary) => {
     setEditingId(agent.agent_id);
+    setPromptError(null);
     setView('edit');
   };
 
@@ -129,13 +139,20 @@ const AgentBuilderPage = () => {
   const handleSave = () => {
     if (!form.name.trim()) return;
 
+    // agent-instruction-required: 지침 필수 — 생성/수정 공통으로 빈 값 저장 차단
+    if (!form.systemPrompt.trim()) {
+      setPromptError('지침을 입력해주세요. Fix 에이전트 탭에서 초안을 생성할 수도 있습니다.');
+      return;
+    }
+    setPromptError(null);
+
     if (view === 'edit' && editingId) {
       updateMutation.mutate(
         {
           agentId: editingId,
           data: {
             name: form.name,
-            system_prompt: form.systemPrompt || undefined,
+            system_prompt: form.systemPrompt,
             temperature: form.temperature,
             sub_agent_configs: form.subAgents.map((s) => ({
               ref_agent_id: s.ref_agent_id,
@@ -177,6 +194,8 @@ const AgentBuilderPage = () => {
         {
           user_request: form.description || form.name,
           name: form.name,
+          // agent-instruction-required: 지침을 create 본문에 직접 포함 (create→update 2-call 제거)
+          system_prompt: form.systemPrompt,
           llm_model_id: selectedModel?.id,
           temperature: form.temperature,
           tool_ids: toolIds,
@@ -190,13 +209,6 @@ const AgentBuilderPage = () => {
         },
         {
           onSuccess: async (response) => {
-            if (form.systemPrompt.trim()) {
-              updateMutation.mutate({
-                agentId: response.agent_id,
-                data: { system_prompt: form.systemPrompt },
-              });
-            }
-
             // agent-schedule: staged 스케줄 순차 등록 (병렬 금지 — 10개 제한 경합/실패 지점 명확화)
             let failed = 0;
             for (const s of form.schedules) {
@@ -287,6 +299,7 @@ const AgentBuilderPage = () => {
   // compose-tool-instructions FR-08: 저장 형식 tool_ids → 카탈로그 형식 변환
   // (변환 없이는 도구함 체크 비교/RAG_TOOL_ID 부수효과가 모두 미동작)
   const handleApplyDraft = (draft: ComposeAgentDraftResponse) => {
+    if (draft.system_prompt?.trim()) setPromptError(null);
     setForm((prev) => {
       const newTools = mapDraftToolIdsToCatalog(draft.tool_ids, catalogTools);
 
@@ -391,7 +404,7 @@ const AgentBuilderPage = () => {
           mode={view === 'edit' ? 'edit' : 'create'}
           agentId={editingId}
           form={form}
-          onChange={setForm}
+          onChange={handleFormChange}
           onToolToggle={handleToolToggle}
           onSkillToggle={handleSkillToggle}
           onRagConfigChange={handleRagConfigChange}
@@ -401,6 +414,7 @@ const AgentBuilderPage = () => {
           onSave={handleSave}
           onCancel={() => setView('list')}
           isSaving={isSaving}
+          systemPromptError={promptError}
           catalogTools={catalogTools}
           isToolsLoading={isToolsLoading}
           isToolsError={isToolsError}

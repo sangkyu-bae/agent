@@ -89,6 +89,58 @@ class TestWorkflowCompiler:
         assert "quality_gate" in node_names
 
     @pytest.mark.asyncio
+    async def test_compile_zero_workers_graph_nodes(self):
+        """agent-instruction-required: 워커 0개(순수 대화형) → supervisor/final_answer만,
+        quality_gate는 고아 노드 방지 위해 미등록."""
+        compiler, _ = _make_compiler()
+        workflow = _make_workflow(worker_count=0)
+        graph = await compiler.compile(workflow, _make_llm_model(), "req-1")
+
+        node_names = set(graph.get_graph().nodes.keys())
+        assert "supervisor" in node_names
+        assert "final_answer" in node_names
+        assert "quality_gate" not in node_names
+
+    @pytest.mark.asyncio
+    async def test_zero_worker_graph_invokes_and_finishes(self):
+        """agent-instruction-required 설계 §8.1: compile(workers=[]) + ainvoke 시
+        supervisor가 워커 없이 FINISH+answer로 직접 응답하고 종료한다."""
+        from src.application.agent_builder.supervisor_nodes import (
+            SupervisorDecision,
+            build_initial_state,
+        )
+
+        compiler, _ = _make_compiler()
+        # supervisor LLM이 워커 호출 없이 즉시 FINISH + answer를 반환하도록 mock
+        llm = compiler._llm_factory.create.return_value
+        llm.with_structured_output.return_value.ainvoke = AsyncMock(
+            return_value=SupervisorDecision(
+                next="FINISH",
+                reasoning="사용 가능한 워커가 없어 직접 답변",
+                answer="안녕하세요! 무엇을 도와드릴까요?",
+            )
+        )
+
+        workflow = _make_workflow(worker_count=0)
+        config = SupervisorConfig()
+        graph = await compiler.compile(
+            workflow, _make_llm_model(), "req-1", supervisor_config=config,
+        )
+
+        state = build_initial_state(
+            messages=[{"role": "user", "content": "안녕"}],
+            config=config,
+            available_workers=[],
+        )
+        result = await graph.ainvoke(state)
+
+        # 워커 미실행(last_worker_id 없음) → supervisor answer가 최종 메시지로 남고 종료
+        contents = [
+            getattr(m, "content", "") for m in result["messages"]
+        ]
+        assert "안녕하세요! 무엇을 도와드릴까요?" in contents
+
+    @pytest.mark.asyncio
     async def test_compile_three_workers_graph_nodes(self):
         """TC-17: 워커 3개 → 노드 5개 + 올바른 구조."""
         compiler, _ = _make_compiler()

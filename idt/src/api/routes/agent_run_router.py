@@ -18,8 +18,13 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from src.application.agent_run.exceptions import (
+    MessageAccessDeniedError,
+    MessageNotFoundError,
     RunAccessDeniedError,
     RunNotFoundError,
+)
+from src.application.agent_run.use_cases.get_message_retrievals_use_case import (
+    GetMessageRetrievalsUseCase,
 )
 from src.application.agent_run.use_cases.get_my_usage_timeseries_use_case import (
     GetMyUsageTimeseriesUseCase,
@@ -55,6 +60,7 @@ from src.domain.agent_run.interfaces import RunListFilters
 from src.domain.auth.entities import User, UserRole
 from src.interfaces.dependencies.auth import get_current_user, require_role
 from src.interfaces.schemas.agent_run_response import (
+    MessageRetrievalsResponse,
     RunDetailResponse,
     RunListResponse,
     UsageByLlmResponse,
@@ -111,6 +117,10 @@ def get_my_usage_timeseries_use_case() -> GetMyUsageTimeseriesUseCase:
     raise NotImplementedError("GetMyUsageTimeseriesUseCase not initialized")
 
 
+def get_message_retrievals_use_case() -> GetMessageRetrievalsUseCase:
+    raise NotImplementedError("GetMessageRetrievalsUseCase not initialized")
+
+
 # -------- Helpers --------
 
 
@@ -161,6 +171,39 @@ async def get_run_detail(
             detail="Access denied",
         )
     return RunDetailResponse.from_dto(dto)
+
+
+@router.get(
+    "/conversations/messages/{message_id}/retrievals",
+    response_model=MessageRetrievalsResponse,
+)
+async def get_message_retrievals(
+    message_id: int,
+    current_user: User = Depends(get_current_user),
+    use_case: GetMessageRetrievalsUseCase = Depends(get_message_retrievals_use_case),
+) -> MessageRetrievalsResponse:
+    """메시지 기준 검색 근거: 재작성 쿼리별 그룹 + 뽑힌 문서 (retrieval-observability §4.6).
+
+    run 없음(관측성 미기록 메시지)이면 빈 runs로 200.
+    """
+    is_admin = current_user.role == UserRole.ADMIN
+    try:
+        dto = await use_case.execute(
+            message_id=message_id,
+            requesting_user_id=str(current_user.id),
+            is_admin=is_admin,
+        )
+    except MessageNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Message not found: {message_id}",
+        )
+    except MessageAccessDeniedError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied",
+        )
+    return MessageRetrievalsResponse.from_dto(dto)
 
 
 @router.get("/admin/usage/users", response_model=UsageByUserResponse)

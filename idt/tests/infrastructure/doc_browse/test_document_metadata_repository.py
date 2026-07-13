@@ -150,6 +150,105 @@ class TestFindByCollection:
         assert page.offset == 0
 
 
+class TestSaveKbId:
+    """kb-management-ui D2: kb_id 기록 (additive, 기본 None)."""
+
+    async def test_save_records_kb_id(
+        self, repo: DocumentMetadataRepository, mock_session: AsyncMock
+    ) -> None:
+        mock_session.execute = AsyncMock(
+            return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=None))
+        )
+
+        meta = DocumentMetadata(
+            document_id="doc-kb",
+            collection_name="test-col",
+            filename="kb.pdf",
+            category="uncategorized",
+            user_id="u1",
+            chunk_count=3,
+            chunk_strategy="parent_child",
+            kb_id="kb-1",
+        )
+        await repo.save(meta, request_id="req-kb-1")
+
+        model = mock_session.add.call_args[0][0]
+        assert model.kb_id == "kb-1"
+
+    async def test_save_without_kb_id_defaults_none(
+        self, repo: DocumentMetadataRepository, mock_session: AsyncMock
+    ) -> None:
+        mock_session.execute = AsyncMock(
+            return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=None))
+        )
+
+        await repo.save(_metadata(), request_id="req-kb-2")
+
+        model = mock_session.add.call_args[0][0]
+        assert model.kb_id is None
+
+
+class TestFindByKbId:
+    """kb-management-ui D1: kb_id 필터 문서 목록."""
+
+    @staticmethod
+    def _kb_model(i: int) -> DocumentMetadataModel:
+        from datetime import datetime
+
+        return DocumentMetadataModel(
+            document_id=f"doc-{i}",
+            collection_name="shared-col",
+            filename=f"{i}.pdf",
+            category="uncategorized",
+            user_id="u1",
+            chunk_count=i + 1,
+            chunk_strategy="clause_aware",
+            kb_id="kb-1",
+            created_at=datetime(2026, 7, 10, 12, 0, i),
+        )
+
+    async def test_returns_kb_document_summaries(
+        self, repo: DocumentMetadataRepository, mock_session: AsyncMock
+    ) -> None:
+        models = [self._kb_model(i) for i in range(2)]
+        count_result = MagicMock(scalar_one=MagicMock(return_value=5))
+        query_result = MagicMock(
+            scalars=MagicMock(
+                return_value=MagicMock(all=MagicMock(return_value=models))
+            )
+        )
+        mock_session.execute = AsyncMock(side_effect=[count_result, query_result])
+
+        pagination = MySQLPaginationParams(limit=2, offset=0)
+        page = await repo.find_by_kb_id("kb-1", "req-kb-3", pagination)
+
+        assert page.total == 5
+        assert len(page.items) == 2
+        item = page.items[0]
+        assert item.document_id == "doc-0"
+        assert item.filename == "0.pdf"
+        assert item.chunk_count == 1
+        assert item.chunk_strategy == "clause_aware"
+        assert item.created_at is not None
+
+    async def test_returns_empty_for_no_documents(
+        self, repo: DocumentMetadataRepository, mock_session: AsyncMock
+    ) -> None:
+        count_result = MagicMock(scalar_one=MagicMock(return_value=0))
+        query_result = MagicMock(
+            scalars=MagicMock(
+                return_value=MagicMock(all=MagicMock(return_value=[]))
+            )
+        )
+        mock_session.execute = AsyncMock(side_effect=[count_result, query_result])
+
+        page = await repo.find_by_kb_id("kb-none", "req-kb-4")
+
+        assert page.total == 0
+        assert page.items == []
+        assert page.limit == 20
+
+
 class TestDeleteByDocumentId:
     async def test_deletes_existing_document(
         self, repo: DocumentMetadataRepository, mock_session: AsyncMock

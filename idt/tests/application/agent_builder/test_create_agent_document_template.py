@@ -55,10 +55,6 @@ def _make_use_case():
     )
 
     use_case = CreateAgentUseCase(
-        tool_selector=MagicMock(),
-        prompt_generator=MagicMock(
-            generate=AsyncMock(return_value="시스템 프롬프트")
-        ),
         repository=repository,
         llm_model_repository=llm_repo,
         perm_repo=MagicMock(
@@ -76,6 +72,7 @@ def _request(tool_ids=None, document_template=None) -> CreateAgentRequest:
         user_request="여신심의서 자동 작성 에이전트",
         name="심의서봇",
         user_id="7",
+        system_prompt="여신심의서 지침",
         tool_ids=tool_ids or ["document_extractor"],
         document_template=document_template,
     )

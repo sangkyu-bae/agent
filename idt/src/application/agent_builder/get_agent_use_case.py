@@ -98,6 +98,7 @@ class GetAgentUseCase:
                 department_id=agent.department_id,
                 department_name=department_name,
                 temperature=agent.temperature,
+                max_iterations=agent.max_iterations,
                 owner_user_id=agent.user_id,
                 can_edit=can_edit,
                 can_delete=can_delete,

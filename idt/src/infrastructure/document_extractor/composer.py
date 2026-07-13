@@ -18,6 +18,10 @@ from src.domain.document_extractor.policies import (
 from src.domain.document_extractor.schemas import DocumentTemplate, TemplateSlot
 from src.domain.document_extractor.tool_config import DocumentExtractorToolConfig
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
+from src.infrastructure.langsmith.langsmith import (
+    DOCUMENT_EXTRACTOR_PROJECT_NAME,
+    make_document_extractor_tracer,
+)
 
 _CODE_FENCE_RE = re.compile(r"^```[a-zA-Z]*\n|\n```$")
 
@@ -103,9 +107,10 @@ class DocumentComposer:
             },
         ]
         required_keys = {s.key for s in template.slots}
+        config = self._build_trace_config(template, request_id)
         last_error = ""
         for attempt in (1, 2):
-            response = await llm.ainvoke(messages)
+            response = await llm.ainvoke(messages, config=config)
             content = getattr(response, "content", str(response))
             values, error = self._parse_values(content, required_keys)
             if values is not None:
@@ -121,6 +126,27 @@ class DocumentComposer:
             f"문서 합성 LLM 응답이 계약(JSON {{key: value|null}})을 위반했습니다: "
             f"{last_error}"
         )
+
+    @staticmethod
+    def _build_trace_config(template: DocumentTemplate, request_id: str) -> dict:
+        """LangSmith 추적 config — 프로젝트 'document-extractor'로 per-run 기록.
+
+        run_name 'compose:{템플릿명}'으로 어떤 문서를 합성했는지 식별.
+        tracer가 None(API 키 없음)이면 callbacks 미설정 — 본 흐름 영향 없음.
+        """
+        tags = [DOCUMENT_EXTRACTOR_PROJECT_NAME, "compose"]
+        config: dict = {
+            "run_name": f"compose:{template.name}",
+            "tags": tags,
+            "metadata": {
+                "request_id": request_id,
+                "template_id": template.id,
+            },
+        }
+        tracer = make_document_extractor_tracer(tags=tags)
+        if tracer is not None:
+            config["callbacks"] = [tracer]
+        return config
 
     @staticmethod
     def _build_prompt(template: DocumentTemplate) -> str:

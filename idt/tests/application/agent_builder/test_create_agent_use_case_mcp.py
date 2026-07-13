@@ -45,9 +45,6 @@ def _mcp_registration(server_id: str = "srv-1", is_active: bool = True) -> MCPSe
 
 
 def _make_use_case(mcp_server_repo=None):
-    tool_selector = MagicMock()
-    prompt_generator = MagicMock()
-    prompt_generator.generate = AsyncMock(return_value="자동 생성된 프롬프트")
     repository = MagicMock()
 
     async def _save_passthrough(agent, req_id):
@@ -64,18 +61,16 @@ def _make_use_case(mcp_server_repo=None):
     perm_repo.find_by_collection_name = AsyncMock(return_value=None)
 
     use_case = CreateAgentUseCase(
-        tool_selector=tool_selector,
-        prompt_generator=prompt_generator,
         repository=repository,
         llm_model_repository=llm_model_repository,
         perm_repo=perm_repo,
         logger=MagicMock(),
         mcp_server_repo=mcp_server_repo,
     )
-    return use_case, repository, prompt_generator
+    return use_case, repository
 
 
-def _request(tool_ids: list[str], system_prompt: str | None = None) -> CreateAgentRequest:
+def _request(tool_ids: list[str], system_prompt: str = "테스트 지침") -> CreateAgentRequest:
     return CreateAgentRequest(
         user_request="MCP 도구를 쓰는 에이전트",
         name="MCP 에이전트",
@@ -90,7 +85,7 @@ class TestCreateAgentWithMcpToolIds:
     async def test_mcp_tool_id_creates_worker_from_registry_meta(self):
         mcp_repo = MagicMock()
         mcp_repo.find_by_id = AsyncMock(return_value=_mcp_registration())
-        use_case, repository, _ = _make_use_case(mcp_server_repo=mcp_repo)
+        use_case, repository = _make_use_case(mcp_server_repo=mcp_repo)
 
         result = await use_case.execute(_request(["mcp_srv-1"]), "req-1")
 
@@ -105,7 +100,7 @@ class TestCreateAgentWithMcpToolIds:
     async def test_mixed_internal_and_mcp_tool_ids(self):
         mcp_repo = MagicMock()
         mcp_repo.find_by_id = AsyncMock(return_value=_mcp_registration())
-        use_case, repository, _ = _make_use_case(mcp_server_repo=mcp_repo)
+        use_case, repository = _make_use_case(mcp_server_repo=mcp_repo)
 
         result = await use_case.execute(
             _request(["tavily_search", "mcp_srv-1"]), "req-1"
@@ -117,7 +112,7 @@ class TestCreateAgentWithMcpToolIds:
     async def test_unknown_mcp_server_raises(self):
         mcp_repo = MagicMock()
         mcp_repo.find_by_id = AsyncMock(return_value=None)
-        use_case, _, _ = _make_use_case(mcp_server_repo=mcp_repo)
+        use_case, _ = _make_use_case(mcp_server_repo=mcp_repo)
 
         with pytest.raises(ValueError, match="MCP"):
             await use_case.execute(_request(["mcp_ghost"]), "req-1")
@@ -128,14 +123,14 @@ class TestCreateAgentWithMcpToolIds:
         mcp_repo.find_by_id = AsyncMock(
             return_value=_mcp_registration(is_active=False)
         )
-        use_case, _, _ = _make_use_case(mcp_server_repo=mcp_repo)
+        use_case, _ = _make_use_case(mcp_server_repo=mcp_repo)
 
         with pytest.raises(ValueError, match="MCP"):
             await use_case.execute(_request(["mcp_srv-1"]), "req-1")
 
     @pytest.mark.asyncio
     async def test_mcp_tool_id_without_repo_raises(self):
-        use_case, _, _ = _make_use_case(mcp_server_repo=None)
+        use_case, _ = _make_use_case(mcp_server_repo=None)
 
         with pytest.raises(ValueError):
             await use_case.execute(_request(["mcp_srv-1"]), "req-1")
@@ -143,7 +138,7 @@ class TestCreateAgentWithMcpToolIds:
     @pytest.mark.asyncio
     async def test_internal_only_path_unchanged(self):
         """내부 도구만 사용하는 기존 경로는 mcp repo 없이 그대로 동작."""
-        use_case, repository, _ = _make_use_case(mcp_server_repo=None)
+        use_case, repository = _make_use_case(mcp_server_repo=None)
 
         result = await use_case.execute(
             _request(["tavily_search", "excel_export"]), "req-1"
@@ -156,7 +151,7 @@ class TestCreateAgentWithMcpToolIds:
         """compose-tool-instructions D5: mcp:{srv}:{tool} → mcp_{srv} 정규화."""
         mcp_repo = MagicMock()
         mcp_repo.find_by_id = AsyncMock(return_value=_mcp_registration())
-        use_case, repository, _ = _make_use_case(mcp_server_repo=mcp_repo)
+        use_case, repository = _make_use_case(mcp_server_repo=mcp_repo)
 
         result = await use_case.execute(_request(["mcp:srv-1:search"]), "req-1")
 
@@ -169,7 +164,7 @@ class TestCreateAgentWithMcpToolIds:
         """compose-tool-instructions D5: 동일 서버 도구 여러 개 → mcp_{srv} 1개."""
         mcp_repo = MagicMock()
         mcp_repo.find_by_id = AsyncMock(return_value=_mcp_registration())
-        use_case, repository, _ = _make_use_case(mcp_server_repo=mcp_repo)
+        use_case, repository = _make_use_case(mcp_server_repo=mcp_repo)
 
         result = await use_case.execute(
             _request(["mcp:srv-1:search", "mcp:srv-1:fetch"]), "req-1"
@@ -188,15 +183,15 @@ class TestCreateAgentWithMcpToolIds:
         assert norm("mcp:srv-1:search") == "mcp_srv-1"
 
     @pytest.mark.asyncio
-    async def test_prompt_generation_with_mcp_worker_uses_worker_description(self):
-        """프리필 프롬프트 없이 mcp_ 워커만 있어도 생성이 실패하지 않는다."""
+    async def test_mcp_worker_created_with_worker_description(self):
+        """mcp_ 워커만 있어도 (자동생성 없이) 워커 설명이 채워진다."""
         mcp_repo = MagicMock()
         mcp_repo.find_by_id = AsyncMock(return_value=_mcp_registration())
-        use_case, _, prompt_generator = _make_use_case(mcp_server_repo=mcp_repo)
+        use_case, repository = _make_use_case(mcp_server_repo=mcp_repo)
 
         result = await use_case.execute(_request(["mcp_srv-1"]), "req-1")
 
-        prompt_generator.generate.assert_awaited_once()
-        tool_metas = prompt_generator.generate.call_args[0][2]
-        assert tool_metas[0].tool_id == "mcp_srv-1"
-        assert result.system_prompt == "자동 생성된 프롬프트"
+        assert result.tool_ids == ["mcp_srv-1"]
+        assert result.system_prompt == "테스트 지침"
+        saved_agent = repository.save.call_args[0][0]
+        assert "웹 페이지 수집 MCP" in saved_agent.workers[0].description

@@ -12,11 +12,14 @@ import WorkflowBuilderPage from '@/pages/WorkflowBuilderPage';
 import AgentStorePage from '@/pages/AgentStorePage';
 import CollectionPage from '@/pages/CollectionPage';
 import CollectionDocumentsPage from '@/pages/CollectionDocumentsPage';
+import KnowledgeBasesPage from '@/pages/KnowledgeBasesPage';
+import KnowledgeBaseDetailPage from '@/pages/KnowledgeBaseDetailPage';
 import LoginPage from '@/pages/LoginPage';
 import RegisterPage from '@/pages/RegisterPage';
 import AdminUsersPage from '@/pages/AdminUsersPage';
 import AdminDepartmentsPage from '@/pages/AdminDepartmentsPage';
 import AdminMcpServersPage from '@/pages/AdminMcpServersPage';
+import AdminLlmModelsPage from '@/pages/AdminLlmModelsPage';
 import AdminSkillsPage from '@/pages/AdminSkillsPage';
 import AdminRagasPage from '@/pages/AdminRagasPage';
 import AdminAgentRunsPage from '@/pages/AdminAgentRunsPage';
@@ -54,6 +57,8 @@ const App = () => (
           <Route path="/agent-store" element={<AgentStorePage />} />
           <Route path="/collections" element={<CollectionPage />} />
           <Route path="/collections/:collectionName/documents" element={<CollectionDocumentsPage />} />
+          <Route path="/knowledge-bases" element={<KnowledgeBasesPage />} />
+          <Route path="/knowledge-bases/:kbId" element={<KnowledgeBaseDetailPage />} />
           <Route path="/usage" element={<UsageMePage />} />
         </Route>
       </Route>
@@ -64,6 +69,7 @@ const App = () => (
           <Route path="/admin/users" element={<AdminUsersPage />} />
           <Route path="/admin/departments" element={<AdminDepartmentsPage />} />
           <Route path="/admin/mcp-servers" element={<AdminMcpServersPage />} />
+          <Route path="/admin/llm-models" element={<AdminLlmModelsPage />} />
           <Route path="/admin/skills" element={<AdminSkillsPage />} />
           <Route path="/admin/ragas" element={<AdminRagasPage />} />
           <Route path="/admin/agent-runs" element={<AdminAgentRunsPage />} />

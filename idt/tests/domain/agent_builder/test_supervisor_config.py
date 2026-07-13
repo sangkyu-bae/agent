@@ -4,8 +4,9 @@ from src.domain.agent_builder.schemas import SupervisorConfig
 
 class TestSupervisorConfig:
     def test_default_values(self):
+        # agent-recursion-limit D1: 기본 한도 10 → 25 (IterationLimitPolicy.DEFAULT)
         config = SupervisorConfig()
-        assert config.max_iterations == 10
+        assert config.max_iterations == 25
         assert config.token_limit == 8000
         assert config.quality_gate_enabled is False
         assert config.max_retries_per_worker == 2

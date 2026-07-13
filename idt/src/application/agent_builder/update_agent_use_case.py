@@ -18,8 +18,11 @@ from src.domain.agent_builder.policies import (
     VisibilityPolicy,
 )
 from src.domain.agent_builder.schemas import WorkerDefinition
+from src.domain.auth.entities import UserRole
 from src.domain.collection.permission_interfaces import CollectionPermissionRepositoryInterface
 from src.domain.department.interfaces import DepartmentRepositoryInterface
+from src.domain.knowledge_base.interfaces import KnowledgeBaseRepositoryInterface
+from src.domain.knowledge_base.policy import KnowledgeBasePolicy
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 
 
@@ -34,9 +37,12 @@ class UpdateAgentUseCase:
         document_template_repo=None,
         source_archiver=None,
         max_template_slots: int = DEFAULT_MAX_SLOTS,
+        kb_repo: KnowledgeBaseRepositoryInterface | None = None,
     ) -> None:
         self._repository = repository
         self._perm_repo = perm_repo
+        # kb-rag-filter D7: kb_id 워커 scope 검증용 (kb_id 워커 존재 시 주입 필수)
+        self._kb_repo = kb_repo
         self._logger = logger
         self._dept_repo = dept_repo
         self._skill_sync = skill_sync
@@ -80,7 +86,8 @@ class UpdateAgentUseCase:
 
             if request.visibility is not None:
                 await self._validate_visibility_scope(
-                    request.visibility, agent.workers, request_id
+                    request.visibility, agent.workers, request_id,
+                    viewer_user_id or agent.user_id, viewer_role,
                 )
 
             agent.apply_update(
@@ -89,6 +96,7 @@ class UpdateAgentUseCase:
                 visibility=request.visibility,
                 department_id=request.department_id,
                 temperature=request.temperature,
+                max_iterations=request.max_iterations,
             )
 
             if request.sub_agent_configs is not None:
@@ -191,20 +199,28 @@ class UpdateAgentUseCase:
         requested: str,
         workers: list[WorkerDefinition],
         request_id: str,
+        user_id: str,
+        viewer_role: str,
     ) -> None:
+        # kb-rag-filter D7: kb_id 워커는 KB scope가 지배 — 물리 컬렉션 조회 제외.
         collection_names = [
             w.tool_config["collection_name"]
             for w in workers
-            if w.tool_config and w.tool_config.get("collection_name")
+            if w.tool_config
+            and not w.tool_config.get("kb_id")
+            and w.tool_config.get("collection_name")
         ]
-        if not collection_names:
-            return
         scopes: list[str] = []
         for name in collection_names:
             perm = await self._perm_repo.find_by_collection_name(
                 name, request_id
             )
             scopes.append(perm.scope.value if perm else "PERSONAL")
+        scopes += await self._lookup_kb_scopes(
+            workers, request_id, user_id, viewer_role
+        )
+        if not scopes:
+            return
         clamped = VisibilityPolicy.clamp_visibility(requested, scopes)
         if clamped != requested:
             raise ValueError(
@@ -212,3 +228,57 @@ class UpdateAgentUseCase:
                 f"'{requested}'로 설정할 수 없습니다. "
                 f"최대 허용: '{clamped}'"
             )
+
+    async def _lookup_kb_scopes(
+        self,
+        workers: list[WorkerDefinition],
+        request_id: str,
+        user_id: str,
+        viewer_role: str,
+    ) -> list[str]:
+        """kb-rag-filter D3/D7: kb_id 워커의 KB scope 수집.
+
+        미존재 → ValueError(400), 읽기권한 없음 → PermissionError(403).
+        """
+        kb_ids = {
+            w.tool_config["kb_id"]
+            for w in workers
+            if w.tool_config and w.tool_config.get("kb_id")
+        }
+        if not kb_ids:
+            return []
+        if self._kb_repo is None:
+            raise ValueError(
+                "kb_id가 지정된 도구 설정에는 kb_repo 주입이 필요합니다"
+            )
+        role = (
+            UserRole.ADMIN
+            if viewer_role == UserRole.ADMIN.value
+            else UserRole.USER
+        )
+        dept_ids = (
+            []
+            if role == UserRole.ADMIN
+            else await self._resolve_department_ids(user_id, request_id)
+        )
+        scopes: list[str] = []
+        for kb_id in kb_ids:
+            kb = await self._kb_repo.find_by_id(kb_id, request_id)
+            if kb is None:
+                raise ValueError(f"Knowledge base not found: {kb_id}")
+            if not KnowledgeBasePolicy.can_read_ref(
+                self._owner_ref(user_id), role, kb, dept_ids
+            ):
+                raise PermissionError(
+                    f"No read access to knowledge base '{kb_id}'"
+                )
+            scopes.append(kb.scope.value)
+        return scopes
+
+    @staticmethod
+    def _owner_ref(user_id: str | None) -> int | None:
+        """user_id(str) → KB owner_id(int) 비교용. 비정수 형식은 소유자 불일치."""
+        try:
+            return int(user_id)
+        except (TypeError, ValueError):
+            return None

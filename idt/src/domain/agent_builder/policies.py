@@ -85,25 +85,21 @@ class VisibilityPolicy:
 
 class AgentBuilderPolicy:
     MAX_TOOLS = 5
-    MIN_TOOLS = 1
     MAX_SUB_AGENTS = 3
     MAX_WORKERS_TOTAL = 6
-    MIN_WORKERS = 1
     MAX_NAME_LENGTH = 200
     MAX_SYSTEM_PROMPT_LENGTH = 4000
     MAX_USER_REQUEST_LENGTH = 1000
 
     @classmethod
     def validate_tool_count(cls, count: int) -> None:
-        if count < cls.MIN_TOOLS:
-            raise ValueError(f"최소 {cls.MIN_TOOLS}개 이상의 도구가 필요합니다.")
+        # agent-instruction-required: 도구 자동선택 제거로 0개 허용 (하한 없음, 상한만 검증)
         if count > cls.MAX_TOOLS:
             raise ValueError(f"도구는 최대 {cls.MAX_TOOLS}개까지 선택할 수 있습니다.")
 
     @classmethod
     def validate_worker_count(cls, workers: list) -> None:
-        if len(workers) < cls.MIN_WORKERS:
-            raise ValueError(f"최소 {cls.MIN_WORKERS}개 이상의 워커가 필요합니다.")
+        # agent-instruction-required: 워커 0개(순수 대화형) 허용 (하한 없음)
         if len(workers) > cls.MAX_WORKERS_TOTAL:
             raise ValueError(f"워커는 최대 {cls.MAX_WORKERS_TOTAL}개까지 선택할 수 있습니다.")
 
@@ -117,6 +113,12 @@ class AgentBuilderPolicy:
 
     @classmethod
     def validate_system_prompt(cls, prompt: str) -> None:
+        # agent-instruction-required: 지침 필수 (자동생성은 Fix 에이전트 전담)
+        if not prompt or not prompt.strip():
+            raise ValueError(
+                "지침(system_prompt)은 비어 있을 수 없습니다. "
+                "직접 입력하거나 Fix 에이전트로 초안을 생성해 주세요."
+            )
         if len(prompt) > cls.MAX_SYSTEM_PROMPT_LENGTH:
             raise ValueError(
                 f"system_prompt는 {cls.MAX_SYSTEM_PROMPT_LENGTH}자를 초과할 수 없습니다."
@@ -143,6 +145,45 @@ class ForkPolicy:
         """삭제된 에이전트는 포크 불가."""
         if status == "deleted":
             raise ValueError("삭제된 에이전트는 포크할 수 없습니다.")
+
+
+class IterationLimitPolicy:
+    """supervisor 반복 한도 도메인 규칙 (agent-recursion-limit D2).
+
+    한도의 단위는 supervisor 반복 횟수(SupervisorState.iteration_count).
+    LangGraph recursion_limit은 이 값에서 파생하며, 최악 경로(반복당
+    supervisor+worker+chart_router+chart_builder+quality_gate = 5스텝,
+    quality_gate 재시도 시 반복당 최대 +8스텝)보다 항상 크게 잡아
+    state 가드가 먼저 발동하게 한다. 계수 변경은 이 클래스 상수만 수정.
+    """
+
+    DEFAULT = 25
+    MIN = 10
+    MAX = 1000
+
+    RECURSION_STEP_FACTOR = 10
+    RECURSION_BUFFER = 20
+
+    SUB_AGENT_DIVISOR = 2
+    SUB_AGENT_MIN = 5
+
+    @classmethod
+    def validate(cls, value: int) -> None:
+        if not (cls.MIN <= value <= cls.MAX):
+            raise ValueError(
+                f"max_iterations는 {cls.MIN}~{cls.MAX} 범위여야 합니다. "
+                f"(입력값: {value})"
+            )
+
+    @classmethod
+    def derive_recursion_limit(cls, max_iterations: int) -> int:
+        return max_iterations * cls.RECURSION_STEP_FACTOR + cls.RECURSION_BUFFER
+
+    @classmethod
+    def sub_agent_limit(cls, parent_max_iterations: int) -> int:
+        return max(
+            parent_max_iterations // cls.SUB_AGENT_DIVISOR, cls.SUB_AGENT_MIN
+        )
 
 
 class QualityGatePolicy:

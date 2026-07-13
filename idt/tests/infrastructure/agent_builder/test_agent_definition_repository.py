@@ -105,6 +105,7 @@ class TestAgentDefinitionRepositoryFindById:
         mock_model.visibility = "private"
         mock_model.department_id = None
         mock_model.temperature = 0.70
+        mock_model.max_iterations = 25
         mock_model.created_at = now
         mock_model.updated_at = now
         mock_model.tools = [mock_tool]
@@ -116,6 +117,7 @@ class TestAgentDefinitionRepositoryFindById:
         result = await repo.find_by_id("agent-1", "req-1")
         assert isinstance(result, AgentDefinition)
         assert result.id == "agent-1"
+        assert result.max_iterations == 25
         assert len(result.workers) == 1
         assert result.workers[0].tool_id == "tavily_search"
 

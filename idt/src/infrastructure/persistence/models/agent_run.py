@@ -164,6 +164,15 @@ class RetrievalSourceModel(Base):
     content_preview: Mapped[str | None] = mapped_column(Text)
     metadata_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    # retrieval-observability (V046): 검색 실행 컨텍스트 — 전부 nullable additive
+    search_query: Mapped[str | None] = mapped_column(Text)
+    query_source: Mapped[str | None] = mapped_column(String(20))
+    search_mode: Mapped[str | None] = mapped_column(String(20))
+    bm25_score: Mapped[Decimal | None] = mapped_column(Numeric(10, 6))
+    vector_score: Mapped[Decimal | None] = mapped_column(Numeric(10, 6))
+    bm25_rank: Mapped[int | None] = mapped_column(Integer)
+    vector_rank: Mapped[int | None] = mapped_column(Integer)
+    fusion_source: Mapped[str | None] = mapped_column(String(20))
 
     __table_args__ = (
         Index("idx_retrieval_run", "run_id"),

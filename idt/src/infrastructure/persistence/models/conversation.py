@@ -28,6 +28,8 @@ class ConversationMessageModel(Base):
     turn_index: Mapped[int] = mapped_column(Integer, nullable=False)
     # chat-chart-persistence: Chart.js config 배열 (NULL = 차트 없음)
     charts: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    # analysis-data-continuity: 분석 원천 데이터 스냅샷 (NULL = 없음)
+    analysis_data: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
     __table_args__ = (

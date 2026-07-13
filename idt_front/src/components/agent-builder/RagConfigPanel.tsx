@@ -1,4 +1,5 @@
 import { useCollections, useMetadataKeys } from '@/hooks/useRagToolConfig';
+import { useKnowledgeBases } from '@/hooks/useKnowledgeBases';
 import type { RagToolConfig, CollectionScope } from '@/types/ragToolConfig';
 import { SEARCH_MODES } from '@/types/ragToolConfig';
 import Dropdown from '@/components/common/Dropdown';
@@ -20,7 +21,12 @@ const MAX_TOOL_DESCRIPTION = 500;
 
 const RagConfigPanel = ({ config, onChange }: RagConfigPanelProps) => {
   const { data: collections, isLoading: isCollLoading, isError: isCollError, refetch: refetchColl } = useCollections();
-  const { data: metadataKeys } = useMetadataKeys(config.collection_name);
+  const { data: knowledgeBases } = useKnowledgeBases();
+  // kb-rag-filter D2: KB 선택 시 물리 컬렉션은 KB의 것 — 메타데이터 키도 KB 컬렉션 기준
+  const selectedKb = knowledgeBases?.find((kb) => kb.kb_id === config.kb_id);
+  const { data: metadataKeys } = useMetadataKeys(
+    config.kb_id ? selectedKb?.collection_name : config.collection_name,
+  );
 
   const filterEntries = Object.entries(config.metadata_filter);
 
@@ -28,6 +34,15 @@ const RagConfigPanel = ({ config, onChange }: RagConfigPanelProps) => {
     onChange({
       ...config,
       collection_name: name || undefined,
+      metadata_filter: {},
+    });
+  };
+
+  const handleKbChange = (kbId: string) => {
+    onChange({
+      ...config,
+      kb_id: kbId || undefined,
+      collection_name: undefined,
       metadata_filter: {},
     });
   };
@@ -56,6 +71,37 @@ const RagConfigPanel = ({ config, onChange }: RagConfigPanelProps) => {
 
   return (
     <div className="rounded-2xl border border-violet-200 bg-violet-50/30 p-5 space-y-6">
+      {/* Section 0: 지식베이스 선택 (kb-rag-filter) */}
+      <div>
+        <label className="mb-1.5 block text-[13px] font-semibold text-zinc-700">
+          검색 대상 지식베이스
+        </label>
+        <Dropdown
+          value={config.kb_id ?? ''}
+          onChange={handleKbChange}
+          ariaLabel="검색 대상 지식베이스"
+          options={[
+            { value: '', label: '선택 안 함' },
+            ...(knowledgeBases ?? []).map((kb) => {
+              const scopeLabel = SCOPE_LABELS[kb.scope]?.label;
+              return {
+                value: kb.kb_id,
+                label: `${scopeLabel ? `[${scopeLabel}] ` : ''}${kb.name}`,
+              };
+            }),
+          ]}
+          className="w-full"
+        />
+        {selectedKb && selectedKb.scope !== 'PUBLIC' && (
+          <p
+            className={`mt-1.5 text-[12px] ${SCOPE_LABELS[selectedKb.scope].color} rounded-lg px-2 py-1 inline-block`}
+          >
+            이 지식베이스는 {SCOPE_LABELS[selectedKb.scope].label}용이므로 에이전트
+            공개 범위가 자동 제한됩니다
+          </p>
+        )}
+      </div>
+
       {/* Section 1: 컬렉션 선택 */}
       <div>
         <label className="mb-1.5 block text-[13px] font-semibold text-zinc-700">
@@ -77,6 +123,8 @@ const RagConfigPanel = ({ config, onChange }: RagConfigPanelProps) => {
           <Dropdown
             value={config.collection_name ?? ''}
             onChange={handleCollectionChange}
+            ariaLabel="검색 대상 컬렉션"
+            disabled={!!config.kb_id}
             options={[
               { value: '', label: '전체 (기본)' },
               ...(collections ?? []).map((c) => {
@@ -89,6 +137,11 @@ const RagConfigPanel = ({ config, onChange }: RagConfigPanelProps) => {
             ]}
             className="w-full"
           />
+        )}
+        {config.kb_id && (
+          <p className="mt-1.5 inline-block rounded-lg bg-zinc-100 px-2 py-1 text-[12px] text-zinc-500">
+            지식베이스 선택 시 해당 지식베이스의 컬렉션이 자동 적용됩니다
+          </p>
         )}
         {(() => {
           const selected = collections?.find((c) => c.name === config.collection_name);
@@ -232,6 +285,29 @@ const RagConfigPanel = ({ config, onChange }: RagConfigPanelProps) => {
               </span>
               <span className="mt-0.5 block text-[12px] text-zinc-400">
                 승인된 위키 지식을 먼저 검색하고, 부족하면 원본 문서로 폴백합니다
+              </span>
+            </span>
+          </label>
+        </div>
+
+        {/* 라우팅 검색 토글 (rag-routed-integration) */}
+        <div className="mt-3 rounded-xl border border-zinc-200 bg-white/60 p-3">
+          <label className="flex cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              checked={config.use_routed_search ?? false}
+              onChange={(e) =>
+                onChange({ ...config, use_routed_search: e.target.checked })
+              }
+              className="mt-0.5 h-4 w-4 accent-violet-600"
+            />
+            <span>
+              <span className="block text-[13px] font-semibold text-zinc-700">
+                라우팅 검색 (3계층 요약)
+              </span>
+              <span className="mt-0.5 block text-[12px] text-zinc-400">
+                문서·섹션 요약을 거쳐 관련 조문을 좁혀 검색합니다. 요약 데이터가 없거나
+                검색이 실패하면 위 검색 모드로 자동 전환됩니다 (교차검증용)
               </span>
             </span>
           </label>

@@ -89,6 +89,8 @@ class SearchFilter:
     document_type: Optional[DocumentType] = None
     date_range: Optional[DateRange] = None
     metadata: Dict[str, str] = field(default_factory=dict)
+    # 다중 값 매칭(key IN values) — summary-routed-retrieval D6 (섹션 document_id 스코핑)
+    metadata_any: Dict[str, list] = field(default_factory=dict)
 
     def is_empty(self) -> bool:
         """Check if the filter has no conditions set.
@@ -100,4 +102,5 @@ class SearchFilter:
             self.document_type is None
             and self.date_range is None
             and len(self.metadata) == 0
+            and len(self.metadata_any) == 0
         )

@@ -1,4 +1,5 @@
 """Factory for creating chunking strategies."""
+import re
 from enum import Enum
 from typing import List, Union
 
@@ -14,6 +15,9 @@ from src.infrastructure.chunking.strategies.semantic_strategy import SemanticStr
 from src.infrastructure.chunking.strategies.section_aware_strategy import (
     SectionAwareChunkingStrategy,
 )
+from src.infrastructure.chunking.strategies.clause_aware_strategy import (
+    ClauseAwareStrategy,
+)
 
 
 class StrategyType(Enum):
@@ -23,6 +27,7 @@ class StrategyType(Enum):
     PARENT_CHILD = "parent_child"
     SEMANTIC = "semantic"
     SECTION_AWARE = "section_aware"
+    CLAUSE_AWARE = "clause_aware"
 
 
 class ChunkingStrategyFactory:
@@ -70,6 +75,8 @@ class ChunkingStrategyFactory:
             return cls._create_semantic_strategy(**kwargs)
         elif strategy_type == StrategyType.SECTION_AWARE:
             return cls._create_section_aware_strategy(**kwargs)
+        elif strategy_type == StrategyType.CLAUSE_AWARE:
+            return cls._create_clause_aware_strategy(**kwargs)
         else:
             raise ValueError(f"Unknown strategy type: {strategy_type}")
 
@@ -181,6 +188,49 @@ class ChunkingStrategyFactory:
         min_chunk_size = kwargs.get("min_chunk_size", cls.DEFAULT_SECTION_AWARE_MIN)
         config = ChunkingConfig(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
         return SectionAwareChunkingStrategy(config, min_chunk_size=min_chunk_size)
+
+    DEFAULT_CLAUSE_PARENT_SIZE = 2000
+    DEFAULT_CLAUSE_CHILD_SIZE = 500
+    DEFAULT_CLAUSE_CHILD_OVERLAP = 50
+
+    @classmethod
+    def _create_clause_aware_strategy(
+        cls, **kwargs
+    ) -> ClauseAwareStrategy:
+        """Create ClauseAwareStrategy (clause-aware-chunking Design §6.1).
+
+        kwargs:
+            parent_patterns, child_patterns: 정규식 문자열 목록 (priority 정렬 완료).
+            parent_chunk_size, chunk_size, chunk_overlap: 토큰 파라미터.
+        """
+        parent_patterns = kwargs.get("parent_patterns", [])
+        child_patterns = kwargs.get("child_patterns", [])
+        parent_chunk_size = kwargs.get(
+            "parent_chunk_size", cls.DEFAULT_CLAUSE_PARENT_SIZE
+        )
+        chunk_size = kwargs.get("chunk_size", cls.DEFAULT_CLAUSE_CHILD_SIZE)
+        chunk_overlap = kwargs.get(
+            "chunk_overlap", cls.DEFAULT_CLAUSE_CHILD_OVERLAP
+        )
+
+        compiled_parents = [
+            re.compile(p, re.MULTILINE) for p in parent_patterns
+        ]
+        compiled_children = [
+            re.compile(p, re.MULTILINE) for p in child_patterns
+        ]
+        parent_config = ChunkingConfig(
+            chunk_size=parent_chunk_size, chunk_overlap=0
+        )
+        child_config = ChunkingConfig(
+            chunk_size=chunk_size, chunk_overlap=chunk_overlap
+        )
+        return ClauseAwareStrategy(
+            parent_patterns=compiled_parents,
+            child_patterns=compiled_children,
+            parent_config=parent_config,
+            child_config=child_config,
+        )
 
     @classmethod
     def list_strategies(cls) -> List[str]:

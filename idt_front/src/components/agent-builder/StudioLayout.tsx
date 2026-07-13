@@ -22,6 +22,8 @@ interface StudioLayoutProps {
   onSave: () => void;
   onCancel: () => void;
   isSaving: boolean;
+  /** agent-instruction-required: 지침 미입력 시 인라인 에러 메시지 */
+  systemPromptError?: string | null;
   catalogTools?: CatalogTool[];
   isToolsLoading: boolean;
   isToolsError: boolean;
@@ -51,6 +53,7 @@ const StudioLayout = ({
   onSave,
   onCancel,
   isSaving,
+  systemPromptError,
   catalogTools,
   isToolsLoading,
   isToolsError,
@@ -82,6 +85,7 @@ const StudioLayout = ({
             onRagConfigChange={onRagConfigChange}
             isEditMode={mode === 'edit'}
             agentId={agentId}
+            systemPromptError={systemPromptError}
             catalogTools={catalogTools}
             isToolsLoading={isToolsLoading}
             isToolsError={isToolsError}

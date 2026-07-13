@@ -14,6 +14,10 @@ from src.domain.document_extractor.schemas import (
     TemplateSlot,
 )
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
+from src.infrastructure.langsmith.langsmith import (
+    DOCUMENT_EXTRACTOR_PROJECT_NAME,
+    make_document_extractor_tracer,
+)
 
 _CODE_FENCE_RE = re.compile(r"^```[a-zA-Z]*\n|\n```$")
 _VALID_SLOT_TYPES = {"value", "generated"}
@@ -56,16 +60,19 @@ class SlotExtractor:
         llm_factory,
         llm_model_repository,
         logger: LoggerInterface,
+        llm_html_max_chars: int = 20000,
     ) -> None:
         self._llm_factory = llm_factory
         self._llm_model_repository = llm_model_repository
         self._logger = logger
         self._llm_cache = None
+        self._llm_html_max_chars = llm_html_max_chars
+        self._trace_disabled_logged = False
 
     async def extract(self, html: str, request_id: str) -> SuggestedSlots:
         """HTML → 자동화 슬롯 추천."""
-        user_prompt = f"[분석 대상 HTML]\n{html}"
-        return await self._suggest(user_prompt, request_id)
+        user_prompt = f"[분석 대상 HTML]\n{self._clip_html(html, request_id)}"
+        return await self._suggest(user_prompt, request_id, "slot-extract")
 
     async def refine(
         self,
@@ -82,20 +89,49 @@ class SlotExtractor:
             ],
             ensure_ascii=False,
         )
-        user_prompt = f"[분석 대상 HTML]\n{html}\n" + _REFINE_SUFFIX.format(
-            prev_slots=prev_json, instruction=instruction
+        user_prompt = (
+            f"[분석 대상 HTML]\n{self._clip_html(html, request_id)}\n"
+            + _REFINE_SUFFIX.format(prev_slots=prev_json, instruction=instruction)
         )
-        return await self._suggest(user_prompt, request_id)
+        return await self._suggest(user_prompt, request_id, "slot-refine")
 
-    async def _suggest(self, user_prompt: str, request_id: str) -> SuggestedSlots:
+    def _clip_html(self, html: str, request_id: str) -> str:
+        """LLM 입력 상한 초과 시 절단 — 모델 TPM 한도 초과(429) 방지.
+
+        반환 html(템플릿 원본)이 아닌 LLM 프롬프트 입력만 자른다.
+        """
+        if len(html) <= self._llm_html_max_chars:
+            return html
+        self._logger.warning(
+            "SlotExtractor html clipped for llm input",
+            request_id=request_id,
+            original_chars=len(html),
+            max_chars=self._llm_html_max_chars,
+        )
+        return (
+            html[: self._llm_html_max_chars]
+            + "\n<!-- 이하 생략: LLM 입력 길이 한도 초과 -->"
+        )
+
+    async def _suggest(
+        self, user_prompt: str, request_id: str, run_name: str
+    ) -> SuggestedSlots:
         llm = await self._get_llm(request_id)
         messages = [
             {"role": "system", "content": _EXTRACT_SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ]
+        config = self._build_trace_config(run_name, request_id)
         last_error: Exception | None = None
         for attempt in (1, 2):
-            response = await llm.ainvoke(messages)
+            try:
+                response = await llm.ainvoke(messages, config=config)
+            except Exception as e:
+                # LLM 호출 자체 실패(429/네트워크 등) — SDK가 이미 재시도했으므로
+                # 즉시 도메인 예외로 감싸 라우터가 메시지를 UI로 전달하게 한다.
+                raise SlotExtractionFailedError(
+                    f"슬롯 추출 LLM 호출에 실패했습니다: {e}"
+                ) from e
             content = getattr(response, "content", str(response))
             try:
                 return self._parse_slots(content, request_id)
@@ -110,6 +146,29 @@ class SlotExtractor:
         raise SlotExtractionFailedError(
             f"슬롯 추출 결과를 해석할 수 없습니다: {last_error}"
         )
+
+    def _build_trace_config(self, run_name: str, request_id: str) -> dict:
+        """LangSmith 추적 config — 프로젝트 'document-extractor'로 per-run 기록.
+
+        tracer가 None(API 키 없음)이면 callbacks 미설정 — 본 흐름 영향 없음.
+        """
+        tags = [DOCUMENT_EXTRACTOR_PROJECT_NAME, run_name]
+        config: dict = {
+            "run_name": run_name,
+            "tags": tags,
+            "metadata": {"request_id": request_id},
+        }
+        tracer = make_document_extractor_tracer(tags=tags)
+        if tracer is not None:
+            config["callbacks"] = [tracer]
+        elif not self._trace_disabled_logged:
+            self._trace_disabled_logged = True
+            self._logger.warning(
+                "LangSmith 추적 비활성 — LANGCHAIN_API_KEY/LANGSMITH_API_KEY "
+                "미설정으로 document-extractor 프로젝트에 기록되지 않습니다.",
+                request_id=request_id,
+            )
+        return config
 
     async def _get_llm(self, request_id: str):
         if self._llm_cache is not None:

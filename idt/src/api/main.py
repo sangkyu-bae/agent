@@ -39,6 +39,10 @@ from src.api.routes.retrieval_router import (
     router as retrieval_router,
     get_retrieval_use_case,
 )
+from src.api.routes.routed_retrieval_router import (
+    router as routed_retrieval_router,
+    get_routed_retrieval_use_case,
+)
 from src.api.routes.hybrid_search_router import (
     router as hybrid_search_router,
     get_hybrid_search_use_case,
@@ -82,7 +86,6 @@ from src.api.routes.agent_builder_router import (
     get_update_agent_use_case,
     get_run_agent_use_case,
     get_get_agent_use_case,
-    get_interview_use_case,
     get_list_agents_use_case,
     get_delete_agent_use_case,
     get_load_mcp_tools_use_case,
@@ -231,6 +234,23 @@ from src.api.routes.unified_upload_router import (
     router as unified_upload_router,
     get_unified_upload_use_case,
 )
+from src.api.routes.knowledge_base_router import (
+    router as knowledge_base_router,
+    get_knowledge_base_use_case,
+    get_kb_upload_use_case,
+    get_list_kb_documents_use_case,
+    get_section_summary_query_use_case,
+)
+from src.api.routes.admin_collection_router import (
+    router as admin_collection_router,
+)
+from src.api.routes.admin_chunking_router import (
+    router as admin_chunking_router,
+    get_chunking_profile_use_case,
+)
+from src.api.routes.chunking_profile_router import (
+    router as chunking_profile_router,
+)
 from src.api.routes.collection_search_router import (
     router as collection_search_router,
     get_collection_search_use_case,
@@ -268,8 +288,6 @@ from src.application.conversation.use_case import ConversationUseCase
 from src.application.rag_agent.use_case import RAGAgentUseCase
 from src.application.retrieval.retrieval_use_case import RetrievalUseCase
 from src.application.use_cases.excel_upload_use_case import ExcelUploadUseCase
-from src.application.agent_builder.tool_selector import ToolSelector
-from src.application.agent_builder.prompt_generator import PromptGenerator
 from src.application.agent_builder.supervisor_hooks import DefaultHooks
 from src.application.agent_builder.workflow_compiler import WorkflowCompiler
 from src.application.agent_builder.create_agent_use_case import CreateAgentUseCase
@@ -281,9 +299,6 @@ from src.application.agent_run.model_name_resolver import ModelNameResolver
 from src.application.agent_run.schemas import RunObservabilityConfig
 from src.application.agent_run.tracker import RunTracker
 from src.application.agent_builder.get_agent_use_case import GetAgentUseCase
-from src.application.agent_builder.interview_use_case import InterviewUseCase
-from src.application.agent_builder.interviewer import Interviewer
-from src.application.agent_builder.interview_session_store import InMemoryInterviewSessionStore
 from src.application.agent_builder.list_agents_use_case import ListAgentsUseCase
 from src.application.agent_builder.delete_agent_use_case import DeleteAgentUseCase
 from src.application.agent_builder.subscribe_use_case import SubscribeUseCase
@@ -340,6 +355,7 @@ from src.infrastructure.persistence.repositories.conversation_repository import 
 from src.infrastructure.persistence.repositories.conversation_summary_repository import (
     SQLAlchemyConversationSummaryRepository,
 )
+from src.domain.conversation.analysis_snapshot_policy import AnalysisSnapshotPolicy
 from src.domain.conversation.policies import SummarizationPolicy
 from src.application.workflows.excel_analysis_workflow import ExcelAnalysisWorkflow
 from src.application.use_cases.analyze_excel_use_case import AnalyzeExcelUseCase
@@ -460,6 +476,7 @@ from src.api.routes.agent_run_router import (
     get_usage_summary_use_case,
     get_usage_timeseries_use_case,
     get_my_usage_timeseries_use_case,
+    get_message_retrievals_use_case,
 )
 from src.application.llm_model.create_llm_model_use_case import CreateLlmModelUseCase
 from src.application.llm_model.update_llm_model_use_case import UpdateLlmModelUseCase
@@ -471,6 +488,9 @@ from src.application.llm_model.update_llm_model_pricing_use_case import (
 )
 from src.application.agent_run.use_cases.get_run_detail_use_case import (
     GetRunDetailUseCase,
+)
+from src.application.agent_run.use_cases.get_message_retrievals_use_case import (
+    GetMessageRetrievalsUseCase,
 )
 from src.application.agent_run.use_cases.get_usage_by_user_use_case import (
     GetUsageByUserUseCase,
@@ -565,6 +585,7 @@ _retrieval_use_case: Optional[RetrievalUseCase] = None
 
 # Global hybrid search use case instance (initialized on startup)
 _hybrid_search_use_case: Optional[HybridSearchUseCase] = None
+_routed_retrieval_use_case = None  # RoutedRetrievalUseCase (summary-routed-retrieval)
 
 # Global chunk-and-index use case instance (initialized on startup)
 _chunk_index_use_case: Optional[ChunkAndIndexUseCase] = None
@@ -686,6 +707,7 @@ def create_document_extractor_factories():
             session_factory=get_session_factory(), logger=app_logger
         ),
         logger=app_logger,
+        llm_html_max_chars=settings.document_extractor_llm_html_max_chars,
     )
 
     def extract_factory(session: AsyncSession = Depends(get_session)):
@@ -933,6 +955,13 @@ def get_configured_hybrid_search_use_case() -> HybridSearchUseCase:
     return _hybrid_search_use_case
 
 
+def get_configured_routed_retrieval_use_case():
+    """Get the configured routed retrieval use case (summary-routed-retrieval)."""
+    if _routed_retrieval_use_case is None:
+        raise RuntimeError("RoutedRetrievalUseCase not initialized")
+    return _routed_retrieval_use_case
+
+
 def get_configured_retrieval_use_case() -> RetrievalUseCase:
     """Get the configured retrieval use case.
 
@@ -1075,6 +1104,61 @@ def create_hybrid_search_use_case() -> HybridSearchUseCase:
         embedding=embedding,
         vector_store=vector_store,
         es_index=settings.es_index,
+        logger=app_logger,
+    )
+
+
+def create_routed_retrieval_use_case():
+    """Create the routed retrieval use case (summary-routed-retrieval Design D10).
+
+    싱글턴 — 폴백은 getter 주입으로 lifespan 생성 순서와 무관.
+    """
+    from src.application.routed_retrieval.use_case import RoutedRetrievalUseCase
+    from src.domain.routed_retrieval.policy import RoutedRetrievalPolicy
+    from src.domain.hybrid_search.policies import RRFFusionPolicy
+    from src.infrastructure.routed_retrieval.es_chunk_expander import (
+        EsChunkExpander,
+    )
+    from src.infrastructure.routed_retrieval.hybrid_section_router import (
+        HybridSectionRouter,
+    )
+    from src.infrastructure.routed_retrieval.qdrant_document_router import (
+        QdrantDocumentRouter,
+    )
+
+    app_logger = get_app_logger()
+    es_config = ElasticsearchConfig(
+        ES_HOST=settings.es_host,
+        ES_PORT=settings.es_port,
+        ES_SCHEME=settings.es_scheme,
+    )
+    es_client = ElasticsearchClient.from_config(es_config)
+    es_repo = ElasticsearchRepository(client=es_client, logger=app_logger)
+
+    embedding = OpenAIEmbedding(model_name=settings.openai_embedding_model)
+    qdrant_client = AsyncQdrantClient(
+        host=settings.qdrant_host,
+        port=settings.qdrant_port,
+    )
+    vector_store = QdrantVectorStore(
+        client=qdrant_client,
+        embedding=embedding,
+        collection_name=settings.qdrant_collection_name,
+    )
+
+    return RoutedRetrievalUseCase(
+        embedding=embedding,
+        document_router=QdrantDocumentRouter(vector_store, app_logger),
+        section_router=HybridSectionRouter(
+            vector_store=vector_store,
+            es_repo=es_repo,
+            es_index=settings.es_index,
+            rrf_policy=RRFFusionPolicy(),
+            logger=app_logger,
+        ),
+        chunk_expander=EsChunkExpander(es_repo, settings.es_index, app_logger),
+        policy=RoutedRetrievalPolicy(),
+        hybrid_search_getter=get_configured_hybrid_search_use_case,
         logger=app_logger,
     )
 
@@ -1730,6 +1814,16 @@ def create_agent_run_factories():
     ) -> GetMyUsageTimeseriesUseCase:
         return GetMyUsageTimeseriesUseCase(aggregator=_aggregator(session))
 
+    # ── retrieval-observability §4.6: 메시지 기준 검색 근거 조회 ──
+    def message_retrievals_factory(
+        session: AsyncSession = Depends(get_session),
+    ) -> GetMessageRetrievalsUseCase:
+        return GetMessageRetrievalsUseCase(
+            agent_run_repo=SqlAlchemyAgentRunRepository(session),
+            message_repo=SQLAlchemyConversationMessageRepository(session),
+            logger=app_logger,
+        )
+
     return (
         run_detail_factory,
         by_user_factory,
@@ -1741,6 +1835,7 @@ def create_agent_run_factories():
         usage_summary_factory,        # ★ M5 dashboard
         usage_timeseries_factory,     # ★ M5 dashboard
         my_usage_timeseries_factory,  # ★ M5 dashboard
+        message_retrievals_factory,   # ★ retrieval-observability
     )
 
 
@@ -1851,6 +1946,68 @@ def create_history_use_case_factory():
     return _factory
 
 
+def _make_analysis_snapshot_policy() -> AnalysisSnapshotPolicy:
+    """analysis-data-continuity D8: settings 기반 스냅샷 정책 (하드코딩 금지)."""
+    return AnalysisSnapshotPolicy(
+        item_max_chars=settings.analysis_snapshot_item_max_chars,
+        total_max_chars=settings.analysis_snapshot_total_max_chars,
+        retention=settings.analysis_snapshot_retention,
+        raw_source_max_chars=settings.analysis_snapshot_raw_source_max_chars,
+        raw_source_total_max_chars=settings.analysis_snapshot_raw_source_total_max_chars,
+        raw_source_max_rows=settings.analysis_snapshot_raw_source_max_rows,
+    )
+
+
+def _analysis_snapshot_excluded_tools() -> frozenset[str]:
+    """analysis-data-continuity D8: General Chat 수집 제외 도구 (콤마 구분 설정)."""
+    return frozenset(
+        t.strip()
+        for t in settings.analysis_snapshot_excluded_tools.split(",")
+        if t.strip()
+    )
+
+
+# retrieval-observability §4.5: RunTracker lazy singleton.
+# agent_run(create_agent_builder_factories)과 general_chat factory가 동일 인스턴스를
+# 공유한다 — 상태 없는 파사드(session_factory만 보유)라 공유 안전.
+_run_tracker_singleton: RunTracker | None = None
+_tracker_cost_calculator: CostCalculator | None = None
+
+
+def get_run_tracker() -> RunTracker:
+    global _run_tracker_singleton, _tracker_cost_calculator
+    if _run_tracker_singleton is None:
+        app_logger = get_app_logger()
+        from src.infrastructure.llm_model.session_scoped_llm_model_repository import (
+            SessionScopedLlmModelRepository,
+        )
+
+        scoped_llm_model_repo = SessionScopedLlmModelRepository(
+            session_factory=get_session_factory(),
+            logger=app_logger,
+        )
+        _tracker_cost_calculator = CostCalculator(
+            llm_model_repo=scoped_llm_model_repo,
+            config=RunObservabilityConfig(),
+        )
+        _run_tracker_singleton = RunTracker(
+            session_factory=get_session_factory(),
+            cost_calculator=_tracker_cost_calculator,
+            model_name_resolver=ModelNameResolver(
+                llm_model_repo=scoped_llm_model_repo,
+                logger=app_logger,
+            ),
+            logger=app_logger,
+        )
+    return _run_tracker_singleton
+
+
+def get_tracker_cost_calculator() -> CostCalculator:
+    """M4 가격 PATCH invalidate 공유용 — tracker와 동일 CostCalculator."""
+    get_run_tracker()
+    return _tracker_cost_calculator
+
+
 def create_general_chat_use_case_factory():
     """Return a per-request factory for GeneralChatUseCase.
 
@@ -1874,11 +2031,16 @@ def create_general_chat_use_case_factory():
         tavily_tool = TavilySearchTool()
 
         # 도구: InternalDocumentSearchTool (HybridSearch 재사용)
+        # retrieval-observability §4.5: tracker 주입 → general_chat 검색도
+        # ai_retrieval_source에 영속화 (RunContext는 UseCase가 세팅).
         hybrid_search_uc = get_configured_hybrid_search_use_case()
         internal_doc_tool = InternalDocumentSearchTool(
             hybrid_search_use_case=hybrid_search_uc,
             top_k=5,
             request_id="",
+            tracker=get_run_tracker(),
+            logger=app_logger,
+            config=RunObservabilityConfig(),
         )
 
         # 도구: MCP Tools (LoadMCPToolsUseCase via DB) — 동일 세션 공유
@@ -1929,6 +2091,9 @@ def create_general_chat_use_case_factory():
             viz_classifier=viz_classifier,
             chart_builder=chart_builder,
             chart_transformer=chart_transformer,
+            snapshot_policy=_make_analysis_snapshot_policy(),
+            snapshot_excluded_tools=_analysis_snapshot_excluded_tools(),
+            tracker=get_run_tracker(),
         )
 
     return _factory
@@ -1971,44 +2136,14 @@ def _build_search_pipeline_llm_model() -> LlmModel | None:
 
 def create_agent_builder_factories():
     """Return per-request DI factories for Agent Builder use cases."""
-    from langchain_openai import ChatOpenAI
-
     app_logger = get_app_logger()
-
-    llm = ChatOpenAI(
-        model=settings.openai_llm_model,
-        api_key=settings.openai_api_key,
-        temperature=0,
-    )
-    tool_selector = ToolSelector(llm=llm, logger=app_logger)
-    prompt_generator = PromptGenerator(llm=llm, logger=app_logger)
-    interviewer = Interviewer(llm=llm, logger=app_logger)
 
     # AGENT-OBS-001 (M1·M4): RunTracker 등 관측성 싱글톤은 ToolFactory보다 먼저 생성
     # M4: ToolFactory에 tracker 주입 → InternalDocumentSearchTool이 record_retrieval 호출
-    from src.infrastructure.llm_model.session_scoped_llm_model_repository import (
-        SessionScopedLlmModelRepository,
-    )
-
+    # retrieval-observability §4.5: general_chat factory와 공유하는 lazy singleton 사용
     _obs_config = RunObservabilityConfig()
-    _scoped_llm_model_repo = SessionScopedLlmModelRepository(
-        session_factory=get_session_factory(),
-        logger=app_logger,
-    )
-    _cost_calculator = CostCalculator(
-        llm_model_repo=_scoped_llm_model_repo,
-        config=_obs_config,
-    )
-    _model_name_resolver = ModelNameResolver(
-        llm_model_repo=_scoped_llm_model_repo,
-        logger=app_logger,
-    )
-    run_tracker = RunTracker(
-        session_factory=get_session_factory(),
-        cost_calculator=_cost_calculator,
-        model_name_resolver=_model_name_resolver,
-        logger=app_logger,
-    )
+    run_tracker = get_run_tracker()
+    _cost_calculator = get_tracker_cost_calculator()
 
     # LLM-WIKI-001 Step6: 승인 위키 우선 검색 어댑터(run-scoped 세션). use_wiki_first=True 도구에만 적용.
     from src.application.wiki.run_scoped_wiki_search import RunScopedWikiSearch
@@ -2047,6 +2182,8 @@ def create_agent_builder_factories():
         tracker=run_tracker,                # ★ M4: RAG retrieval 영속화
         run_observability_config=_obs_config,
         wiki_search=_wiki_search,           # ★ LLM-WIKI-001 Step6
+        # ★ rag-routed-integration D2: use_routed_search 에이전트용 라우팅 검색
+        routed_retrieval_getter=get_configured_routed_retrieval_use_case,
     )
     # document-template-extractor Design §6: 합성 노드 의존(싱글톤).
     # 컴파일러/컴포저는 앱 싱글톤이라 per-request 세션 대신 session-scoped 어댑터 사용.
@@ -2084,9 +2221,6 @@ def create_agent_builder_factories():
         document_composer=_dt_composer,
     )
 
-    # 인터뷰 세션 스토어는 앱 전체에서 공유 (싱글턴)
-    interview_session_store = InMemoryInterviewSessionStore()
-
     # DB-001 §10.2: session 은 Depends(get_session) 으로 주입.
     def _make_repo(session: AsyncSession):
         return AgentDefinitionRepository(session=session, logger=app_logger)
@@ -2116,10 +2250,14 @@ def create_agent_builder_factories():
     def _make_document_template_repo(session: AsyncSession):
         return DocumentTemplateRepository(session=session, logger=app_logger)
 
+    def _make_kb_repo(session: AsyncSession):
+        from src.infrastructure.knowledge_base.repository import (
+            KnowledgeBaseRepository,
+        )
+        return KnowledgeBaseRepository(session, app_logger)
+
     def create_uc_factory(session: AsyncSession = Depends(get_session)):
         return CreateAgentUseCase(
-            tool_selector=tool_selector,
-            prompt_generator=prompt_generator,
             repository=_make_repo(session),
             llm_model_repository=_make_llm_model_repo(session),
             perm_repo=_make_perm_repo(session),
@@ -2133,6 +2271,8 @@ def create_agent_builder_factories():
             mcp_server_repo=MCPServerRepository(
                 session=session, logger=app_logger, cipher=_mcp_cipher()
             ),
+            # kb-rag-filter D7: kb_id 검증·scope clamp·컬렉션 고정
+            kb_repo=_make_kb_repo(session),
         )
 
     def update_uc_factory(session: AsyncSession = Depends(get_session)):
@@ -2145,6 +2285,8 @@ def create_agent_builder_factories():
             document_template_repo=_make_document_template_repo(session),
             source_archiver=_dt_archiver,
             max_template_slots=settings.document_extractor_max_slots,
+            # kb-rag-filter D7: kb_id 워커 scope 검증
+            kb_repo=_make_kb_repo(session),
         )
 
     # agent-schedule Design §6.2: RunAgentUseCase 조립 본문을 함수로 추출해
@@ -2172,6 +2314,8 @@ def create_agent_builder_factories():
             session_factory=get_session_factory(),
             # skill-agent-integration Phase A: 부착 Skill instruction 주입
             agent_skill_repo=_make_agent_skill_repo(session),
+            # analysis-data-continuity D8: 분석 데이터 스냅샷 영속·재주입
+            snapshot_policy=_make_analysis_snapshot_policy(),
         )
 
     def run_uc_factory(session: AsyncSession = Depends(get_session)):
@@ -2185,17 +2329,6 @@ def create_agent_builder_factories():
             dept_repository=dept_repo,
             logger=app_logger,
             agent_skill_repo=_make_agent_skill_repo(session),
-        )
-
-    def interview_uc_factory(session: AsyncSession = Depends(get_session)):
-        return InterviewUseCase(
-            interviewer=interviewer,
-            tool_selector=tool_selector,
-            prompt_generator=prompt_generator,
-            repository=_make_repo(session),
-            llm_model_repository=_make_llm_model_repo(session),
-            session_store=interview_session_store,
-            logger=app_logger,
         )
 
     def list_uc_factory(session: AsyncSession = Depends(get_session)):
@@ -2253,7 +2386,7 @@ def create_agent_builder_factories():
 
     return (
         create_uc_factory, update_uc_factory, run_uc_factory,
-        get_uc_factory, interview_uc_factory,
+        get_uc_factory,
         list_uc_factory, delete_uc_factory,
         subscribe_uc_factory, fork_uc_factory, list_my_uc_factory,
         list_available_sub_agents_uc_factory,
@@ -2518,6 +2651,235 @@ def create_unified_upload_factories():
         )
 
     return use_case_factory
+
+
+def create_knowledge_base_factories(unified_upload_factory, summary_launcher=None):
+    """Return per-request DI factories for Knowledge Base (knowledge-base-scoping Design §8).
+
+    summary_launcher: 섹션 요약 잡 킥오프 싱글턴 (card-section-summary D14, 선택).
+    """
+    from src.infrastructure.collection.qdrant_collection_repository import QdrantCollectionRepository
+    from src.infrastructure.collection.permission_repository import CollectionPermissionRepository
+    from src.application.collection.permission_service import CollectionPermissionService
+    from src.domain.collection.permission_policy import CollectionPermissionPolicy
+    from src.infrastructure.department.department_repository import DepartmentRepository
+    from src.infrastructure.knowledge_base.repository import KnowledgeBaseRepository
+    from src.domain.knowledge_base.policy import KnowledgeBasePolicy
+    from src.application.knowledge_base.collection_assigner import UserSelectedCollectionAssigner
+    from src.application.knowledge_base.use_case import KnowledgeBaseUseCase
+    from src.application.knowledge_base.upload_use_case import KnowledgeBaseUploadUseCase
+    from src.application.knowledge_base.chunking_resolver import ChunkingSettingsResolver
+    from src.infrastructure.chunking_profile.repository import ChunkingProfileRepository
+
+    app_logger = get_app_logger()
+    qdrant_client = AsyncQdrantClient(
+        host=settings.qdrant_host,
+        port=settings.qdrant_port,
+    )
+    collection_repo = QdrantCollectionRepository(qdrant_client)
+
+    def _build_assigner(session: AsyncSession):
+        perm_repo = CollectionPermissionRepository(session, app_logger)
+        dept_repo = DepartmentRepository(session, app_logger)
+        perm_service = CollectionPermissionService(
+            perm_repo=perm_repo,
+            dept_repo=dept_repo,
+            policy=CollectionPermissionPolicy(),
+            logger=app_logger,
+        )
+        return UserSelectedCollectionAssigner(
+            collection_repo=collection_repo,
+            perm_service=perm_service,
+        )
+
+    def kb_use_case_factory(session: AsyncSession = Depends(get_session)):
+        kb_repo = KnowledgeBaseRepository(session, app_logger)
+        dept_repo = DepartmentRepository(session, app_logger)
+        profile_repo = ChunkingProfileRepository(session, app_logger)
+        return KnowledgeBaseUseCase(
+            kb_repo=kb_repo,
+            policy=KnowledgeBasePolicy(),
+            assigner=_build_assigner(session),
+            dept_repo=dept_repo,
+            logger=app_logger,
+            profile_repo=profile_repo,
+        )
+
+    def kb_upload_factory(session: AsyncSession = Depends(get_session)):
+        kb_repo = KnowledgeBaseRepository(session, app_logger)
+        dept_repo = DepartmentRepository(session, app_logger)
+        # 동일 요청 세션으로 UnifiedUploadUseCase 조립 (db-session 규칙: UseCase 단일 세션)
+        unified = unified_upload_factory(session)
+        profile_repo = ChunkingProfileRepository(session, app_logger)
+        resolver = ChunkingSettingsResolver(profile_repo, app_logger)
+        return KnowledgeBaseUploadUseCase(
+            kb_repo=kb_repo,
+            policy=KnowledgeBasePolicy(),
+            dept_repo=dept_repo,
+            unified_upload=unified,
+            logger=app_logger,
+            chunking_resolver=resolver,
+            summary_launcher=summary_launcher,
+        )
+
+    def kb_documents_factory(session: AsyncSession = Depends(get_session)):
+        # kb-management-ui D3: 권한/존재 검증은 동일 세션의 KnowledgeBaseUseCase에 위임
+        from src.application.knowledge_base.list_documents_use_case import (
+            ListKbDocumentsUseCase,
+        )
+        from src.infrastructure.doc_browse.document_metadata_repository import (
+            DocumentMetadataRepository,
+        )
+
+        return ListKbDocumentsUseCase(
+            kb_use_case=kb_use_case_factory(session),
+            document_metadata_repo=DocumentMetadataRepository(
+                session, app_logger
+            ),
+            logger=app_logger,
+        )
+
+    return kb_use_case_factory, kb_upload_factory, kb_documents_factory
+
+
+def create_chunking_profile_factories():
+    """Return per-request DI factory for Chunking Profile (clause-aware-chunking Design §9)."""
+    from src.infrastructure.chunking_profile.repository import ChunkingProfileRepository
+    from src.domain.chunking_profile.policy import ChunkingProfilePolicy
+    from src.application.chunking_profile.use_case import ChunkingProfileUseCase
+    from src.infrastructure.llm_model.llm_model_repository import LlmModelRepository
+
+    app_logger = get_app_logger()
+
+    def profile_use_case_factory(session: AsyncSession = Depends(get_session)):
+        repo = ChunkingProfileRepository(session, app_logger)
+        # card-section-summary D16: summary_llm_model_id 존재+활성 검증용
+        llm_model_repo = LlmModelRepository(session, app_logger)
+        return ChunkingProfileUseCase(
+            repo, ChunkingProfilePolicy(), app_logger,
+            llm_model_repo=llm_model_repo,
+        )
+
+    return profile_use_case_factory
+
+
+def create_section_summary_components():
+    """Section Summary 배선 (card-section-summary Design §3, D11).
+
+    launcher/runner는 애플리케이션 싱글턴 — DB 접근은 전부 session_factory 기반
+    독립 짧은 세션(JobStore)으로 수행한다. query use case만 per-request 세션.
+    """
+    from src.application.section_summary.launcher import SectionSummaryLauncher
+    from src.application.section_summary.query_use_case import (
+        SectionSummaryQueryUseCase,
+    )
+    from src.application.section_summary.use_case import SummarizeSectionsUseCase
+    from src.domain.knowledge_base.policy import KnowledgeBasePolicy
+    from src.domain.section_summary.policy import SectionSummaryJobPolicy
+    from src.infrastructure.department.department_repository import (
+        DepartmentRepository,
+    )
+    from src.infrastructure.embeddings.embedding_factory import EmbeddingFactory
+    from src.infrastructure.knowledge_base.repository import (
+        KnowledgeBaseRepository,
+    )
+    from src.infrastructure.llm.llm_factory import LLMFactory
+    from src.infrastructure.llm_model.session_scoped_llm_model_repository import (
+        SessionScopedLlmModelRepository,
+    )
+    from src.infrastructure.section_summary.document_summary_step import (
+        DocumentSummaryStep,
+    )
+    from src.infrastructure.section_summary.job_repository import (
+        SectionSummaryJobRepository,
+        SessionScopedSectionSummaryJobStore,
+    )
+    from src.infrastructure.section_summary.qdrant_section_source import (
+        QdrantSectionSource,
+    )
+    from src.infrastructure.section_summary.summary_writer import (
+        DualStoreSummaryWriter,
+    )
+
+    app_logger = get_app_logger()
+    session_factory = get_session_factory()
+    qdrant_client = AsyncQdrantClient(
+        host=settings.qdrant_host,
+        port=settings.qdrant_port,
+    )
+    es_config = ElasticsearchConfig(
+        ES_HOST=settings.es_host,
+        ES_PORT=settings.es_port,
+        ES_SCHEME=settings.es_scheme,
+    )
+    es_client = ElasticsearchClient.from_config(es_config)
+    es_repo = ElasticsearchRepository(client=es_client, logger=app_logger)
+
+    job_store = SessionScopedSectionSummaryJobStore(session_factory, app_logger)
+    policy = SectionSummaryJobPolicy()
+
+    async def _resolve_embedding_provider(
+        model_name: str, request_id: str
+    ) -> str | None:
+        async with session_factory() as session:
+            repo = EmbeddingModelRepository(session=session, logger=app_logger)
+            model = await repo.find_by_model_name(model_name, request_id)
+            return model.provider if model else None
+
+    section_source = QdrantSectionSource(qdrant_client, app_logger)
+    llm_model_repo = SessionScopedLlmModelRepository(session_factory, app_logger)
+    llm_factory = LLMFactory()
+    embedding_factory = EmbeddingFactory()
+    # document-summary-routing D1/D2: 섹션 요약 완료 직후 문서 요약 자동 체이닝
+    document_summary_step = DocumentSummaryStep(
+        section_source=section_source,
+        qdrant_client=qdrant_client,
+        es_repo=es_repo,
+        es_index=settings.es_index,
+        llm_model_repo=llm_model_repo,
+        llm_factory=llm_factory,
+        embedding_factory=embedding_factory,
+        policy=policy,
+        logger=app_logger,
+        input_char_cap=settings.document_summary_input_char_cap,
+        max_batches=settings.document_summary_max_batches,
+    )
+    runner = SummarizeSectionsUseCase(
+        job_store=job_store,
+        section_source=section_source,
+        writer=DualStoreSummaryWriter(
+            qdrant_client, es_repo, settings.es_index, app_logger
+        ),
+        llm_model_repo=llm_model_repo,
+        llm_factory=llm_factory,
+        embedding_factory=embedding_factory,
+        policy=policy,
+        logger=app_logger,
+        concurrency=settings.section_summary_concurrency,
+        input_char_cap=settings.section_summary_input_char_cap,
+        max_sections=settings.section_summary_max_sections,
+        document_summary_step=document_summary_step,
+    )
+    launcher = SectionSummaryLauncher(
+        job_store=job_store,
+        runner=runner,
+        logger=app_logger,
+        embedding_provider_resolver=_resolve_embedding_provider,
+    )
+
+    def query_use_case_factory(session: AsyncSession = Depends(get_session)):
+        return SectionSummaryQueryUseCase(
+            kb_repo=KnowledgeBaseRepository(session, app_logger),
+            dept_repo=DepartmentRepository(session, app_logger),
+            kb_policy=KnowledgeBasePolicy(),
+            job_repo=SectionSummaryJobRepository(session, app_logger),
+            policy=policy,
+            launcher=launcher,
+            logger=app_logger,
+            stale_seconds=settings.section_summary_stale_seconds,
+        )
+
+    return launcher, query_use_case_factory
 
 
 def create_collection_search_factories():
@@ -2975,6 +3337,18 @@ async def _ensure_es_index() -> None:
             get_app_logger().info(
                 "ES index ensured on startup", index=settings.es_index
             )
+        else:
+            # card-section-summary D7: 기존 인덱스에 신규 필드(summary_text 등)를
+            # additive put_mapping으로 반영 (동일 매핑 재적용은 no-op — 멱등)
+            try:
+                await es_client.get_client().indices.put_mapping(
+                    index=settings.es_index,
+                    properties=DOCUMENTS_INDEX_MAPPINGS["properties"],
+                )
+            except Exception as e:
+                get_app_logger().warning(
+                    "ES put_mapping for summary fields failed", exception=e
+                )
     except Exception as e:
         get_app_logger().warning(
             "ES index ensure failed on startup", exception=e
@@ -2987,6 +3361,7 @@ async def lifespan(app: FastAPI):
     global _document_processor, _analyze_excel_use_case, _excel_upload_use_case
     global _supervisor_excel_workflow
     global _retrieval_use_case, _hybrid_search_use_case, _chunk_index_use_case
+    global _routed_retrieval_use_case
     global _morph_index_use_case, _rag_agent_use_case, _ingest_use_case
     global _doc_chunk_use_case
     global _advanced_ingest_use_case
@@ -3004,6 +3379,8 @@ async def lifespan(app: FastAPI):
     _attachment_store = create_attachment_store()
     _retrieval_use_case = create_retrieval_use_case()
     _hybrid_search_use_case = create_hybrid_search_use_case()
+    # summary-routed-retrieval: 3계층 하강 라우팅 검색 (폴백=위 하이브리드 getter)
+    _routed_retrieval_use_case = create_routed_retrieval_use_case()
     _chunk_index_use_case = create_chunk_index_use_case()
     _morph_index_use_case = create_morph_index_use_case()
     _rag_agent_use_case = create_rag_agent_use_case()
@@ -3042,6 +3419,7 @@ async def lifespan(app: FastAPI):
     _attachment_store = None
     _retrieval_use_case = None
     _hybrid_search_use_case = None
+    _routed_retrieval_use_case = None
     _chunk_index_use_case = None
     _morph_index_use_case = None
     _rag_agent_use_case = None
@@ -3089,6 +3467,9 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_excel_upload_use_case] = get_configured_excel_upload_use_case
     app.dependency_overrides[get_retrieval_use_case] = get_configured_retrieval_use_case
     app.dependency_overrides[get_hybrid_search_use_case] = get_configured_hybrid_search_use_case
+    app.dependency_overrides[get_routed_retrieval_use_case] = (
+        get_configured_routed_retrieval_use_case
+    )
     app.dependency_overrides[get_chunk_index_use_case] = get_configured_chunk_index_use_case
     app.dependency_overrides[get_morph_index_use_case] = get_configured_morph_index_use_case
     app.dependency_overrides[get_rag_agent_use_case] = get_configured_rag_agent_use_case
@@ -3101,7 +3482,7 @@ def create_app() -> FastAPI:
 
     # Agent Builder DI
     (
-        _create_uc, _update_uc, _run_uc, _get_uc, _interview_uc,
+        _create_uc, _update_uc, _run_uc, _get_uc,
         _list_agents_uc, _delete_agent_uc,
         _subscribe_uc, _fork_uc, _list_my_uc,
         _list_available_sub_agents_uc,
@@ -3112,7 +3493,6 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_update_agent_use_case] = _update_uc
     app.dependency_overrides[get_run_agent_use_case] = _run_uc
     app.dependency_overrides[get_get_agent_use_case] = _get_uc
-    app.dependency_overrides[get_interview_use_case] = _interview_uc
     app.dependency_overrides[get_list_agents_use_case] = _list_agents_uc
     app.dependency_overrides[get_delete_agent_use_case] = _delete_agent_uc
     app.dependency_overrides[get_subscribe_use_case] = _subscribe_uc
@@ -3258,6 +3638,7 @@ def create_app() -> FastAPI:
         _usage_summary_f,            # ★ M5 dashboard
         _usage_timeseries_f,         # ★ M5 dashboard
         _my_usage_timeseries_f,      # ★ M5 dashboard
+        _message_retrievals_f,       # ★ retrieval-observability
     ) = create_agent_run_factories()
     app.dependency_overrides[get_run_detail_use_case] = _run_detail_f
     app.dependency_overrides[get_usage_by_user_use_case] = _usage_by_user_f
@@ -3269,6 +3650,7 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_usage_summary_use_case] = _usage_summary_f
     app.dependency_overrides[get_usage_timeseries_use_case] = _usage_timeseries_f
     app.dependency_overrides[get_my_usage_timeseries_use_case] = _my_usage_timeseries_f
+    app.dependency_overrides[get_message_retrievals_use_case] = _message_retrievals_f
 
     # Embedding Model Registry DI
     (_emb_list_f,) = create_embedding_model_factories()
@@ -3327,6 +3709,27 @@ def create_app() -> FastAPI:
     # Unified Upload DI (per-request — session 필요)
     _unified_upload_uc_factory = create_unified_upload_factories()
     app.dependency_overrides[get_unified_upload_use_case] = _unified_upload_uc_factory
+    # Section Summary DI (card-section-summary — launcher는 싱글턴, query는 per-request)
+    _section_summary_launcher, _section_summary_query_factory = (
+        create_section_summary_components()
+    )
+    _kb_uc_factory, _kb_upload_factory, _kb_documents_factory = (
+        create_knowledge_base_factories(
+            _unified_upload_uc_factory, _section_summary_launcher
+        )
+    )
+    app.dependency_overrides[get_knowledge_base_use_case] = _kb_uc_factory
+    app.dependency_overrides[get_kb_upload_use_case] = _kb_upload_factory
+    app.dependency_overrides[get_list_kb_documents_use_case] = (
+        _kb_documents_factory
+    )
+    app.dependency_overrides[get_section_summary_query_use_case] = (
+        _section_summary_query_factory
+    )
+
+    # Chunking Profile DI (clause-aware-chunking)
+    _chunking_profile_factory = create_chunking_profile_factories()
+    app.dependency_overrides[get_chunking_profile_use_case] = _chunking_profile_factory
 
     # Preview Router DI
     _preview_parser = ParserFactory.create_from_string("pymupdf4llm")
@@ -3467,6 +3870,7 @@ def create_app() -> FastAPI:
     app.include_router(agent_attachment_router)
     app.include_router(document_extractor_router)
     app.include_router(retrieval_router)
+    app.include_router(routed_retrieval_router)
     app.include_router(hybrid_search_router)
     app.include_router(chunk_index_router)
     app.include_router(morph_index_router)
@@ -3498,6 +3902,10 @@ def create_app() -> FastAPI:
     app.include_router(excel_export_router)
     app.include_router(pdf_export_router)
     app.include_router(unified_upload_router)
+    app.include_router(knowledge_base_router)
+    app.include_router(admin_collection_router)
+    app.include_router(admin_chunking_router)
+    app.include_router(chunking_profile_router)
     app.include_router(collection_search_router)
     app.include_router(ragas_router)
     app.include_router(preview_router)

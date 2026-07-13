@@ -35,6 +35,7 @@ class AgentDefinitionRepository(AgentDefinitionRepositoryInterface):
                 visibility=agent.visibility,
                 department_id=agent.department_id,
                 temperature=agent.temperature,
+                max_iterations=agent.max_iterations,
                 include_user_context=agent.include_user_context,
                 forked_from=agent.forked_from,
                 forked_at=agent.forked_at,
@@ -108,6 +109,7 @@ class AgentDefinitionRepository(AgentDefinitionRepositoryInterface):
             model.visibility = agent.visibility
             model.department_id = agent.department_id
             model.temperature = agent.temperature
+            model.max_iterations = agent.max_iterations
             model.updated_at = datetime.now(timezone.utc)
             await self._sync_workers(model, agent.workers)
             await self._session.flush()
@@ -353,6 +355,7 @@ class AgentDefinitionRepository(AgentDefinitionRepositoryInterface):
             visibility=model.visibility,
             department_id=model.department_id,
             temperature=model.temperature,
+            max_iterations=model.max_iterations,
             include_user_context=model.include_user_context,
             forked_from=model.forked_from,
             forked_at=model.forked_at,

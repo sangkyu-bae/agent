@@ -33,6 +33,15 @@ class RetrievalDto(BaseModel):
     rank_index: Optional[int] = None
     content_preview: Optional[str] = None
     created_at: datetime
+    # retrieval-observability (V046): 검색 실행 컨텍스트
+    search_query: Optional[str] = None
+    query_source: Optional[str] = None
+    search_mode: Optional[str] = None
+    bm25_score: Optional[float] = None
+    vector_score: Optional[float] = None
+    bm25_rank: Optional[int] = None
+    vector_rank: Optional[int] = None
+    fusion_source: Optional[str] = None
 
 
 class LlmCallDto(BaseModel):
@@ -107,6 +116,55 @@ class RunDetailResponse(BaseModel):
             run=_run_to_dto(dto.run),
             steps=[_step_node_to_dto(s) for s in dto.steps],
             orphan_llm_calls=[_llm_to_dto(lc) for lc in dto.orphan_llm_calls],
+        )
+
+
+# ── Message Retrievals (retrieval-observability §4.6) ─────────────
+
+
+class QueryRetrievalGroupDto(BaseModel):
+    """재작성 쿼리 1개 단위의 근거 그룹."""
+
+    search_query: Optional[str] = None
+    query_source: Optional[str] = None
+    search_mode: Optional[str] = None
+    sources: List[RetrievalDto] = []
+
+
+class MessageRunRetrievalsDto(BaseModel):
+    """run 1개의 검색 근거 (보통 메시지당 1 run, 재시도 시 복수)."""
+
+    run_id: str
+    agent_id: str
+    langsmith_run_url: Optional[str] = None
+    groups: List[QueryRetrievalGroupDto] = []
+
+
+class MessageRetrievalsResponse(BaseModel):
+    message_id: int
+    runs: List[MessageRunRetrievalsDto] = []
+
+    @classmethod
+    def from_dto(cls, dto) -> "MessageRetrievalsResponse":
+        return cls(
+            message_id=dto.message_id,
+            runs=[
+                MessageRunRetrievalsDto(
+                    run_id=node.run.id.value,
+                    agent_id=node.run.agent_id,
+                    langsmith_run_url=node.run.langsmith_run_url,
+                    groups=[
+                        QueryRetrievalGroupDto(
+                            search_query=g.search_query,
+                            query_source=g.query_source,
+                            search_mode=g.search_mode,
+                            sources=[_retrieval_to_dto(r) for r in g.sources],
+                        )
+                        for g in node.groups
+                    ],
+                )
+                for node in dto.runs
+            ],
         )
 
 
@@ -393,6 +451,14 @@ def _retrieval_to_dto(r) -> RetrievalDto:
         rank_index=r.rank_index,
         content_preview=r.content_preview,
         created_at=r.created_at,
+        search_query=r.search_query,
+        query_source=r.query_source,
+        search_mode=r.search_mode,
+        bm25_score=r.bm25_score,
+        vector_score=r.vector_score,
+        bm25_rank=r.bm25_rank,
+        vector_rank=r.vector_rank,
+        fusion_source=r.fusion_source,
     )
 
 

@@ -1,4 +1,8 @@
-"""CreateAgentUseCase — FR-09: system_prompt 프리필 테스트 (nl-agent-composer D1)."""
+"""CreateAgentUseCase — system_prompt 필수화 테스트 (agent-instruction-required).
+
+이전 nl-agent-composer D1의 '프리필 우선, 없으면 자동생성' 동작을 대체한다.
+지침은 이제 필수값이며 자동생성 경로(PromptGenerator)는 제거되었다.
+"""
 import uuid
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
@@ -29,9 +33,6 @@ def _make_default_llm_model() -> LlmModel:
 
 
 def _make_use_case():
-    tool_selector = MagicMock()
-    prompt_generator = MagicMock()
-    prompt_generator.generate = AsyncMock(return_value="자동 생성된 프롬프트")
     repository = MagicMock()
 
     async def _save_passthrough(agent, req_id):
@@ -48,14 +49,12 @@ def _make_use_case():
     perm_repo.find_by_collection_name = AsyncMock(return_value=None)
 
     use_case = CreateAgentUseCase(
-        tool_selector=tool_selector,
-        prompt_generator=prompt_generator,
         repository=repository,
         llm_model_repository=llm_model_repository,
         perm_repo=perm_repo,
         logger=MagicMock(),
     )
-    return use_case, repository, prompt_generator
+    return use_case, repository
 
 
 def _request(system_prompt: str | None) -> CreateAgentRequest:
@@ -68,26 +67,29 @@ def _request(system_prompt: str | None) -> CreateAgentRequest:
     )
 
 
-class TestSystemPromptPrefill:
+class TestSystemPromptRequired:
     @pytest.mark.asyncio
-    async def test_prefill_skips_generator_and_saves_as_is(self):
-        use_case, repository, prompt_generator = _make_use_case()
+    async def test_provided_prompt_saved_as_is(self):
+        use_case, repository = _make_use_case()
 
-        result = await use_case.execute(_request("화면에서 수정된 프롬프트"), "req-1")
+        result = await use_case.execute(_request("화면에서 입력한 지침"), "req-1")
 
-        prompt_generator.generate.assert_not_called()
-        assert result.system_prompt == "화면에서 수정된 프롬프트"
+        assert result.system_prompt == "화면에서 입력한 지침"
         saved_agent = repository.save.call_args[0][0]
-        assert saved_agent.system_prompt == "화면에서 수정된 프롬프트"
+        assert saved_agent.system_prompt == "화면에서 입력한 지침"
 
     @pytest.mark.asyncio
-    async def test_none_falls_back_to_generator(self):
-        use_case, _, prompt_generator = _make_use_case()
+    async def test_none_prompt_raises(self):
+        # 자동생성 제거: None이면 더 이상 fallback 없이 에러
+        use_case, _ = _make_use_case()
+        with pytest.raises(ValueError, match="비어"):
+            await use_case.execute(_request(None), "req-1")
 
-        result = await use_case.execute(_request(None), "req-1")
-
-        prompt_generator.generate.assert_awaited_once()
-        assert result.system_prompt == "자동 생성된 프롬프트"
+    @pytest.mark.asyncio
+    async def test_empty_prompt_raises(self):
+        use_case, _ = _make_use_case()
+        with pytest.raises(ValueError, match="비어"):
+            await use_case.execute(_request(""), "req-1")
 
     def test_over_4000_chars_rejected_by_schema(self):
         with pytest.raises(ValidationError):

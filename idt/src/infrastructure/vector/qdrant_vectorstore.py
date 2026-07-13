@@ -14,6 +14,11 @@ from src.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 
+# card-section-summary D8 / document-summary-routing D12:
+# 요약 계층 청크(섹션·문서)는 기존 벡터 검색에서 기본 제외.
+# 호출자가 명시적으로 요약 타입을 요구할 때만 가드 해제.
+_SUMMARY_CHUNK_TYPES = frozenset({"section_summary", "document_summary"})
+
 
 class QdrantVectorStore(VectorStoreInterface):
     """Qdrant implementation of VectorStoreInterface."""
@@ -86,6 +91,7 @@ class QdrantVectorStore(VectorStoreInterface):
         """Search for similar documents using a vector."""
         target_collection = collection_name if collection_name else self._collection_name
         query_filter = self._build_qdrant_filter(filter) if filter else None
+        query_filter = self._apply_section_summary_guard(query_filter, filter)
 
         try:
             response = await self._client.query_points(
@@ -157,6 +163,34 @@ class QdrantVectorStore(VectorStoreInterface):
             return None
         return self._point_to_document(results[0], include_score=False)
 
+    @staticmethod
+    def _apply_section_summary_guard(
+        query_filter: Optional[models.Filter],
+        search_filter: Optional[SearchFilter],
+    ) -> Optional[models.Filter]:
+        """요약 계층 청크 제외 가드 (card-section-summary D8, D12 일반화).
+
+        기존 적재 데이터에 요약 타입이 없으므로 동작 보존이며,
+        후속 라우팅 검색은 명시 필터(chunk_type=요약 타입)로 가드를 통과한다.
+        """
+        requested = (
+            search_filter.metadata.get("chunk_type") if search_filter else None
+        )
+        if requested in _SUMMARY_CHUNK_TYPES:
+            return query_filter
+        guard = models.FieldCondition(
+            key="chunk_type",
+            match=models.MatchAny(any=sorted(_SUMMARY_CHUNK_TYPES)),
+        )
+        if query_filter is None:
+            return models.Filter(must_not=[guard])
+        must_not = list(query_filter.must_not or []) + [guard]
+        return models.Filter(
+            must=query_filter.must,
+            should=query_filter.should,
+            must_not=must_not,
+        )
+
     def _build_qdrant_filter(self, search_filter: SearchFilter) -> models.Filter:
         conditions = []
 
@@ -172,6 +206,15 @@ class QdrantVectorStore(VectorStoreInterface):
             conditions.append(
                 models.FieldCondition(key=key, match=models.MatchValue(value=value))
             )
+
+        # summary-routed-retrieval D6: 다중 값 매칭 (key IN values)
+        for key, values in search_filter.metadata_any.items():
+            if values:
+                conditions.append(
+                    models.FieldCondition(
+                        key=key, match=models.MatchAny(any=list(values))
+                    )
+                )
 
         return models.Filter(must=conditions) if conditions else None
 

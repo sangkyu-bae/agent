@@ -13,18 +13,27 @@ from src.application.agent_builder.schemas import (
 from src.application.agent_builder.update_agent_use_case import UpdateAgentUseCase
 from src.domain.agent_builder.schemas import AgentDefinition, WorkerDefinition
 from src.domain.collection.permission_schemas import CollectionPermission, CollectionScope
+from src.domain.knowledge_base.entities import KnowledgeBase
 
 
-def _make_agent(status: str = "active") -> AgentDefinition:
+def _make_agent(
+    status: str = "active",
+    workers: list[WorkerDefinition] | None = None,
+    user_id: str = "user-1",
+) -> AgentDefinition:
     now = datetime.now(timezone.utc)
     return AgentDefinition(
         id=str(uuid.uuid4()),
-        user_id="user-1",
+        user_id=user_id,
         name="원래 이름",
         description="설명",
         system_prompt="원래 프롬프트",
         flow_hint="힌트",
-        workers=[WorkerDefinition("tavily_search", "search_worker", "검색", 0)],
+        workers=(
+            workers
+            if workers is not None
+            else [WorkerDefinition("tavily_search", "search_worker", "검색", 0)]
+        ),
         llm_model_id="model-1",
         status=status,
         created_at=now,
@@ -35,6 +44,8 @@ def _make_agent(status: str = "active") -> AgentDefinition:
 def _make_use_case(
     agent: AgentDefinition | None = None,
     perm_by_name: dict[str, CollectionPermission] | None = None,
+    kb_by_id: dict[str, KnowledgeBase] | None = None,
+    with_kb_repo: bool = True,
 ):
     repository = MagicMock()
     perm_repo = MagicMock()
@@ -49,8 +60,19 @@ def _make_use_case(
         return None
 
     perm_repo.find_by_collection_name = AsyncMock(side_effect=_find_perm)
+
+    kb_repo = None
+    if with_kb_repo:
+        kb_repo = MagicMock()
+
+        async def _find_kb(kb_id, req_id):
+            return (kb_by_id or {}).get(kb_id)
+
+        kb_repo.find_by_id = AsyncMock(side_effect=_find_kb)
+
     use_case = UpdateAgentUseCase(
-        repository=repository, perm_repo=perm_repo, logger=logger
+        repository=repository, perm_repo=perm_repo, logger=logger,
+        kb_repo=kb_repo,
     )
     return use_case, repository, _agent
 
@@ -264,6 +286,106 @@ class TestUpdateVisibilityScope:
         request = UpdateAgentRequest(name="새 이름")
         result = await use_case.execute(agent.id, request, "req-1")
         assert result.name == "새 이름"
+
+
+class TestUpdateVisibilityKbScope:
+    """kb-rag-filter D7 — kb_id 워커의 KB scope가 visibility 변경을 제한."""
+
+    def _make_kb_agent(self, kb_id: str = "kb-1") -> AgentDefinition:
+        # user_id "1" == 테스트 KB 기본 owner_id(1) — 소유자 정상 흐름 재현
+        return _make_agent(user_id="1", workers=[
+            WorkerDefinition(
+                "internal_document_search", "rag_worker", "RAG", 0,
+                # 생성 시 canonicalize된 상태 재현 (D1)
+                tool_config={"kb_id": kb_id, "collection_name": "admin-coll"},
+            ),
+        ])
+
+    @staticmethod
+    def _make_kb(
+        scope: CollectionScope, owner_id: int = 1
+    ) -> KnowledgeBase:
+        return KnowledgeBase(
+            id="kb-1", name="테스트 KB", owner_id=owner_id,
+            scope=scope, collection_name="admin-coll",
+        )
+
+    @pytest.mark.asyncio
+    async def test_personal_kb_blocks_public_visibility(self):
+        agent = self._make_kb_agent()
+        use_case, _, _ = _make_use_case(
+            agent=agent, kb_by_id={"kb-1": self._make_kb(CollectionScope.PERSONAL)}
+        )
+        request = UpdateAgentRequest(visibility="public")
+        with pytest.raises(ValueError, match="최대 허용"):
+            await use_case.execute(agent.id, request, "req-1")
+
+    @pytest.mark.asyncio
+    async def test_public_kb_allows_public_visibility(self):
+        agent = self._make_kb_agent()
+        use_case, _, _ = _make_use_case(
+            agent=agent, kb_by_id={"kb-1": self._make_kb(CollectionScope.PUBLIC)}
+        )
+        request = UpdateAgentRequest(visibility="public")
+        result = await use_case.execute(agent.id, request, "req-1")
+        assert isinstance(result, UpdateAgentResponse)
+
+    @pytest.mark.asyncio
+    async def test_kb_worker_collection_not_looked_up(self):
+        """D7: canonicalize된 물리 컬렉션(admin-coll)은 perm 조회 제외."""
+        agent = self._make_kb_agent()
+        use_case, _, _ = _make_use_case(
+            agent=agent, kb_by_id={"kb-1": self._make_kb(CollectionScope.PUBLIC)}
+        )
+        request = UpdateAgentRequest(visibility="public")
+        await use_case.execute(agent.id, request, "req-1")
+        use_case._perm_repo.find_by_collection_name.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_missing_kb_raises(self):
+        agent = self._make_kb_agent(kb_id="kb-gone")
+        use_case, _, _ = _make_use_case(agent=agent, kb_by_id={})
+        request = UpdateAgentRequest(visibility="public")
+        with pytest.raises(ValueError, match="Knowledge base not found"):
+            await use_case.execute(agent.id, request, "req-1")
+
+    @pytest.mark.asyncio
+    async def test_kb_worker_without_repo_raises(self):
+        agent = self._make_kb_agent()
+        use_case, _, _ = _make_use_case(agent=agent, with_kb_repo=False)
+        request = UpdateAgentRequest(visibility="public")
+        with pytest.raises(ValueError, match="kb_repo"):
+            await use_case.execute(agent.id, request, "req-1")
+
+    @pytest.mark.asyncio
+    async def test_other_users_personal_kb_raises_permission_error(self):
+        """D3(Act-1 G1): 타인 PERSONAL KB 참조 상태의 visibility 변경 → 403."""
+        agent = self._make_kb_agent()
+        use_case, _, _ = _make_use_case(
+            agent=agent,
+            kb_by_id={
+                "kb-1": self._make_kb(CollectionScope.PERSONAL, owner_id=2)
+            },
+        )
+        request = UpdateAgentRequest(visibility="private")
+        with pytest.raises(PermissionError, match="No read access"):
+            await use_case.execute(agent.id, request, "req-1")
+
+    @pytest.mark.asyncio
+    async def test_admin_can_reference_other_users_personal_kb(self):
+        """D3(Act-1 G1): admin은 타인 KB 참조 허용 — scope clamp은 별도."""
+        agent = self._make_kb_agent()
+        use_case, _, _ = _make_use_case(
+            agent=agent,
+            kb_by_id={
+                "kb-1": self._make_kb(CollectionScope.PERSONAL, owner_id=2)
+            },
+        )
+        request = UpdateAgentRequest(visibility="private")
+        result = await use_case.execute(
+            agent.id, request, "req-1", viewer_role="admin"
+        )
+        assert isinstance(result, UpdateAgentResponse)
 
 
 class TestUpdateAgentSkillSync:

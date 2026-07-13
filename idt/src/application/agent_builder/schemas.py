@@ -33,6 +33,11 @@ class RagToolConfigRequest(BaseModel):
     tool_description: str = Field("", max_length=500)
     # LLM-WIKI-001 Step6: 승인 위키 우선 검색 사용 여부
     use_wiki_first: bool = False
+    # rag-routed-integration D1: 라우팅 검색 opt-in (기존 search_mode와 독립)
+    use_routed_search: bool = False
+    # kb-rag-filter: 논리 지식베이스 필터 opt-in — 지정 시 저장 UseCase가
+    # 존재 검증 + 물리 컬렉션 고정(D1) + scope clamp(D7)를 수행한다.
+    kb_id: str | None = None
 
 
 class WorkerInfo(BaseModel):
@@ -62,6 +67,8 @@ class CreateAgentRequest(BaseModel):
     visibility: str = Field("private", pattern="^(private|department|public)$")
     department_id: str | None = None
     temperature: float = Field(0.70, ge=0.0, le=2.0)
+    # agent-recursion-limit D10: supervisor 반복 한도 (미전달 시 25)
+    max_iterations: int = Field(25, ge=10, le=1000)
     tool_ids: list[str] | None = None
     tool_configs: dict[str, RagToolConfigRequest] | None = None
     sub_agent_configs: list[SubAgentConfigRequest] | None = None
@@ -69,7 +76,8 @@ class CreateAgentRequest(BaseModel):
     skill_ids: list[str] | None = None
     # document-template-extractor GA4: 확정 템플릿 (document_extractor 도구 필요)
     document_template: DocumentTemplateRequest | None = None
-    # nl-agent-composer D1: 초안 프리필 프롬프트. None이면 기존대로 LLM 자동 생성.
+    # agent-instruction-required: 지침 필수. None/빈 값이면 생성 시 에러(자동생성 제거).
+    # 자동 구성은 Fix 에이전트(agent_composer)가 초안을 프리필하는 방식으로만 제공.
     system_prompt: str | None = Field(None, max_length=4000)
 
 
@@ -86,6 +94,7 @@ class CreateAgentResponse(BaseModel):
     max_visibility: str | None = None
     department_id: str | None = None
     temperature: float
+    max_iterations: int = 25
     created_at: str
     has_sub_agents: bool = False
 
@@ -96,6 +105,8 @@ class UpdateAgentRequest(BaseModel):
     visibility: str | None = Field(None, pattern="^(private|department|public)$")
     department_id: str | None = None
     temperature: float | None = Field(None, ge=0.0, le=2.0)
+    # agent-recursion-limit D10: None = 반복 한도 변경 안 함
+    max_iterations: int | None = Field(None, ge=10, le=1000)
     # None = 서브에이전트 변경 안 함, [] = 모든 서브에이전트 제거
     sub_agent_configs: list[SubAgentConfigRequest] | None = None
     # agent-skill-toggle: None = 스킬 변경 안 함, [] = 전부 해제, [...] = 목표 상태
@@ -127,6 +138,8 @@ class GetAgentResponse(BaseModel):
     department_id: str | None = None
     department_name: str | None = None
     temperature: float
+    # agent-recursion-limit D10: edit 폼 프라임용
+    max_iterations: int = 25
     owner_user_id: str
     can_edit: bool
     can_delete: bool
@@ -181,43 +194,6 @@ class SubAgentCandidate(BaseModel):
 
 class AvailableSubAgentsResponse(BaseModel):
     agents: list[SubAgentCandidate]
-
-
-# ── Human-in-the-Loop Interview ─────────────────────────────────
-
-class InterviewStartRequest(BaseModel):
-    user_request: str = Field(..., max_length=1000)
-    name: str = Field(..., max_length=200)
-    user_id: str
-    llm_model_id: str | None = None
-
-
-class InterviewStartResponse(BaseModel):
-    session_id: str
-    questions: list[str]
-    guidance: str = "아래 질문에 답해주시면 더 정확한 에이전트를 만들 수 있습니다."
-
-
-class AgentDraftPreview(BaseModel):
-    tool_ids: list[str]
-    workers: list[WorkerInfo]
-    flow_hint: str
-    system_prompt: str  # LLM 자동 생성, 수정 가능
-
-
-class InterviewAnswerRequest(BaseModel):
-    answers: list[str] = Field(..., description="현재 질문 목록에 대한 순서대로의 답변")
-
-
-class InterviewAnswerResponse(BaseModel):
-    session_id: str
-    status: str  # "questioning" | "reviewing"
-    questions: list[str] | None = None   # status == "questioning"
-    preview: AgentDraftPreview | None = None  # status == "reviewing"
-
-
-class InterviewFinalizeRequest(BaseModel):
-    system_prompt: str | None = Field(None, max_length=4000, description="None이면 자동 생성된 프롬프트 사용")
 
 
 # ── List / Delete ─────────────────────────────────────────────────

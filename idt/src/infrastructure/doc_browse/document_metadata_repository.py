@@ -4,7 +4,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.doc_browse.interfaces import DocumentMetadataRepositoryInterface
-from src.domain.doc_browse.schemas import DocumentMetadata
+from src.domain.doc_browse.schemas import DocumentMetadata, KbDocumentSummary
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.domain.mysql.schemas import MySQLPaginationParams, MySQLPageResult
 from src.infrastructure.doc_browse.models import DocumentMetadataModel
@@ -30,6 +30,7 @@ class DocumentMetadataRepository(DocumentMetadataRepositoryInterface):
                 existing.user_id = metadata.user_id
                 existing.chunk_count = metadata.chunk_count
                 existing.chunk_strategy = metadata.chunk_strategy
+                existing.kb_id = metadata.kb_id
             else:
                 model = DocumentMetadataModel(
                     document_id=metadata.document_id,
@@ -39,6 +40,7 @@ class DocumentMetadataRepository(DocumentMetadataRepositoryInterface):
                     user_id=metadata.user_id,
                     chunk_count=metadata.chunk_count,
                     chunk_strategy=metadata.chunk_strategy,
+                    kb_id=metadata.kb_id,
                 )
                 self._session.add(model)
             await self._session.flush()
@@ -107,6 +109,60 @@ class DocumentMetadataRepository(DocumentMetadataRepositoryInterface):
             )
             raise
 
+    async def find_by_kb_id(
+        self,
+        kb_id: str,
+        request_id: str,
+        pagination: Optional[MySQLPaginationParams] = None,
+    ) -> MySQLPageResult[KbDocumentSummary]:
+        """kb-management-ui D1: kb_id 필터 문서 목록 (created_at DESC)."""
+        self._logger.info(
+            "Document metadata find_by_kb_id started",
+            request_id=request_id,
+            kb_id=kb_id,
+        )
+        try:
+            p = pagination or MySQLPaginationParams(limit=20, offset=0)
+
+            count_stmt = (
+                select(func.count())
+                .select_from(DocumentMetadataModel)
+                .where(DocumentMetadataModel.kb_id == kb_id)
+            )
+            total = (await self._session.execute(count_stmt)).scalar_one()
+
+            query_stmt = (
+                select(DocumentMetadataModel)
+                .where(DocumentMetadataModel.kb_id == kb_id)
+                .order_by(DocumentMetadataModel.created_at.desc())
+                .limit(p.limit)
+                .offset(p.offset)
+            )
+            rows = (await self._session.execute(query_stmt)).scalars().all()
+
+            items = [self._to_kb_summary(r) for r in rows]
+            self._logger.info(
+                "Document metadata find_by_kb_id completed",
+                request_id=request_id,
+                kb_id=kb_id,
+                total=total,
+                page_size=len(items),
+            )
+            return MySQLPageResult(
+                items=items,
+                total=total,
+                limit=p.limit,
+                offset=p.offset,
+            )
+        except Exception as e:
+            self._logger.error(
+                "Document metadata find_by_kb_id failed",
+                exception=e,
+                request_id=request_id,
+                kb_id=kb_id,
+            )
+            raise
+
     async def delete_by_document_id(
         self,
         document_id: str,
@@ -166,4 +222,15 @@ class DocumentMetadataRepository(DocumentMetadataRepositoryInterface):
             user_id=model.user_id,
             chunk_count=model.chunk_count,
             chunk_strategy=model.chunk_strategy,
+            kb_id=model.kb_id,
+        )
+
+    @staticmethod
+    def _to_kb_summary(model: DocumentMetadataModel) -> KbDocumentSummary:
+        return KbDocumentSummary(
+            document_id=model.document_id,
+            filename=model.filename,
+            chunk_count=model.chunk_count,
+            chunk_strategy=model.chunk_strategy,
+            created_at=model.created_at,
         )

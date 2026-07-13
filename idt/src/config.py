@@ -87,6 +87,21 @@ class Settings(BaseSettings):
     # chart-builder: 한 응답에 포함할 최대 차트 개수 (Design D1).
     chart_max_count: int = 3
 
+    # Analysis Snapshot (analysis-data-continuity Design §3.8)
+    # 분석 원천 데이터 스냅샷 — 항목/총량 상한(문자), 재주입할 최신 스냅샷 수.
+    # 상한 근거: compact 후 총량(요약 ≤512자 + 최근 3메시지 + 스냅샷) 기준.
+    analysis_snapshot_item_max_chars: int = 4000
+    analysis_snapshot_total_max_chars: int = 8000
+    analysis_snapshot_retention: int = 2
+    # General Chat 스냅샷 수집 제외 도구 (콤마 구분) — 웹 스니펫은 데이터성 낮음.
+    analysis_snapshot_excluded_tools: str = "tavily_search"
+
+    # Analysis Source Preservation (analysis-source-preservation Design §3.5)
+    # 엑셀 원천 데이터(raw_source)는 비-raw 항목과 독립 budget으로 상한한다.
+    analysis_snapshot_raw_source_max_chars: int = 6000        # raw 항목당 상한(직렬화 후)
+    analysis_snapshot_raw_source_total_max_chars: int = 8000  # raw 전용 total budget
+    analysis_snapshot_raw_source_max_rows: int = 200          # 행 샘플링 임계
+
     # Search Pipeline (search-node-query-pipeline)
     # search 노드 rewrite/validate/compress용 경량 LLM. 빈 값이면 per-run 에이전트 LLM 사용.
     search_pipeline_provider: str = "openai"
@@ -104,6 +119,8 @@ class Settings(BaseSettings):
     document_extractor_max_file_mb: int = 20          # 업로드 상한 (R8)
     document_extractor_max_slots: int = 30            # 슬롯 개수 상한
     document_extractor_max_regen: int = 10            # refine/재생성 상한 (R5)
+    # 슬롯 추출 LLM 입력 HTML 상한(문자) — 모델 TPM 한도 초과(429) 방지
+    document_extractor_llm_html_max_chars: int = 20000
     # 원본 영구 보관 디렉토리 (D3). 빈 값이면 main.py에서 uploads/document_templates 해석.
     document_template_dir: str = ""
     # 기본 MCP 변환 도구 id ("mcp_{uuid}") — extract 요청에 미지정 시 폴백 (D5).
@@ -124,6 +141,19 @@ class Settings(BaseSettings):
     # 외부 트리거(POST /internal/schedules/trigger) 인증 토큰.
     # 빈 값이면 트리거 비활성(503). 외부 cron 이 X-Scheduler-Token 헤더로 전달.
     scheduler_trigger_token: str = ""
+
+    # Section Summary (card-section-summary Design D17)
+    # 섹션 요약 백그라운드 잡 — LLM 동시 호출 상한 / LLM 입력 절단(문자) /
+    # stale 판정 기준(초, 서버 재시작 고아 복구) / 문서당 섹션 수 상한(초과 시 잡 failed).
+    section_summary_concurrency: int = 3
+    section_summary_input_char_cap: int = 12000
+    section_summary_stale_seconds: int = 600
+    section_summary_max_sections: int = 500
+
+    # Document Summary (document-summary-routing Design D14)
+    # 문서 요약 LLM 입력 상한(문자, 단일 패스/배치 분할 기준) / 계층 요약 배치 수 상한.
+    document_summary_input_char_cap: int = 24000
+    document_summary_max_batches: int = 10
 
     # PII Masking (pii-masking)
     # 외부 LLM 경계의 가역 PII 마스킹 전역 on/off. false면 mask/unmask는 no-op.

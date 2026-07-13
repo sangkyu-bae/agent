@@ -31,6 +31,8 @@ class AgentDefinitionModel(Base):
         nullable=True,
     )
     temperature: Mapped[float] = mapped_column(nullable=False, default=0.70)
+    # agent-recursion-limit V045: supervisor 반복 한도 (기본 25, 범위는 도메인 정책 검증).
+    max_iterations: Mapped[int] = mapped_column(nullable=False, default=25)
     # agent-user-context V028: 향후 system bot이 user 컨텍스트 prepend를 거부하기 위한 슬롯.
     # 현재 PR은 전역 자동 prepend (DEFAULT TRUE).
     include_user_context: Mapped[bool] = mapped_column(

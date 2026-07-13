@@ -13,7 +13,10 @@ import asyncio
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, AsyncIterator, Optional
+from typing import TYPE_CHECKING, Any, AsyncIterator, Optional
+
+if TYPE_CHECKING:  # 순환 import 방지: tracker는 런타임에 duck-typed
+    from src.application.agent_run.tracker import RunTracker
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.prebuilt import create_react_agent
@@ -22,7 +25,13 @@ from src.application.agent_run.auth_context import (
     reset_current_auth_context,
     set_current_auth_context,
 )
+from src.application.agent_run.context import (
+    RunContext,
+    reset_run_context,
+    set_current_run_context,
+)
 from src.application.agent_run.prompt_rendering import render_user_context_block
+from src.domain.agent_run.value_objects import RunId
 from src.application.conversation.interfaces import ConversationSummarizerInterface
 from src.application.general_chat.tools import ChatToolBuilder
 from src.application.repositories.conversation_repository import ConversationMessageRepository
@@ -30,6 +39,7 @@ from src.application.repositories.conversation_summary_repository import (
     ConversationSummaryRepository,
 )
 from src.domain.agent_run.auth_context import AuthContext
+from src.domain.conversation.analysis_snapshot_policy import AnalysisSnapshotPolicy
 from src.domain.conversation.chart_caption_policy import ChartCaptionPolicy
 from src.domain.conversation.entities import ConversationMessage, ConversationSummary
 from src.domain.conversation.policies import SummarizationPolicy
@@ -63,14 +73,23 @@ _SYSTEM_PROMPT = (
     "- MCP 도구: 등록된 외부 서비스 연동\n"
     "이전 턴에 [생성된 차트: ...] 표기가 있으면 그 차트를 참조하는 "
     "후속 요청을 문맥으로 이해하세요.\n"
+    "[이전 분석 데이터] 블록이 있으면 후속 분석/차트 요청에 그 데이터를 "
+    "재사용하고, 범위를 벗어난 요청이면 도구로 새 데이터를 수집하세요.\n"
     "항상 한국어로 답변하세요."
 )
+
+# analysis-data-continuity D7: General Chat 스냅샷 수집 제외 도구 기본값.
+# 웹 검색 스니펫은 데이터성이 낮아 캡처하지 않는다.
+_DEFAULT_SNAPSHOT_EXCLUDED_TOOLS = frozenset({"tavily_search"})
 
 # chart-context-continuity §3.7: 변환 성공 + message 누락 시 기본 확인 답변
 _CHART_EDIT_DEFAULT_ANSWER = "요청하신 차트 수정을 적용했습니다."
 
 _CHAT_FAILED_CODE = "CHAT_EXEC_FAILED"
 _STEP_NAME_CHAT_AGENT = "chat_agent"  # agent-chat-reasoning-display §10.1
+
+# retrieval-observability D3: ai_run.agent_id sentinel (FK 없음 — V021 확인).
+GENERAL_CHAT_AGENT_ID = "general-chat"
 
 
 def _utcnow() -> datetime:
@@ -119,6 +138,9 @@ class GeneralChatUseCase:
         chart_transformer: ChartTransformerInterface | None = None,
         followup_policy: ChartFollowupPolicy | None = None,
         caption_policy: ChartCaptionPolicy | None = None,
+        snapshot_policy: AnalysisSnapshotPolicy | None = None,
+        snapshot_excluded_tools: frozenset[str] | None = None,
+        tracker: "RunTracker | None" = None,
     ) -> None:
         self._tool_builder = chat_tool_builder
         self._msg_repo = message_repo
@@ -138,6 +160,79 @@ class GeneralChatUseCase:
         self._chart_transformer = chart_transformer
         self._followup_policy = followup_policy or ChartFollowupPolicy()
         self._caption_policy = caption_policy or ChartCaptionPolicy()
+        # analysis-data-continuity: 미주입(None) 시 스냅샷 기능 비활성 (하위호환).
+        self._snapshot_policy = snapshot_policy
+        self._snapshot_excluded_tools = (
+            snapshot_excluded_tools or _DEFAULT_SNAPSHOT_EXCLUDED_TOOLS
+        )
+        # retrieval-observability: 미주입(None) 시 관측성 완전 비활성 (하위호환).
+        self._tracker = tracker
+
+    async def _begin_observability(
+        self, request: GeneralChatRequest, session_id_str: str,
+    ):
+        """retrieval-observability D1~D4: ai_run open + RunContext 세팅.
+
+        agent 경로 `_begin_observability`와 동일 계약 —
+        start_run 실패 시 degraded mode (run 없이 채팅 계속).
+        user_message_id는 D2 deferred attach (start 시점엔 None).
+        반환: (run_id | None, callback | None, ctx_token | None)
+        """
+        if self._tracker is None:
+            return None, None, None
+
+        run_id = RunId(str(uuid.uuid4()))
+        try:
+            await self._tracker.start_run(
+                run_id=run_id,
+                conversation_id=session_id_str,
+                user_id=request.user_id,
+                agent_id=GENERAL_CHAT_AGENT_ID,
+                agent_llm_model_id=self._llm_model.id,
+                user_message_id=None,
+                langgraph_thread_id=session_id_str,
+            )
+        except Exception as e:
+            self._logger.warning(
+                "Observability degraded — start_run failed, continuing",
+                exception=e,
+                session_id=session_id_str,
+            )
+            return None, None, None
+
+        from src.infrastructure.llm.usage_callback import UsageCallback
+
+        callback = UsageCallback(
+            tracker=self._tracker,
+            run_id=run_id,
+            user_id=request.user_id,
+            agent_id=GENERAL_CHAT_AGENT_ID,
+            logger=self._logger,
+        )
+        ctx_token = set_current_run_context(
+            RunContext(
+                run_id=run_id,
+                user_id=request.user_id,
+                agent_id=GENERAL_CHAT_AGENT_ID,
+                callback=callback,
+            )
+        )
+        return run_id, callback, ctx_token
+
+    async def _finish_observability(
+        self, run_id, user_message_id: int | None,
+    ) -> None:
+        """D2 attach + complete_run — 전부 best-effort."""
+        if self._tracker is None or run_id is None:
+            return
+        if isinstance(user_message_id, int):
+            await self._tracker.attach_user_message(run_id, user_message_id)
+        from src.infrastructure.langsmith.trace_extractor import TraceExtractor
+
+        trace_id, run_url = TraceExtractor.extract()
+        await self._tracker.complete_run(
+            run_id, langsmith_trace_id=trace_id, langsmith_run_url=run_url,
+        )
 
     def _create_agent(self, tools: list, auth_ctx: AuthContext | None = None):
         """ReAct 에이전트 생성 (테스트에서 패치 가능).
@@ -186,6 +281,10 @@ class GeneralChatUseCase:
         auth_token = (
             set_current_auth_context(auth_ctx) if auth_ctx is not None else None
         )
+        # retrieval-observability: run 핸들 (chart-edit 분기 이후 D1에서 open)
+        run_id = None
+        callback = None
+        ctx_token = None
 
         try:
             history = await self._msg_repo.find_by_session(user_id, session_id)
@@ -215,6 +314,11 @@ class GeneralChatUseCase:
                 )
                 return
 
+            # retrieval-observability D1: chart-edit 이후, tool build 직전 run open.
+            run_id, callback, ctx_token = await self._begin_observability(
+                request, session_id_str,
+            )
+
             if self._policy.needs_summarization(history):
                 was_summarized = True
                 context = await self._build_summarized_context(
@@ -231,8 +335,12 @@ class GeneralChatUseCase:
             agent = self._create_agent(tools, auth_ctx=auth_ctx)
 
             state = _ChatStreamState()
+            # D4: callback 부착 시 general_chat LLM 호출도 ai_llm_call에 기록.
+            stream_kwargs: dict = {"version": "v2"}
+            if callback is not None:
+                stream_kwargs["config"] = {"callbacks": [callback]}
             async for raw in agent.astream_events(
-                {"messages": context}, version="v2",
+                {"messages": context}, **stream_kwargs,
             ):
                 mapped = self._map_event(raw, seq, session_id_str, state)
                 if mapped is not None:
@@ -245,13 +353,21 @@ class GeneralChatUseCase:
             # chat-chart-persistence D4: 차트 생성 → 저장 순서.
             # (저장이 먼저면 charts를 영속화할 수 없음. 빌드 실패 시 [] graceful)
             charts = await self._maybe_build_charts(
-                request.message, answer, sources, tools_used,
+                request.message, answer, sources, tools_used, history,
             )
 
-            await self._persist_messages(
+            # analysis-data-continuity D7: 도구 산출 데이터 스냅샷 수집.
+            snapshot = self._collect_snapshot(
+                request.message, state.final_messages,
+            )
+            user_message_id = await self._persist_messages(
                 user_id, session_id, request.message, answer, len(history),
                 charts=charts or None,
+                analysis_data=snapshot,
             )
+
+            # retrieval-observability D2: 메시지 commit 후 attach + complete.
+            await self._finish_observability(run_id, user_message_id)
 
             yield self._build_event(
                 seq, ChatEventType.ANSWER_COMPLETED, session_id_str,
@@ -267,20 +383,26 @@ class GeneralChatUseCase:
                 seq, ChatEventType.CHAT_DONE, session_id_str,
                 {"session_id": session_id_str},
             )
-        except asyncio.CancelledError:
+        except asyncio.CancelledError as ce:
             self._logger.warning(
                 "GeneralChatUseCase.stream cancelled", request_id=request_id,
             )
+            if self._tracker is not None and run_id is not None:
+                await self._tracker.fail_run(run_id, ce)
             raise
         except Exception as e:
             self._logger.error(
                 "GeneralChatUseCase failed", exception=e, request_id=request_id,
             )
+            if self._tracker is not None and run_id is not None:
+                await self._tracker.fail_run(run_id, e)
             yield self._build_event(
                 seq, ChatEventType.CHAT_FAILED, session_id_str,
                 {"code": _CHAT_FAILED_CODE, "message": str(e)[:512]},
             )
         finally:
+            if ctx_token is not None:
+                reset_run_context(ctx_token)
             if auth_token is not None:
                 reset_current_auth_context(auth_token)
 
@@ -377,6 +499,48 @@ class GeneralChatUseCase:
             )
             return ChartTransformResult(charts=[], message="")
 
+    # ── analysis-data-continuity (스냅샷 수집·복원) ─────────────────────────
+
+    def _collect_snapshot(
+        self, question: str, final_messages: list,
+    ) -> Optional[dict]:
+        """도구 산출 데이터 수집 → 스냅샷 (Design §3.7).
+
+        제외 목록 도구(웹 검색 등)는 캡처하지 않는다.
+        미주입/실패 시 None — 본 답변 흐름을 막지 않는다 (graceful).
+        """
+        if self._snapshot_policy is None:
+            return None
+        try:
+            items = [
+                {"origin": getattr(m, "name", "") or "", "kind": "tool",
+                 "content": coerce_message_text(getattr(m, "content", None))}
+                for m in final_messages
+                if isinstance(m, ToolMessage)
+                and getattr(m, "name", "") not in self._snapshot_excluded_tools
+            ]
+            return self._snapshot_policy.build_snapshot(question, items)
+        except Exception as e:
+            self._logger.error(
+                "chat analysis snapshot collect failed", exception=e,
+            )
+            return None
+
+    def _snapshot_block(self, history: list[ConversationMessage]) -> str:
+        """세션 최신 스냅샷 → [이전 분석 데이터] 블록 (없으면 "")."""
+        if self._snapshot_policy is None:
+            return ""
+        return self._snapshot_policy.render_context_block(
+            self._snapshot_policy.select_recent(history)
+        )
+
+    def _snapshot_context_messages(
+        self, history: list[ConversationMessage],
+    ) -> list:
+        """스냅샷 블록 → [SystemMessage] (재주입, 비영속 — compact 공존)."""
+        block = self._snapshot_block(history)
+        return [SystemMessage(content=block)] if block else []
+
     # ── chart-builder ───────────────────────────────────────────────────────
 
     async def _maybe_build_charts(
@@ -385,6 +549,7 @@ class GeneralChatUseCase:
         answer: str,
         sources: list[DocumentSource],
         tools_used: list[str],
+        history: list[ConversationMessage],
     ) -> list[dict]:
         """시각화 판단 후 Chart.js config 리스트 생성 (Design §5.2).
 
@@ -398,7 +563,10 @@ class GeneralChatUseCase:
             decision = await self._classify_safe(question, answer)
         if decision != VizDecision.VISUALIZE.value:
             return []
-        context = self._build_chart_context(sources)
+        # analysis-data-continuity D7: sources 없으면 스냅샷을 수치 근거로 사용.
+        context = self._build_chart_context(sources) or self._snapshot_block(
+            history
+        )
         try:
             charts = await self._chart_builder.build(question, answer, context)
         except Exception as e:
@@ -544,12 +712,15 @@ class GeneralChatUseCase:
         self, user_id: UserId, session_id: SessionId,
         user_query: str, answer: str, base_turn: int,
         *, charts: list[dict] | None = None,
-    ) -> None:
+        analysis_data: dict | None = None,
+    ) -> int | None:
         """사용자 메시지 + AI 응답 DB 저장 (기존 execute() §7과 동일 동작).
 
         chat-chart-persistence: charts는 assistant 메시지에만 부속 (D8).
         D7-rev1(chart-context-continuity): full config는 컨텍스트/요약에
         재투입하지 않되, 캡션 1줄은 _to_langchain_message에서 부착한다.
+        analysis-data-continuity: analysis_data는 assistant 메시지에만 부속.
+        retrieval-observability D2: 저장된 user 메시지 id 반환 (ai_run attach용).
         """
         super_agent = AgentId.super()
         user_msg = ConversationMessage(
@@ -557,14 +728,17 @@ class GeneralChatUseCase:
             agent_id=super_agent, role=MessageRole.USER, content=user_query,
             turn_index=TurnIndex(base_turn + 1), created_at=datetime.utcnow(),
         )
-        await self._msg_repo.save(user_msg)
+        saved_user = await self._msg_repo.save(user_msg)
         ai_msg = ConversationMessage(
             id=None, user_id=user_id, session_id=session_id,
             agent_id=super_agent, role=MessageRole.ASSISTANT, content=answer,
             turn_index=TurnIndex(base_turn + 2), created_at=datetime.utcnow(),
             charts=charts,
+            analysis_data=analysis_data,
         )
         await self._msg_repo.save(ai_msg)
+        saved_id = getattr(saved_user, "id", None)
+        return getattr(saved_id, "value", None) if saved_id is not None else None
 
     # ── Conversation helpers (기존 그대로) ──────────────────────────────────
 
@@ -599,6 +773,8 @@ class GeneralChatUseCase:
         messages = [SystemMessage(content=f"[이전 대화 요약]\n{summary_text}")]
         for msg in sorted(recent, key=lambda m: m.turn_index.value):
             messages.append(self._to_langchain_message(msg))
+        # analysis-data-continuity D7: 스냅샷은 전체 히스토리에서 복원 (compact 공존).
+        messages.extend(self._snapshot_context_messages(history))
         messages.append(HumanMessage(content=new_message))
         return messages
 
@@ -611,6 +787,8 @@ class GeneralChatUseCase:
         messages = []
         for msg in sorted(history, key=lambda m: m.turn_index.value):
             messages.append(self._to_langchain_message(msg))
+        # analysis-data-continuity D7: 최신 스냅샷을 새 질문 직전에 재주입.
+        messages.extend(self._snapshot_context_messages(history))
         messages.append(HumanMessage(content=new_message))
         return messages
 

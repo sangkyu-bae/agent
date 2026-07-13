@@ -93,3 +93,15 @@ def make_composer_tracer(tags: Optional[list[str]] = None):
     LangSmith에서 run_name/metadata로 추적한다.
     """
     return _make_project_tracer(COMPOSER_PROJECT_NAME, tags)
+
+
+DOCUMENT_EXTRACTOR_PROJECT_NAME = "document-extractor"
+
+
+def make_document_extractor_tracer(tags: Optional[list[str]] = None):
+    """문서추출기 추적용 per-run tracer — 고정 프로젝트 'document-extractor'.
+
+    슬롯 추출/재추천(SlotExtractor)과 문서 합성(DocumentComposer)의 LLM 호출을
+    run_name(slot-extract/slot-refine/compose:{템플릿명})으로 구분 추적한다.
+    """
+    return _make_project_tracer(DOCUMENT_EXTRACTOR_PROJECT_NAME, tags)

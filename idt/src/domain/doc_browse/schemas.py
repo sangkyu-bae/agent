@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Dict, List, Optional
 
 
@@ -39,6 +40,19 @@ class DocumentMetadata:
     user_id: str
     chunk_count: int
     chunk_strategy: str
+    # kb-management-ui D2: 논리 KB 지정 업로드만 값 보유. None = 일반 업로드.
+    kb_id: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class KbDocumentSummary:
+    """지식베이스 문서 목록 항목 (kb-management-ui D1)."""
+
+    document_id: str
+    filename: str
+    chunk_count: int
+    chunk_strategy: str
+    created_at: Optional[datetime]
 
 
 @dataclass(frozen=True)

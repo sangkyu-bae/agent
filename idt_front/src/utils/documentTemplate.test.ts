@@ -7,6 +7,7 @@ import {
   DRAFT_STORAGE_KEY,
   extractPageWidthPt,
   generateSlotKey,
+  htmlContainsText,
   loadDraftFromSession,
   saveDraftToSession,
   tokenizeHtml,
@@ -93,6 +94,77 @@ describe('tokenizeHtml', () => {
     const result = tokenizeHtml(html, [slot()]);
     expect(result.htmlSkeleton).toContain('<html>');
     expect(result.htmlSkeleton).toContain('{{loan_amount}}');
+  });
+});
+
+// doc-extractor-slot-add-fix FR-01: 수동 슬롯 추가 검증이 tokenizeHtml과
+// 동일한 정규화 매칭 경로를 타는지 확인
+describe('htmlContainsText', () => {
+  it('평문 본문에 있는 텍스트를 찾는다', () => {
+    expect(htmlContainsText('<p>금액: 5억 원</p>', '5억 원')).toBe(true);
+  });
+
+  it('숫자 엔티티로 이스케이프된 한글도 화면 표기 문자열로 찾는다', () => {
+    const html = '<p><span>&#xae08; 500,000,000&#xc6d0;</span></p>';
+    expect(htmlContainsText(html, '금 500,000,000원')).toBe(true);
+  });
+
+  it('여러 span으로 분절된 텍스트도 찾는다', () => {
+    const html = '<p><span>500,</span><span>000,000원</span></p>';
+    expect(htmlContainsText(html, '500,000,000원')).toBe(true);
+  });
+
+  it('연속 공백 차이를 무시하고 찾는다 (white-space:pre)', () => {
+    const html = '<p>금   500,000,000원</p>';
+    expect(htmlContainsText(html, '금 500,000,000원')).toBe(true);
+  });
+
+  it('본문에 없는 텍스트는 false를 반환한다', () => {
+    expect(htmlContainsText('<p>내용 없음</p>', '5억 원')).toBe(false);
+  });
+
+  it('빈 문자열/공백만 있는 텍스트는 false를 반환한다', () => {
+    expect(htmlContainsText('<p>금액</p>', '   ')).toBe(false);
+    expect(htmlContainsText('<p>금액</p>', '')).toBe(false);
+  });
+});
+
+// preview-highlight 후속: PyMuPDF layout 모드는 어절 span 사이에 공백 텍스트
+// 노드가 없어 공백 포함 target의 완전일치가 실패한다 → 공백 무시 폴백 매칭
+describe('공백 무시 폴백 매칭 (layout HTML 대응)', () => {
+  it('span 사이 공백이 없는 문서도 공백 포함 텍스트로 찾는다', () => {
+    const html = '<p><span>담당자:</span><span>김과장</span></p>';
+    expect(htmlContainsText(html, '담당자: 김과장')).toBe(true);
+  });
+
+  it('문서에 공백이 있고 텍스트에 없어도 찾는다', () => {
+    expect(htmlContainsText('<p>담당자: 김과장</p>', '담당자:김과장')).toBe(
+      true,
+    );
+  });
+
+  it('공백 외 문자가 다르면 여전히 false다', () => {
+    expect(htmlContainsText('<p>담당자: 김부장</p>', '담당자: 김과장')).toBe(
+      false,
+    );
+  });
+
+  it('buildPreviewHtml이 layout 분절 문서에서도 하이라이트 mark를 만든다', () => {
+    const html =
+      '<div class="pdf-page"><p><span>담당자:</span><span>김과장</span></p></div>';
+    const result = buildPreviewHtml(html, [
+      slot({ key: 'manager', label: '담당자', sample_value: '담당자: 김과장' }),
+    ]);
+    expect(result.missingSlotKeys).toHaveLength(0);
+    expect(result.html).toContain('data-slot="manager"');
+  });
+
+  it('tokenizeHtml이 공백 표기가 다른 sample_value도 토큰화한다', () => {
+    const result = tokenizeHtml('<p>담당자: 김과장</p>', [
+      slot({ key: 'manager', label: '담당자', sample_value: '담당자:김과장' }),
+    ]);
+    expect(result.usedSlots).toHaveLength(1);
+    expect(result.htmlSkeleton).toContain('{{manager}}');
   });
 });
 

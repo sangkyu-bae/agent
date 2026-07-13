@@ -69,6 +69,7 @@ class ForkAgentUseCase:
                 visibility="private",
                 department_id=None,
                 temperature=source.temperature,
+                max_iterations=source.max_iterations,
                 forked_from=source_agent_id,
                 forked_at=now,
                 created_at=now,

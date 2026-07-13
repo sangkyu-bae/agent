@@ -23,9 +23,11 @@ class FakeLLM:
     def __init__(self, contents: list[str]):
         self._contents = list(contents)
         self.call_count = 0
+        self.configs: list[dict | None] = []
 
-    async def ainvoke(self, messages):
+    async def ainvoke(self, messages, config=None):
         self.call_count += 1
+        self.configs.append(config)
         response = MagicMock()
         response.content = self._contents.pop(0)
         return response
@@ -181,6 +183,19 @@ class TestCompose:
         composer, _ = _composer(adapter=FakeAdapter(error=McpConversionError("down")))
         with pytest.raises(McpConversionError):
             await _compose(composer, llm)
+
+    @pytest.mark.asyncio
+    async def test_llm_called_with_trace_config(self):
+        """LangSmith 추적: run_name 'compose:{템플릿명}' + request_id/template_id."""
+        llm = FakeLLM([json.dumps({"loan_amount": "5억", "opinion": "소견"})])
+        composer, _ = _composer()
+        await _compose(composer, llm)
+        config = llm.configs[0]
+        assert config is not None
+        assert config["run_name"] == "compose:여신심의서"
+        assert "document-extractor" in config["tags"]
+        assert config["metadata"]["request_id"] == "req"
+        assert config["metadata"]["template_id"]
 
     @pytest.mark.asyncio
     async def test_docx_output_filename(self):

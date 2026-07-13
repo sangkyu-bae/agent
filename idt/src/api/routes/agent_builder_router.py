@@ -29,11 +29,6 @@ from src.application.agent_builder.schemas import (
     ForkAgentResponse,
     ForkStatsResponse,
     GetAgentResponse,
-    InterviewAnswerRequest,
-    InterviewAnswerResponse,
-    InterviewFinalizeRequest,
-    InterviewStartRequest,
-    InterviewStartResponse,
     ListAgentsRequest,
     ListAgentsResponse,
     ListMyAgentsResponse,
@@ -71,10 +66,6 @@ def get_run_agent_use_case():
 
 
 def get_get_agent_use_case():
-    raise NotImplementedError
-
-
-def get_interview_use_case():
     raise NotImplementedError
 
 
@@ -261,9 +252,11 @@ async def update_agent(
             viewer_user_id=str(current_user.id),
             viewer_role=current_user.role.value,
         )
-    except PermissionError:
+    except PermissionError as e:
+        # kb-rag-filter Act-1: KB 읽기권한 거부 등 원인별 메시지를 그대로 노출
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="수정 권한 없음"
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e) or "수정 권한 없음",
         )
     except ValueError as e:
         msg = str(e)
@@ -404,57 +397,6 @@ async def delete_agent(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=str(e)
         )
-
-
-# ── Human-in-the-Loop 인터뷰 엔드포인트 ──────────────────────────
-
-
-@router.post("/interview", response_model=InterviewStartResponse, status_code=201)
-async def start_interview(
-    body: InterviewStartRequest,
-    use_case=Depends(get_interview_use_case),
-):
-    """인터뷰 시작 — LLM이 에이전트 설계를 위한 명확화 질문 생성."""
-    request_id = str(uuid.uuid4())
-    return await use_case.start(body, request_id)
-
-
-@router.post(
-    "/interview/{session_id}/answer",
-    response_model=InterviewAnswerResponse,
-)
-async def answer_interview(
-    session_id: str,
-    body: InterviewAnswerRequest,
-    use_case=Depends(get_interview_use_case),
-):
-    """질문 답변 제출 — 추가 질문 반환 또는 에이전트 초안 미리보기 반환."""
-    request_id = str(uuid.uuid4())
-    try:
-        return await use_case.answer(session_id, body, request_id)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-
-
-@router.post(
-    "/interview/{session_id}/finalize",
-    response_model=CreateAgentResponse,
-    status_code=201,
-)
-async def finalize_interview(
-    session_id: str,
-    body: InterviewFinalizeRequest,
-    use_case=Depends(get_interview_use_case),
-):
-    """에이전트 초안 확정 — 시스템 프롬프트 수정(선택) 후 DB 저장."""
-    request_id = str(uuid.uuid4())
-    try:
-        return await use_case.finalize(session_id, body, request_id)
-    except ValueError as e:
-        msg = str(e)
-        if "세션" in msg:
-            raise HTTPException(status_code=404, detail=msg)
-        raise HTTPException(status_code=422, detail=msg)
 
 
 # ── 구독 / 포크 엔드포인트 ──────────────────────────────────────

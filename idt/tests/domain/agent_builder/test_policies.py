@@ -2,6 +2,7 @@
 import pytest
 
 from src.domain.agent_builder.policies import AgentBuilderPolicy, UpdateAgentPolicy
+from src.domain.agent_builder.schemas import WorkerDefinition
 
 
 class TestAgentBuilderPolicy:
@@ -13,13 +14,29 @@ class TestAgentBuilderPolicy:
     def test_validate_tool_count_max_passes(self):
         AgentBuilderPolicy.validate_tool_count(5)  # 예외 없음
 
-    def test_validate_tool_count_zero_raises(self):
-        with pytest.raises(ValueError, match="최소"):
-            AgentBuilderPolicy.validate_tool_count(0)
+    def test_validate_tool_count_zero_passes(self):
+        # agent-instruction-required: 도구 0개 허용 (하한 제거)
+        AgentBuilderPolicy.validate_tool_count(0)  # 예외 없음
 
     def test_validate_tool_count_over_max_raises(self):
         with pytest.raises(ValueError, match="최대"):
             AgentBuilderPolicy.validate_tool_count(6)
+
+    # ── validate_worker_count ───────────────────────────────────
+
+    def test_validate_worker_count_empty_passes(self):
+        # agent-instruction-required: 워커 0개 허용 (하한 제거)
+        AgentBuilderPolicy.validate_worker_count([])  # 예외 없음
+
+    def test_validate_worker_count_over_max_raises(self):
+        workers = [
+            WorkerDefinition(
+                tool_id=f"tool_{i}", worker_id=f"w_{i}", description="d",
+            )
+            for i in range(7)
+        ]
+        with pytest.raises(ValueError, match="최대"):
+            AgentBuilderPolicy.validate_worker_count(workers)
 
     # ── validate_system_prompt ──────────────────────────────────
 
@@ -32,6 +49,15 @@ class TestAgentBuilderPolicy:
     def test_validate_system_prompt_over_limit_raises(self):
         with pytest.raises(ValueError, match="4000"):
             AgentBuilderPolicy.validate_system_prompt("a" * 4001)
+
+    def test_validate_system_prompt_empty_raises(self):
+        # agent-instruction-required: 빈 지침 거부 (자동생성 제거)
+        with pytest.raises(ValueError, match="비어"):
+            AgentBuilderPolicy.validate_system_prompt("")
+
+    def test_validate_system_prompt_whitespace_only_raises(self):
+        with pytest.raises(ValueError, match="비어"):
+            AgentBuilderPolicy.validate_system_prompt("   \n\t  ")
 
     # ── validate_name ───────────────────────────────────────────
 
@@ -65,3 +91,12 @@ class TestUpdateAgentPolicy:
 
     def test_validate_update_none_system_prompt_passes(self):
         UpdateAgentPolicy.validate_update(status="active", system_prompt=None)
+
+    def test_validate_update_empty_system_prompt_raises(self):
+        # agent-instruction-required: 빈 문자열은 '변경 안 함'(None)과 구분되어 거부
+        with pytest.raises(ValueError, match="비어"):
+            UpdateAgentPolicy.validate_update(status="active", system_prompt="")
+
+    def test_validate_update_whitespace_system_prompt_raises(self):
+        with pytest.raises(ValueError, match="비어"):
+            UpdateAgentPolicy.validate_update(status="active", system_prompt="   ")

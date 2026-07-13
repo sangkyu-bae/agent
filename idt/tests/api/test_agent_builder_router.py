@@ -12,19 +12,15 @@ from src.api.routes.agent_builder_router import (
     get_update_agent_use_case,
     get_run_agent_use_case,
     get_get_agent_use_case,
-    get_interview_use_case,
     get_load_mcp_tools_use_case,
     get_list_agents_use_case,
     get_delete_agent_use_case,
 )
 from src.application.agent_builder.schemas import (
-    AgentDraftPreview,
     AgentSummary,
     CreateAgentResponse,
     ListAgentsResponse,
     GetAgentResponse,
-    InterviewAnswerResponse,
-    InterviewStartResponse,
     RunAgentResponse,
     UpdateAgentResponse,
     WorkerInfo,
@@ -108,13 +104,28 @@ def _make_fake_user():
     )
 
 
+def _make_fake_auth_context():
+    from src.domain.agent_run.auth_context import AuthContext
+    return AuthContext(
+        user_id=1,
+        display_name="테스트 사용자",
+        role="admin",
+        primary_department_id=None,
+        primary_department_name=None,
+        department_ids=(),
+        department_names=(),
+        permissions=frozenset(),
+    )
+
+
 def _make_client(overrides: dict) -> TestClient:
     from fastapi import FastAPI
-    from src.interfaces.dependencies.auth import get_current_user
+    from src.interfaces.dependencies.auth import get_current_user, get_auth_context
 
     app = FastAPI()
     app.include_router(router)
     app.dependency_overrides[get_current_user] = _make_fake_user
+    app.dependency_overrides[get_auth_context] = _make_fake_auth_context
     for dep, override in overrides.items():
         app.dependency_overrides[dep] = override
     return TestClient(app)
@@ -131,13 +142,14 @@ def _make_mock_load_mcp_uc(mcp_registrations=None):
 
 
 class TestListTools:
-    def test_list_tools_returns_200_and_four_tools(self):
+    def test_list_tools_returns_200_and_internal_tools_only(self):
+        from src.domain.agent_builder.tool_registry import TOOL_REGISTRY
         mock_uc = _make_mock_load_mcp_uc()
         client = _make_client({get_load_mcp_tools_use_case: lambda: mock_uc})
         resp = client.get("/api/v1/agents/tools")
         assert resp.status_code == 200
         data = resp.json()
-        assert len(data["tools"]) == 4  # 내부 도구 4개, MCP 없음
+        assert len(data["tools"]) == len(TOOL_REGISTRY)  # 내부 도구만, MCP 없음
 
     def test_each_tool_has_required_fields(self):
         mock_uc = _make_mock_load_mcp_uc()
@@ -162,7 +174,8 @@ class TestListTools:
         resp = client.get("/api/v1/agents/tools")
         assert resp.status_code == 200
         tools = resp.json()["tools"]
-        assert len(tools) == 5  # 내부 4 + MCP 1
+        from src.domain.agent_builder.tool_registry import TOOL_REGISTRY
+        assert len(tools) == len(TOOL_REGISTRY) + 1  # 내부 도구 + MCP 1
         tool_ids = [t["tool_id"] for t in tools]
         assert "mcp_mcp-uuid-1" in tool_ids
 
@@ -204,6 +217,22 @@ class TestCreateAgent:
             "user_id": "user-1",
         })
         assert resp.status_code == 422
+
+    def test_create_agent_empty_system_prompt_returns_422(self):
+        # agent-instruction-required: 빈 지침 → policy ValueError → 422
+        mock_uc = MagicMock()
+        mock_uc.execute = AsyncMock(
+            side_effect=ValueError("지침(system_prompt)은 비어 있을 수 없습니다.")
+        )
+        client = _make_client({get_create_agent_use_case: lambda: mock_uc})
+
+        resp = client.post("/api/v1/agents", json={
+            "user_request": "요청",
+            "name": "지침없는봇",
+            "user_id": "user-1",
+        })
+        assert resp.status_code == 422
+        assert "비어" in resp.json()["detail"]
 
 
 # ── GET /agents/{id} ──────────────────────────────────────────────
@@ -316,120 +345,31 @@ class TestRunAgent:
         assert resp.status_code == 404
 
 
-# ── POST /agents/interview ────────────────────────────────────────
+# ── 인터뷰 엔드포인트 제거 확인 (agent-instruction-required) ──────────
 
 
-class TestStartInterview:
-    def test_start_interview_returns_201_with_session_id(self):
-        mock_uc = MagicMock()
-        mock_uc.start = AsyncMock(
-            return_value=InterviewStartResponse(
-                session_id="sess-1",
-                questions=["어떤 주제?", "저장 경로?", "몇 개?"],
-            )
-        )
-        client = _make_client({get_interview_use_case: lambda: mock_uc})
-
+class TestInterviewEndpointsRemoved:
+    def test_start_interview_removed(self):
+        # 라우트 삭제로 /interview는 더 이상 POST를 받지 않는다.
+        # (단일 세그먼트라 GET /{agent_id}와 경로가 겹쳐 405, 그 외 404 — 모두 '제거됨'을 의미)
+        client = _make_client({})
         resp = client.post("/api/v1/agents/interview", json={
             "user_request": "AI 뉴스 수집 에이전트 만들어줘",
             "name": "AI 뉴스 수집기",
             "user_id": "user-1",
         })
-        assert resp.status_code == 201
-        data = resp.json()
-        assert data["session_id"] == "sess-1"
-        assert len(data["questions"]) == 3
+        assert resp.status_code in (404, 405)
 
-    def test_start_interview_missing_fields_returns_422(self):
-        client = _make_client({get_interview_use_case: lambda: MagicMock()})
-        resp = client.post("/api/v1/agents/interview", json={"user_request": "AI 뉴스"})
-        assert resp.status_code == 422
-
-
-# ── POST /agents/interview/{session_id}/answer ────────────────────
-
-
-class TestAnswerInterview:
-    def test_answer_returns_reviewing_status(self):
-        mock_uc = MagicMock()
-        mock_uc.answer = AsyncMock(
-            return_value=InterviewAnswerResponse(
-                session_id="sess-1",
-                status="reviewing",
-                preview=AgentDraftPreview(
-                    tool_ids=["tavily_search"],
-                    workers=[WorkerInfo(tool_id="tavily_search", worker_id="search_worker",
-                                        description="검색", sort_order=0)],
-                    flow_hint="search 후 export",
-                    system_prompt="당신은 AI 뉴스 수집 에이전트입니다.",
-                ),
-            )
-        )
-        client = _make_client({get_interview_use_case: lambda: mock_uc})
-
+    def test_answer_interview_returns_404(self):
+        client = _make_client({})
         resp = client.post("/api/v1/agents/interview/sess-1/answer",
-                           json={"answers": ["OpenAI 뉴스", "/data/news", "10개"]})
-        assert resp.status_code == 200
-        assert resp.json()["status"] == "reviewing"
-
-    def test_answer_returns_questioning_status(self):
-        mock_uc = MagicMock()
-        mock_uc.answer = AsyncMock(
-            return_value=InterviewAnswerResponse(
-                session_id="sess-1",
-                status="questioning",
-                questions=["저장 경로는?", "몇 개?"],
-            )
-        )
-        client = _make_client({get_interview_use_case: lambda: mock_uc})
-
-        resp = client.post("/api/v1/agents/interview/sess-1/answer",
-                           json={"answers": ["OpenAI 뉴스만"]})
-        assert resp.status_code == 200
-        assert resp.json()["status"] == "questioning"
-
-    def test_answer_session_not_found_returns_404(self):
-        mock_uc = MagicMock()
-        mock_uc.answer = AsyncMock(side_effect=ValueError("인터뷰 세션을 찾을 수 없습니다"))
-        client = _make_client({get_interview_use_case: lambda: mock_uc})
-
-        resp = client.post("/api/v1/agents/interview/bad-id/answer",
                            json={"answers": ["답변"]})
         assert resp.status_code == 404
 
-
-# ── POST /agents/interview/{session_id}/finalize ──────────────────
-
-
-class TestFinalizeInterview:
-    def test_finalize_returns_201(self):
-        mock_uc = MagicMock()
-        mock_uc.finalize = AsyncMock(return_value=_make_create_response())
-        client = _make_client({get_interview_use_case: lambda: mock_uc})
-
+    def test_finalize_interview_returns_404(self):
+        client = _make_client({})
         resp = client.post("/api/v1/agents/interview/sess-1/finalize", json={})
-        assert resp.status_code == 201
-        assert "agent_id" in resp.json()
-
-    def test_finalize_session_not_found_returns_404(self):
-        mock_uc = MagicMock()
-        mock_uc.finalize = AsyncMock(
-            side_effect=ValueError("인터뷰 세션을 찾을 수 없습니다: sess-99")
-        )
-        client = _make_client({get_interview_use_case: lambda: mock_uc})
-
-        resp = client.post("/api/v1/agents/interview/sess-99/finalize", json={})
         assert resp.status_code == 404
-
-    def test_finalize_draft_not_ready_returns_422(self):
-        mock_uc = MagicMock()
-        mock_uc.finalize = AsyncMock(
-            side_effect=ValueError("아직 초안이 생성되지 않았습니다. 먼저 답변을 완료해주세요.")
-        )
-        client = _make_client({get_interview_use_case: lambda: mock_uc})
-
-        resp = client.post("/api/v1/agents/interview/sess-1/finalize", json={})
-        assert resp.status_code == 422
 
 
 # ── GET /agents (list) ────────────────────────────────────────────

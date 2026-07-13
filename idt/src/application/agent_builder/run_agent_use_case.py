@@ -18,9 +18,16 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from typing import Any, AsyncIterator, Optional
 
+from langchain_core.messages import AIMessage
+from langgraph.errors import GraphRecursionError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.application.agent_builder.schemas import RunAgentRequest, RunAgentResponse
+from src.application.agent_builder.search_pipeline import (
+    format_search_result,
+    is_search_result,
+    is_worker_output,
+)
 from src.application.agent_builder.supervisor_nodes import build_initial_state
 from src.application.agent_builder.workflow_compiler import WorkflowCompiler
 from src.application.agent_run.auth_context import (
@@ -43,7 +50,11 @@ from src.application.repositories.conversation_summary_repository import (
     ConversationSummaryRepository,
 )
 from src.domain.agent_builder.interfaces import AgentDefinitionRepositoryInterface
-from src.domain.agent_builder.policies import AccessCheckInput, VisibilityPolicy
+from src.domain.agent_builder.policies import (
+    AccessCheckInput,
+    IterationLimitPolicy,
+    VisibilityPolicy,
+)
 from src.domain.agent_skill.interfaces import AgentSkillRepositoryInterface
 from src.domain.agent_skill.policies import InjectableSkill, SkillInjectionPolicy
 from src.domain.agent_builder.schemas import (
@@ -57,6 +68,7 @@ from src.domain.agent_run.value_objects import (
     NodeType,
     RunId,
 )
+from src.domain.conversation.analysis_snapshot_policy import AnalysisSnapshotPolicy
 from src.domain.conversation.entities import ConversationMessage, ConversationSummary
 from src.domain.conversation.policies import SummarizationPolicy
 from src.domain.conversation.value_objects import (
@@ -108,8 +120,12 @@ class _StreamState:
     node_start_ts: dict[str, datetime] = field(default_factory=dict)
     tool_start_ts: dict[str, datetime] = field(default_factory=dict)
     final_messages: list = field(default_factory=list)
+    # agent-recursion-limit D7: supervisor 가드의 limit_reached 캡처 → payload 플래그.
+    limit_reached: bool = False
     # supervisor-chart-builder-node: chart_builder 노드가 생성한 Chart.js config.
     charts: list = field(default_factory=list)
+    # analysis-source-preservation: analysis_node가 방출한 원천 데이터 채널.
+    analysis_source: list = field(default_factory=list)
 
 
 def _node_type_for(name: str) -> NodeType:
@@ -138,6 +154,11 @@ def _collect_node_names(workflow: WorkflowDefinition) -> set[str]:
     return names
 
 
+def _has_excel_attachment(attachments: list[dict] | None) -> bool:
+    """analysis-data-continuity §3.3: 엑셀 첨부 턴 판정 (excel 항목 수집 조건)."""
+    return any(a.get("type") == "excel" for a in attachments or [])
+
+
 class RunAgentUseCase:
     def __init__(
         self,
@@ -152,6 +173,7 @@ class RunAgentUseCase:
         tracker: Optional[RunTracker] = None,
         session_factory: Optional[async_sessionmaker[AsyncSession]] = None,
         agent_skill_repo: Optional[AgentSkillRepositoryInterface] = None,
+        snapshot_policy: Optional[AnalysisSnapshotPolicy] = None,
     ) -> None:
         self._repository = repository
         self._llm_model_repository = llm_model_repository
@@ -168,6 +190,9 @@ class RunAgentUseCase:
         # AGENT-OBS-001 fix: user_message는 별도 세션에서 즉시 commit해야
         # Tracker의 별도 세션 ai_run INSERT가 FK 락 대기에 빠지지 않는다.
         self._session_factory = session_factory
+        # analysis-data-continuity: 분석 데이터 스냅샷 영속·재주입 정책.
+        # None이면 기능 비활성 → 기존 동작 100% 유지 (하위호환).
+        self._snapshot_policy = snapshot_policy
 
     # ── Public API ─────────────────────────────────────────────────────
 
@@ -245,13 +270,22 @@ class RunAgentUseCase:
                     yield extra
 
             answer, tools_used = self._parse_result({"messages": state.final_messages})
+            # analysis-data-continuity D3: 턴의 분석 원천 데이터 스냅샷 수집.
+            # analysis-source-preservation: 엑셀 원천(state.analysis_source) 병합.
+            snapshot = self._collect_snapshot(
+                request, state.final_messages, state.analysis_source,
+            )
             # chat-chart-persistence D5: 차트 페이로드를 메시지와 함께 영속화.
             # 빈 리스트는 None으로 저장 (D2) — 재진입 시 이력 API가 복원.
             await self._save_assistant_message(
                 answer, request.user_id, session_id, agent_id,
                 charts=state.charts or None,
+                analysis_data=snapshot,
             )
             answer_payload: dict = {"answer": answer, "tools_used": tools_used}
+            # agent-recursion-limit D7: True일 때만 부착 (charts 선례와 동형).
+            if state.limit_reached:
+                answer_payload["limit_reached"] = True
             if state.charts:
                 answer_payload["charts"] = state.charts
             yield self._build_event(
@@ -282,6 +316,15 @@ class RunAgentUseCase:
             if self._tracker is not None and run_id is not None:
                 await self._tracker.fail_run(run_id, ce)
             raise
+        except GraphRecursionError as gre:
+            # agent-recursion-limit D9: 파생 recursion_limit(D3)으로 도달 확률은
+            # 낮지만, 발동 시에도 축적 메시지로 강등 답변을 시도한다 (오류 대신 답변).
+            async for ev in self._degraded_completion_events(
+                gre, seq=seq, run_id=run_id, state=state,
+                request=request, session_id=session_id,
+                agent_id=agent_id, request_id=request_id,
+            ):
+                yield ev
         except Exception as e:
             self._logger.error(
                 "RunAgentUseCase.stream failed",
@@ -345,6 +388,64 @@ class RunAgentUseCase:
             request_id=request_id,
             session_id=session_id,
             run_id=run_id_str,
+        )
+
+    async def _degraded_completion_events(
+        self,
+        error: GraphRecursionError,
+        *,
+        seq: _SeqCounter,
+        run_id: Optional[RunId],
+        state: _StreamState,
+        request: RunAgentRequest,
+        session_id: str,
+        agent_id: str,
+        request_id: str,
+    ) -> AsyncIterator[AgentRunEvent]:
+        """GraphRecursionError 안전망 (agent-recursion-limit D9).
+
+        축적 메시지(state.final_messages)로 답변을 구성할 수 있으면 정상 완료
+        시퀀스(ANSWER_COMPLETED[limit_reached]→RUN_COMPLETED)로 강등 처리하고,
+        불가능할 때만 기존 RUN_FAILED 경로를 따른다.
+        """
+        self._logger.warning(
+            "RunAgentUseCase.stream recursion limit hit — degraded completion",
+            request_id=request_id, error=str(error)[:256],
+        )
+        answer, tools_used = self._parse_result({"messages": state.final_messages})
+        if not answer:
+            if self._tracker is not None and run_id is not None:
+                await self._tracker.fail_run(run_id, error)
+            yield self._build_event(
+                seq, AgentRunEventType.RUN_FAILED, run_id,
+                {"code": _RUN_FAILED_CODE_GRAPH, "message": str(error)[:512]},
+            )
+            return
+
+        snapshot = self._collect_snapshot(
+            request, state.final_messages, state.analysis_source,
+        )
+        await self._save_assistant_message(
+            answer, request.user_id, session_id, agent_id,
+            charts=state.charts or None,
+            analysis_data=snapshot,
+        )
+        yield self._build_event(
+            seq, AgentRunEventType.ANSWER_COMPLETED, run_id,
+            {"answer": answer, "tools_used": tools_used, "limit_reached": True},
+        )
+        run_url: Optional[str] = None
+        if self._tracker is not None and run_id is not None:
+            trace_id, run_url = TraceExtractor.extract()
+            await self._tracker.complete_run(
+                run_id, langsmith_trace_id=trace_id, langsmith_run_url=run_url,
+            )
+        yield self._build_event(
+            seq, AgentRunEventType.RUN_COMPLETED, run_id,
+            {
+                "run_id": run_id.value if run_id is not None else None,
+                "langsmith_run_url": run_url,
+            },
         )
 
     # ── Stream helpers ─────────────────────────────────────────────────
@@ -453,7 +554,8 @@ class RunAgentUseCase:
 
         workflow = agent.to_workflow_definition()
         workflow = await self._inject_attached_skills(workflow, agent, request_id)
-        sv_config = SupervisorConfig()
+        # agent-recursion-limit D1: 에이전트별 반복 한도를 단일 소스로 주입.
+        sv_config = SupervisorConfig(max_iterations=agent.max_iterations)
         graph = await self._compiler.compile(
             workflow=workflow,
             llm_model=llm_model,
@@ -551,6 +653,11 @@ class RunAgentUseCase:
             "run_name": agent.name,
             "tags": tags,
             "metadata": metadata,
+            # agent-recursion-limit D3: 시스템 recursion_limit(기본 25 스텝)이
+            # state 가드보다 먼저 터지지 않도록 반복 한도에서 파생 설정.
+            "recursion_limit": IterationLimitPolicy.derive_recursion_limit(
+                agent.max_iterations
+            ),
         }
         if callbacks:
             config["callbacks"] = callbacks
@@ -616,10 +723,16 @@ class RunAgentUseCase:
         output = data.get("output")
         if isinstance(output, dict) and "messages" in output:
             state.final_messages = list(output["messages"])
+        # agent-recursion-limit D7: supervisor 가드의 limit_reached 캡처 (latch).
+        if isinstance(output, dict) and output.get("limit_reached"):
+            state.limit_reached = True
         # supervisor-chart-builder-node: chart_builder 노드 output의 charts 캡처.
         # truthy일 때만 갱신 → 빈 배열이 유효 charts를 덮어쓰지 않음.
         if isinstance(output, dict) and output.get("charts"):
             state.charts = list(output["charts"])
+        # analysis-source-preservation: analysis_node output의 원천 데이터 캡처.
+        if isinstance(output, dict) and output.get("analysis_source"):
+            state.analysis_source = list(output["analysis_source"])
 
         if name not in node_names:
             return None
@@ -713,6 +826,83 @@ class RunAgentUseCase:
             {"chunk": chunk_text, "node_name": node_name},
         )
 
+    # ── analysis-data-continuity (스냅샷 수집·재주입) ────────────────────
+
+    def _collect_snapshot(
+        self, request: RunAgentRequest, final_messages: list,
+        analysis_source: list | None = None,
+    ) -> Optional[dict]:
+        """턴의 분석 원천 데이터 수집 → 스냅샷 (Design §3.3).
+
+        analysis-source-preservation: 엑셀 파싱 원천(analysis_source)을
+        raw_source 항목으로 병합 (직렬화·샘플링은 policy가 전담).
+        미주입/수집 실패 시 None — 본 답변 흐름을 막지 않는다 (graceful).
+        """
+        if self._snapshot_policy is None:
+            return None
+        try:
+            items = self._snapshot_items(request, final_messages)
+            for src in analysis_source or []:
+                body = self._snapshot_policy.render_raw_source(
+                    src.get("excel") or {}
+                )
+                if body:
+                    items.append({
+                        "origin": src.get("origin", ""),
+                        "kind": "raw_source",
+                        "content": body,
+                    })
+            return self._snapshot_policy.build_snapshot(request.query, items)
+        except Exception as e:
+            self._logger.error("analysis snapshot collect failed", exception=e)
+            return None
+
+    def _snapshot_items(
+        self, request: RunAgentRequest, final_messages: list,
+    ) -> list[dict]:
+        """search: 검색결과 전부(재주입분 제외) / excel: 엑셀 첨부 턴의 워커 산출."""
+        policy = self._snapshot_policy
+        items = [
+            {"origin": getattr(m, "name", ""), "kind": "search",
+             "content": getattr(m, "content", "")}
+            for m in final_messages
+            if is_search_result(m)
+            and not policy.is_reinjected(getattr(m, "content", ""))
+        ]
+        if _has_excel_attachment(getattr(request, "attachments", None)):
+            items += [
+                {"origin": getattr(m, "name", ""), "kind": "excel",
+                 "content": getattr(m, "content", "")}
+                for m in final_messages
+                if is_worker_output(m) and not is_search_result(m)
+            ]
+        return items
+
+    def _inject_snapshot_messages(
+        self, existing: list[ConversationMessage], messages: list,
+    ) -> list:
+        """최신 스냅샷을 검색결과 규약 AIMessage로 새 user 직전에 삽입 (Design §3.4).
+
+        - 세션 전체 히스토리 스캔(select_recent) — 요약 발동과 무관 (compact 공존)
+        - 재주입 메시지는 저장하지 않음 (컨텍스트 빌드 산출물)
+        """
+        if self._snapshot_policy is None:
+            return messages
+        injected = [
+            AIMessage(
+                name=item.get("origin", ""),
+                content=format_search_result(
+                    item.get("origin", ""),
+                    self._snapshot_policy.render_reinjection_body(snap, item),
+                ),
+            )
+            for snap in self._snapshot_policy.select_recent(existing)
+            for item in snap.get("items", [])
+        ]
+        if not injected:
+            return messages
+        return [*messages[:-1], *injected, messages[-1]]
+
     # ── Conversation helpers (기존 그대로) ──────────────────────────────
 
     async def _build_messages(
@@ -721,7 +911,7 @@ class RunAgentUseCase:
         user_id: str,
         session_id: str,
         has_session: bool,
-    ) -> list[dict]:
+    ) -> list:
         if not has_session:
             return [{"role": "user", "content": query}]
 
@@ -733,15 +923,16 @@ class RunAgentUseCase:
             return [{"role": "user", "content": query}]
 
         if self._policy.needs_summarization(existing):
-            return await self._build_summarized_context(
+            messages = await self._build_summarized_context(
                 existing, query, user_id, session_id
             )
-
-        messages: list[dict] = []
-        for msg in sorted(existing, key=lambda m: m.turn_index.value):
-            messages.append({"role": msg.role.value, "content": msg.content})
-        messages.append({"role": "user", "content": query})
-        return messages
+        else:
+            messages = [
+                {"role": msg.role.value, "content": msg.content}
+                for msg in sorted(existing, key=lambda m: m.turn_index.value)
+            ]
+            messages.append({"role": "user", "content": query})
+        return self._inject_snapshot_messages(existing, messages)
 
     async def _build_summarized_context(
         self,
@@ -838,11 +1029,14 @@ class RunAgentUseCase:
         agent_id: str,
         *,
         charts: Optional[list[dict]] = None,
+        analysis_data: Optional[dict] = None,
     ) -> None:
         """assistant message 저장 (user message 이후 turn_index 자동 계산).
 
         chat-chart-persistence: charts는 표시 전용 메타 — LLM 컨텍스트(_build_messages)
         에는 재투입하지 않는다 (Design D7).
+        analysis-data-continuity: analysis_data는 다음 턴 컨텍스트에 재주입되는
+        데이터 스냅샷 (요약 입력에는 미포함).
         """
         existing = await self._message_repo.find_by_session(
             UserId(user_id), SessionId(session_id)
@@ -858,6 +1052,7 @@ class RunAgentUseCase:
             turn_index=TurnIndex(base_turn + 1),
             created_at=datetime.now(timezone.utc),
             charts=charts,
+            analysis_data=analysis_data,
         )
         await self._message_repo.save(assistant_msg)
 

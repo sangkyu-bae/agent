@@ -48,7 +48,8 @@ class TestBuildInitialState:
             available_workers=["worker_0", "worker_1"],
         )
         assert state["iteration_count"] == 0
-        assert state["max_iterations"] == 10
+        # agent-recursion-limit D1: SupervisorConfig 기본 한도 25
+        assert state["max_iterations"] == 25
         assert state["token_usage"] == 0
         assert state["token_limit"] == 8000
         assert state["available_workers"] == ["worker_0", "worker_1"]

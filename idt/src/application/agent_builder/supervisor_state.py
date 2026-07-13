@@ -24,6 +24,11 @@ class SupervisorState(TypedDict):
     forced_worker: str
     skipped_workers: list[str]
 
+    # agent-recursion-limit D5: 반복 한도 도달 플래그.
+    # supervisor 가드가 세우면 route_to_worker_or_final이 final_answer로 우회하고
+    # final_answer는 안내 지시를, run_agent_use_case는 payload 플래그를 부착한다.
+    limit_reached: bool
+
     quality_gate_result: str
 
     # analysis-node-agent: 분석 노드 입력용 첨부(엑셀 파일 경로 등).
@@ -41,3 +46,8 @@ class SupervisorState(TypedDict):
     # supervisor-chart-builder-node: 시각화 처리 완료 플래그.
     # True면 skip_workers가 분석 워커를 제외해 supervisor 재라우팅을 결정적으로 차단.
     visualization_done: bool
+
+    # analysis-source-preservation: 엑셀 분기 원천 데이터(파싱 dict) 전달 채널.
+    # [{"origin": worker_id, "kind": "raw_source", "excel": ExcelData.to_dict()}]
+    # charts 채널 동형(replace 시맨틱) — run_agent_use_case가 스냅샷 캡처에 소비.
+    analysis_source: list[dict]

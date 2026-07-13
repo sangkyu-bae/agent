@@ -27,7 +27,10 @@ from src.application.agent_builder.supervisor_nodes import (
 from src.application.agent_builder.supervisor_state import SupervisorState
 from src.application.agent_run.auth_context import get_current_auth_context
 from src.application.agent_run.prompt_rendering import render_user_context_block
-from src.application.visualization.analysis_prompt import ANALYSIS_OUTPUT_GUIDE
+from src.application.visualization.analysis_prompt import (
+    ANALYSIS_OUTPUT_GUIDE,
+    DATA_GAP_GUIDE,
+)
 from src.application.visualization.chart_builder_node import (
     create_chart_builder_node,
 )
@@ -55,6 +58,7 @@ from src.domain.agent_run.auth_context import AuthContext
 from src.domain.agent_builder.interfaces import AgentDefinitionRepositoryInterface
 from src.domain.agent_builder.policies import (
     CircularReferencePolicy,
+    IterationLimitPolicy,
     NestingDepthPolicy,
     QualityGatePolicy,
     SearchPipelinePolicy,
@@ -318,10 +322,13 @@ class WorkflowCompiler:
                 "supervisor",
                 _wrap_step("supervisor", NodeType.SUPERVISOR, supervisor_fn),
             )
-            graph.add_node(
-                "quality_gate",
-                _wrap_step("quality_gate", NodeType.GATE, quality_gate_fn),
-            )
+            # agent-instruction-required: 워커 0개(순수 대화형)면 quality_gate로
+            # 향하는 진입 간선이 없어 고아 노드가 된다 → 워커가 있을 때만 등록.
+            if worker_map:
+                graph.add_node(
+                    "quality_gate",
+                    _wrap_step("quality_gate", NodeType.GATE, quality_gate_fn),
+                )
 
             for worker_id, worker_agent in worker_map.items():
                 if worker_id in function_node_ids:
@@ -420,10 +427,14 @@ class WorkflowCompiler:
                 # final-answer-node D3: 워커별 quality_gate를 이미 통과했으므로 END 직행.
                 graph.add_edge("final_answer", END)
 
-            qg_route_map = {"supervisor": "supervisor"}
-            for wid in worker_map:
-                qg_route_map[wid] = wid
-            graph.add_conditional_edges("quality_gate", route_after_quality, qg_route_map)
+            # quality_gate는 워커가 있을 때만 등록되므로 발신 간선도 동일 조건.
+            if worker_map:
+                qg_route_map = {"supervisor": "supervisor"}
+                for wid in worker_map:
+                    qg_route_map[wid] = wid
+                graph.add_conditional_edges(
+                    "quality_gate", route_after_quality, qg_route_map
+                )
 
             compiled = graph.compile()
             self._logger.info("WorkflowCompiler compile done", request_id=request_id)
@@ -551,6 +562,17 @@ class WorkflowCompiler:
                 logger.warning("final_answer_node: no worker outputs found")
                 blocks.append("(수집된 결과 없음)")
 
+            # agent-recursion-limit D7-①: 한도 도달 시 안내 지시 블록 추가.
+            limit_notice = ""
+            if state.get("limit_reached"):
+                limit_notice = (
+                    "\n\n[반복 한도 도달 안내]\n"
+                    "실행 반복 한도에 도달하여 지금까지 수집된 정보만으로 "
+                    "답변합니다. 이 사실을 답변에서 자연스럽게 언급하고, "
+                    "수집 정보가 부족한 부분은 추측하지 말고 부족하다고 "
+                    "명시하세요."
+                )
+
             answer_prompt = (
                 f"{system_prompt}\n\n"
                 f"아래 수집된 결과들을 종합하여 사용자의 가장 최근 질문에 "
@@ -558,6 +580,7 @@ class WorkflowCompiler:
                 f"수집된 결과에 없는 내용은 추측하지 마세요. "
                 f"이전 대화 맥락도 참고하세요.\n\n"
                 + "\n\n".join(blocks)
+                + limit_notice
             )
 
             # fix-anthropic-prefill-error: name 없는 assistant-last 방어.
@@ -763,11 +786,17 @@ class WorkflowCompiler:
             )
 
             wf = get_excel_wf() if (excel and get_excel_wf is not None) else None
+            source_items: list[dict] = []
             if wf is not None:
                 branch = "excel"
-                analysis_text = await self._run_excel_analysis(
+                analysis_text, raw = await self._run_excel_analysis(
                     wf, question, excel, logger,
                 )
+                # analysis-source-preservation: 파싱 원천을 상태 채널로 노출.
+                if raw is not None:
+                    source_items = [
+                        {"origin": worker_id, "kind": "raw_source", "excel": raw}
+                    ]
             else:
                 branch = "context"
                 analysis_text = await self._analyze_context(
@@ -782,16 +811,27 @@ class WorkflowCompiler:
             )
 
             token_delta = len(analysis_text) // 4
-            return {
+            result = {
                 "messages": [AIMessage(content=analysis_text, name=worker_id)],
                 "last_worker_id": worker_id,
                 "token_usage": state["token_usage"] + token_delta,
             }
+            # context 분기는 키 미포함 → SupervisorState.analysis_source 빈 배열 유지.
+            if source_items:
+                result["analysis_source"] = source_items
+            return result
 
         return analysis_node
 
-    async def _run_excel_analysis(self, wf, question: str, excel: dict, logger) -> str:
-        """기존 ExcelAnalysisWorkflow 래핑 호출. 예외 시 에러 메시지 반환(그래프 비중단)."""
+    async def _run_excel_analysis(
+        self, wf, question: str, excel: dict, logger,
+    ) -> tuple[str, dict | None]:
+        """기존 ExcelAnalysisWorkflow 래핑 호출.
+
+        Returns:
+            (analysis_text, raw_excel_dict|None) — 원천은 파싱 성공분(sheets 키)만.
+            예외 시 (에러 메시지, None) 반환(그래프 비중단).
+        """
         initial = {
             "request_id": "",
             "user_query": question,
@@ -821,8 +861,12 @@ class WorkflowCompiler:
             final = await wf.run(initial)
         except Exception as e:
             logger.error("analysis_node excel workflow failed", exception=e)
-            return f"엑셀 분석 실패: {e}"
-        return final.get("analysis_text", "") or "(엑셀 분석 결과 없음)"
+            return (f"엑셀 분석 실패: {e}", None)
+        text = final.get("analysis_text", "") or "(엑셀 분석 결과 없음)"
+        raw = final.get("excel_data")
+        # 파싱 성공분만 원천으로 인정 (sheets = to_dict 결과). 미파싱 {file_path}는 제외.
+        raw = raw if isinstance(raw, dict) and "sheets" in raw else None
+        return (text, raw)
 
     async def _analyze_context(
         self, llm, system_prompt: str, question: str, messages: list
@@ -851,7 +895,7 @@ class WorkflowCompiler:
         analysis_prompt = (
             f"{user_block}{system_prompt}\n\n"
             f"당신은 데이터 분석가입니다. {source_hint} 사용자의 질문에 답합니다.\n\n"
-            f"{ANALYSIS_OUTPUT_GUIDE}\n\n"
+            f"{ANALYSIS_OUTPUT_GUIDE}\n\n{DATA_GAP_GUIDE}\n\n"
             f"[분석 대상 데이터]\n{context}\n\n[질문]\n{question}"
         )
         response = await llm.ainvoke(
@@ -897,15 +941,30 @@ class WorkflowCompiler:
             last_msg = state["messages"][-1]
             task_content = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
 
+            # agent-recursion-limit D8: 반복 한도는 부모의 절반(정책 상수, 하한 보장).
+            # 기존 state(키 부재) 하위호환을 위해 get + 정책 기본값.
+            sub_limit = IterationLimitPolicy.sub_agent_limit(
+                state.get("max_iterations", IterationLimitPolicy.DEFAULT)
+            )
             sub_initial = build_initial_state(
                 messages=[{"role": "user", "content": task_content}],
                 config=SupervisorConfig(
+                    max_iterations=sub_limit,
                     token_limit=state["token_limit"] // 2,
                 ),
                 available_workers=[],
             )
 
-            result = await sub_graph.ainvoke(sub_initial)
+            # 서브 그래프도 config 미전달 시 기본 recursion_limit(25 스텝)에
+            # 걸리는 동일 결함이 있어 파생값을 함께 전달한다 (D8).
+            result = await sub_graph.ainvoke(
+                sub_initial,
+                config={
+                    "recursion_limit": IterationLimitPolicy.derive_recursion_limit(
+                        sub_limit
+                    ),
+                },
+            )
             sub_messages = result.get("messages", [])
 
             answer_content = ""
