@@ -40,6 +40,13 @@ class RagToolConfig:
     score_threshold: float | None = None
     # LLM-WIKI-001 Step6: True면 승인 위키를 우선 검색(WikiFirstSearch) 후 원본 폴백.
     use_wiki_first: bool = False
+    # rag-routed-integration D1: True면 3계층 라우팅 검색을 우선 시도, 강등 시
+    # 이 에이전트의 기존 search_mode 경로로 폴백 — 교차검증용 독립 opt-in.
+    use_routed_search: bool = False
+    # kb-rag-filter D5: 논리 지식베이스 필터 opt-in.
+    #   None = 미사용(기존 동작). 존재/권한 검증은 저장 UseCase 책임이라
+    #   여기서는 형식 검증을 하지 않는다.
+    kb_id: str | None = None
 
     def __post_init__(self) -> None:
         if not 1 <= self.top_k <= 20:

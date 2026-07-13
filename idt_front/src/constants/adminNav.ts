@@ -7,7 +7,7 @@ export interface AdminNavItem {
   description: string;
 }
 
-/** 관리자 영역 4개 페이지 — AdminLayout 사이드바 / TopNav ADMIN_MENU 공유 단일 소스 */
+/** 관리자 영역 페이지 목록 — AdminLayout 사이드바 / TopNav ADMIN_MENU 공유 단일 소스 */
 export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   {
     label: '사용자 관리',
@@ -32,6 +32,12 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
     path: '/admin/agent-runs',
     icon: 'M2.25 18 9 11.25l4.306 4.306a11.95 11.95 0 0 1 5.814-5.518l2.74-1.22m0 0-5.94-2.281m5.94 2.28-2.28 5.941',
     description: '에이전트 실행 이력·사용량 관측',
+  },
+  {
+    label: 'LLM 모델',
+    path: '/admin/llm-models',
+    icon: 'M8.25 3v1.5M4.5 8.25H3m18 0h-1.5M4.5 12H3m18 0h-1.5m-15 3.75H3m18 0h-1.5M8.25 19.5V21M12 3v1.5m0 15V21m3.75-18v1.5m0 15V21m-9-1.5h10.5a2.25 2.25 0 0 0 2.25-2.25V6.75a2.25 2.25 0 0 0-2.25-2.25H6.75A2.25 2.25 0 0 0 4.5 6.75v10.5a2.25 2.25 0 0 0 2.25 2.25Zm.75-12h9v9h-9v-9Z',
+    description: 'LLM 모델 등록·수정·가격·비활성화 관리',
   },
   {
     label: 'MCP 서버',

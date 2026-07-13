@@ -15,6 +15,8 @@ class DocumentMetadataModel(Base):
     user_id = Column(String(128), nullable=False, default="")
     chunk_count = Column(Integer, nullable=False, default=0)
     chunk_strategy = Column(String(64), nullable=False, default="unknown")
+    # kb-management-ui D1 (V047): 논리 KB 문서 목록 필터 키. NULL = 일반 업로드.
+    kb_id = Column(String(64), nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(
         DateTime,
@@ -27,4 +29,5 @@ class DocumentMetadataModel(Base):
         Index("idx_dm_collection", "collection_name"),
         Index("idx_dm_user", "user_id"),
         Index("idx_dm_created", "created_at"),
+        Index("idx_dm_kb", "kb_id"),
     )

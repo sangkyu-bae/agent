@@ -1,8 +1,9 @@
 """AgentComposer: 자연어 요청 + 후보 도구(내부/MCP) → 에이전트 초안 LLM 조합.
 
 nl-agent-composer D3: 역량 분해·coverage 근거·도구 선택·flow_hint·system_prompt·
-이름 제안을 structured output 1회 호출로 통합. 기존 ToolSelector/PromptGenerator와
-독립된 신규 컴포넌트(생성 공통단 미재사용).
+이름 제안을 structured output 1회 호출로 통합한 독립 컴포넌트.
+(agent-instruction-required: 레거시 자동생성 ToolSelector/PromptGenerator는 제거됨 —
+자동 구성은 이 Fix 에이전트 compose 경로가 전담한다.)
 """
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field

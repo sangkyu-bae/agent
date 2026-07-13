@@ -50,6 +50,24 @@ async def test_returns_children_only_by_default():
 
 
 @pytest.mark.asyncio
+async def test_summary_chunks_are_excluded():
+    """요약 계층 청크는 문서 청크 열람에서 제외 (card-section-summary D9, D13)."""
+    points = [
+        _point("p1", _base_payload(chunk_id="c1", chunk_type="parent", chunk_index=0, content="parent text")),
+        _point("p2", _base_payload(chunk_id="c2", chunk_type="child", chunk_index=0, content="child 0", parent_id="c1")),
+        _point("p3", _base_payload(chunk_id="s1", chunk_type="section_summary", chunk_index=0, content="요약")),
+        _point("p4", _base_payload(chunk_id="d1", chunk_type="document_summary", chunk_index=0, content="문서 요약")),
+    ]
+    uc = _make_use_case(points)
+    result = await uc.execute("col", "doc-1", include_parent=False)
+    assert result.total_chunks == 2
+    assert all(
+        c.chunk_type not in ("section_summary", "document_summary")
+        for c in result.chunks
+    )
+
+
+@pytest.mark.asyncio
 async def test_sorts_by_chunk_index():
     points = [
         _point("p1", _base_payload(chunk_id="c3", chunk_type="child", chunk_index=2, content="third", parent_id="x")),

@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 from src.application.agent_builder.message_normalization import ensure_user_tail
 from src.application.agent_builder.search_pipeline import (
     QUALITY_FEEDBACK_PREFIX,
+    is_search_result,
     latest_user_question,
 )
 from src.application.agent_builder.supervisor_hooks import SupervisorHooks
@@ -34,6 +35,35 @@ def _render_attachment_block(attachments: list[dict] | None) -> str:
         f"\n\n[첨부된 데이터]\n사용자가 다음을 첨부했습니다: {joined}.\n"
         f"이 데이터를 분석할 수 있는 워커가 사용 가능 목록에 있으면, "
         f"권한이 없다고 거부하지 말고 반드시 그 워커로 라우팅하세요."
+    )
+
+
+def _summarize_data_entry(index: int, msg) -> str:
+    """검색결과 메시지 1건 → 인지 블록 요약 1줄 (본문 미포함 — 토큰 절약)."""
+    content = getattr(msg, "content", "")
+    body_lines = content.splitlines()[1:]  # 첫 줄은 "[worker 검색결과]" 헤더
+    head = body_lines[0][:80] if body_lines else ""
+    return f"{index}. {getattr(msg, 'name', '')} — {head} ({len(content)}자)"
+
+
+def _render_data_context_block(messages: list) -> str:
+    """state 내 검색결과(현재 턴 수집분 + 재주입분) → 보유 데이터 인지 블록.
+
+    analysis-data-continuity Design §3.5 (D5): supervisor가 보유 데이터 범위를
+    근거로 재사용(분석 직행) vs 재수집(검색 워커 우선)을 판단하게 한다.
+    없으면 빈 문자열.
+    """
+    entries = [m for m in messages if is_search_result(m)]
+    if not entries:
+        return ""
+    lines = "\n".join(
+        _summarize_data_entry(i, m) for i, m in enumerate(entries, 1)
+    )
+    return (
+        f"\n\n[보유 분석 데이터]\n{lines}\n"
+        f"- 요청이 보유 데이터 범위 안이면 데이터 재수집 없이 분석 워커를 호출하세요.\n"
+        f"- 요청이 보유 데이터 범위를 벗어나면(대상·기간·집단 확대 등) "
+        f"먼저 검색 워커로 새 데이터를 수집한 뒤 분석 워커를 호출하세요."
     )
 
 
@@ -96,11 +126,13 @@ def build_initial_state(
         "max_retries_per_worker": config.max_retries_per_worker,
         "forced_worker": "",
         "skipped_workers": [],
+        "limit_reached": False,
         "quality_gate_result": "",
         "attachments": attachments or [],
         "viz_decision": "",
         "charts": [],
         "visualization_done": False,
+        "analysis_source": [],
     }
 
 
@@ -135,9 +167,11 @@ def create_supervisor_node(
     async def supervisor_node(state: SupervisorState) -> dict:
         _set_purpose_if_context(RunPurpose.SUPERVISOR)
         if state["iteration_count"] >= state["max_iterations"]:
+            # agent-recursion-limit D5: 오류·침묵 종료가 아니라 조기 답변 경로로.
+            # limit_reached는 라우팅(final_answer 우회)·안내 지시·payload 플래그의 신호.
             logger.warning("max_iterations reached",
                            iteration_count=state["iteration_count"])
-            return {"next_worker": "__end__"}
+            return {"next_worker": "__end__", "limit_reached": True}
 
         if state["token_usage"] >= state["token_limit"]:
             logger.warning("token_limit reached",
@@ -156,6 +190,8 @@ def create_supervisor_node(
 
         # 첨부 인지 블록 — supervisor가 첨부 데이터의 존재를 알게 한다.
         attachment_block = _render_attachment_block(state.get("attachments", []))
+        # 보유 데이터 인지 블록 — 재사용 vs 재수집 판단 근거 (analysis-data-continuity).
+        data_block = _render_data_context_block(state["messages"])
         # 시각화 인지 블록 — 차트는 분석 워커 경유 필수임을 LLM에 알린다.
         viz_block = _render_viz_guidance_block(
             state["messages"], analysis_worker_ids or [], viz_policy,
@@ -165,6 +201,7 @@ def create_supervisor_node(
             f"{supervisor_prompt}\n\n"
             f"사용 가능한 워커:\n{worker_descriptions}"
             f"{attachment_block}"
+            f"{data_block}"
             f"{viz_block}\n\n"
             f"다음 중 선택하세요:\n"
             f"- 워커 호출이 필요하면 해당 worker_id를 선택\n"
@@ -299,9 +336,14 @@ def route_to_worker_or_final(state: SupervisorState) -> str:
 
     final-answer-node Design §3-1 — supervisor LLM의 선택이 아닌 라우팅 함수가
     최종 답변 노드 경유를 구조적으로 보장한다. 워커 미실행(단순 대화)은 즉시 종료.
+
+    agent-recursion-limit D6: 반복 한도 도달(limit_reached) 시에는 워커 미실행이라도
+    final_answer로 우회 — 답변 없이 END 직행하는 경로를 차단한다.
     """
     next_worker = state["next_worker"]
-    if next_worker == "__end__" and state.get("last_worker_id"):
+    if next_worker == "__end__" and (
+        state.get("last_worker_id") or state.get("limit_reached")
+    ):
         return "final_answer"
     return next_worker
 

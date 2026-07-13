@@ -263,35 +263,154 @@ export const handlers = [
     )
   ),
 
-  // LLM-MODEL-FRONT-001: LLM 모델 목록 조회
-  http.get(`*${API_ENDPOINTS.LLM_MODELS}`, () =>
-    HttpResponse.json({
-      models: [
-        {
-          id: 'uuid-1',
-          provider: 'openai',
-          model_name: 'gpt-4o',
-          display_name: 'GPT-4o',
-          description: 'OpenAI GPT-4o model',
-          max_tokens: null,
-          is_active: true,
-          is_default: true,
-          base_url: null,
-        },
-        {
-          id: 'uuid-2',
-          provider: 'anthropic',
-          model_name: 'claude-sonnet-4-6',
-          display_name: 'Claude Sonnet 4.6',
-          description: 'Anthropic Claude Sonnet',
-          max_tokens: null,
-          is_active: true,
-          is_default: false,
-          base_url: null,
-        },
-      ],
-    })
-  ),
+  // LLM-MODEL-FRONT-001: LLM 모델 목록 조회 (llm-register: include_inactive 지원 + 가격 필드)
+  http.get(`*${API_ENDPOINTS.LLM_MODELS}`, ({ request }) => {
+    const includeInactive =
+      new URL(request.url).searchParams.get('include_inactive') === 'true';
+    const models = [
+      {
+        id: 'uuid-1',
+        provider: 'openai',
+        model_name: 'gpt-4o',
+        display_name: 'GPT-4o',
+        description: 'OpenAI GPT-4o model',
+        max_tokens: null,
+        is_active: true,
+        is_default: true,
+        base_url: null,
+        input_price_per_1k_usd: '0.0025',
+        output_price_per_1k_usd: '0.0100',
+        pricing_updated_at: '2026-07-01T00:00:00',
+      },
+      {
+        id: 'uuid-2',
+        provider: 'anthropic',
+        model_name: 'claude-sonnet-4-6',
+        display_name: 'Claude Sonnet 4.6',
+        description: 'Anthropic Claude Sonnet',
+        max_tokens: null,
+        is_active: true,
+        is_default: false,
+        base_url: null,
+        input_price_per_1k_usd: null,
+        output_price_per_1k_usd: null,
+        pricing_updated_at: null,
+      },
+    ];
+    if (includeInactive) {
+      models.push({
+        id: 'uuid-3',
+        provider: 'ollama',
+        model_name: 'llama-3-8b',
+        display_name: 'Llama 3 8B',
+        description: null,
+        max_tokens: 4096,
+        is_active: false,
+        is_default: false,
+        base_url: 'http://vllm.internal:8000/v1',
+        input_price_per_1k_usd: null,
+        output_price_per_1k_usd: null,
+        pricing_updated_at: null,
+      });
+    }
+    return HttpResponse.json({ models });
+  }),
+
+  // llm-register: 모델 등록 (dup-model → 409)
+  http.post(`*${API_ENDPOINTS.LLM_MODELS}`, async ({ request }) => {
+    const body = (await request.json()) as Record<string, unknown>;
+    if (body.model_name === 'dup-model') {
+      return HttpResponse.json(
+        { detail: '이미 등록된 모델입니다' },
+        { status: 409 },
+      );
+    }
+    return HttpResponse.json(
+      {
+        id: 'uuid-new',
+        provider: body.provider,
+        model_name: body.model_name,
+        display_name: body.display_name,
+        description: body.description ?? null,
+        max_tokens: body.max_tokens ?? null,
+        is_active: body.is_active ?? true,
+        is_default: body.is_default ?? false,
+        base_url: body.base_url ?? null,
+        input_price_per_1k_usd: null,
+        output_price_per_1k_usd: null,
+        pricing_updated_at: null,
+      },
+      { status: 201 },
+    );
+  }),
+
+  // llm-register: 가격 변경 (:id 매처보다 먼저 등록)
+  http.patch('*/api/v1/llm-models/:id/pricing', async ({ params, request }) => {
+    if (params.id === 'not-found') {
+      return HttpResponse.json({ detail: '모델을 찾을 수 없습니다' }, { status: 404 });
+    }
+    const body = (await request.json()) as {
+      input_price_per_1k_usd: number;
+      output_price_per_1k_usd: number;
+    };
+    return HttpResponse.json({
+      id: params.id,
+      provider: 'openai',
+      model_name: 'gpt-4o',
+      display_name: 'GPT-4o',
+      description: null,
+      max_tokens: null,
+      is_active: true,
+      is_default: true,
+      base_url: null,
+      input_price_per_1k_usd: String(body.input_price_per_1k_usd),
+      output_price_per_1k_usd: String(body.output_price_per_1k_usd),
+      pricing_updated_at: '2026-07-11T00:00:00',
+    });
+  }),
+
+  // llm-register: 모델 수정
+  http.patch('*/api/v1/llm-models/:id', async ({ params, request }) => {
+    if (params.id === 'not-found') {
+      return HttpResponse.json({ detail: '모델을 찾을 수 없습니다' }, { status: 404 });
+    }
+    const body = (await request.json()) as Record<string, unknown>;
+    return HttpResponse.json({
+      id: params.id,
+      provider: 'openai',
+      model_name: 'gpt-4o',
+      display_name: body.display_name ?? 'GPT-4o',
+      description: body.description ?? null,
+      max_tokens: body.max_tokens ?? null,
+      is_active: body.is_active ?? true,
+      is_default: body.is_default ?? false,
+      base_url: body.base_url ?? null,
+      input_price_per_1k_usd: '0.0025',
+      output_price_per_1k_usd: '0.0100',
+      pricing_updated_at: '2026-07-01T00:00:00',
+    });
+  }),
+
+  // llm-register: 모델 비활성화 (soft delete)
+  http.delete('*/api/v1/llm-models/:id', ({ params }) => {
+    if (params.id === 'not-found') {
+      return HttpResponse.json({ detail: '모델을 찾을 수 없습니다' }, { status: 404 });
+    }
+    return HttpResponse.json({
+      id: params.id,
+      provider: 'openai',
+      model_name: 'gpt-4o',
+      display_name: 'GPT-4o',
+      description: null,
+      max_tokens: null,
+      is_active: false,
+      is_default: false,
+      base_url: null,
+      input_price_per_1k_usd: '0.0025',
+      output_price_per_1k_usd: '0.0100',
+      pricing_updated_at: '2026-07-01T00:00:00',
+    });
+  }),
 
   // RAG-TOOL: 컬렉션 목록
   http.get(`*${API_ENDPOINTS.RAG_TOOL_COLLECTIONS}`, () =>
@@ -302,6 +421,96 @@ export const handlers = [
         { name: 'tech_manuals', display_name: '기술 매뉴얼', vectors_count: 150, scope: 'PERSONAL' },
       ],
     })
+  ),
+
+  // KB (kb-rag-filter): 지식베이스 목록
+  http.get(`*${API_ENDPOINTS.KNOWLEDGE_BASES}`, () =>
+    HttpResponse.json({
+      knowledge_bases: [
+        {
+          kb_id: 'kb-public-1', name: '전사 규정', description: '전사 공통 규정',
+          scope: 'PUBLIC', department_id: null, collection_name: 'admin-coll-01',
+          owner_id: 1, created_at: '2026-07-01T00:00:00Z',
+        },
+        {
+          kb_id: 'kb-dept-1', name: '여신 심사 기준', description: null,
+          scope: 'DEPARTMENT', department_id: 'dept-1', collection_name: 'admin-coll-01',
+          owner_id: 2, created_at: '2026-07-02T00:00:00Z',
+        },
+        {
+          kb_id: 'kb-personal-1', name: '내 메모', description: null,
+          scope: 'PERSONAL', department_id: null, collection_name: 'admin-coll-02',
+          owner_id: 3, created_at: '2026-07-03T00:00:00Z',
+        },
+      ],
+      total: 3,
+    })
+  ),
+
+  // KB (kb-management-ui): 상세
+  http.get(`*${API_ENDPOINTS.KNOWLEDGE_BASE_DETAIL(':kbId')}`, ({ params }) =>
+    HttpResponse.json({
+      kb_id: params.kbId, name: '전사 규정', description: '전사 공통 규정',
+      scope: 'PUBLIC', department_id: null, collection_name: 'admin-coll-01',
+      owner_id: 1, use_clause_chunking: false, created_at: '2026-07-01T00:00:00Z',
+    })
+  ),
+
+  // KB (kb-management-ui): 문서 목록
+  http.get(
+    `*${API_ENDPOINTS.KNOWLEDGE_BASE_DOCUMENTS(':kbId')}`,
+    ({ params }) =>
+      HttpResponse.json({
+        kb_id: params.kbId,
+        kb_name: '전사 규정',
+        documents: [
+          {
+            document_id: 'doc-1', filename: '여신규정.pdf', chunk_count: 12,
+            chunking_strategy: 'clause_aware', created_at: '2026-07-09T10:00:00Z',
+          },
+          {
+            document_id: 'doc-2', filename: '내규집.pdf', chunk_count: 8,
+            chunking_strategy: 'parent_child', created_at: '2026-07-08T09:00:00Z',
+          },
+        ],
+        total: 2, offset: 0, limit: 20,
+      })
+  ),
+
+  // KB (kb-management-ui): 생성
+  http.post(`*${API_ENDPOINTS.KNOWLEDGE_BASES}`, () =>
+    HttpResponse.json(
+      {
+        kb_id: 'kb-new-1', name: '신규 KB', scope: 'PERSONAL',
+        collection_name: 'admin-coll-01',
+        message: 'Knowledge base created successfully',
+      },
+      { status: 201 }
+    )
+  ),
+
+  // KB (kb-management-ui): 삭제
+  http.delete(`*${API_ENDPOINTS.KNOWLEDGE_BASE_DETAIL(':kbId')}`, ({ params }) =>
+    HttpResponse.json({
+      kb_id: params.kbId,
+      message: 'Knowledge base deleted. Stored vectors remain until cleanup.',
+    })
+  ),
+
+  // KB (kb-management-ui): 문서 업로드
+  http.post(
+    `*${API_ENDPOINTS.KNOWLEDGE_BASE_DOCUMENTS(':kbId')}`,
+    ({ params }) =>
+      HttpResponse.json({
+        kb_id: params.kbId, kb_name: '전사 규정',
+        collection_name: 'admin-coll-01',
+        document_id: 'doc-new-1', filename: 'uploaded.pdf',
+        total_pages: 3, chunk_count: 15, chunking_strategy: 'parent_child',
+        qdrant: { status: 'success', error: null },
+        es: { status: 'success', error: null },
+        status: 'completed',
+        section_summary: null,
+      })
   ),
 
   // RAG-TOOL: 메타데이터 키

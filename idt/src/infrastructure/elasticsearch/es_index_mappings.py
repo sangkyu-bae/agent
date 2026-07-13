@@ -42,5 +42,13 @@ DOCUMENTS_INDEX_MAPPINGS: dict = {
         "user_id": {"type": "keyword"},
         "collection_name": {"type": "keyword"},
         "parent_id": {"type": "keyword"},
+        "kb_id": {"type": "keyword"},
+        "kb_name": {"type": "keyword"},
+        # card-section-summary D7: 섹션 요약 전용 필드 — content/morph_text를
+        # 채우지 않아 기존 BM25 multi_match에 구조적으로 노출되지 않는다.
+        "summary_text": {"type": "text", "analyzer": "nori_analyzer"},
+        "summary_keywords": {"type": "keyword"},
+        "section_ref": {"type": "keyword"},
+        "clause_title": {"type": "text", "fields": {"raw": {"type": "keyword"}}},
     }
 }

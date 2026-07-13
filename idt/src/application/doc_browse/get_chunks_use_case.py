@@ -49,6 +49,14 @@ class GetChunksUseCase:
         )
         try:
             points = await self._scroll_filtered(collection_name, document_id)
+            # card-section-summary D9 / document-summary-routing D13:
+            # 요약 계층 청크는 문서 청크 열람에서 제외
+            points = [
+                p
+                for p in points
+                if (p.payload or {}).get("chunk_type")
+                not in ("section_summary", "document_summary")
+            ]
             if not points:
                 return DocumentChunksResult(
                     document_id=document_id,

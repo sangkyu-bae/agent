@@ -90,8 +90,16 @@ export const API_ENDPOINTS = {
   RAG_TOOL_COLLECTIONS: '/api/v1/rag-tools/collections',
   RAG_TOOL_METADATA_KEYS: '/api/v1/rag-tools/metadata-keys',
 
+  // Knowledge Bases (kb-rag-filter / kb-management-ui)
+  KNOWLEDGE_BASES: '/api/v1/knowledge-bases',
+  KNOWLEDGE_BASE_DETAIL: (kbId: string) => `/api/v1/knowledge-bases/${kbId}`,
+  KNOWLEDGE_BASE_DOCUMENTS: (kbId: string) =>
+    `/api/v1/knowledge-bases/${kbId}/documents`,
+
   // LLM Models
   LLM_MODELS: '/api/v1/llm-models',
+  LLM_MODEL_DETAIL: (id: string) => `/api/v1/llm-models/${id}`,
+  LLM_MODEL_PRICING: (id: string) => `/api/v1/llm-models/${id}/pricing`,
 
   // Admin — User approval
   ADMIN_USERS_PENDING: '/api/v1/admin/users/pending',

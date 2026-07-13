@@ -88,7 +88,11 @@ class ToolCall:
 
 @dataclass
 class RetrievalSource:
-    """RAG 검색 1건의 근거 chunk."""
+    """RAG 검색 1건의 근거 chunk.
+
+    retrieval-observability (V046): search_query 이하 8필드는 검색 실행 컨텍스트 —
+    전부 Optional 기본값이라 기존 생성 호출부와 하위호환.
+    """
 
     id: str
     run_id: RunId
@@ -101,6 +105,14 @@ class RetrievalSource:
     content_preview: Optional[str]
     metadata_json: Optional[dict[str, Any]]
     created_at: datetime
+    search_query: Optional[str] = None
+    query_source: Optional[str] = None
+    search_mode: Optional[str] = None
+    bm25_score: Optional[float] = None
+    vector_score: Optional[float] = None
+    bm25_rank: Optional[int] = None
+    vector_rank: Optional[int] = None
+    fusion_source: Optional[str] = None
 
 
 @dataclass

@@ -140,6 +140,88 @@ class TestToolFactoryRagConfig:
         assert tool.name == "excel_export"
 
 
+class TestToolFactoryRoutedSearch:
+    """rag-routed-integration D2 — routed getter 주입·전달."""
+
+    def test_routed_getter_and_flag_forwarded(self):
+        getter = lambda: MagicMock()  # noqa: E731
+        factory = ToolFactory(
+            logger=MagicMock(),
+            hybrid_search_use_case=MagicMock(),
+            routed_retrieval_getter=getter,
+        )
+        tool = factory.create(
+            "internal_document_search",
+            tool_config={"use_routed_search": True},
+        )
+        assert tool.use_routed_search is True
+        assert tool.routed_retrieval_getter is getter
+
+    def test_default_config_disables_routed(self):
+        tool = _make_factory().create("internal_document_search")
+        assert tool.use_routed_search is False
+        assert tool.routed_retrieval_getter is None
+
+    def test_legacy_config_without_field_restores_false(self):
+        """기존 저장 config(필드 부재) 하위호환 (D1)."""
+        tool = _make_factory().create(
+            "internal_document_search",
+            tool_config={"top_k": 7, "search_mode": "vector_only"},
+        )
+        assert tool.use_routed_search is False
+        assert tool.search_mode == "vector_only"
+
+
+class TestToolFactoryKbFilter:
+    """kb-rag-filter D6 — kb_id를 metadata_filter에 병합."""
+
+    def test_kb_id_merged_into_metadata_filter(self):
+        tool = _make_factory().create(
+            "internal_document_search",
+            tool_config={"kb_id": "kb-uuid-001"},
+        )
+        assert tool.metadata_filter == {"kb_id": "kb-uuid-001"}
+
+    def test_kb_id_merges_with_existing_filters(self):
+        tool = _make_factory().create(
+            "internal_document_search",
+            tool_config={
+                "kb_id": "kb-uuid-001",
+                "metadata_filter": {"department": "finance"},
+            },
+        )
+        assert tool.metadata_filter == {
+            "department": "finance",
+            "kb_id": "kb-uuid-001",
+        }
+
+    def test_first_class_kb_id_overrides_manual_filter_key(self):
+        """D2: metadata_filter의 수동 kb_id 키보다 필드가 우선."""
+        tool = _make_factory().create(
+            "internal_document_search",
+            tool_config={
+                "kb_id": "kb-field",
+                "metadata_filter": {"kb_id": "kb-manual"},
+            },
+        )
+        assert tool.metadata_filter["kb_id"] == "kb-field"
+
+    def test_without_kb_id_filter_unchanged(self):
+        """FR-06: kb_id 미설정 시 기존 동작 그대로."""
+        tool = _make_factory().create(
+            "internal_document_search",
+            tool_config={"metadata_filter": {"department": "finance"}},
+        )
+        assert tool.metadata_filter == {"department": "finance"}
+
+    def test_legacy_config_without_kb_id_restores_none(self):
+        tool = _make_factory().create(
+            "internal_document_search",
+            tool_config={"top_k": 7},
+        )
+        assert tool.metadata_filter == {}
+
+
 class TestToolFactoryScoreThreshold:
     """벡터 코사인 컷오프 임계값 주입 (에이전트값 우선 + 전역 fallback)."""
 

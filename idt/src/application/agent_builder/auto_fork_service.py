@@ -65,6 +65,7 @@ class AutoForkService:
                     visibility="private",
                     department_id=None,
                     temperature=agent.temperature,
+                    max_iterations=agent.max_iterations,
                     forked_from=agent.id,
                     forked_at=now,
                     created_at=now,

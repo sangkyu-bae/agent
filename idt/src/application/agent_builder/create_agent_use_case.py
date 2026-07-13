@@ -7,13 +7,11 @@ from src.application.agent_builder.document_template_binding import (
     ensure_template_wiring,
     persist_document_template,
 )
-from src.application.agent_builder.prompt_generator import PromptGenerator
 from src.application.agent_builder.schemas import (
     CreateAgentRequest, CreateAgentResponse, RagToolConfigRequest, WorkerInfo,
 )
 from src.domain.document_extractor.policies import DEFAULT_MAX_SLOTS
 from src.application.agent_builder.sub_agent_worker_builder import SubAgentWorkerBuilder
-from src.application.agent_builder.tool_selector import ToolSelector
 from src.application.agent_skill.sync_agent_skills_use_case import (
     SyncAgentSkillsUseCase,
 )
@@ -26,11 +24,15 @@ from src.domain.agent_builder.policies import (
     VisibilityPolicy,
 )
 from src.domain.agent_builder.schemas import (
-    AgentDefinition, ToolMeta, WorkerDefinition, WorkflowSkeleton,
+    AgentDefinition, WorkerDefinition, WorkflowSkeleton,
 )
 from src.domain.agent_builder.tool_registry import get_tool_meta
+from src.domain.auth.entities import UserRole
 from src.domain.collection.permission_interfaces import CollectionPermissionRepositoryInterface
 from src.domain.department.interfaces import DepartmentRepositoryInterface
+from src.domain.knowledge_base.entities import KnowledgeBase
+from src.domain.knowledge_base.interfaces import KnowledgeBaseRepositoryInterface
+from src.domain.knowledge_base.policy import KnowledgeBasePolicy
 from src.domain.llm_model.interfaces import LlmModelRepositoryInterface
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 
@@ -38,8 +40,6 @@ from src.domain.logging.interfaces.logger_interface import LoggerInterface
 class CreateAgentUseCase:
     def __init__(
         self,
-        tool_selector: ToolSelector,
-        prompt_generator: PromptGenerator,
         repository: AgentDefinitionRepositoryInterface,
         llm_model_repository: LlmModelRepositoryInterface,
         perm_repo: CollectionPermissionRepositoryInterface,
@@ -51,9 +51,8 @@ class CreateAgentUseCase:
         source_archiver=None,
         max_template_slots: int = DEFAULT_MAX_SLOTS,
         mcp_server_repo=None,
+        kb_repo: KnowledgeBaseRepositoryInterface | None = None,
     ) -> None:
-        self._selector = tool_selector
-        self._generator = prompt_generator
         self._repository = repository
         self._llm_model_repository = llm_model_repository
         self._perm_repo = perm_repo
@@ -67,6 +66,8 @@ class CreateAgentUseCase:
         self._max_template_slots = max_template_slots
         # nl-agent-composer FR-08: mcp_* tool_id 메타 해석용 (미주입 시 mcp_* 거부)
         self._mcp_server_repo = mcp_server_repo
+        # kb-rag-filter D7: kb_id 검증·scope clamp용 (kb_id 지정 요청은 주입 필수)
+        self._kb_repo = kb_repo
         self._sub_agent_builder = SubAgentWorkerBuilder(repository, logger)
 
     async def execute(
@@ -85,7 +86,9 @@ class CreateAgentUseCase:
             )
 
             # Step 1: 도구 선택 + 플로우 결정
-            # 우선순위: 명시적 tool_ids → tool_configs → AI 자동 선택
+            # 우선순위: 명시적 tool_ids → tool_configs → 도구 없음(순수 대화형)
+            # agent-instruction-required: LLM 도구 자동선택 제거 — 도구 구성은
+            # 사용자가 직접(또는 Fix 에이전트로) 결정한다. 미지정 시 워커 0개.
             if request.tool_ids:
                 skeleton = await self._build_skeleton_from_tool_ids(
                     request.tool_ids, request.tool_configs, request_id
@@ -95,9 +98,7 @@ class CreateAgentUseCase:
                     request.tool_configs, request_id
                 )
             else:
-                skeleton = await self._selector.select(
-                    request.user_request, request_id
-                )
+                skeleton = WorkflowSkeleton(workers=[], flow_hint="")
 
             # Step 1.5: 서브 에이전트 워커 빌드
             sub_agent_workers: list[WorkerDefinition] = []
@@ -135,22 +136,20 @@ class CreateAgentUseCase:
                 AgentBuilderPolicy.validate_tool_count(len(skeleton.workers))
             AgentBuilderPolicy.validate_name(request.name)
 
-            # Step 2.5: 컬렉션 scope 기반 visibility 자동 조정
-            visibility, clamped, max_vis = await self._resolve_visibility(
-                request, skeleton.workers, request_id
+            # Step 2.5: 컬렉션/지식베이스 scope 기반 visibility 자동 조정
+            # (kb-rag-filter D1/D7: KB 검증 → clamp → 물리 컬렉션 고정)
+            kbs = await self._resolve_kbs(
+                skeleton.workers, request_id, request.user_id, viewer_role
             )
+            visibility, clamped, max_vis = await self._resolve_visibility(
+                request, skeleton.workers, request_id, kbs
+            )
+            self._canonicalize_kb_collections(skeleton.workers, kbs)
 
-            # Step 3: 시스템 프롬프트 — 프리필 우선(nl-agent-composer D1), 없으면 자동 생성
-            if request.system_prompt:
-                system_prompt = request.system_prompt
-            else:
-                tool_metas = [
-                    self._resolve_prompt_tool_meta(w) for w in skeleton.workers
-                ]
-                system_prompt = await self._generator.generate(
-                    request.user_request, skeleton, tool_metas, request_id
-                )
-            AgentBuilderPolicy.validate_system_prompt(system_prompt)
+            # Step 3: 시스템 프롬프트 필수 (agent-instruction-required)
+            # LLM 자동생성 제거 — 지침은 사용자 입력 또는 Fix 에이전트 초안 전담.
+            AgentBuilderPolicy.validate_system_prompt(request.system_prompt or "")
+            system_prompt = request.system_prompt
 
             # Step 4: AgentDefinition 저장
             now = datetime.now(timezone.utc)
@@ -167,6 +166,7 @@ class CreateAgentUseCase:
                 visibility=visibility,
                 department_id=request.department_id,
                 temperature=request.temperature,
+                max_iterations=request.max_iterations,
                 created_at=now,
                 updated_at=now,
             )
@@ -216,6 +216,7 @@ class CreateAgentUseCase:
                 max_visibility=max_vis,
                 department_id=saved.department_id,
                 temperature=saved.temperature,
+                max_iterations=saved.max_iterations,
                 created_at=saved.created_at.isoformat(),
                 has_sub_agents=any(w.worker_type == "sub_agent" for w in saved.workers),
             )
@@ -310,17 +311,6 @@ class CreateAgentUseCase:
         return reg.description or reg.name
 
     @staticmethod
-    def _resolve_prompt_tool_meta(worker: WorkerDefinition) -> ToolMeta:
-        """프롬프트 생성용 ToolMeta. mcp_* 워커는 레지스트리에 없으므로 워커 정보로 구성."""
-        if worker.tool_id.startswith("mcp_"):
-            return ToolMeta(
-                tool_id=worker.tool_id,
-                name=worker.tool_id,
-                description=worker.description,
-            )
-        return get_tool_meta(worker.tool_id)
-
-    @staticmethod
     def _normalize_tool_id(raw_key: str) -> str:
         """카탈로그 형식(`internal:{id}`, `mcp:{srv}:{tool}`)을 저장 형식으로 정규화.
 
@@ -337,13 +327,16 @@ class CreateAgentUseCase:
         request: CreateAgentRequest,
         workers: list[WorkerDefinition],
         request_id: str,
+        kbs: dict[str, KnowledgeBase] | None = None,
     ) -> tuple[str, bool, str | None]:
         collection_names = self._extract_collection_names(workers)
-        if not collection_names:
+        kb_scopes = [kb.scope.value for kb in (kbs or {}).values()]
+        if not collection_names and not kb_scopes:
             return request.visibility, False, None
         scopes = await self._lookup_collection_scopes(
             collection_names, request_id
         )
+        scopes += kb_scopes
         clamped_vis = VisibilityPolicy.clamp_visibility(
             request.visibility, scopes
         )
@@ -355,11 +348,79 @@ class CreateAgentUseCase:
     def _extract_collection_names(
         workers: list[WorkerDefinition],
     ) -> list[str]:
+        """kb-rag-filter D7: kb_id 워커는 KB scope가 지배 — 컬렉션 조회 제외."""
         names: list[str] = []
         for w in workers:
-            if w.tool_config and w.tool_config.get("collection_name"):
+            if not w.tool_config or w.tool_config.get("kb_id"):
+                continue
+            if w.tool_config.get("collection_name"):
                 names.append(w.tool_config["collection_name"])
         return names
+
+    async def _resolve_kbs(
+        self,
+        workers: list[WorkerDefinition],
+        request_id: str,
+        user_id: str,
+        viewer_role: str,
+    ) -> dict[str, KnowledgeBase]:
+        """kb-rag-filter D3: kb_id 수집 + 존재/읽기권한 검증.
+
+        미존재 → ValueError(400), 읽기권한 없음 → PermissionError(403).
+        """
+        kb_ids = {
+            w.tool_config["kb_id"]
+            for w in workers
+            if w.tool_config and w.tool_config.get("kb_id")
+        }
+        if not kb_ids:
+            return {}
+        if self._kb_repo is None:
+            raise ValueError(
+                "kb_id가 지정된 도구 설정에는 kb_repo 주입이 필요합니다"
+            )
+        role = (
+            UserRole.ADMIN
+            if viewer_role == UserRole.ADMIN.value
+            else UserRole.USER
+        )
+        dept_ids = (
+            []
+            if role == UserRole.ADMIN
+            else await self._resolve_department_ids(user_id, request_id)
+        )
+        kbs: dict[str, KnowledgeBase] = {}
+        for kb_id in kb_ids:
+            kb = await self._kb_repo.find_by_id(kb_id, request_id)
+            if kb is None:
+                raise ValueError(f"Knowledge base not found: {kb_id}")
+            if not KnowledgeBasePolicy.can_read_ref(
+                self._owner_ref(user_id), role, kb, dept_ids
+            ):
+                raise PermissionError(
+                    f"No read access to knowledge base '{kb_id}'"
+                )
+            kbs[kb_id] = kb
+        return kbs
+
+    @staticmethod
+    def _owner_ref(user_id: str | None) -> int | None:
+        """user_id(str) → KB owner_id(int) 비교용. 비정수 형식은 소유자 불일치."""
+        try:
+            return int(user_id)
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _canonicalize_kb_collections(
+        workers: list[WorkerDefinition],
+        kbs: dict[str, KnowledgeBase],
+    ) -> None:
+        """kb-rag-filter D1: kb_id 워커의 collection_name을 KB 물리 컬렉션으로 고정."""
+        for w in workers:
+            kb_id = w.tool_config.get("kb_id") if w.tool_config else None
+            if kb_id:
+                w.tool_config["collection_name"] = kbs[kb_id].collection_name
 
     async def _lookup_collection_scopes(
         self,

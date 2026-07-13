@@ -10,7 +10,12 @@ from typing import Any, Dict, Optional
 from qdrant_client.models import Filter, FieldCondition, MatchValue, Range
 
 
-VALID_CHUNK_TYPES = frozenset({"parent", "child", "full", "semantic"})
+VALID_CHUNK_TYPES = frozenset(
+    {
+        "parent", "child", "full", "semantic",
+        "section_summary", "document_summary",
+    }
+)
 
 
 @dataclass(frozen=True)

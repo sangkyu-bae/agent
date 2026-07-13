@@ -180,9 +180,9 @@ class TestValidateWorkerCount:
         ]
         AgentBuilderPolicy.validate_worker_count(workers)
 
-    def test_empty_workers_raises(self):
-        with pytest.raises(ValueError, match="최소"):
-            AgentBuilderPolicy.validate_worker_count([])
+    def test_empty_workers_passes(self):
+        # agent-instruction-required: 워커 0개(순수 대화형) 허용 (하한 제거)
+        AgentBuilderPolicy.validate_worker_count([])
 
     def test_exceeds_total_max_raises(self):
         workers = [_tool_worker(f"tool_{i}", i) for i in range(7)]

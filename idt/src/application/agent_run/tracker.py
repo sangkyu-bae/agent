@@ -367,6 +367,14 @@ class RunTracker:
         rank_index: Optional[int] = None,
         content_preview: Optional[str] = None,
         metadata: Optional[dict] = None,
+        search_query: Optional[str] = None,
+        query_source: Optional[str] = None,
+        search_mode: Optional[str] = None,
+        bm25_score: Optional[float] = None,
+        vector_score: Optional[float] = None,
+        bm25_rank: Optional[int] = None,
+        vector_rank: Optional[int] = None,
+        fusion_source: Optional[str] = None,
     ) -> None:
         src = RetrievalSource(
             id=str(uuid.uuid4()),
@@ -380,6 +388,14 @@ class RunTracker:
             content_preview=content_preview,
             metadata_json=metadata,
             created_at=_utcnow(),
+            search_query=search_query,
+            query_source=query_source,
+            search_mode=search_mode,
+            bm25_score=bm25_score,
+            vector_score=vector_score,
+            bm25_rank=bm25_rank,
+            vector_rank=vector_rank,
+            fusion_source=fusion_source,
         )
         try:
             async with self._session_factory() as session:
@@ -392,6 +408,29 @@ class RunTracker:
                 exception=e,
                 run_id=run_id.value,
                 collection=collection_name,
+            )
+
+    # ── attach_user_message (best-effort, retrieval-observability D2) ─
+    async def attach_user_message(
+        self, run_id: RunId, user_message_id: int
+    ) -> None:
+        """ai_run.user_message_id deferred UPDATE.
+
+        general_chat은 user 메시지를 답변 완료 후 저장하므로 start_run 시점엔
+        message_id가 없다. 메시지 commit 후 이 메서드로 연결한다 (FK 락 경합 없음).
+        실패는 warning만 — 근거 자체는 run_id로 조회 가능, 질문 연결만 유실.
+        """
+        try:
+            async with self._session_factory() as session:
+                async with session.begin():
+                    repo = SqlAlchemyAgentRunRepository(session)
+                    await repo.attach_user_message(run_id, user_message_id)
+        except Exception as e:
+            self._logger.warning(
+                "Tracker attach_user_message failed (best-effort)",
+                exception=e,
+                run_id=run_id.value,
+                user_message_id=user_message_id,
             )
 
     # ── record_llm_call (best-effort, UsageCallback 호출 진입점) ───────

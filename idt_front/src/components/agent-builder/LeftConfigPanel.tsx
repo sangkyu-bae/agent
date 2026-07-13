@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import type { CatalogTool } from '@/types/toolCatalog';
 import type { LlmModel } from '@/types/llmModel';
-import type { CollectionInfo, RagToolConfig } from '@/types/ragToolConfig';
+import type { CollectionInfo, KnowledgeBaseInfo, RagToolConfig } from '@/types/ragToolConfig';
 import { DEFAULT_RAG_CONFIG, SEARCH_MODES } from '@/types/ragToolConfig';
 import type { AgentBuilderFormData, LeftTabId, SubAgentCandidate } from '@/types/agentBuilder';
 import CollapsibleSection from './CollapsibleSection';
@@ -14,6 +14,7 @@ import DocumentExtractorConfigModal from './DocumentExtractorConfigModal';
 import SubAgentManagerModal from './SubAgentManagerModal';
 import { useSkills } from '@/hooks/useSkills';
 import { useCollections } from '@/hooks/useRagToolConfig';
+import { useKnowledgeBases } from '@/hooks/useKnowledgeBases';
 import { MAX_ATTACHED_SKILLS } from '@/constants/agentSkill';
 import { DOCUMENT_EXTRACTOR_TOOL_ID } from '@/types/documentExtractor';
 import type { DocumentExtractorDraft } from '@/types/documentExtractor';
@@ -40,6 +41,8 @@ interface LeftConfigPanelProps {
   onRagConfigChange: (config: RagToolConfig) => void;
   isEditMode: boolean;
   agentId?: string | null;
+  /** agent-instruction-required: 지침 미입력 시 인라인 에러 메시지 */
+  systemPromptError?: string | null;
   catalogTools?: CatalogTool[];
   isToolsLoading: boolean;
   isToolsError: boolean;
@@ -60,8 +63,8 @@ const LeftConfigPanel = ({
   onToolToggle,
   onSkillToggle,
   onRagConfigChange,
-  isEditMode,
   agentId,
+  systemPromptError,
   catalogTools,
   isToolsLoading,
   isToolsError,
@@ -82,6 +85,7 @@ const LeftConfigPanel = ({
   const subAgents = form.subAgents ?? [];
   const { data: skillList } = useSkills({ scope: 'all', size: 100 });
   const { data: collections } = useCollections();
+  const { data: knowledgeBases } = useKnowledgeBases();
   const selectedSkills = (skillList?.skills ?? []).filter((s) =>
     form.skills.includes(s.id),
   );
@@ -199,23 +203,33 @@ const LeftConfigPanel = ({
       ) : (
       /* 스크롤 본문 */
       <div style={{ flex: 1, overflowY: 'auto' }} className="px-3 py-2">
-        {/* 지침 (시스템 프롬프트) */}
-        <CollapsibleSection title="지침">
-          <div className="overflow-hidden rounded-2xl border border-zinc-300 bg-white transition-all focus-within:border-violet-400 focus-within:ring-2 focus-within:ring-violet-100">
+        {/* 지침 (시스템 프롬프트) — agent-instruction-required: 필수 입력 */}
+        <CollapsibleSection
+          title="지침"
+          action={<span className="text-[10px] font-semibold text-red-400">필수</span>}
+        >
+          <div
+            className={`overflow-hidden rounded-2xl border bg-white transition-all focus-within:ring-2 ${
+              systemPromptError
+                ? 'border-red-300 focus-within:border-red-400 focus-within:ring-red-100'
+                : 'border-zinc-300 focus-within:border-violet-400 focus-within:ring-violet-100'
+            }`}
+          >
             <textarea
               value={form.systemPrompt}
               onChange={(e) => onChange({ ...form, systemPrompt: e.target.value })}
-              placeholder={
-                isEditMode
-                  ? '에이전트의 시스템 프롬프트/지침을 입력하세요...'
-                  : '비워두면 AI가 설명을 기반으로 자동 생성합니다'
-              }
+              placeholder="에이전트의 시스템 프롬프트/지침을 입력하세요..."
               rows={6}
               aria-label="지침"
+              aria-invalid={systemPromptError ? true : undefined}
               className="block w-full resize-none bg-transparent px-4 py-3.5 text-[14px] leading-relaxed text-zinc-900 placeholder-zinc-400 outline-none"
             />
           </div>
-          <p className="mt-1 text-right text-[11.5px] text-zinc-400">{form.systemPrompt.length}자</p>
+          {systemPromptError ? (
+            <p role="alert" className="mt-1 text-[11.5px] text-red-500">{systemPromptError}</p>
+          ) : (
+            <p className="mt-1 text-right text-[11.5px] text-zinc-400">{form.systemPrompt.length}자</p>
+          )}
         </CollapsibleSection>
 
         {/* 서브에이전트 */}
@@ -334,7 +348,11 @@ const LeftConfigPanel = ({
                       </button>
                     </div>
                     {tool.tool_id === RAG_TOOL_ID && ragConfig && (
-                      <RagConfigSummaryBadge config={ragConfig} collections={collections} />
+                      <RagConfigSummaryBadge
+                        config={ragConfig}
+                        collections={collections}
+                        knowledgeBases={knowledgeBases}
+                      />
                     )}
                     {tool.tool_id === DOCUMENT_EXTRACTOR_TOOL_ID && (
                       <ExtractorSummaryBadge draft={form.documentExtractorDraft ?? null} />
@@ -459,13 +477,25 @@ const LeftConfigPanel = ({
 interface RagConfigSummaryBadgeProps {
   config: RagToolConfig;
   collections?: CollectionInfo[];
+  knowledgeBases?: KnowledgeBaseInfo[];
 }
 
-const RagConfigSummaryBadge = ({ config, collections }: RagConfigSummaryBadgeProps) => {
-  const collectionLabel = config.collection_name
-    ? collections?.find((c) => c.name === config.collection_name)?.display_name ??
-      config.collection_name
-    : '전체';
+// 테스트용 named export (kb-rag-filter FE-3)
+export const RagConfigSummaryBadge = ({
+  config,
+  collections,
+  knowledgeBases,
+}: RagConfigSummaryBadgeProps) => {
+  // kb-rag-filter: KB 선택 시 KB 이름이 최우선 라벨
+  const kbLabel = config.kb_id
+    ? knowledgeBases?.find((kb) => kb.kb_id === config.kb_id)?.name ?? config.kb_id
+    : null;
+  const collectionLabel =
+    kbLabel ??
+    (config.collection_name
+      ? collections?.find((c) => c.name === config.collection_name)?.display_name ??
+        config.collection_name
+      : '전체');
   const modeLabel =
     SEARCH_MODES.find((m) => m.value === config.search_mode)?.label ?? config.search_mode;
 

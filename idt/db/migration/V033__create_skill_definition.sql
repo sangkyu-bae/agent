@@ -1,6 +1,10 @@
 -- skill-builder Plan §5.1 / Design §3.3: 재사용 Skill(지시문+스크립트) 저장 테이블.
 -- agent_definition의 소유/visibility/fork 구조(V007) 차용. 비밀값 없음(평문 TEXT).
 -- 'trigger'는 MySQL 예약어 → 컬럼명 trigger_text. script_content는 저장 전용(실행 안 함).
+--
+-- ⚠️ FK 콜레이션 주의(errno 3780, V037 선례): departments는 SQLAlchemy create_all로
+-- 생성되어 DB 기본 콜레이션(utf8mb4_0900_ai_ci)을 사용한다. 테이블 레벨 COLLATE를
+-- 명시하지 않아 skill_definition도 DB 기본 콜레이션을 상속 → FK 컬럼 정합.
 CREATE TABLE skill_definition (
     id             VARCHAR(36)  PRIMARY KEY,
     user_id        VARCHAR(100) NOT NULL,
@@ -22,4 +26,4 @@ CREATE TABLE skill_definition (
     INDEX ix_skill_visibility  (visibility),
     INDEX ix_skill_dept_vis    (department_id, visibility),
     INDEX ix_skill_status      (status)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB;

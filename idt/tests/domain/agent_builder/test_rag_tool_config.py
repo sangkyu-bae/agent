@@ -19,6 +19,20 @@ class TestRagToolConfig:
         assert config.rrf_k == 60
         assert config.tool_name == "internal_document_search"
         assert config.tool_description != ""
+        assert config.use_routed_search is False  # rag-routed-integration D1
+
+    def test_use_routed_search_restored_from_legacy_dict(self):
+        """기존 저장 config(필드 부재) 하위호환 (rag-routed-integration D1)."""
+        legacy = {"top_k": 7, "search_mode": "bm25_only"}
+        config = RagToolConfig(**legacy)
+        assert config.use_routed_search is False
+
+    def test_use_routed_search_roundtrip(self):
+        from dataclasses import asdict
+
+        config = RagToolConfig(use_routed_search=True)
+        restored = RagToolConfig(**asdict(config))
+        assert restored.use_routed_search is True
 
     def test_custom_values(self):
         config = RagToolConfig(
@@ -118,6 +132,29 @@ class TestRagToolConfig:
     def test_score_threshold_from_dict(self):
         config = RagToolConfig(**{"top_k": 5, "score_threshold": 0.4})
         assert config.score_threshold == 0.4
+
+    def test_kb_id_default_is_none(self):
+        """kb-rag-filter D5: kb_id 기본 None = 기존 동작."""
+        config = RagToolConfig()
+        assert config.kb_id is None
+
+    def test_kb_id_restored_from_legacy_dict(self):
+        """기존 저장 config(kb_id 부재) 하위호환."""
+        legacy = {"collection_name": "finance_docs", "top_k": 7}
+        config = RagToolConfig(**legacy)
+        assert config.kb_id is None
+
+    def test_kb_id_roundtrip(self):
+        from dataclasses import asdict
+
+        config = RagToolConfig(kb_id="0b7c9a1e-1111-2222-3333-444455556666")
+        restored = RagToolConfig(**asdict(config))
+        assert restored.kb_id == "0b7c9a1e-1111-2222-3333-444455556666"
+
+    def test_kb_id_no_format_validation(self):
+        """D5: UUID 정규식 과검증 안 함 — 존재 검증은 UseCase 책임."""
+        config = RagToolConfig(kb_id="any-string")
+        assert config.kb_id == "any-string"
 
 
 class TestRagToolConfigPolicy:

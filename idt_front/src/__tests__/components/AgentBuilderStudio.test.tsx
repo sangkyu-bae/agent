@@ -35,6 +35,11 @@ const openToolModal = async () => {
   await userEvent.click(screen.getByRole('button', { name: '도구' }));
 };
 
+/** agent-instruction-required: 지침 필수 — 저장 전 지침 입력 */
+const fillInstruction = async (text = '당신은 테스트 에이전트입니다.') => {
+  await userEvent.type(screen.getByLabelText('지침'), text);
+};
+
 describe('AgentBuilderPage — Studio 도구 추가 모달', () => {
   it('도구 모달 로딩 중 스켈레톤 UI 를 표시한다', async () => {
     server.use(
@@ -109,12 +114,14 @@ describe('AgentBuilderPage — Studio 도구 추가 모달', () => {
     await userEvent.click(excelTool);
     await userEvent.click(screen.getByRole('button', { name: '완료' }));
 
+    await fillInstruction();
     await userEvent.click(screen.getByRole('button', { name: /^저장$/ }));
 
     await vi.waitFor(() => {
       expect(capturedBody).not.toBeNull();
     });
     expect(capturedBody!.tool_ids).toEqual(['internal:excel_export']);
+    expect(capturedBody!.system_prompt).toBe('당신은 테스트 에이전트입니다.');
   });
 
   it('생성 모드에서 스킬을 토글하면 skill_ids 로 서버에 전송된다', async () => {
@@ -143,6 +150,7 @@ describe('AgentBuilderPage — Studio 도구 추가 모달', () => {
     const toggle = await screen.findByRole('switch', { name: '환율 계산기 토글' });
     await userEvent.click(toggle);
 
+    await fillInstruction();
     await userEvent.click(screen.getByRole('button', { name: /^저장$/ }));
 
     await vi.waitFor(() => {
@@ -151,7 +159,7 @@ describe('AgentBuilderPage — Studio 도구 추가 모달', () => {
     expect(capturedBody!.skill_ids).toEqual(['skill-1']);
   });
 
-  it('도구를 선택하지 않으면 tool_ids 가 전송되지 않는다 (AI 자동 선택)', async () => {
+  it('도구를 선택하지 않으면 tool_ids 없이 전송된다 (백엔드 0-워커 생성)', async () => {
     let capturedBody: Record<string, unknown> | null = null;
     server.use(
       http.post(`*${API_ENDPOINTS.AGENT_BUILDER_CREATE}`, async ({ request }) => {
@@ -169,8 +177,9 @@ describe('AgentBuilderPage — Studio 도구 추가 모달', () => {
     );
 
     await enterStudio();
-    await userEvent.type(screen.getByLabelText('에이전트 이름'), 'AI 자동 에이전트');
+    await userEvent.type(screen.getByLabelText('에이전트 이름'), '순수 대화 에이전트');
 
+    await fillInstruction();
     await userEvent.click(screen.getByRole('button', { name: /^저장$/ }));
 
     await vi.waitFor(() => {
@@ -207,6 +216,7 @@ describe('AgentBuilderPage — Studio 도구 추가 모달', () => {
     await userEvent.click(screen.getByRole('button', { name: '완료' }));
 
     await userEvent.type(screen.getByLabelText('에이전트 이름'), 'MCP 에이전트');
+    await fillInstruction();
     await userEvent.click(screen.getByRole('button', { name: /^저장$/ }));
 
     await vi.waitFor(() => {
@@ -422,6 +432,7 @@ describe('AgentBuilderPage — 스케줄 staged 일괄 등록 (agent-schedule)',
 
     await enterStudio();
     await userEvent.type(screen.getByLabelText('에이전트 이름'), '스케줄 에이전트');
+    await fillInstruction();
 
     await userEvent.click(screen.getByRole('button', { name: '스케줄' }));
     await addStagedSchedule('9', '아침 뉴스 요약');
@@ -467,6 +478,7 @@ describe('AgentBuilderPage — 스케줄 staged 일괄 등록 (agent-schedule)',
 
     await enterStudio();
     await userEvent.type(screen.getByLabelText('에이전트 이름'), '부분 실패 에이전트');
+    await fillInstruction();
 
     await userEvent.click(screen.getByRole('button', { name: '스케줄' }));
     await addStagedSchedule('9', '아침 뉴스 요약');
@@ -491,12 +503,70 @@ describe('AgentBuilderPage — 스케줄 staged 일괄 등록 (agent-schedule)',
 
     await enterStudio();
     await userEvent.type(screen.getByLabelText('에이전트 이름'), '무스케줄 에이전트');
+    await fillInstruction();
     await userEvent.click(screen.getByRole('button', { name: /^저장$/ }));
 
     expect(
       await screen.findByText('에이전트가 성공적으로 등록되었습니다.'),
     ).toBeInTheDocument();
     expect(scheduleCalls).toBe(0);
+  });
+});
+
+describe('AgentBuilderPage — 지침 필수 (agent-instruction-required)', () => {
+  it('지침 없이 저장하면 create 호출 없이 인라인 에러를 표시한다', async () => {
+    let createCalled = false;
+    server.use(
+      http.post(`*${API_ENDPOINTS.AGENT_BUILDER_CREATE}`, async () => {
+        createCalled = true;
+        return HttpResponse.json({}, { status: 201 });
+      }),
+    );
+
+    await enterStudio();
+    await userEvent.type(screen.getByLabelText('에이전트 이름'), '지침없는 에이전트');
+    await userEvent.click(screen.getByRole('button', { name: /^저장$/ }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('지침을 입력해주세요');
+    expect(createCalled).toBe(false);
+  });
+
+  it('지침을 입력하면 에러가 사라지고 create 본문에 system_prompt가 포함된다 (1-call)', async () => {
+    let capturedBody: Record<string, unknown> | null = null;
+    let createCalls = 0;
+    server.use(
+      http.post(`*${API_ENDPOINTS.AGENT_BUILDER_CREATE}`, async ({ request }) => {
+        createCalls += 1;
+        capturedBody = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json(
+          {
+            agent_id: 'agent-prompt', name: capturedBody.name,
+            system_prompt: capturedBody.system_prompt, tool_ids: [], workers: [],
+            flow_hint: '', llm_model_id: 'm-1', visibility: 'private',
+            visibility_clamped: false, max_visibility: null, department_id: null,
+            temperature: 0.7, created_at: '2026-07-06T00:00:00Z',
+          },
+          { status: 201 },
+        );
+      }),
+    );
+
+    await enterStudio();
+    await userEvent.type(screen.getByLabelText('에이전트 이름'), '지침있는 에이전트');
+
+    // 먼저 빈 지침으로 저장 → 에러
+    await userEvent.click(screen.getByRole('button', { name: /^저장$/ }));
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+
+    // 지침 입력 → 에러 해제
+    await fillInstruction('구체적인 지침 내용');
+    expect(screen.queryByRole('alert')).toBeNull();
+
+    await userEvent.click(screen.getByRole('button', { name: /^저장$/ }));
+    await vi.waitFor(() => expect(capturedBody).not.toBeNull());
+    expect(capturedBody!.system_prompt).toBe('구체적인 지침 내용');
+    // create→update 2-call 제거: create는 정확히 1회
+    expect(createCalls).toBe(1);
   });
 });
 

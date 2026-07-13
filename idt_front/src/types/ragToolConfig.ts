@@ -9,9 +9,27 @@ export interface RagToolConfig {
   tool_description: string;
   /** LLM-WIKI-001 Step6: 승인 위키를 먼저 검색(WikiFirstSearch) 후 원본 폴백 */
   use_wiki_first?: boolean;
+  /** rag-routed-integration: 3계층 요약 라우팅 검색 opt-in — 실패 시 위 검색 모드로 자동 전환 (교차검증용) */
+  use_routed_search?: boolean;
+  /** kb-rag-filter: 논리 지식베이스 필터 opt-in — 설정 시 컬렉션은 KB의 것으로 자동 고정 */
+  kb_id?: string;
 }
 
 export type CollectionScope = 'PERSONAL' | 'DEPARTMENT' | 'PUBLIC';
+
+/** kb-rag-filter: GET /api/v1/knowledge-bases 응답 항목
+ *  (kb-management-ui D5: 관리 화면용 필드 additive 확장 — 기존 사용처 무영향) */
+export interface KnowledgeBaseInfo {
+  kb_id: string;
+  name: string;
+  description?: string | null;
+  scope: CollectionScope;
+  department_id?: string | null;
+  collection_name: string;
+  owner_id?: number;
+  use_clause_chunking?: boolean;
+  created_at?: string | null;
+}
 
 export interface CollectionInfo {
   name: string;
@@ -42,4 +60,5 @@ export const DEFAULT_RAG_CONFIG: RagToolConfig = {
   tool_description:
     '내부 문서에서 관련 정보를 검색합니다. 질문에 대한 내부 문서 정보가 필요할 때 사용하세요.',
   use_wiki_first: false,
+  use_routed_search: false,
 };

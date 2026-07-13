@@ -12,6 +12,7 @@ from src.infrastructure.langsmith.langsmith import (
     normalize_agent_project_name,
     make_agent_run_tracer,
     make_composer_tracer,
+    make_document_extractor_tracer,
 )
 
 
@@ -63,3 +64,20 @@ class TestMakeComposerTracer:
         tracer = make_composer_tracer(tags=["agent-composer"])
         assert tracer is not None
         assert tracer.project_name == "agent-composer"
+
+
+class TestMakeDocumentExtractorTracer:
+    """document-extractor 추적: 고정 프로젝트 'document-extractor'로 per-run tracer."""
+
+    def test_none_without_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("LANGCHAIN_API_KEY", raising=False)
+        monkeypatch.delenv("LANGSMITH_API_KEY", raising=False)
+        assert make_document_extractor_tracer() is None
+
+    def test_returns_tracer_with_fixed_project(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("LANGCHAIN_API_KEY", "lsv2_dummy_key_for_test")
+        tracer = make_document_extractor_tracer(tags=["document-extractor"])
+        assert tracer is not None
+        assert tracer.project_name == "document-extractor"

@@ -27,6 +27,7 @@ class ToolFactory:
         tracker: Any = None,                       # ★ M4: RunTracker | None
         run_observability_config: Any = None,      # ★ M4: RunObservabilityConfig | None
         wiki_search: Any = None,                   # ★ LLM-WIKI-001: RunScopedWikiSearch | None
+        routed_retrieval_getter: Callable[[], Any] | None = None,  # ★ rag-routed-integration D2
     ) -> None:
         self._logger = logger
         self._hybrid_search = hybrid_search_use_case
@@ -37,6 +38,9 @@ class ToolFactory:
         self._obs_config = run_observability_config
         # use_wiki_first=True인 RAG 도구에 주입할 위키 우선 검색 어댑터(없으면 hybrid 폴백).
         self._wiki_search = wiki_search
+        # rag-routed-integration D2: use_routed_search=True인 RAG 도구에 주입.
+        # None이면 도구가 not_wired 강등 처리(기존 search_mode 경로).
+        self._routed_retrieval_getter = routed_retrieval_getter
         # agent-user-context Design §7.1:
         # WorkflowCompiler.compile() 시점에 갱신되는 현재 요청의 AuthContext.
         # None이면 Tool은 ContextVar fallback 또는 public_anonymous 동작.
@@ -76,6 +80,7 @@ class ToolFactory:
                 rag_config = self._parse_rag_config(tool_config)
                 effective_threshold = self._resolve_score_threshold(rag_config)
                 search_use_case = self._select_search(rag_config)
+                effective_filter = self._merge_kb_filter(rag_config)
                 return InternalDocumentSearchTool(
                     hybrid_search_use_case=search_use_case,
                     request_id=request_id,
@@ -83,7 +88,7 @@ class ToolFactory:
                     search_mode=rag_config.search_mode,
                     rrf_k=rag_config.rrf_k,
                     score_threshold=effective_threshold,
-                    metadata_filter=rag_config.metadata_filter,
+                    metadata_filter=effective_filter,
                     collection_name=rag_config.collection_name,
                     es_index=rag_config.es_index,
                     name=sanitize_tool_name(rag_config.tool_name),
@@ -94,6 +99,9 @@ class ToolFactory:
                     config=self._obs_config,
                     # ── agent-user-context Design §7.1: AuthContext 주입 ──
                     auth_ctx=self._auth_ctx,
+                    # ── rag-routed-integration D2: 라우팅 opt-in 배선 ──
+                    use_routed_search=rag_config.use_routed_search,
+                    routed_retrieval_getter=self._routed_retrieval_getter,
                 )
             case "tavily_search":
                 from src.infrastructure.web_search.tavily_tool import TavilySearchTool
@@ -144,6 +152,16 @@ class ToolFactory:
             return tools[0]
 
         return self.create(tool_id, request_id, tool_config=tool_config)
+
+    @staticmethod
+    def _merge_kb_filter(rag_config: RagToolConfig) -> dict[str, str]:
+        """kb-rag-filter D6: kb_id를 metadata_filter에 병합.
+
+        D2: first-class kb_id 필드가 수동 metadata_filter["kb_id"] 키보다 우선.
+        """
+        if not rag_config.kb_id:
+            return rag_config.metadata_filter
+        return {**rag_config.metadata_filter, "kb_id": rag_config.kb_id}
 
     def _parse_rag_config(self, tool_config: dict | None) -> RagToolConfig:
         """tool_config dict → RagToolConfig 변환. None이면 기본값."""

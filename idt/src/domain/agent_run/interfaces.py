@@ -162,6 +162,14 @@ class AgentRunRepositoryInterface(ABC):
     async def find_retrievals(self, run_id: RunId) -> List[RetrievalSource]: ...
 
     @abstractmethod
+    async def attach_user_message(self, run_id: RunId, message_id: int) -> None:
+        """retrieval-observability D2: ai_run.user_message_id deferred attach."""
+
+    @abstractmethod
+    async def find_runs_by_user_message(self, message_id: int) -> List[AgentRun]:
+        """메시지 기준 run 조회 (조회 API)."""
+
+    @abstractmethod
     async def list_runs(self, filters: "RunListFilters") -> List[AgentRun]:
         """M5: 필터 + ORDER BY started_at DESC + LIMIT/OFFSET."""
 

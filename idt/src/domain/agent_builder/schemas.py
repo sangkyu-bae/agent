@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Literal
 
+from src.domain.agent_builder.policies import IterationLimitPolicy
 from src.domain.llm_model.entity import LlmModel
 
 ToolCategory = Literal["search", "action", "analysis"]
@@ -12,7 +13,7 @@ ToolCategory = Literal["search", "action", "analysis"]
 class SupervisorConfig:
     """Supervisor 루프 실행 설정. WorkflowCompiler에 전달."""
 
-    max_iterations: int = 10
+    max_iterations: int = IterationLimitPolicy.DEFAULT
     token_limit: int = 8000
     quality_gate_enabled: bool = False
     max_retries_per_worker: int = 2
@@ -55,7 +56,11 @@ class WorkerDefinition:
 
 @dataclass
 class WorkflowSkeleton:
-    """ToolSelector 출력: 도구 선택 결과 (시스템 프롬프트 제외)."""
+    """워크플로우 골격: 선택된 도구 워커 목록 + flow_hint (시스템 프롬프트 제외).
+
+    도구 미지정 시 workers=[]인 순수 대화형 골격으로도 생성된다
+    (agent-instruction-required: LLM 도구 자동선택 제거).
+    """
 
     workers: list[WorkerDefinition]
     flow_hint: str
@@ -88,6 +93,9 @@ class AgentDefinition:
     visibility: str = "private"
     department_id: str | None = None
     temperature: float = 0.70
+    # agent-recursion-limit: supervisor 반복 한도 (기본 25, 10~1000).
+    # 실행 시 SupervisorConfig·LangGraph recursion_limit의 단일 소스.
+    max_iterations: int = IterationLimitPolicy.DEFAULT
     # agent-user-context: 사용자 컨텍스트 prepend opt-out flag (default True).
     # WorkflowCompiler.compile()에서 prepend 여부 결정에 사용.
     include_user_context: bool = True
@@ -98,6 +106,7 @@ class AgentDefinition:
     def __post_init__(self) -> None:
         if not (0.0 <= self.temperature <= 2.0):
             raise ValueError(f"temperature must be 0.0~2.0, got {self.temperature}")
+        IterationLimitPolicy.validate(self.max_iterations)
         if self.visibility == "department" and self.department_id is None:
             raise ValueError("department visibility requires department_id")
 
@@ -116,6 +125,7 @@ class AgentDefinition:
         visibility: str | None = None,
         department_id: str | None = None,
         temperature: float | None = None,
+        max_iterations: int | None = None,
     ) -> None:
         """업데이트 적용."""
         if system_prompt is not None:
@@ -128,6 +138,8 @@ class AgentDefinition:
             self.department_id = department_id
         if temperature is not None:
             self.temperature = temperature
+        if max_iterations is not None:
+            self.max_iterations = max_iterations
         self.__post_init__()
 
     def replace_sub_agents(self, sub_workers: list["WorkerDefinition"]) -> None:

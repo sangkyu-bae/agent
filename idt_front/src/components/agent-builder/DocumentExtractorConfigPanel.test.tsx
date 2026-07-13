@@ -58,6 +58,36 @@ const draftFixture = (
 });
 
 describe('DocumentExtractorConfigPanel — 업로드/추출', () => {
+  it('extract 실패 시 업로드 화면(draft 없음)에도 에러 메시지를 표시한다', async () => {
+    server.use(
+      http.post(`*${API_ENDPOINTS.DOCUMENT_EXTRACTOR_EXTRACT}`, () =>
+        HttpResponse.json(
+          {
+            detail: {
+              code: 'SLOT_EXTRACTION_FAILED',
+              message: '슬롯 추출 LLM 호출에 실패했습니다: 429 rate_limit',
+            },
+          },
+          { status: 502 },
+        ),
+      ),
+    );
+    renderWithQuery(
+      <DocumentExtractorConfigPanel draft={null} onChange={vi.fn()} />,
+    );
+
+    await userEvent.upload(
+      screen.getByLabelText('양식 문서 업로드'),
+      new File(['%PDF'], '큰문서.pdf', { type: 'application/pdf' }),
+    );
+
+    expect(
+      await screen.findByText(
+        '슬롯 추출 LLM 호출에 실패했습니다: 429 rate_limit',
+      ),
+    ).toBeInTheDocument();
+  });
+
   it('파일 업로드 시 extract 응답으로 드래프트를 생성한다', async () => {
     server.use(
       http.post(`*${API_ENDPOINTS.DOCUMENT_EXTRACTOR_EXTRACT}`, () =>
@@ -227,7 +257,7 @@ describe('DocumentExtractorConfigPanel — 슬롯 수동 추가/라벨 편집 (G
     expect(added.key).toMatch(/^[a-z][a-z0-9_]{0,49}$/);
   });
 
-  it('예시값이 문서에 없으면 슬롯을 추가하지 않고 에러를 표시한다', async () => {
+  it('예시값이 문서에 없으면 슬롯을 추가하지 않고 버튼 인접 에러를 표시한다', async () => {
     const onChange = vi.fn();
     renderWithQuery(
       <DocumentExtractorConfigPanel
@@ -240,7 +270,64 @@ describe('DocumentExtractorConfigPanel — 슬롯 수동 추가/라벨 편집 (G
     await userEvent.click(screen.getByRole('button', { name: '추가' }));
 
     expect(onChange).not.toHaveBeenCalled();
-    expect(screen.getByText(/예시값이 문서 본문에 없습니다/)).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      /예시값을 문서에서 찾지 못했습니다/,
+    );
+  });
+
+  // doc-extractor-slot-add-fix FR-01: MCP pdf_to_html 실출력(숫자 엔티티/span 분절)
+  it('엔티티/분절 문서에서도 화면 표기 예시값으로 슬롯을 추가한다', async () => {
+    const onChange = vi.fn();
+    renderWithQuery(
+      <DocumentExtractorConfigPanel
+        draft={draftFixture({
+          html: '<p><span>&#xb2f4;</span><span>&#xb2f9;&#xc790;: &#xae40;&#xacfc;&#xc7a5;</span></p>',
+        })}
+        onChange={onChange}
+      />,
+    );
+    await userEvent.type(screen.getByLabelText('새 슬롯 항목명'), '담당자');
+    await userEvent.type(screen.getByLabelText('새 슬롯 예시값'), '김과장');
+    await userEvent.click(screen.getByRole('button', { name: '추가' }));
+
+    const updated = onChange.mock.calls.at(-1)?.[0] as DocumentExtractorDraft;
+    expect(updated.slots).toHaveLength(2);
+    expect(updated.slots[1].sample_value).toBe('김과장');
+  });
+
+  it('추가 성공 시 성공 피드백을 표시하고 입력 필드를 초기화한다', async () => {
+    const onChange = vi.fn();
+    renderWithQuery(
+      <DocumentExtractorConfigPanel
+        draft={draftFixture()}
+        onChange={onChange}
+      />,
+    );
+    await userEvent.type(screen.getByLabelText('새 슬롯 항목명'), '담당자');
+    await userEvent.type(screen.getByLabelText('새 슬롯 예시값'), '5억 원');
+    await userEvent.click(screen.getByRole('button', { name: '추가' }));
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      "'담당자' 슬롯이 추가되었습니다.",
+    );
+    expect(screen.getByLabelText('새 슬롯 항목명')).toHaveValue('');
+    expect(screen.getByLabelText('새 슬롯 예시값')).toHaveValue('');
+  });
+
+  it('입력값을 다시 수정하면 이전 피드백이 사라진다', async () => {
+    renderWithQuery(
+      <DocumentExtractorConfigPanel
+        draft={draftFixture()}
+        onChange={vi.fn()}
+      />,
+    );
+    await userEvent.type(screen.getByLabelText('새 슬롯 항목명'), '담당자');
+    await userEvent.type(screen.getByLabelText('새 슬롯 예시값'), '없는값');
+    await userEvent.click(screen.getByRole('button', { name: '추가' }));
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+
+    await userEvent.type(screen.getByLabelText('새 슬롯 예시값'), '5');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });
 

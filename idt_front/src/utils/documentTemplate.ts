@@ -89,8 +89,25 @@ const findRange = (index: TextIndex, target: string): CharRef[] | null => {
   const normalized = target.normalize('NFC').replace(/\s+/g, ' ').trim();
   if (!normalized) return null;
   const at = index.normText.indexOf(normalized);
-  if (at === -1) return null;
-  return index.chars.slice(at, at + normalized.length);
+  if (at !== -1) return index.chars.slice(at, at + normalized.length);
+  // 폴백: PyMuPDF layout HTML은 어절 span 사이에 공백 텍스트 노드가 없어
+  // (미리보기 preview_html 실측) 공백 포함 target의 완전일치가 실패한다.
+  // 공백을 완전히 제거한 압축 문자열로 재시도해 위치를 복원한다.
+  const compactTarget = normalized.replace(/ /g, '');
+  if (!compactTarget) return null;
+  let compactText = '';
+  const compactToNorm: number[] = [];
+  for (let i = 0; i < index.normText.length; i += 1) {
+    if (index.normText[i] !== ' ') {
+      compactText += index.normText[i];
+      compactToNorm.push(i);
+    }
+  }
+  const compactAt = compactText.indexOf(compactTarget);
+  if (compactAt === -1) return null;
+  return compactToNorm
+    .slice(compactAt, compactAt + compactTarget.length)
+    .map((i) => index.chars[i]);
 };
 
 // 매칭 문자들을 노드별 연속 구간으로 그룹화
@@ -171,6 +188,14 @@ export const tokenizeHtml = (
     missingSlots,
   };
 };
+
+/**
+ * 수동 슬롯 추가 검증용(doc-extractor-slot-add-fix FR-01): 정규화 텍스트 기준으로
+ * 본문에 텍스트가 존재하는지 확인. tokenizeHtml과 동일한 매칭 경로를 쓰므로
+ * "추가 통과 = 확정 시 토큰화 가능"이 보장된다.
+ */
+export const htmlContainsText = (html: string, text: string): boolean =>
+  findRange(buildTextIndex(parseDoc(html)), text) !== null;
 
 // D5(mark 가시성) + D6(스케일) 스타일 주입.
 // layout 모드의 `.pdf-page span{color:transparent!important}`(0,1,1)보다

@@ -86,12 +86,7 @@ class UnifiedUploadUseCase:
         )
         total_pages = len(parsed_docs)
 
-        strategy = ChunkingStrategyFactory.create_strategy(
-            "parent_child",
-            parent_chunk_size=2000,
-            child_chunk_size=request.child_chunk_size,
-            child_chunk_overlap=request.child_chunk_overlap,
-        )
+        strategy, strategy_name, chunking_config = self._build_strategy(request)
         chunks = strategy.chunk(parsed_docs)
 
         document_id = str(uuid.uuid4())
@@ -99,6 +94,8 @@ class UnifiedUploadUseCase:
             chunk.metadata["document_id"] = document_id
             chunk.metadata["user_id"] = request.user_id
             chunk.metadata["collection_name"] = request.collection_name
+            for key, value in request.extra_metadata.items():
+                chunk.metadata.setdefault(key, value)
 
         qdrant_raw, es_raw = await asyncio.gather(
             self._store_to_qdrant(
@@ -140,7 +137,9 @@ class UnifiedUploadUseCase:
                     category="uncategorized",
                     user_id=request.user_id,
                     chunk_count=len(chunks),
-                    chunk_strategy="parent_child",
+                    chunk_strategy=strategy_name,
+                    # kb-management-ui D2: KB 지정 업로드만 값 존재
+                    kb_id=request.extra_metadata.get("kb_id"),
                 ),
                 request_id=request_id,
             )
@@ -184,14 +183,35 @@ class UnifiedUploadUseCase:
             collection_name=request.collection_name,
             qdrant=qdrant_result,
             es=es_result,
-            chunking_config={
-                "strategy": "parent_child",
-                "parent_chunk_size": 2000,
-                "child_chunk_size": request.child_chunk_size,
-                "child_chunk_overlap": request.child_chunk_overlap,
-            },
+            chunking_config=chunking_config,
             status=status,
         )
+
+    def _build_strategy(self, request: UnifiedUploadRequest):
+        """전략 선택 (clause-aware-chunking Design D10).
+
+        chunking_config가 None이면 기존 parent_child 하드코딩 경로를 그대로 사용하고,
+        지정되면 해당 전략을 factory에 위임한다. Returns (strategy, name, config_dict).
+        """
+        if request.chunking_config is not None:
+            cfg = request.chunking_config
+            strategy = ChunkingStrategyFactory.create_strategy(
+                cfg.strategy, **cfg.params
+            )
+            return strategy, cfg.strategy, dict(cfg.display)
+        strategy = ChunkingStrategyFactory.create_strategy(
+            "parent_child",
+            parent_chunk_size=2000,
+            child_chunk_size=request.child_chunk_size,
+            child_chunk_overlap=request.child_chunk_overlap,
+        )
+        config = {
+            "strategy": "parent_child",
+            "parent_chunk_size": 2000,
+            "child_chunk_size": request.child_chunk_size,
+            "child_chunk_overlap": request.child_chunk_overlap,
+        }
+        return strategy, "parent_child", config
 
     async def _resolve_embedding_model(self, collection_name: str, request_id: str):
         logs = await self._activity_log_repo.find_all(
@@ -273,6 +293,8 @@ class UnifiedUploadUseCase:
             }
             if "parent_id" in chunk.metadata:
                 body["parent_id"] = chunk.metadata["parent_id"]
+            for key, value in request.extra_metadata.items():
+                body.setdefault(key, value)
             es_docs.append(ESDocument(id=chunk_id, body=body, index=self._es_index))
 
         count = await self._es_repo.bulk_index(es_docs, request_id)

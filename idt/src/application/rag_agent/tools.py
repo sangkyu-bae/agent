@@ -21,9 +21,23 @@ from src.domain.agent_run.auth_context import AuthContext
 from src.domain.hybrid_search.schemas import HybridSearchRequest
 from src.domain.permission.value_objects import PermissionCode
 from src.domain.rag_agent.schemas import DocumentSource
+from src.domain.routed_retrieval.schemas import (
+    RoutedChunk,
+    RoutedParams,
+    RoutedScope,
+)
 
 
 _RAG_DENIED_MSG = "RAG 검색 권한이 없습니다."
+
+# rag-routed-integration D4: 라우팅 스코프 필터 키 3분류.
+# kb_id는 RoutedScope로 매핑, viewer_department_ids는 기존 hybrid 경로에서도
+# 실효 없는 키(Repository 미지원 시 무시 — _apply_auth_filter 주석)라 동일 취급,
+# 그 외 키(visibility 포함)는 요약 payload에 존재 보장이 없어 강등한다.
+_ROUTED_SCOPE_KEYS = frozenset({"kb_id"})
+_ROUTED_IGNORED_KEYS = frozenset({"viewer_department_ids"})
+# rag-routed-integration D6: 근거 헤더의 섹션 요약 1줄 절단 상한 (NFR-04)
+_ROUTED_EVIDENCE_SUMMARY_MAX = 150
 
 
 _DEFAULT_OBS_CFG = RunObservabilityConfig()
@@ -67,6 +81,9 @@ class InternalDocumentSearchTool(BaseTool):
     config: Any = None   # RunObservabilityConfig | None
     # ── agent-user-context Design §7.2: AuthContext (Optional) ─────────────
     auth_ctx: Any = None  # AuthContext | None — ToolFactory.bind_auth_ctx로 주입
+    # ── rag-routed-integration D1/D2: 라우팅 검색 opt-in (기존 search_mode와 독립) ──
+    use_routed_search: bool = False
+    routed_retrieval_getter: Any = None  # Callable[[], RoutedRetrievalUseCase] | None
 
     def _run(self, query: str) -> str:
         raise NotImplementedError("비동기 _arun을 사용하세요.")
@@ -129,9 +146,72 @@ class InternalDocumentSearchTool(BaseTool):
             ctx, self.metadata_filter,
         )
 
+        # rag-routed-integration D3: opt-in 시 라우팅 시도 — None(강등)이면
+        # 아래 기존 흐름(이 에이전트의 search_mode 경로) 그대로 계속.
+        if self.use_routed_search:
+            routed = await self._routed_search(query)
+            if routed is not None:
+                return routed
+
         if self.use_multi_query and self.multi_query_use_case is not None:
             return await self._multi_query_search(query)
         return await self._single_query_search(query)
+
+    def _routed_degrade(self, reason: str, **extra) -> None:
+        """강등 사유 로그 (D5) — 교차검증 강등률 관측용."""
+        if self.logger is not None:
+            self.logger.warning(
+                "Routed search degraded to legacy path",
+                reason=reason,
+                request_id=self.request_id,
+                **extra,
+            )
+
+    def _routed_scope(self) -> RoutedScope | None:
+        """effective filter 키 3분류 → 스코프 매핑 또는 None(강등) (D4)."""
+        effective = self._get_effective_filter()
+        incompatible = [
+            key
+            for key in effective
+            if key not in _ROUTED_SCOPE_KEYS and key not in _ROUTED_IGNORED_KEYS
+        ]
+        if incompatible:
+            self._routed_degrade(
+                "filter_incompatible", filter_keys=sorted(incompatible)
+            )
+            return None
+        return RoutedScope(
+            collection_name=self.collection_name,
+            kb_id=effective.get("kb_id"),
+        )
+
+    async def _routed_search(self, query: str) -> str | None:
+        """3계층 라우팅 검색 시도 — 실패/비호환 시 None 반환(강등) (D3~D5)."""
+        if self.routed_retrieval_getter is None:
+            self._routed_degrade("not_wired")
+            return None
+        scope = self._routed_scope()
+        if scope is None:
+            return None
+        params = RoutedParams(top_k=self.top_k, rrf_k=self.rrf_k)
+        try:
+            result = await self.routed_retrieval_getter().execute(
+                query, scope, params, self.request_id
+            )
+        except Exception as e:
+            self._routed_degrade("error", exception=e)
+            return None
+        if not result.results:
+            self._routed_degrade("empty")
+            return None
+        if self.logger is not None:
+            self.logger.info(
+                "Routed search completed",
+                request_id=self.request_id,
+                routed_results=len(result.results) - result.fallback_count,
+                fallback_used=result.fallback_used,
+            )
+        return await self._format_routed_results(result.results, query)
 
     async def _multi_query_search(self, query: str) -> str:
         """Multi-Query 워크플로우를 통한 검색."""
@@ -147,7 +227,21 @@ class InternalDocumentSearchTool(BaseTool):
         if not result.results:
             return "관련 내부 문서를 찾지 못했습니다."
 
-        return await self._format_results(result.results)
+        # retrieval-observability D6: chunk_id → 기여 쿼리 역맵.
+        # per_query_hits 미제공(None)이면 빈 맵 → search_query는 원 tool 입력 폴백.
+        hit_queries: dict[str, list[str]] = {}
+        for pq in (result.per_query_hits or []):
+            for hid in pq.hit_ids:
+                hit_queries.setdefault(hid, []).append(pq.query)
+
+        return await self._format_results(
+            result.results,
+            search_query=query,
+            query_source="multi_query",
+            search_mode="hybrid",
+            hit_queries=hit_queries,
+            extra_metadata={"generated_queries": result.generated_queries},
+        )
 
     async def _single_query_search(self, query: str) -> str:
         """기존 단일 쿼리 하이브리드 검색."""
@@ -177,13 +271,112 @@ class InternalDocumentSearchTool(BaseTool):
         if not result.results:
             return "관련 내부 문서를 찾지 못했습니다."
 
-        return await self._format_results(result.results)
+        return await self._format_results(
+            result.results,
+            search_query=query,
+            query_source="original",
+            search_mode=self.search_mode,
+        )
 
-    async def _format_results(self, results: list) -> str:
+    async def _format_routed_results(
+        self, chunks: list[RoutedChunk], query: str = ""
+    ) -> str:
+        """라우팅 결과 포맷팅 — 근거 헤더 + 요약 1줄 + 본문 (D6).
+
+        내장 폴백 결과(from_fallback)는 기존 포맷을 준용하고,
+        collected_sources/record_retrieval은 기존 계약과 동형으로 채운다.
+        """
+        lines: list[str] = []
+        ctx = get_current_run_context() if self.tracker is not None else None
+        for rank_index, chunk in enumerate(chunks, start=1):
+            source = self._routed_source_label(chunk)
+            if chunk.from_fallback or chunk.section is None:
+                lines.append(f"[출처: {source}]\n{chunk.content}")
+            else:
+                summary_line = chunk.section.summary.split("\n")[0][
+                    :_ROUTED_EVIDENCE_SUMMARY_MAX
+                ]
+                lines.append(
+                    f"[출처: {source}]\n요약: {summary_line}\n{chunk.content}"
+                )
+            self.collected_sources.append(
+                DocumentSource(
+                    content=chunk.content,
+                    source=source,
+                    chunk_id=chunk.section_ref,
+                    score=chunk.score,
+                )
+            )
+            await self._record_routed_retrieval(ctx, chunk, rank_index, query)
+        return "\n\n".join(lines)
+
+    @staticmethod
+    def _routed_source_label(chunk: RoutedChunk) -> str:
+        if chunk.from_fallback or chunk.document is None:
+            return chunk.clause_title or chunk.document_id or "unknown"
+        filename = chunk.document.filename or chunk.document_id
+        if chunk.clause_title:
+            return f"{filename} > {chunk.clause_title}"
+        return filename
+
+    async def _record_routed_retrieval(
+        self, ctx, chunk: RoutedChunk, rank_index: int, query: str = ""
+    ) -> None:
+        """라우팅 hit의 record_retrieval — 기존 계약과 동형 best-effort.
+
+        metadata에 search=routed/from_fallback을 표기해 RRF 점수 스케일을
+        기존 코사인/BM25 기록과 구분한다 (D6, 혼합 비교 금지).
+        retrieval-observability D7: search_mode=routed, 개별 점수는 NULL 유지.
+        """
+        if ctx is None or ctx.run_id is None:
+            return
+        preview_max = (self.config or _DEFAULT_OBS_CFG).retrieval_preview_max_bytes
+        try:
+            await self.tracker.record_retrieval(
+                run_id=ctx.run_id,
+                tool_call_id=ctx.tool_call_id,
+                collection_name=self.collection_name or "unknown",
+                document_id=chunk.document_id or None,
+                chunk_id=chunk.section_ref,
+                score=chunk.score,
+                rank_index=rank_index,
+                content_preview=chunk.content[:preview_max] if chunk.content else None,
+                metadata={
+                    "search": "routed",
+                    "from_fallback": str(chunk.from_fallback),
+                    "clause_title": chunk.clause_title,
+                },
+                search_query=query or None,
+                query_source="original",
+                search_mode="routed",
+            )
+        except Exception as e:
+            if self.logger is not None:
+                self.logger.warning(
+                    "record_retrieval failed in routed search (best-effort)",
+                    exception=e,
+                    chunk_id=chunk.section_ref,
+                )
+
+    async def _format_results(
+        self,
+        results: list,
+        *,
+        search_query: str | None = None,
+        query_source: str | None = None,
+        search_mode: str | None = None,
+        hit_queries: dict[str, list[str]] | None = None,
+        extra_metadata: dict | None = None,
+    ) -> str:
         """검색 결과를 텍스트로 포맷팅 + (tracker 주입 시) retrieval 영속화.
 
         M4: 각 hit에 대해 best-effort로 `tracker.record_retrieval`을 호출한다.
         실패는 warning 로그만 남기고 다음 hit 진행 — RAG 답변 흐름을 차단하지 않는다.
+
+        retrieval-observability D5~D7: 검색 실행 컨텍스트를 함께 기록.
+        - hit_queries: chunk_id → 기여 재작성 쿼리 목록 (D6, multi_query 전용).
+          해당 hit의 search_query는 첫 기여 쿼리, 전체는 metadata.matched_queries.
+        - 개별 점수는 HybridSearchResult 필드에서 getattr — 없는 결과형은 NULL (D7).
         """
         lines: list[str] = []
         ctx = get_current_run_context() if self.tracker is not None else None
@@ -211,6 +404,12 @@ class InternalDocumentSearchTool(BaseTool):
                     or hit.metadata.get("collection")
                     or "unknown"
                 )
+                matched = hit_queries.get(hit.id, []) if hit_queries else []
+                metadata = dict(hit.metadata) if hit.metadata else {}
+                if matched:
+                    metadata["matched_queries"] = matched
+                if extra_metadata:
+                    metadata.update(extra_metadata)
                 await self.tracker.record_retrieval(
                     run_id=ctx.run_id,
                     tool_call_id=ctx.tool_call_id,
@@ -220,7 +419,15 @@ class InternalDocumentSearchTool(BaseTool):
                     score=hit.score,
                     rank_index=rank_index,
                     content_preview=preview,
-                    metadata=dict(hit.metadata) if hit.metadata else None,
+                    metadata=metadata or None,
+                    search_query=(matched[0] if matched else search_query),
+                    query_source=query_source,
+                    search_mode=search_mode,
+                    bm25_score=getattr(hit, "bm25_score", None),
+                    vector_score=getattr(hit, "vector_score", None),
+                    bm25_rank=getattr(hit, "bm25_rank", None),
+                    vector_rank=getattr(hit, "vector_rank", None),
+                    fusion_source=getattr(hit, "source", None),
                 )
             except Exception as e:
                 if self.logger is not None:

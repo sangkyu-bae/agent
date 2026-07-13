@@ -83,6 +83,7 @@ export const queryKeys = {
     all: ['llmModels'] as const,
     list: (includeInactive?: boolean) =>
       [...queryKeys.llmModels.all, 'list', { includeInactive }] as const,
+    detail: (id: string) => [...queryKeys.llmModels.all, 'detail', id] as const,
   },
 
   // ── RAG Tools ──────────────────────────────────────────
@@ -91,6 +92,16 @@ export const queryKeys = {
     collections: () => [...queryKeys.ragTools.all, 'collections'] as const,
     metadataKeys: (collectionName?: string) =>
       [...queryKeys.ragTools.all, 'metadataKeys', collectionName] as const,
+  },
+
+  // ── Knowledge Bases (kb-rag-filter / kb-management-ui) ─
+  knowledgeBases: {
+    all: ['knowledgeBases'] as const,
+    list: () => [...queryKeys.knowledgeBases.all, 'list'] as const,
+    detail: (kbId: string) =>
+      [...queryKeys.knowledgeBases.all, 'detail', kbId] as const,
+    documents: (kbId: string, params?: { offset?: number; limit?: number }) =>
+      [...queryKeys.knowledgeBases.all, 'documents', kbId, params] as const,
   },
 
   // ── Embedding Models ────────────────────────────────────

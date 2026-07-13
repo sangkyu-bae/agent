@@ -30,6 +30,17 @@ class QueryVariant:
 
 
 @dataclass(frozen=True)
+class PerQueryHits:
+    """재작성 쿼리 1개가 반환한 hit id 목록 (병합 전).
+
+    retrieval-observability D6: hit별 기여 쿼리 태깅용. id만 담아 콘텐츠 중복 없음.
+    """
+
+    query: str
+    hit_ids: list[str]
+
+
+@dataclass(frozen=True)
 class MultiQueryResult:
     """Multi-Query 검색 최종 결과."""
 
@@ -39,3 +50,5 @@ class MultiQueryResult:
     results: list[HybridSearchResult]
     total_found: int
     request_id: str
+    # retrieval-observability D6: additive — 구버전 소비자 하위호환 (기본 None)
+    per_query_hits: Optional[list[PerQueryHits]] = None

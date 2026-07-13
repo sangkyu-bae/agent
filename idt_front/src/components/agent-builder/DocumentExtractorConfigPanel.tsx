@@ -4,6 +4,7 @@ import {
   buildPreviewHtml,
   extractPageWidthPt,
   generateSlotKey,
+  htmlContainsText,
   ptToPx,
   tokenizeHtml,
 } from '@/utils/documentTemplate';
@@ -17,6 +18,11 @@ import { IDLE_RESUGGEST_MS, MAX_REGEN } from '@/types/documentExtractor';
 interface DocumentExtractorConfigPanelProps {
   draft: DocumentExtractorDraft | null;
   onChange: (draft: DocumentExtractorDraft | null) => void;
+}
+
+interface AddSlotFeedback {
+  type: 'error' | 'success';
+  message: string;
 }
 
 const SLOT_TYPE_BADGE = {
@@ -41,6 +47,11 @@ const DocumentExtractorConfigPanel = ({
   const [newSlotLabel, setNewSlotLabel] = useState('');
   const [newSlotSample, setNewSlotSample] = useState('');
   const [newSlotType, setNewSlotType] = useState<SlotType>('value');
+  // 수동 추가 결과는 추가 버튼 인접에 표시 — 전역 errorMessage는 패널 최상단이라
+  // 긴 모달에서 뷰포트 밖에 렌더링되어 무반응으로 보인다 (slot-add-fix FR-02)
+  const [addSlotFeedback, setAddSlotFeedback] = useState<AddSlotFeedback | null>(
+    null,
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
   const previewWrapRef = useRef<HTMLDivElement>(null);
   const [previewWidth, setPreviewWidth] = useState<number | null>(null);
@@ -182,14 +193,22 @@ const DocumentExtractorConfigPanel = ({
     const label = newSlotLabel.trim();
     const sample = newSlotSample.trim();
     if (!label || !sample) {
-      setErrorMessage('수동 슬롯은 항목명과 예시값(문서 내 실제 텍스트)이 모두 필요합니다.');
+      setAddSlotFeedback({
+        type: 'error',
+        message: '항목명과 예시값(문서 내 실제 텍스트)을 모두 입력해주세요.',
+      });
       return;
     }
-    if (!draft.html.includes(sample)) {
-      setErrorMessage('예시값이 문서 본문에 없습니다. 문서에 있는 텍스트를 그대로 입력하세요.');
+    // 원시 includes 매칭 금지 — MCP pdf_to_html 출력은 엔티티/span 분절 때문에
+    // 완전일치가 항상 실패한다. 확정(tokenizeHtml)과 같은 정규화 매칭 사용 (FR-01)
+    if (!htmlContainsText(draft.html, sample)) {
+      setAddSlotFeedback({
+        type: 'error',
+        message:
+          '예시값을 문서에서 찾지 못했습니다. 미리보기에 보이는 텍스트를 그대로 입력해주세요.',
+      });
       return;
     }
-    setErrorMessage(null);
     const key = generateSlotKey(draft.slots.map((s) => s.key));
     const slot: TemplateSlot = {
       key,
@@ -204,6 +223,10 @@ const DocumentExtractorConfigPanel = ({
       slots: [...draft.slots, slot],
       confirmed: false,
       htmlSkeleton: '',
+    });
+    setAddSlotFeedback({
+      type: 'success',
+      message: `'${label}' 슬롯이 추가되었습니다.`,
     });
     setNewSlotLabel('');
     setNewSlotSample('');
@@ -241,6 +264,7 @@ const DocumentExtractorConfigPanel = ({
   const handleReset = () => {
     setErrorMessage(null);
     setNoticeMessage(null);
+    setAddSlotFeedback(null);
     onChange(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -273,6 +297,14 @@ const DocumentExtractorConfigPanel = ({
             </p>
           )}
         </div>
+      )}
+
+      {/* 상태/에러 — 업로드 실패(draft 없음) 시에도 보여야 한다 */}
+      {noticeMessage && (
+        <p className="mt-3 text-[11.5px] text-amber-600">{noticeMessage}</p>
+      )}
+      {errorMessage && (
+        <p className="mt-3 text-[11.5px] text-red-500">{errorMessage}</p>
       )}
 
       {/* 추천 결과 + 확정 */}
@@ -384,7 +416,10 @@ const DocumentExtractorConfigPanel = ({
                 <input
                   type="text"
                   value={newSlotLabel}
-                  onChange={(e) => setNewSlotLabel(e.target.value)}
+                  onChange={(e) => {
+                    setNewSlotLabel(e.target.value);
+                    setAddSlotFeedback(null);
+                  }}
                   placeholder="항목명 (예: 담당자)"
                   aria-label="새 슬롯 항목명"
                   className="min-w-[90px] flex-1 rounded border border-zinc-200 px-2 py-1.5 text-[12px] outline-none focus:border-violet-400"
@@ -392,7 +427,10 @@ const DocumentExtractorConfigPanel = ({
                 <input
                   type="text"
                   value={newSlotSample}
-                  onChange={(e) => setNewSlotSample(e.target.value)}
+                  onChange={(e) => {
+                    setNewSlotSample(e.target.value);
+                    setAddSlotFeedback(null);
+                  }}
                   placeholder="문서 내 예시값"
                   aria-label="새 슬롯 예시값"
                   className="min-w-[90px] flex-1 rounded border border-zinc-200 px-2 py-1.5 text-[12px] outline-none focus:border-violet-400"
@@ -414,6 +452,18 @@ const DocumentExtractorConfigPanel = ({
                   추가
                 </button>
               </div>
+              {addSlotFeedback && (
+                <p
+                  role={addSlotFeedback.type === 'error' ? 'alert' : 'status'}
+                  className={`mt-1.5 text-[11.5px] ${
+                    addSlotFeedback.type === 'error'
+                      ? 'text-red-500'
+                      : 'text-emerald-600'
+                  }`}
+                >
+                  {addSlotFeedback.message}
+                </p>
+              )}
             </div>
           )}
 
@@ -442,13 +492,6 @@ const DocumentExtractorConfigPanel = ({
             </div>
           )}
 
-          {/* 상태/에러 */}
-          {noticeMessage && (
-            <p className="text-[11.5px] text-amber-600">{noticeMessage}</p>
-          )}
-          {errorMessage && (
-            <p className="text-[11.5px] text-red-500">{errorMessage}</p>
-          )}
           {draft.confirmed && (
             <p className="rounded-lg bg-emerald-50 px-3 py-2 text-[12px] font-medium text-emerald-700">
               ✓ 확정됨 — 에이전트 생성 시 이 템플릿이 함께 등록됩니다

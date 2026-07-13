@@ -56,10 +56,12 @@ authApiClient.interceptors.response.use(
       }
     }
 
-    // FastAPI 검증 에러는 detail 필드로 내려온다 (agent-schedule 등)
+    // FastAPI 검증 에러는 detail 필드로 내려온다 (agent-schedule 등).
+    // detail이 {code, message} 객체인 라우터(document-extractor 등)도 지원.
+    const detail = error.response?.data?.detail;
     const message =
       error.response?.data?.message ??
-      error.response?.data?.detail ??
+      (typeof detail === 'string' ? detail : detail?.message) ??
       '알 수 없는 오류가 발생했습니다.';
     const status = error.response?.status ?? 0;
     return Promise.reject(new ApiError(message, status));

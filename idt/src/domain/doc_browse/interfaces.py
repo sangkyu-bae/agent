@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Optional
 
-from src.domain.doc_browse.schemas import DocumentMetadata
+from src.domain.doc_browse.schemas import DocumentMetadata, KbDocumentSummary
 from src.domain.mysql.schemas import MySQLPaginationParams, MySQLPageResult
 
 
@@ -18,6 +18,15 @@ class DocumentMetadataRepositoryInterface(ABC):
         request_id: str,
         pagination: Optional[MySQLPaginationParams] = None,
     ) -> MySQLPageResult[DocumentMetadata]:
+        ...
+
+    @abstractmethod
+    async def find_by_kb_id(
+        self,
+        kb_id: str,
+        request_id: str,
+        pagination: Optional[MySQLPaginationParams] = None,
+    ) -> MySQLPageResult[KbDocumentSummary]:
         ...
 
     @abstractmethod

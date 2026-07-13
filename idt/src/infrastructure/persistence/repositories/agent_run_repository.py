@@ -248,10 +248,38 @@ class SqlAlchemyAgentRunRepository(AgentRunRepositoryInterface):
             content_preview=source.content_preview,
             metadata_json=source.metadata_json,
             created_at=source.created_at,
+            search_query=source.search_query,
+            query_source=source.query_source,
+            search_mode=source.search_mode,
+            bm25_score=source.bm25_score,
+            vector_score=source.vector_score,
+            bm25_rank=source.bm25_rank,
+            vector_rank=source.vector_rank,
+            fusion_source=source.fusion_source,
         )
         self._session.add(row)
         await self._session.flush()
         return source
+
+    async def attach_user_message(self, run_id: RunId, message_id: int) -> None:
+        """retrieval-observability D2: deferred attach — set-based UPDATE 1문."""
+        stmt = (
+            update(AgentRunModel)
+            .where(AgentRunModel.id == run_id.value)
+            .values(user_message_id=message_id)
+        )
+        await self._session.execute(stmt)
+        await self._session.flush()
+
+    async def find_runs_by_user_message(self, message_id: int) -> List[AgentRun]:
+        """메시지 기준 run 조회 (조회 API용). 보통 1건, 재시도 시 복수."""
+        stmt = (
+            select(AgentRunModel)
+            .where(AgentRunModel.user_message_id == message_id)
+            .order_by(AgentRunModel.started_at)
+        )
+        result = await self._session.execute(stmt)
+        return [self._run_to_domain(r) for r in result.scalars().all()]
 
     async def find_retrievals(self, run_id: RunId) -> List[RetrievalSource]:
         stmt = (
@@ -422,4 +450,14 @@ class SqlAlchemyAgentRunRepository(AgentRunRepositoryInterface):
             content_preview=row.content_preview,
             metadata_json=row.metadata_json,
             created_at=_to_utc(row.created_at),
+            search_query=row.search_query,
+            query_source=row.query_source,
+            search_mode=row.search_mode,
+            bm25_score=float(row.bm25_score) if row.bm25_score is not None else None,
+            vector_score=(
+                float(row.vector_score) if row.vector_score is not None else None
+            ),
+            bm25_rank=row.bm25_rank,
+            vector_rank=row.vector_rank,
+            fusion_source=row.fusion_source,
         )

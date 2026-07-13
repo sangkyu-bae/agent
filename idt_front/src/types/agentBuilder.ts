@@ -41,6 +41,8 @@ export interface AvailableSubAgentsResponse {
 export interface CreateBuilderAgentRequest {
   user_request: string;
   name: string;
+  // agent-instruction-required: 지침 필수 — 비우면 백엔드 422
+  system_prompt: string;
   llm_model_id?: string;
   visibility?: 'private' | 'department' | 'public';
   department_id?: string;

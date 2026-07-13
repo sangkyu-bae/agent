@@ -15,9 +15,11 @@ class FakeLLM:
     def __init__(self, contents: list[str]):
         self._contents = list(contents)
         self.call_count = 0
+        self.configs: list[dict | None] = []
 
-    async def ainvoke(self, messages):
+    async def ainvoke(self, messages, config=None):
         self.call_count += 1
+        self.configs.append(config)
         content = self._contents.pop(0)
         response = MagicMock()
         response.content = content
@@ -111,15 +113,88 @@ class TestExtract:
         assert result.slots == []
 
 
+class TestLlmFailure:
+    """LLM 호출 실패(429 등)는 도메인 예외로 감싸 라우터가 메시지를 전달하게 한다."""
+
+    @pytest.mark.asyncio
+    async def test_llm_error_wrapped_as_domain_error(self):
+        class FailingLLM:
+            async def ainvoke(self, messages, config=None):
+                raise RuntimeError(
+                    "Error code: 429 - rate_limit_exceeded: Request too large"
+                )
+
+        extractor = SlotExtractor(
+            llm_factory=FakeLLMFactory(FailingLLM()),
+            llm_model_repository=FakeModelRepo(),
+            logger=MagicMock(),
+        )
+        with pytest.raises(SlotExtractionFailedError) as exc_info:
+            await extractor.extract("<p>양식</p>", "req")
+        assert "429" in str(exc_info.value)
+
+
+class TestHtmlClip:
+    """LLM 입력 HTML 상한 — TPM 한도 초과(429) 방지."""
+
+    @pytest.mark.asyncio
+    async def test_long_html_clipped_before_llm(self):
+        captured = {}
+
+        class CapturingLLM(FakeLLM):
+            async def ainvoke(self, messages, config=None):
+                captured["user"] = messages[1]["content"]
+                return await super().ainvoke(messages, config=config)
+
+        extractor = SlotExtractor(
+            llm_factory=FakeLLMFactory(CapturingLLM([VALID_SLOTS_JSON])),
+            llm_model_repository=FakeModelRepo(),
+            logger=MagicMock(),
+            llm_html_max_chars=100,
+        )
+        await extractor.extract("<p>" + "가" * 500 + "</p>", "req")
+        assert "가" * 500 not in captured["user"]
+        assert "이하 생략" in captured["user"]
+
+    @pytest.mark.asyncio
+    async def test_short_html_not_clipped(self):
+        extractor, llm = _extractor([VALID_SLOTS_JSON])
+        await extractor.extract("<p>짧은 양식</p>", "req")
+        assert llm.call_count == 1
+
+
+class TestLangsmithTrace:
+    """LangSmith 추적 config — run_name/tags/metadata 주입 (per-run tracer 패턴)."""
+
+    @pytest.mark.asyncio
+    async def test_extract_passes_trace_config(self):
+        extractor, llm = _extractor([VALID_SLOTS_JSON])
+        await extractor.extract("<p>양식</p>", "req-1")
+        config = llm.configs[0]
+        assert config is not None
+        assert config["run_name"] == "slot-extract"
+        assert "document-extractor" in config["tags"]
+        assert config["metadata"]["request_id"] == "req-1"
+
+    @pytest.mark.asyncio
+    async def test_refine_passes_trace_config(self):
+        extractor, llm = _extractor([VALID_SLOTS_JSON])
+        await extractor.refine("<p>양식</p>", "보강해줘", [], "req-2")
+        config = llm.configs[0]
+        assert config is not None
+        assert config["run_name"] == "slot-refine"
+        assert config["metadata"]["request_id"] == "req-2"
+
+
 class TestRefine:
     @pytest.mark.asyncio
     async def test_refine_includes_instruction_and_prev_slots(self):
         captured = {}
 
         class CapturingLLM(FakeLLM):
-            async def ainvoke(self, messages):
+            async def ainvoke(self, messages, config=None):
                 captured["prompt"] = str(messages)
-                return await super().ainvoke(messages)
+                return await super().ainvoke(messages, config=config)
 
         llm = CapturingLLM([VALID_SLOTS_JSON])
         extractor = SlotExtractor(

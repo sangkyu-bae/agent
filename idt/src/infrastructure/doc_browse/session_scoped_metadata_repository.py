@@ -3,7 +3,7 @@ from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.domain.doc_browse.interfaces import DocumentMetadataRepositoryInterface
-from src.domain.doc_browse.schemas import DocumentMetadata
+from src.domain.doc_browse.schemas import DocumentMetadata, KbDocumentSummary
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.domain.mysql.schemas import MySQLPaginationParams, MySQLPageResult
 from src.infrastructure.doc_browse.document_metadata_repository import DocumentMetadataRepository
@@ -34,6 +34,16 @@ class SessionScopedDocumentMetadataRepository(DocumentMetadataRepositoryInterfac
         async with self._session_factory() as session:
             repo = DocumentMetadataRepository(session, self._logger)
             return await repo.find_by_collection(collection_name, request_id, pagination)
+
+    async def find_by_kb_id(
+        self,
+        kb_id: str,
+        request_id: str,
+        pagination: Optional[MySQLPaginationParams] = None,
+    ) -> MySQLPageResult[KbDocumentSummary]:
+        async with self._session_factory() as session:
+            repo = DocumentMetadataRepository(session, self._logger)
+            return await repo.find_by_kb_id(kb_id, request_id, pagination)
 
     async def delete_by_document_id(
         self,

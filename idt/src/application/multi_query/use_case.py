@@ -2,7 +2,7 @@
 from typing import Any
 
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
-from src.domain.multi_query.schemas import MultiQueryResult
+from src.domain.multi_query.schemas import MultiQueryResult, PerQueryHits
 from src.application.multi_query.workflow import MultiQueryRewriteWorkflow
 
 
@@ -47,6 +47,15 @@ class MultiQuerySearchUseCase:
             top_k=top_k,
         )
 
+        # retrieval-observability D6: asyncio.gather 순서 보존을 전제로
+        # generated_queries × per_query_results를 zip (실패 폴백 state는 빈 목록).
+        per_query_hits = [
+            PerQueryHits(query=q, hit_ids=[hit.id for hit in hits])
+            for q, hits in zip(
+                state["generated_queries"], state["per_query_results"]
+            )
+        ]
+
         return MultiQueryResult(
             original_query=query,
             query_type=state["query_type"],
@@ -54,4 +63,5 @@ class MultiQuerySearchUseCase:
             results=state["fused_results"],
             total_found=len(state["fused_results"]),
             request_id=request_id,
+            per_query_hits=per_query_hits,
         )

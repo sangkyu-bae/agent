@@ -57,6 +57,9 @@ class ConversationMessage:
     # D7-rev1(chart-context-continuity): full config는 LLM 컨텍스트 미투입,
     # 캡션 1줄만 투입(ChartCaptionPolicy). 편집 후속 질문 시 변환 경로에서 로드.
     charts: Optional[list[dict]] = None
+    # analysis-data-continuity D1: 분석 원천 데이터 스냅샷 (None = 없음).
+    # 다음 턴 컨텍스트에 재주입되며 summarizer 입력에는 미포함.
+    analysis_data: Optional[dict] = None
 
     def __post_init__(self) -> None:
         if not self.content or not self.content.strip():
@@ -64,6 +67,8 @@ class ConversationMessage:
         # D2: 빈 배열 금지 — 차트가 없으면 None으로 표현
         if self.charts is not None and len(self.charts) == 0:
             raise ValueError("charts must be None when empty")
+        if self.analysis_data is not None and not self.analysis_data.get("items"):
+            raise ValueError("analysis_data must be None when it has no items")
 
 
 @dataclass(frozen=True)
