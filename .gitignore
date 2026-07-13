@@ -55,3 +55,19 @@ uploads/
 # 빌드 산출물
 dist/
 build/
+
+# 개인 커리어/이력서 관련 (커밋 금지)
+docs/analyze/
+docs/career/
+idt/docs/analyze/
+idt/docs/career/
+idt/.claude/commands/tailor-resume.md
+idt/.claude/agents/jd-analyzer.md
+idt/.claude/agents/project-analyzer.md
+idt/.claude/agents/resume-writer.md
+idt/.claude/agents/strength-matcher.md
+idt/work/
+
+# 테스트용 문서
+idt/test-docs/
+
