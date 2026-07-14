@@ -170,6 +170,19 @@ class TestAgentDefinition:
         assert agent.system_prompt == "새 프롬프트"
         assert agent.name == "새 이름"
 
+    def test_apply_update_changes_llm_model_id(self):
+        agent = _make_agent()
+        agent.apply_update(
+            system_prompt=None, name=None, llm_model_id="model-2"
+        )
+        assert agent.llm_model_id == "model-2"
+
+    def test_apply_update_llm_model_id_none_does_not_change(self):
+        agent = _make_agent()
+        original = agent.llm_model_id
+        agent.apply_update(system_prompt=None, name=None, llm_model_id=None)
+        assert agent.llm_model_id == original
+
     def test_temperature_default_value(self):
         agent = _make_agent()
         assert agent.temperature == 0.70

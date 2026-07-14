@@ -2287,6 +2287,8 @@ def create_agent_builder_factories():
             max_template_slots=settings.document_extractor_max_slots,
             # kb-rag-filter D7: kb_id 워커 scope 검증
             kb_repo=_make_kb_repo(session),
+            # agent-builder-edit-mapping FR-5: 모델 변경 검증
+            llm_model_repo=_make_llm_model_repo(session),
         )
 
     # agent-schedule Design §6.2: RunAgentUseCase 조립 본문을 함수로 추출해

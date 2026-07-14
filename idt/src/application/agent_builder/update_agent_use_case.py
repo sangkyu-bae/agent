@@ -23,6 +23,7 @@ from src.domain.collection.permission_interfaces import CollectionPermissionRepo
 from src.domain.department.interfaces import DepartmentRepositoryInterface
 from src.domain.knowledge_base.interfaces import KnowledgeBaseRepositoryInterface
 from src.domain.knowledge_base.policy import KnowledgeBasePolicy
+from src.domain.llm_model.interfaces import LlmModelRepositoryInterface
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 
 
@@ -38,6 +39,7 @@ class UpdateAgentUseCase:
         source_archiver=None,
         max_template_slots: int = DEFAULT_MAX_SLOTS,
         kb_repo: KnowledgeBaseRepositoryInterface | None = None,
+        llm_model_repo: LlmModelRepositoryInterface | None = None,
     ) -> None:
         self._repository = repository
         self._perm_repo = perm_repo
@@ -50,6 +52,8 @@ class UpdateAgentUseCase:
         self._document_template_repo = document_template_repo
         self._source_archiver = source_archiver
         self._max_template_slots = max_template_slots
+        # agent-builder-edit-mapping FR-5: llm_model_id 수정 시 존재 검증용
+        self._llm_model_repo = llm_model_repo
         self._sub_agent_builder = SubAgentWorkerBuilder(repository, logger)
 
     async def execute(
@@ -90,6 +94,10 @@ class UpdateAgentUseCase:
                     viewer_user_id or agent.user_id, viewer_role,
                 )
 
+            # agent-builder-edit-mapping FR-5: None = 모델 변경 안 함
+            if request.llm_model_id is not None:
+                await self._validate_llm_model(request.llm_model_id, request_id)
+
             agent.apply_update(
                 system_prompt=request.system_prompt,
                 name=request.name,
@@ -97,6 +105,7 @@ class UpdateAgentUseCase:
                 department_id=request.department_id,
                 temperature=request.temperature,
                 max_iterations=request.max_iterations,
+                llm_model_id=request.llm_model_id,
             )
 
             if request.sub_agent_configs is not None:
@@ -137,6 +146,16 @@ class UpdateAgentUseCase:
                 "UpdateAgentUseCase failed", exception=e, request_id=request_id
             )
             raise
+
+    async def _validate_llm_model(
+        self, llm_model_id: str, request_id: str
+    ) -> None:
+        """모델 존재 검증 (CreateAgentUseCase._resolve_llm_model_id와 동일 규칙)."""
+        if self._llm_model_repo is None:
+            raise ValueError("llm_model_id 수정에는 llm_model_repo 주입이 필요합니다")
+        found = await self._llm_model_repo.find_by_id(llm_model_id, request_id)
+        if found is None:
+            raise ValueError(f"LLM 모델을 찾을 수 없습니다: {llm_model_id}")
 
     async def _replace_document_template(
         self,

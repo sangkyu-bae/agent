@@ -110,6 +110,8 @@ class AgentDefinitionRepository(AgentDefinitionRepositoryInterface):
             model.department_id = agent.department_id
             model.temperature = agent.temperature
             model.max_iterations = agent.max_iterations
+            # agent-builder-edit-mapping FR-5: 미반영 시 모델 변경이 조용히 무효
+            model.llm_model_id = agent.llm_model_id
             model.updated_at = datetime.now(timezone.utc)
             await self._sync_workers(model, agent.workers)
             await self._session.flush()

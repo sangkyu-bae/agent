@@ -22,10 +22,11 @@ import {
   loadDraftFromSession,
   saveDraftToSession,
 } from '@/utils/documentTemplate';
+import { RAG_CATALOG_TOOL_ID } from '@/utils/agentDetailMapping';
 
 const VisualCanvas = lazy(() => import('./visual/VisualCanvas'));
 
-const RAG_TOOL_ID = 'internal:internal_document_search';
+const RAG_TOOL_ID = RAG_CATALOG_TOOL_ID;
 
 /** 옵션 설정 모달을 갖는 도구 (tool-config-modal Design §2.4) */
 const CONFIGURABLE_TOOL_IDS: readonly string[] = [
@@ -63,6 +64,7 @@ const LeftConfigPanel = ({
   onToolToggle,
   onSkillToggle,
   onRagConfigChange,
+  isEditMode,
   agentId,
   systemPromptError,
   catalogTools,
@@ -148,9 +150,12 @@ const LeftConfigPanel = ({
   const ragConfig = form.toolConfigs[RAG_TOOL_ID];
   const selectedTools = (catalogTools ?? []).filter((t) => form.tools.includes(t.tool_id));
   const currentModel = models?.find((m) => m.model_name === form.model);
+  // agent-builder-edit-mapping: 역매핑 실패로 raw id가 남은 경우 미등록 안내
   const modelLabel = currentModel
     ? `${currentModel.provider}:${currentModel.model_name}`
-    : form.model || '모델 미선택';
+    : form.model
+      ? `${form.model} (미등록 모델)`
+      : '모델 미선택';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -314,6 +319,12 @@ const LeftConfigPanel = ({
             </button>
           }
         >
+          {/* agent-builder-edit-mapping FR-6 유예 방어: 도구 워커 교체는 후속 feature */}
+          {isEditMode && (
+            <p className="mb-2 rounded-lg bg-amber-50 px-3 py-2 text-[11.5px] text-amber-700">
+              도구 구성 변경은 아직 저장되지 않습니다 (모델·지침·서브에이전트·스킬은 저장됨)
+            </p>
+          )}
           {selectedTools.length > 0 ? (
             <ul className="space-y-2">
               {selectedTools.map((tool) => {

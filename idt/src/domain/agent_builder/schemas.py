@@ -126,6 +126,7 @@ class AgentDefinition:
         department_id: str | None = None,
         temperature: float | None = None,
         max_iterations: int | None = None,
+        llm_model_id: str | None = None,
     ) -> None:
         """업데이트 적용."""
         if system_prompt is not None:
@@ -140,6 +141,8 @@ class AgentDefinition:
             self.temperature = temperature
         if max_iterations is not None:
             self.max_iterations = max_iterations
+        if llm_model_id is not None:
+            self.llm_model_id = llm_model_id
         self.__post_init__()
 
     def replace_sub_agents(self, sub_workers: list["WorkerDefinition"]) -> None:
