@@ -92,6 +92,8 @@ export interface UpdateBuilderAgentRequest {
   skill_ids?: string[];
   // document-template-extractor: undefined = 변경 안 함, 값 = 템플릿 교체
   document_template?: DocumentTemplateRequest;
+  // agent-builder-edit-mapping FR-5: undefined = 모델 변경 안 함
+  llm_model_id?: string;
 }
 
 export interface UpdateBuilderAgentResponse {

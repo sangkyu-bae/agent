@@ -46,6 +46,8 @@ def _make_use_case(
     perm_by_name: dict[str, CollectionPermission] | None = None,
     kb_by_id: dict[str, KnowledgeBase] | None = None,
     with_kb_repo: bool = True,
+    llm_models: dict[str, object] | None = None,
+    with_llm_repo: bool = False,
 ):
     repository = MagicMock()
     perm_repo = MagicMock()
@@ -70,9 +72,18 @@ def _make_use_case(
 
         kb_repo.find_by_id = AsyncMock(side_effect=_find_kb)
 
+    llm_model_repo = None
+    if with_llm_repo or llm_models is not None:
+        llm_model_repo = MagicMock()
+
+        async def _find_model(model_id, req_id):
+            return (llm_models or {}).get(model_id)
+
+        llm_model_repo.find_by_id = AsyncMock(side_effect=_find_model)
+
     use_case = UpdateAgentUseCase(
         repository=repository, perm_repo=perm_repo, logger=logger,
-        kb_repo=kb_repo,
+        kb_repo=kb_repo, llm_model_repo=llm_model_repo,
     )
     return use_case, repository, _agent
 
@@ -386,6 +397,44 @@ class TestUpdateVisibilityKbScope:
             agent.id, request, "req-1", viewer_role="admin"
         )
         assert isinstance(result, UpdateAgentResponse)
+
+
+class TestUpdateLlmModel:
+    """agent-builder-edit-mapping FR-5: 수정 시 모델 변경 (None=무변경)."""
+
+    @pytest.mark.asyncio
+    async def test_llm_model_id_none_leaves_model_unchanged(self):
+        use_case, _, agent = _make_use_case(with_llm_repo=True)
+        original = agent.llm_model_id
+        await use_case.execute(agent.id, UpdateAgentRequest(name="x"), "req-1")
+        assert agent.llm_model_id == original
+
+    @pytest.mark.asyncio
+    async def test_valid_llm_model_id_updates_agent(self):
+        found = MagicMock()
+        found.id = "model-2"
+        use_case, repository, agent = _make_use_case(
+            llm_models={"model-2": found}
+        )
+        request = UpdateAgentRequest(llm_model_id="model-2")
+        await use_case.execute(agent.id, request, "req-1")
+        assert agent.llm_model_id == "model-2"
+        repository.update.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_unknown_llm_model_id_raises(self):
+        use_case, repository, agent = _make_use_case(llm_models={})
+        request = UpdateAgentRequest(llm_model_id="ghost-model")
+        with pytest.raises(ValueError, match="LLM 모델을 찾을 수 없습니다"):
+            await use_case.execute(agent.id, request, "req-1")
+        repository.update.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_llm_model_id_without_repo_raises(self):
+        use_case, _, agent = _make_use_case(with_llm_repo=False)
+        request = UpdateAgentRequest(llm_model_id="model-2")
+        with pytest.raises(ValueError, match="llm_model_repo"):
+            await use_case.execute(agent.id, request, "req-1")
 
 
 class TestUpdateAgentSkillSync:

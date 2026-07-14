@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useToolCatalog } from '@/hooks/useToolCatalog';
 import { useLlmModels } from '@/hooks/useLlmModels';
 import {
@@ -21,6 +21,7 @@ import { MAX_ATTACHED_SKILLS } from '@/constants/agentSkill';
 import { DOCUMENT_EXTRACTOR_TOOL_ID } from '@/types/documentExtractor';
 import { buildDocumentTemplateRequest } from '@/utils/documentTemplate';
 import { mapDraftToolIdsToCatalog } from '@/utils/draftToolMapping';
+import { mapDetailToForm, RAG_CATALOG_TOOL_ID } from '@/utils/agentDetailMapping';
 
 type ViewMode = 'list' | 'create' | 'edit';
 
@@ -36,7 +37,7 @@ const VISIBILITY_LABELS = {
   public: '공개',
 } as const;
 
-const RAG_TOOL_ID = 'internal:internal_document_search';
+const RAG_TOOL_ID = RAG_CATALOG_TOOL_ID;
 
 const DEFAULT_FORM: AgentBuilderFormData = {
   name: '',
@@ -72,39 +73,27 @@ const AgentBuilderPage = () => {
 
   const agents = agentsData?.agents ?? [];
 
+  // 기본 모델 주입은 create 전용 — edit 프라임(id→model_name 역매핑)과의 경합 차단
   useEffect(() => {
-    if (models && !form.model) {
+    if (view === 'create' && models && !form.model) {
       const defaultModel = models.find(m => m.is_default);
       if (defaultModel) {
         setForm(prev => ({ ...prev, model: defaultModel.model_name }));
       }
     }
-  }, [models, form.model]);
+  }, [models, form.model, view]);
 
+  // agent-builder-edit-mapping FR-4: 쿼리 3종 settled 후 1회만 프라임.
+  // 에러로 끝난 쿼리는 undefined로 전달 → mapDetailToForm의 raw 유지 폴백 동작.
+  // 재시도 성공 후에도 재프라임하지 않음(편집 내용 보호 우선 — Design §2-2).
+  const primedAgentRef = useRef<string | null>(null);
   useEffect(() => {
-    if (editDetail && view === 'edit') {
-      const subAgents = (editDetail.workers ?? [])
-        .filter((w) => w.worker_type === 'sub_agent' && w.ref_agent_id)
-        .map((w) => ({
-          ref_agent_id: w.ref_agent_id as string,
-          name: w.ref_agent_name ?? (w.ref_agent_id as string),
-          description: w.description ?? '',
-        }));
-      setForm({
-        name: editDetail.name,
-        description: editDetail.description,
-        model: editDetail.llm_model_id,
-        systemPrompt: editDetail.system_prompt,
-        tools: editDetail.tool_ids,
-        temperature: editDetail.temperature,
-        toolConfigs: {},
-        subAgents,
-        skills: editDetail.skill_ids ?? [],
-        // edit 모드 스케줄은 SchedulePanel이 서버 직결 — staged 미사용
-        schedules: [],
-      });
-    }
-  }, [editDetail, view]);
+    if (view !== 'edit' || !editingId || !editDetail) return;
+    if (isModelsLoading || isToolsLoading) return;
+    if (primedAgentRef.current === editingId) return;
+    primedAgentRef.current = editingId;
+    setForm(mapDetailToForm(editDetail, models, catalogTools));
+  }, [editDetail, models, catalogTools, isModelsLoading, isToolsLoading, view, editingId]);
 
   // 폼 변경 시 지침이 채워지면 인라인 에러 해제 (effect 내 setState 지양)
   const handleFormChange = (next: AgentBuilderFormData) => {
@@ -116,12 +105,15 @@ const AgentBuilderPage = () => {
     setForm(DEFAULT_FORM);
     setEditingId(null);
     setPromptError(null);
+    primedAgentRef.current = null;
     setView('create');
   };
 
   const handleEdit = (agent: StoreAgentSummary) => {
     setEditingId(agent.agent_id);
     setPromptError(null);
+    // 재진입 시 최신 detail로 재프라임 허용 (react-query가 refetch)
+    primedAgentRef.current = null;
     setView('edit');
   };
 
@@ -154,6 +146,9 @@ const AgentBuilderPage = () => {
             name: form.name,
             system_prompt: form.systemPrompt,
             temperature: form.temperature,
+            // agent-builder-edit-mapping FR-5: 역조회 실패(미등록 모델 유지 상태)
+            // 시 undefined 전송 = 모델 변경 안 함
+            llm_model_id: models?.find((m) => m.model_name === form.model)?.id,
             sub_agent_configs: form.subAgents.map((s) => ({
               ref_agent_id: s.ref_agent_id,
               description: s.description,

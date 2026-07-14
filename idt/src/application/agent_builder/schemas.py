@@ -113,6 +113,8 @@ class UpdateAgentRequest(BaseModel):
     skill_ids: list[str] | None = None
     # document-template-extractor: None = 템플릿 변경 안 함, 값 = 교체(기존 soft-delete)
     document_template: DocumentTemplateRequest | None = None
+    # agent-builder-edit-mapping FR-5: None = 모델 변경 안 함
+    llm_model_id: str | None = None
 
 
 class UpdateAgentResponse(BaseModel):

@@ -5,6 +5,7 @@ import { beforeAll, afterEach, afterAll, describe, it, expect, vi } from 'vitest
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { server } from '@/__tests__/mocks/server';
 import type { CatalogTool } from '@/types/toolCatalog';
+import type { LlmModel } from '@/types/llmModel';
 import type { AgentBuilderFormData } from '@/types/agentBuilder';
 import type { DocumentExtractorDraft } from '@/types/documentExtractor';
 import { DOCUMENT_EXTRACTOR_TOOL_ID } from '@/types/documentExtractor';
@@ -48,6 +49,7 @@ const BASE_FORM: AgentBuilderFormData = {
   toolConfigs: {},
   subAgents: [],
   skills: [],
+  schedules: [],
 };
 
 const DRAFT: DocumentExtractorDraft = {
@@ -96,6 +98,52 @@ const renderPanel = (formOverrides: Partial<AgentBuilderFormData> = {}, onChange
   );
   return { ...utils, onChange };
 };
+
+const LLM_MODELS: LlmModel[] = [
+  {
+    id: 'model-uuid-1',
+    provider: 'openai',
+    model_name: 'gpt-4o',
+    display_name: 'GPT-4o',
+    description: null,
+    max_tokens: null,
+    is_active: true,
+    is_default: true,
+  },
+];
+
+describe('LeftConfigPanel — 모델 라벨 (agent-builder-edit-mapping)', () => {
+  it('form.model이 models에 매칭되면 provider:model_name을 표시한다', () => {
+    renderPanel({ model: 'gpt-4o' }, vi.fn(), { models: LLM_MODELS });
+    expect(screen.getByText('openai:gpt-4o')).toBeInTheDocument();
+  });
+
+  it('매칭 실패(raw id 잔존) 시 미등록 모델 안내를 표시한다', () => {
+    renderPanel({ model: 'ghost-uuid' }, vi.fn(), { models: LLM_MODELS });
+    expect(screen.getByText('ghost-uuid (미등록 모델)')).toBeInTheDocument();
+  });
+
+  it('model이 비어 있으면 "모델 미선택"을 표시한다', () => {
+    renderPanel({ model: '' }, vi.fn(), { models: LLM_MODELS });
+    expect(screen.getByText('모델 미선택')).toBeInTheDocument();
+  });
+});
+
+describe('LeftConfigPanel — 수정 모드 도구 저장 안내 (FR-6 유예 방어)', () => {
+  it('isEditMode=true면 도구함에 미저장 안내 배너를 표시한다', () => {
+    renderPanel({}, vi.fn(), { isEditMode: true });
+    expect(
+      screen.getByText(/도구 구성 변경은 아직 저장되지 않습니다/),
+    ).toBeInTheDocument();
+  });
+
+  it('생성 모드에서는 배너가 없다', () => {
+    renderPanel({}, vi.fn(), { isEditMode: false });
+    expect(
+      screen.queryByText(/도구 구성 변경은 아직 저장되지 않습니다/),
+    ).toBeNull();
+  });
+});
 
 describe('LeftConfigPanel — 지침 필수 (agent-instruction-required)', () => {
   it('지침 placeholder에 자동 생성 안내 문구가 없다 (생성 모드)', () => {
