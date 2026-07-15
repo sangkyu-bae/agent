@@ -10,6 +10,7 @@ from src.domain.chunking_profile.interfaces import (
 from src.domain.chunking_profile.policy import ChunkingProfilePolicy
 from src.domain.collection.permission_schemas import CollectionScope
 from src.domain.department.interfaces import DepartmentRepositoryInterface
+from src.domain.knowledge_base.custom_chunking import CustomChunkingPolicy
 from src.domain.knowledge_base.entities import KnowledgeBase
 from src.domain.knowledge_base.interfaces import (
     CollectionAssignerInterface,
@@ -49,6 +50,8 @@ class KnowledgeBaseUseCase:
         chunking_profile_id: str | None = None,
         chunk_size: int | None = None,
         chunk_overlap: int | None = None,
+        use_custom_chunking: bool = False,
+        custom_chunking_config: dict | None = None,
     ) -> KnowledgeBase:
         clean_name = self._policy.validate_name(name)
         dept_ids = await self._get_dept_ids(user, request_id)
@@ -56,6 +59,7 @@ class KnowledgeBaseUseCase:
         await self._validate_chunking(
             use_clause_chunking, chunking_profile_id,
             chunk_size, chunk_overlap, request_id,
+            use_custom_chunking, custom_chunking_config,
         )
         if await self._kb_repo.exists_active_name(
             user.id, clean_name, request_id
@@ -80,6 +84,8 @@ class KnowledgeBaseUseCase:
             chunking_profile_id=chunking_profile_id,
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap,
+            use_custom_chunking=use_custom_chunking,
+            custom_chunking_config=custom_chunking_config,
         )
         saved = await self._kb_repo.save(kb, request_id)
         self._logger.info(
@@ -123,6 +129,50 @@ class KnowledgeBaseUseCase:
             kb_id=kb_id,
         )
 
+    async def update_chunking(
+        self,
+        kb_id: str,
+        user: User,
+        *,
+        use_clause_chunking: bool,
+        chunking_profile_id: str | None,
+        chunk_size: int | None,
+        chunk_overlap: int | None,
+        use_custom_chunking: bool,
+        custom_chunking_config: dict | None,
+        request_id: str,
+    ) -> KnowledgeBase:
+        """청킹 설정 전체 교체 (kb-custom-chunking D7).
+
+        신규 업로드부터 적용되며 기존 문서는 재청킹하지 않는다 (D10).
+        """
+        kb = await self._find_or_raise(kb_id, request_id)
+        if not self._policy.can_manage_settings(user, kb):
+            raise PermissionError(
+                f"No settings access to knowledge base '{kb_id}'"
+            )
+        await self._validate_chunking(
+            use_clause_chunking, chunking_profile_id,
+            chunk_size, chunk_overlap, request_id,
+            use_custom_chunking, custom_chunking_config,
+        )
+        await self._kb_repo.update_chunking(
+            kb_id,
+            use_clause_chunking=use_clause_chunking,
+            chunking_profile_id=chunking_profile_id,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+            use_custom_chunking=use_custom_chunking,
+            custom_chunking_config=custom_chunking_config,
+            request_id=request_id,
+        )
+        self._logger.info(
+            "KnowledgeBase chunking settings updated",
+            request_id=request_id,
+            kb_id=kb_id,
+        )
+        return await self._find_or_raise(kb_id, request_id)
+
     async def _validate_chunking(
         self,
         use_clause_chunking: bool,
@@ -130,8 +180,13 @@ class KnowledgeBaseUseCase:
         chunk_size: int | None,
         chunk_overlap: int | None,
         request_id: str,
+        use_custom_chunking: bool = False,
+        custom_chunking_config: dict | None = None,
     ) -> None:
-        """청킹 설정 검증 (clause-aware-chunking Design §7.3)."""
+        """청킹 설정 검증 (clause-aware §7.3 + kb-custom-chunking V-06/V-07)."""
+        CustomChunkingPolicy.validate_kb_settings(
+            use_clause_chunking, use_custom_chunking, custom_chunking_config
+        )
         has_override = (
             chunking_profile_id is not None
             or chunk_size is not None

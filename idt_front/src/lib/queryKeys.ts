@@ -102,6 +102,15 @@ export const queryKeys = {
       [...queryKeys.knowledgeBases.all, 'detail', kbId] as const,
     documents: (kbId: string, params?: { offset?: number; limit?: number }) =>
       [...queryKeys.knowledgeBases.all, 'documents', kbId, params] as const,
+    // KB 저장 내용 조회 (kb-content-browser)
+    documentSummary: (kbId: string, docId: string, source: string) =>
+      [...queryKeys.knowledgeBases.all, 'documentSummary', kbId, docId, source] as const,
+    sectionSummaries: (kbId: string, docId: string, source: string) =>
+      [...queryKeys.knowledgeBases.all, 'sectionSummaries', kbId, docId, source] as const,
+    chunks: (kbId: string, docId: string, params?: unknown) =>
+      [...queryKeys.knowledgeBases.all, 'chunks', kbId, docId, params] as const,
+    sectionSummaryStatus: (kbId: string, docId: string) =>
+      [...queryKeys.knowledgeBases.all, 'sectionSummaryStatus', kbId, docId] as const,
   },
 
   // ── Embedding Models ────────────────────────────────────

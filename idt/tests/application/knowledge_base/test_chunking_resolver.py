@@ -95,3 +95,67 @@ class TestResolve:
         kb = _kb(chunking_profile_id="p9", chunk_size=500, chunk_overlap=0)
         cfg = await resolver.resolve(kb, "r")
         assert cfg.params["chunk_overlap"] == 0
+
+
+class TestResolveCustom:
+    """kb-custom-chunking D6 — 커스텀 경로 해석 + 손상 시 legacy 폴백."""
+
+    def _custom_kb(self, config, **kw):
+        return _kb(
+            use_clause_chunking=False,
+            use_custom_chunking=True,
+            custom_chunking_config=config,
+            **kw,
+        )
+
+    @pytest.mark.asyncio
+    async def test_full_token_resolved(self, resolver, repo):
+        kb = self._custom_kb({
+            "strategy": "full_token", "chunk_size": 1500,
+            "chunk_overlap": 150,
+        })
+        cfg = await resolver.resolve(kb, "r")
+        assert cfg.strategy == "full_token"
+        assert cfg.params == {"chunk_size": 1500, "chunk_overlap": 150}
+        assert cfg.display["custom"] is True
+        repo.find_by_id.assert_not_awaited()
+        repo.find_default.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_boundary_pattern_maps_to_clause_aware(
+        self, resolver, repo
+    ):
+        kb = self._custom_kb({
+            "strategy": "boundary_pattern",
+            "chunk_size": 600,
+            "chunk_overlap": 80,
+            "parent_chunk_size": 3000,
+            "boundary_rules": [
+                {"pattern": r"^제\d+장", "priority": 1, "level": "parent"},
+            ],
+        })
+        cfg = await resolver.resolve(kb, "r")
+        assert cfg.strategy == "clause_aware"
+        assert cfg.params["parent_patterns"] == [r"^제\d+장"]
+        assert cfg.params["child_patterns"] == []
+        assert cfg.display["strategy"] == "boundary_pattern"
+
+    @pytest.mark.asyncio
+    async def test_invalid_config_falls_back_to_legacy(self, repo):
+        logger = MagicMock()
+        resolver = ChunkingSettingsResolver(repo, logger)
+        kb = self._custom_kb({"strategy": "magic"})
+        assert await resolver.resolve(kb, "r") is None
+        logger.warning.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_missing_config_falls_back_to_legacy(self, resolver, repo):
+        kb = self._custom_kb(None)
+        assert await resolver.resolve(kb, "r") is None
+
+    @pytest.mark.asyncio
+    async def test_custom_kb_has_no_summary_spec(self, resolver, repo):
+        kb = self._custom_kb({
+            "strategy": "full_token", "chunk_size": 500,
+        })
+        assert await resolver.resolve_summary_spec(kb, "r") is None

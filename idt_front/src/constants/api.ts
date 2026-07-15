@@ -95,6 +95,20 @@ export const API_ENDPOINTS = {
   KNOWLEDGE_BASE_DETAIL: (kbId: string) => `/api/v1/knowledge-bases/${kbId}`,
   KNOWLEDGE_BASE_DOCUMENTS: (kbId: string) =>
     `/api/v1/knowledge-bases/${kbId}/documents`,
+  // kb-custom-chunking D7: 청킹 설정 전체 교체
+  KNOWLEDGE_BASE_CHUNKING: (kbId: string) =>
+    `/api/v1/knowledge-bases/${kbId}/chunking`,
+  // KB 저장 내용 조회 (kb-content-browser)
+  KNOWLEDGE_BASE_DOCUMENT_SUMMARY: (kbId: string, docId: string) =>
+    `/api/v1/knowledge-bases/${kbId}/documents/${docId}/summary`,
+  KNOWLEDGE_BASE_SECTION_SUMMARIES: (kbId: string, docId: string) =>
+    `/api/v1/knowledge-bases/${kbId}/documents/${docId}/section-summaries`,
+  KNOWLEDGE_BASE_DOCUMENT_CHUNKS: (kbId: string, docId: string) =>
+    `/api/v1/knowledge-bases/${kbId}/documents/${docId}/chunks`,
+  KNOWLEDGE_BASE_SECTION_SUMMARY_STATUS: (kbId: string, docId: string) =>
+    `/api/v1/knowledge-bases/${kbId}/documents/${docId}/section-summary`,
+  KNOWLEDGE_BASE_SECTION_SUMMARY_RETRY: (kbId: string, docId: string) =>
+    `/api/v1/knowledge-bases/${kbId}/documents/${docId}/section-summary/retry`,
 
   // LLM Models
   LLM_MODELS: '/api/v1/llm-models',

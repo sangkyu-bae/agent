@@ -38,6 +38,8 @@ class KnowledgeBaseRepository(KnowledgeBaseRepositoryInterface):
             chunking_profile_id=kb.chunking_profile_id,
             chunk_size=kb.chunk_size,
             chunk_overlap=kb.chunk_overlap,
+            use_custom_chunking=1 if kb.use_custom_chunking else 0,
+            custom_chunking_config=kb.custom_chunking_config,
         )
         self._session.add(model)
         await self._session.flush()
@@ -94,6 +96,41 @@ class KnowledgeBaseRepository(KnowledgeBaseRepositoryInterface):
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none() is not None
 
+    async def update_chunking(
+        self,
+        kb_id: str,
+        *,
+        use_clause_chunking: bool,
+        chunking_profile_id: str | None,
+        chunk_size: int | None,
+        chunk_overlap: int | None,
+        use_custom_chunking: bool,
+        custom_chunking_config: dict | None,
+        request_id: str,
+    ) -> None:
+        """청킹 설정 컬럼 화이트리스트만 전체 교체 (kb-custom-chunking D7/D8)."""
+        self._logger.info(
+            "KnowledgeBase chunking settings update",
+            request_id=request_id,
+            kb_id=kb_id,
+            use_clause_chunking=use_clause_chunking,
+            use_custom_chunking=use_custom_chunking,
+        )
+        stmt = (
+            update(KnowledgeBaseModel)
+            .where(KnowledgeBaseModel.id == kb_id)
+            .values(
+                use_clause_chunking=1 if use_clause_chunking else 0,
+                chunking_profile_id=chunking_profile_id,
+                chunk_size=chunk_size,
+                chunk_overlap=chunk_overlap,
+                use_custom_chunking=1 if use_custom_chunking else 0,
+                custom_chunking_config=custom_chunking_config,
+            )
+        )
+        await self._session.execute(stmt)
+        await self._session.flush()
+
     async def soft_delete(self, kb_id: str, request_id: str) -> None:
         stmt = (
             update(KnowledgeBaseModel)
@@ -117,6 +154,8 @@ class KnowledgeBaseRepository(KnowledgeBaseRepositoryInterface):
             chunking_profile_id=model.chunking_profile_id,
             chunk_size=model.chunk_size,
             chunk_overlap=model.chunk_overlap,
+            use_custom_chunking=bool(model.use_custom_chunking),
+            custom_chunking_config=model.custom_chunking_config,
             created_at=model.created_at,
             updated_at=model.updated_at,
         )

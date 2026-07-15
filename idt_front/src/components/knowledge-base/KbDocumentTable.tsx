@@ -5,6 +5,9 @@ interface KbDocumentTableProps {
   isLoading: boolean;
   isError: boolean;
   onRetry: () => void;
+  /** 행 클릭 → 저장 내용 드릴다운 (kb-content-browser) */
+  onRowClick?: (doc: KbDocumentInfo) => void;
+  selectedId?: string | null;
 }
 
 const STRATEGY_LABELS: Record<string, string> = {
@@ -17,6 +20,8 @@ const KbDocumentTable = ({
   isLoading,
   isError,
   onRetry,
+  onRowClick,
+  selectedId,
 }: KbDocumentTableProps) => {
   if (isLoading) {
     return (
@@ -63,7 +68,16 @@ const KbDocumentTable = ({
         </thead>
         <tbody className="divide-y divide-zinc-100">
           {documents.map((doc) => (
-            <tr key={doc.document_id} className="hover:bg-zinc-50/60">
+            <tr
+              key={doc.document_id}
+              onClick={() => onRowClick?.(doc)}
+              aria-selected={selectedId === doc.document_id}
+              className={`${onRowClick ? 'cursor-pointer' : ''} ${
+                selectedId === doc.document_id
+                  ? 'bg-violet-50/70'
+                  : 'hover:bg-zinc-50/60'
+              }`}
+            >
               <td className="px-4 py-3 font-medium text-zinc-800">
                 {doc.filename}
               </td>

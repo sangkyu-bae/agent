@@ -186,6 +186,132 @@ class TestCreateWithChunking:
         assert resp.status_code == 422
 
 
+_CUSTOM_CONFIG = {
+    "version": 1,
+    "strategy": "boundary_pattern",
+    "chunk_size": 600,
+    "chunk_overlap": 80,
+    "parent_chunk_size": 3000,
+    "boundary_rules": [
+        {"pattern": "^제\\d+장", "priority": 1, "level": "parent"},
+    ],
+}
+
+
+class TestCreateWithCustomChunking:
+    """kb-custom-chunking — create 시 커스텀 필드 왕복."""
+
+    def test_custom_fields_passed_and_returned(
+        self, client: TestClient, mock_use_case: AsyncMock
+    ):
+        kb = _kb()
+        kb.use_custom_chunking = True
+        kb.custom_chunking_config = _CUSTOM_CONFIG
+        mock_use_case.create.return_value = kb
+        resp = client.post(
+            "/api/v1/knowledge-bases",
+            json={
+                "name": "커스텀",
+                "collection_name": "shared-col",
+                "use_custom_chunking": True,
+                "custom_chunking_config": _CUSTOM_CONFIG,
+            },
+        )
+        assert resp.status_code == 201
+        _, kwargs = mock_use_case.create.call_args
+        assert kwargs["use_custom_chunking"] is True
+        assert kwargs["custom_chunking_config"] == _CUSTOM_CONFIG
+
+    def test_validation_error_returns_422(
+        self, client: TestClient, mock_use_case: AsyncMock
+    ):
+        mock_use_case.create.side_effect = ValueError(
+            "use_clause_chunking and use_custom_chunking "
+            "cannot both be enabled"
+        )
+        resp = client.post(
+            "/api/v1/knowledge-bases",
+            json={
+                "name": "충돌",
+                "collection_name": "shared-col",
+                "use_clause_chunking": True,
+                "use_custom_chunking": True,
+                "custom_chunking_config": _CUSTOM_CONFIG,
+            },
+        )
+        assert resp.status_code == 422
+
+
+class TestUpdateChunkingSettings:
+    """kb-custom-chunking D7 — PATCH /{kb_id}/chunking."""
+
+    def _body(self, **kw) -> dict:
+        body = {
+            "use_clause_chunking": False,
+            "chunking_profile_id": None,
+            "chunk_size": None,
+            "chunk_overlap": None,
+            "use_custom_chunking": True,
+            "custom_chunking_config": _CUSTOM_CONFIG,
+        }
+        body.update(kw)
+        return body
+
+    def test_returns_200_with_updated_kb(
+        self, client: TestClient, mock_use_case: AsyncMock
+    ):
+        kb = _kb()
+        kb.use_custom_chunking = True
+        kb.custom_chunking_config = _CUSTOM_CONFIG
+        mock_use_case.update_chunking.return_value = kb
+        resp = client.patch(
+            f"/api/v1/knowledge-bases/{KB_ID}/chunking",
+            json=self._body(),
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["use_custom_chunking"] is True
+        assert data["custom_chunking_config"] == _CUSTOM_CONFIG
+        _, kwargs = mock_use_case.update_chunking.call_args
+        assert kwargs["use_custom_chunking"] is True
+        assert kwargs["custom_chunking_config"] == _CUSTOM_CONFIG
+
+    def test_not_found_returns_404(
+        self, client: TestClient, mock_use_case: AsyncMock
+    ):
+        mock_use_case.update_chunking.side_effect = ValueError("not found")
+        resp = client.patch(
+            f"/api/v1/knowledge-bases/{KB_ID}/chunking",
+            json=self._body(),
+        )
+        assert resp.status_code == 404
+
+    def test_no_access_returns_403(
+        self, client: TestClient, mock_use_case: AsyncMock
+    ):
+        mock_use_case.update_chunking.side_effect = PermissionError(
+            "no settings access"
+        )
+        resp = client.patch(
+            f"/api/v1/knowledge-bases/{KB_ID}/chunking",
+            json=self._body(),
+        )
+        assert resp.status_code == 403
+
+    def test_invalid_settings_returns_422(
+        self, client: TestClient, mock_use_case: AsyncMock
+    ):
+        mock_use_case.update_chunking.side_effect = ValueError(
+            "invalid regex pattern '[unclosed'"
+        )
+        resp = client.patch(
+            f"/api/v1/knowledge-bases/{KB_ID}/chunking",
+            json=self._body(),
+        )
+        assert resp.status_code == 422
+        assert "[unclosed" in resp.json()["detail"]
+
+
 class TestListKnowledgeBases:
     def test_returns_200(self, client: TestClient, mock_use_case: AsyncMock):
         mock_use_case.list.return_value = [_kb()]

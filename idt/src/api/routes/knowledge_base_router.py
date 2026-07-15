@@ -5,8 +5,17 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel
 
+from src.application.knowledge_base.get_kb_document_chunks_use_case import (
+    GetKbDocumentChunksUseCase,
+)
+from src.application.knowledge_base.get_kb_document_summary_use_case import (
+    GetKbDocumentSummaryUseCase,
+)
 from src.application.knowledge_base.list_documents_use_case import (
     ListKbDocumentsUseCase,
+)
+from src.application.knowledge_base.list_kb_section_summaries_use_case import (
+    ListKbSectionSummariesUseCase,
 )
 from src.application.knowledge_base.upload_use_case import (
     KnowledgeBaseUploadUseCase,
@@ -45,6 +54,18 @@ def get_list_kb_documents_use_case() -> "ListKbDocumentsUseCase":
     raise NotImplementedError
 
 
+def get_kb_document_summary_use_case() -> "GetKbDocumentSummaryUseCase":
+    raise NotImplementedError
+
+
+def get_kb_section_summaries_use_case() -> "ListKbSectionSummariesUseCase":
+    raise NotImplementedError
+
+
+def get_kb_document_chunks_use_case() -> "GetKbDocumentChunksUseCase":
+    raise NotImplementedError
+
+
 # ── Request / Response Schemas ───────────────────────────────────
 
 class CreateKnowledgeBaseBody(BaseModel):
@@ -58,6 +79,20 @@ class CreateKnowledgeBaseBody(BaseModel):
     chunking_profile_id: str | None = None
     chunk_size: int | None = None
     chunk_overlap: int | None = None
+    # kb-custom-chunking (Design D1): 독립 opt-in — 조항 청킹과 상호배타
+    use_custom_chunking: bool = False
+    custom_chunking_config: dict | None = None
+
+
+class UpdateKbChunkingBody(BaseModel):
+    """청킹 설정 전체 교체 (kb-custom-chunking §5.2 — 부분 병합 아님)."""
+
+    use_clause_chunking: bool = False
+    chunking_profile_id: str | None = None
+    chunk_size: int | None = None
+    chunk_overlap: int | None = None
+    use_custom_chunking: bool = False
+    custom_chunking_config: dict | None = None
 
 
 class KbInfoResponse(BaseModel):
@@ -72,6 +107,8 @@ class KbInfoResponse(BaseModel):
     chunking_profile_id: str | None = None
     chunk_size: int | None = None
     chunk_overlap: int | None = None
+    use_custom_chunking: bool = False
+    custom_chunking_config: dict | None = None
     created_at: datetime | None
 
 
@@ -155,6 +192,67 @@ class SectionSummaryStatusResponse(BaseModel):
     updated_at: datetime | None
 
 
+class KbBrowseChunkDetailResponse(BaseModel):
+    """KB 스코프 청크 항목 (kb-content-browser §4.1 — doc_browse ChunkDetail 대응)."""
+
+    chunk_id: str
+    chunk_index: int
+    chunk_type: str
+    content: str
+    metadata: dict[str, str]
+
+
+class KbBrowseParentGroupResponse(BaseModel):
+    chunk_id: str
+    chunk_index: int
+    chunk_type: str
+    content: str
+    children: list[KbBrowseChunkDetailResponse]
+
+
+class KbDocumentSummaryResponse(BaseModel):
+    """문서 요약 조회 (kb-content-browser D5/D6). 미생성 시 exists=false."""
+
+    exists: bool
+    source: str
+    chunk_id: str | None = None
+    summary_text: str | None = None
+    keywords: list[str] = []
+    section_count: int | None = None
+    filename: str | None = None
+    metadata: dict[str, str] = {}
+
+
+class KbSectionSummaryItemResponse(BaseModel):
+    chunk_id: str
+    section_ref: str
+    clause_title: str
+    chunk_index: int
+    summary_text: str
+    keywords: list[str] = []
+    metadata: dict[str, str] = {}
+
+
+class KbSectionSummaryListResponse(BaseModel):
+    source: str
+    document_id: str
+    total: int
+    items: list[KbSectionSummaryItemResponse]
+
+
+class KbDocumentChunksResponse(BaseModel):
+    """KB 스코프 청크 조회 (kb-content-browser D3). search_mode: match|contains|null."""
+
+    source: str
+    search_mode: str | None
+    document_id: str
+    filename: str
+    chunk_strategy: str
+    total_chunks: int
+    chunks: list[KbBrowseChunkDetailResponse] = []
+    parents: list[KbBrowseParentGroupResponse] | None = None
+
+
 def _to_kb_info(kb: KnowledgeBase) -> KbInfoResponse:
     return KbInfoResponse(
         kb_id=kb.id,
@@ -168,6 +266,8 @@ def _to_kb_info(kb: KnowledgeBase) -> KbInfoResponse:
         chunking_profile_id=kb.chunking_profile_id,
         chunk_size=kb.chunk_size,
         chunk_overlap=kb.chunk_overlap,
+        use_custom_chunking=kb.use_custom_chunking,
+        custom_chunking_config=kb.custom_chunking_config,
         created_at=kb.created_at,
     )
 
@@ -216,6 +316,8 @@ async def create_knowledge_base(
             chunking_profile_id=body.chunking_profile_id,
             chunk_size=body.chunk_size,
             chunk_overlap=body.chunk_overlap,
+            use_custom_chunking=body.use_custom_chunking,
+            custom_chunking_config=body.custom_chunking_config,
         )
     except PermissionError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
@@ -258,6 +360,39 @@ async def get_knowledge_base(
     request_id = str(uuid.uuid4())
     try:
         kb = await use_case.get(kb_id, current_user, request_id)
+    except (PermissionError, ValueError) as e:
+        _raise_http(e)
+    return _to_kb_info(kb)
+
+
+@router.patch(
+    "/{kb_id}/chunking",
+    response_model=KbInfoResponse,
+    description=(
+        "지식베이스 청킹 설정을 전체 교체한다 (kb-custom-chunking D7). "
+        "소유자/ADMIN만 가능하며, 변경된 설정은 이후 업로드 문서부터 적용된다 "
+        "(기존 문서는 재청킹하지 않음 — D10)."
+    ),
+)
+async def update_kb_chunking_settings(
+    kb_id: str,
+    body: UpdateKbChunkingBody,
+    current_user: User = Depends(get_current_user),
+    use_case: KnowledgeBaseUseCase = Depends(get_knowledge_base_use_case),
+):
+    request_id = str(uuid.uuid4())
+    try:
+        kb = await use_case.update_chunking(
+            kb_id,
+            current_user,
+            use_clause_chunking=body.use_clause_chunking,
+            chunking_profile_id=body.chunking_profile_id,
+            chunk_size=body.chunk_size,
+            chunk_overlap=body.chunk_overlap,
+            use_custom_chunking=body.use_custom_chunking,
+            custom_chunking_config=body.custom_chunking_config,
+            request_id=request_id,
+        )
     except (PermissionError, ValueError) as e:
         _raise_http(e)
     return _to_kb_info(kb)
@@ -462,3 +597,153 @@ async def retry_section_summary(
     except (PermissionError, ValueError) as e:
         _raise_http(e)
     return _to_summary_status(job_status)
+
+
+# ── KB 저장 내용 조회 (kb-content-browser) ────────────────────────
+
+_SOURCE_PATTERN = "^(qdrant|es)$"
+
+
+def _to_chunk_response(chunk) -> KbBrowseChunkDetailResponse:
+    return KbBrowseChunkDetailResponse(
+        chunk_id=chunk.chunk_id,
+        chunk_index=chunk.chunk_index,
+        chunk_type=chunk.chunk_type,
+        content=chunk.content,
+        metadata=chunk.metadata,
+    )
+
+
+@router.get(
+    "/{kb_id}/documents/{document_id}/summary",
+    response_model=KbDocumentSummaryResponse,
+    description=(
+        "KB 문서의 문서 단위 요약 본문을 조회한다 (kb-content-browser D2/D6). "
+        "source로 저장소(qdrant|es)를 선택하며, 요약 미생성 문서는 "
+        "404가 아닌 exists=false로 응답한다."
+    ),
+)
+async def get_kb_document_summary(
+    kb_id: str,
+    document_id: str,
+    source: str = Query("qdrant", pattern=_SOURCE_PATTERN),
+    current_user: User = Depends(get_current_user),
+    use_case: GetKbDocumentSummaryUseCase = Depends(
+        get_kb_document_summary_use_case
+    ),
+):
+    request_id = str(uuid.uuid4())
+    try:
+        result = await use_case.execute(
+            kb_id, document_id, source, current_user, request_id
+        )
+    except (PermissionError, ValueError) as e:
+        _raise_http(e)
+    return KbDocumentSummaryResponse(
+        exists=result.exists,
+        source=result.source,
+        chunk_id=result.chunk_id,
+        summary_text=result.summary_text,
+        keywords=result.keywords,
+        section_count=result.section_count,
+        filename=result.filename,
+        metadata=result.metadata,
+    )
+
+
+@router.get(
+    "/{kb_id}/documents/{document_id}/section-summaries",
+    response_model=KbSectionSummaryListResponse,
+    description=(
+        "KB 문서의 섹션 요약 목록(제목·본문·순서)을 조회한다 "
+        "(kb-content-browser D2/D5). source로 저장소(qdrant|es)를 선택한다. "
+        "ES 소스는 chunk_index 미보유로 0이 기본값이다."
+    ),
+)
+async def list_kb_section_summaries(
+    kb_id: str,
+    document_id: str,
+    source: str = Query("qdrant", pattern=_SOURCE_PATTERN),
+    current_user: User = Depends(get_current_user),
+    use_case: ListKbSectionSummariesUseCase = Depends(
+        get_kb_section_summaries_use_case
+    ),
+):
+    request_id = str(uuid.uuid4())
+    try:
+        result = await use_case.execute(
+            kb_id, document_id, source, current_user, request_id
+        )
+    except (PermissionError, ValueError) as e:
+        _raise_http(e)
+    return KbSectionSummaryListResponse(
+        source=result.source,
+        document_id=result.document_id,
+        total=result.total,
+        items=[
+            KbSectionSummaryItemResponse(
+                chunk_id=i.chunk_id,
+                section_ref=i.section_ref,
+                clause_title=i.clause_title,
+                chunk_index=i.chunk_index,
+                summary_text=i.summary_text,
+                keywords=i.keywords,
+                metadata=i.metadata,
+            )
+            for i in result.items
+        ],
+    )
+
+
+@router.get(
+    "/{kb_id}/documents/{document_id}/chunks",
+    response_model=KbDocumentChunksResponse,
+    description=(
+        "KB 문서의 parent/child 청크를 KB 격리 검증 후 조회한다 "
+        "(kb-content-browser D3/D4). q 검색은 선택 저장소 기준 — "
+        "es는 match(형태소), qdrant는 부분일치(contains)이며 "
+        "적용 방식은 응답 search_mode로 확인한다."
+    ),
+)
+async def get_kb_document_chunks(
+    kb_id: str,
+    document_id: str,
+    source: str = Query("qdrant", pattern=_SOURCE_PATTERN),
+    include_parent: bool = Query(False),
+    q: str | None = Query(None, min_length=1, max_length=200),
+    current_user: User = Depends(get_current_user),
+    use_case: GetKbDocumentChunksUseCase = Depends(
+        get_kb_document_chunks_use_case
+    ),
+):
+    request_id = str(uuid.uuid4())
+    try:
+        result = await use_case.execute(
+            kb_id, document_id, source, include_parent, q,
+            current_user, request_id,
+        )
+    except (PermissionError, ValueError) as e:
+        _raise_http(e)
+    return KbDocumentChunksResponse(
+        source=result.source,
+        search_mode=result.search_mode,
+        document_id=result.document_id,
+        filename=result.filename,
+        chunk_strategy=result.chunk_strategy,
+        total_chunks=result.total_chunks,
+        chunks=[_to_chunk_response(c) for c in result.chunks],
+        parents=(
+            [
+                KbBrowseParentGroupResponse(
+                    chunk_id=g.chunk_id,
+                    chunk_index=g.chunk_index,
+                    chunk_type=g.chunk_type,
+                    content=g.content,
+                    children=[_to_chunk_response(c) for c in g.children],
+                )
+                for g in result.parents
+            ]
+            if result.parents is not None
+            else None
+        ),
+    )

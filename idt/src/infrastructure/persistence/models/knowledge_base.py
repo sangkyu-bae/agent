@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import (
+    JSON,
     BigInteger,
     DateTime,
     Enum,
@@ -54,6 +55,13 @@ class KnowledgeBaseModel(Base):
     )
     chunk_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
     chunk_overlap: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # kb-custom-chunking (Design D1): 독립 opt-in + 전략/파라미터 JSON
+    use_custom_chunking: Mapped[bool] = mapped_column(
+        Integer, nullable=False, default=0
+    )
+    custom_chunking_config: Mapped[dict | None] = mapped_column(
+        JSON, nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now()
     )

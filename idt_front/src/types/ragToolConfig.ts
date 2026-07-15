@@ -28,6 +28,12 @@ export interface KnowledgeBaseInfo {
   collection_name: string;
   owner_id?: number;
   use_clause_chunking?: boolean;
+  chunking_profile_id?: string | null;
+  chunk_size?: number | null;
+  chunk_overlap?: number | null;
+  /** kb-custom-chunking (D1): 독립 opt-in + 설정 JSON — additive 확장 */
+  use_custom_chunking?: boolean;
+  custom_chunking_config?: import('@/types/knowledgeBase').CustomChunkingConfig | null;
   created_at?: string | null;
 }
 

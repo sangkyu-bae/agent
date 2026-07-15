@@ -1,13 +1,19 @@
 """ChunkingSettingsResolver — KB의 청킹 설정을 업로드용 config로 해석 (Design §7.2, D11).
 
-use_clause_chunking=False면 None(기존 경로). True면 프로파일 로드 → KB 오버라이드 병합.
-참조 프로파일이 없거나 soft-deleted면 default 폴백, default도 없으면 None(legacy)으로
-폴백해 업로드가 항상 성공하도록 한다 (FR-07).
+use_custom_chunking=True면 KB의 custom_chunking_config를 해석한다
+(kb-custom-chunking D6 — 손상 시 legacy 폴백). use_clause_chunking=True면
+프로파일 로드 → KB 오버라이드 병합. 참조 프로파일이 없거나 soft-deleted면
+default 폴백, default도 없으면 None(legacy)으로 폴백해 업로드가 항상
+성공하도록 한다 (FR-07).
 """
 from src.application.unified_upload.schemas import UploadChunkingConfig
 from src.domain.chunking_profile.entities import ChunkingProfile
 from src.domain.chunking_profile.interfaces import (
     ChunkingProfileRepositoryInterface,
+)
+from src.domain.knowledge_base.custom_chunking import (
+    CustomChunkingPolicy,
+    parse_custom_chunking_config,
 )
 from src.domain.knowledge_base.entities import KnowledgeBase
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
@@ -26,6 +32,8 @@ class ChunkingSettingsResolver:
     async def resolve(
         self, kb: KnowledgeBase, request_id: str
     ) -> UploadChunkingConfig | None:
+        if kb.use_custom_chunking:
+            return self._resolve_custom(kb, request_id)
         if not kb.use_clause_chunking:
             return None
 
@@ -79,6 +87,31 @@ class ChunkingSettingsResolver:
         return SectionSummarySpec(
             llm_model_id=profile.summary_llm_model_id,
             profile_id=profile.id,
+        )
+
+    def _resolve_custom(
+        self, kb: KnowledgeBase, request_id: str
+    ) -> UploadChunkingConfig | None:
+        """커스텀 설정 해석 (kb-custom-chunking D6).
+
+        저장된 config가 손상/해석 불가면 업로드 실패 대신 legacy 폴백.
+        """
+        try:
+            config = parse_custom_chunking_config(kb.custom_chunking_config)
+            CustomChunkingPolicy.validate(config)
+        except ValueError as exc:
+            self._logger.warning(
+                "Custom chunking config invalid, "
+                "falling back to legacy path",
+                request_id=request_id,
+                kb_id=kb.id,
+                error=str(exc),
+            )
+            return None
+        return UploadChunkingConfig(
+            strategy=config.factory_strategy(),
+            params=config.factory_params(),
+            display=config.display(),
         )
 
     async def _load_profile(
