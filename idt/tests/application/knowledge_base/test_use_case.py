@@ -212,3 +212,169 @@ class TestDelete:
         mock_kb_repo.find_by_id.return_value = _kb(owner_id=99)
         await use_case.delete("kb-1", _user(role=UserRole.ADMIN), "req-1")
         mock_kb_repo.soft_delete.assert_awaited_once()
+
+
+_CUSTOM_CONFIG = {
+    "version": 1,
+    "strategy": "full_token",
+    "chunk_size": 1200,
+    "chunk_overlap": 120,
+}
+
+_CHUNKING_OFF = dict(
+    use_clause_chunking=False,
+    chunking_profile_id=None,
+    chunk_size=None,
+    chunk_overlap=None,
+    use_custom_chunking=False,
+    custom_chunking_config=None,
+)
+
+
+class TestCreateCustomChunking:
+    """kb-custom-chunking — create 시 커스텀 설정 검증/전달 (V-06, V-07)."""
+
+    async def test_custom_config_saved_on_entity(
+        self, use_case, mock_kb_repo
+    ):
+        kb = await use_case.create(
+            user=_user(),
+            name="커스텀 KB",
+            collection_name="shared-col",
+            scope=CollectionScope.PERSONAL,
+            department_id=None,
+            description=None,
+            request_id="req-1",
+            use_custom_chunking=True,
+            custom_chunking_config=_CUSTOM_CONFIG,
+        )
+        assert kb.use_custom_chunking is True
+        assert kb.custom_chunking_config == _CUSTOM_CONFIG
+
+    async def test_both_toggles_rejected(self, use_case):
+        with pytest.raises(ValueError, match="cannot both"):
+            await use_case.create(
+                user=_user(),
+                name="충돌 KB",
+                collection_name="shared-col",
+                scope=CollectionScope.PERSONAL,
+                department_id=None,
+                description=None,
+                request_id="req-1",
+                use_clause_chunking=True,
+                use_custom_chunking=True,
+                custom_chunking_config=_CUSTOM_CONFIG,
+            )
+
+    async def test_config_without_toggle_rejected(self, use_case):
+        with pytest.raises(ValueError, match="use_custom_chunking"):
+            await use_case.create(
+                user=_user(),
+                name="KB",
+                collection_name="shared-col",
+                scope=CollectionScope.PERSONAL,
+                department_id=None,
+                description=None,
+                request_id="req-1",
+                use_custom_chunking=False,
+                custom_chunking_config=_CUSTOM_CONFIG,
+            )
+
+    async def test_invalid_config_rejected(self, use_case):
+        with pytest.raises(ValueError, match="chunk_size"):
+            await use_case.create(
+                user=_user(),
+                name="KB",
+                collection_name="shared-col",
+                scope=CollectionScope.PERSONAL,
+                department_id=None,
+                description=None,
+                request_id="req-1",
+                use_custom_chunking=True,
+                custom_chunking_config={
+                    "strategy": "full_token", "chunk_size": 10,
+                },
+            )
+
+
+class TestUpdateChunking:
+    """kb-custom-chunking D7/D8/D9 — 청킹 설정 전체 교체."""
+
+    async def test_owner_updates_settings(self, use_case, mock_kb_repo):
+        mock_kb_repo.find_by_id.return_value = _kb(owner_id=1)
+        await use_case.update_chunking(
+            "kb-1", _user(user_id=1), request_id="req-1",
+            **{**_CHUNKING_OFF,
+               "use_custom_chunking": True,
+               "custom_chunking_config": _CUSTOM_CONFIG},
+        )
+        mock_kb_repo.update_chunking.assert_awaited_once_with(
+            "kb-1",
+            use_clause_chunking=False,
+            chunking_profile_id=None,
+            chunk_size=None,
+            chunk_overlap=None,
+            use_custom_chunking=True,
+            custom_chunking_config=_CUSTOM_CONFIG,
+            request_id="req-1",
+        )
+
+    async def test_returns_refetched_kb(self, use_case, mock_kb_repo):
+        updated = _kb(owner_id=1)
+        updated.use_custom_chunking = True
+        updated.custom_chunking_config = _CUSTOM_CONFIG
+        mock_kb_repo.find_by_id.side_effect = [_kb(owner_id=1), updated]
+        kb = await use_case.update_chunking(
+            "kb-1", _user(user_id=1), request_id="req-1",
+            **{**_CHUNKING_OFF,
+               "use_custom_chunking": True,
+               "custom_chunking_config": _CUSTOM_CONFIG},
+        )
+        assert kb.use_custom_chunking is True
+
+    async def test_non_owner_rejected(self, use_case, mock_kb_repo):
+        mock_kb_repo.find_by_id.return_value = _kb(owner_id=99)
+        with pytest.raises(PermissionError):
+            await use_case.update_chunking(
+                "kb-1", _user(user_id=1), request_id="req-1",
+                **_CHUNKING_OFF,
+            )
+        mock_kb_repo.update_chunking.assert_not_awaited()
+
+    async def test_admin_updates_others(self, use_case, mock_kb_repo):
+        mock_kb_repo.find_by_id.return_value = _kb(owner_id=99)
+        await use_case.update_chunking(
+            "kb-1", _user(role=UserRole.ADMIN), request_id="req-1",
+            **_CHUNKING_OFF,
+        )
+        mock_kb_repo.update_chunking.assert_awaited_once()
+
+    async def test_not_found_raises(self, use_case, mock_kb_repo):
+        mock_kb_repo.find_by_id.return_value = None
+        with pytest.raises(ValueError, match="not found"):
+            await use_case.update_chunking(
+                "ghost", _user(), request_id="req-1", **_CHUNKING_OFF,
+            )
+
+    async def test_invalid_settings_rejected(self, use_case, mock_kb_repo):
+        mock_kb_repo.find_by_id.return_value = _kb(owner_id=1)
+        with pytest.raises(ValueError, match="cannot both"):
+            await use_case.update_chunking(
+                "kb-1", _user(user_id=1), request_id="req-1",
+                **{**_CHUNKING_OFF,
+                   "use_clause_chunking": True,
+                   "use_custom_chunking": True,
+                   "custom_chunking_config": _CUSTOM_CONFIG},
+            )
+        mock_kb_repo.update_chunking.assert_not_awaited()
+
+    async def test_clause_settings_still_validated(
+        self, use_case, mock_kb_repo
+    ):
+        """기존 조항 검증(비활성 시 오버라이드 금지)이 update에도 적용."""
+        mock_kb_repo.find_by_id.return_value = _kb(owner_id=1)
+        with pytest.raises(ValueError, match="use_clause_chunking"):
+            await use_case.update_chunking(
+                "kb-1", _user(user_id=1), request_id="req-1",
+                **{**_CHUNKING_OFF, "chunk_size": 800},
+            )

@@ -135,7 +135,7 @@ class KnowledgeBaseUploadUseCase:
         child_chunk_overlap: int,
         request_id: str,
     ):
-        """KB 청킹 설정 해석. clause chunking 활성 시 Query 파라미터 무시 (Design D6)."""
+        """KB 청킹 설정 해석. clause/custom 활성 시 Query 파라미터 무시 (Design D6)."""
         if self._chunking_resolver is None:
             return None
         config = await self._chunking_resolver.resolve(kb, request_id)
@@ -144,7 +144,7 @@ class KnowledgeBaseUploadUseCase:
             or child_chunk_overlap != _DEFAULT_CHILD_OVERLAP
         ):
             self._logger.warning(
-                "Query chunk params ignored (KB clause chunking active)",
+                "Query chunk params ignored (KB chunking settings active)",
                 request_id=request_id,
                 kb_id=kb.id,
             )

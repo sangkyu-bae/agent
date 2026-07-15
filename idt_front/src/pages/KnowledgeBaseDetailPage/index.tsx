@@ -5,6 +5,9 @@ import {
   useKbDocuments,
 } from '@/hooks/useKnowledgeBases';
 import { SCOPE_LABELS } from '@/types/collection';
+import type { KbDocumentInfo } from '@/types/knowledgeBase';
+import KbChunkingSettingsCard from '@/components/knowledge-base/KbChunkingSettingsCard';
+import KbDocumentContentPanel from '@/components/knowledge-base/KbDocumentContentPanel';
 import KbDocumentTable from '@/components/knowledge-base/KbDocumentTable';
 import KbUploadDocumentModal from '@/components/knowledge-base/KbUploadDocumentModal';
 
@@ -12,6 +15,8 @@ const KnowledgeBaseDetailPage = () => {
   const { kbId } = useParams<{ kbId: string }>();
   const navigate = useNavigate();
   const [uploadOpen, setUploadOpen] = useState(false);
+  // kb-content-browser: 문서 행 클릭 드릴다운 (재클릭 시 닫기)
+  const [selectedDoc, setSelectedDoc] = useState<KbDocumentInfo | null>(null);
 
   const kbQuery = useKnowledgeBase(kbId);
   const docsQuery = useKbDocuments(kbId);
@@ -60,7 +65,10 @@ const KnowledgeBaseDetailPage = () => {
             <p className="mt-1 font-mono text-[12px] text-zinc-400">
               컬렉션: {kb.collection_name}
               {kb.use_clause_chunking && ' · 조항 단위 청킹'}
+              {kb.use_custom_chunking && ' · 커스텀 청킹'}
             </p>
+
+            <KbChunkingSettingsCard kb={kb} />
 
             <div className="mt-8 flex items-center justify-between">
               <h2 className="text-[17px] font-semibold text-zinc-900">
@@ -83,8 +91,22 @@ const KnowledgeBaseDetailPage = () => {
                 isLoading={docsQuery.isLoading}
                 isError={docsQuery.isError}
                 onRetry={() => docsQuery.refetch()}
+                onRowClick={(doc) =>
+                  setSelectedDoc((prev) =>
+                    prev?.document_id === doc.document_id ? null : doc,
+                  )
+                }
+                selectedId={selectedDoc?.document_id ?? null}
               />
             </div>
+
+            {selectedDoc && (
+              <KbDocumentContentPanel
+                kbId={kbId}
+                document={selectedDoc}
+                onClose={() => setSelectedDoc(null)}
+              />
+            )}
 
             <KbUploadDocumentModal
               isOpen={uploadOpen}

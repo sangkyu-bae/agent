@@ -6,6 +6,14 @@ import type { CollectionScope } from '@/types/ragToolConfig';
 import type { CreateKnowledgeBaseRequest } from '@/types/knowledgeBase';
 import { useCollectionList } from '@/hooks/useCollections';
 import { useDepartments } from '@/hooks/useDepartments';
+import ChunkingModeSelector, {
+  type ChunkingMode,
+} from './ChunkingModeSelector';
+import {
+  buildCustomChunkingConfig,
+  defaultCustomChunkingForm,
+  validateCustomChunkingForm,
+} from './customChunkingForm';
 
 interface CreateKnowledgeBaseModalProps {
   isOpen: boolean;
@@ -29,7 +37,9 @@ const CreateKnowledgeBaseModal = ({
   const [scope, setScope] = useState<CollectionScope>('PERSONAL');
   const [departmentId, setDepartmentId] = useState('');
   const [collectionName, setCollectionName] = useState('');
-  const [useClauseChunking, setUseClauseChunking] = useState(false);
+  // kb-custom-chunking §6.1: radio 3택으로 조항/커스텀 상호배타 원천 차단
+  const [chunkingMode, setChunkingMode] = useState<ChunkingMode>('default');
+  const [customForm, setCustomForm] = useState(defaultCustomChunkingForm);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [formError, setFormError] = useState('');
 
@@ -59,6 +69,13 @@ const CreateKnowledgeBaseModal = ({
       setFormError('부서를 선택해주세요');
       return;
     }
+    if (chunkingMode === 'custom') {
+      const chunkingError = validateCustomChunkingForm(customForm);
+      if (chunkingError) {
+        setFormError(chunkingError);
+        return;
+      }
+    }
     setFormError('');
     onSubmit({
       name: name.trim(),
@@ -66,7 +83,12 @@ const CreateKnowledgeBaseModal = ({
       scope,
       department_id: scope === 'DEPARTMENT' ? departmentId : undefined,
       collection_name: collectionName,
-      use_clause_chunking: useClauseChunking,
+      use_clause_chunking: chunkingMode === 'clause',
+      use_custom_chunking: chunkingMode === 'custom',
+      custom_chunking_config:
+        chunkingMode === 'custom'
+          ? buildCustomChunkingConfig(customForm)
+          : undefined,
     });
   };
 
@@ -76,7 +98,8 @@ const CreateKnowledgeBaseModal = ({
     setScope('PERSONAL');
     setDepartmentId('');
     setCollectionName('');
-    setUseClauseChunking(false);
+    setChunkingMode('default');
+    setCustomForm(defaultCustomChunkingForm());
     setAdvancedOpen(false);
     setFormError('');
     onClose();
@@ -212,7 +235,7 @@ const CreateKnowledgeBaseModal = ({
           )}
         </div>
 
-        {/* 고급 옵션 (Q3: use_clause_chunking 토글만) */}
+        {/* 고급 옵션 — 청킹 방식 radio 3택 (kb-custom-chunking §6.1) */}
         <div>
           <button
             type="button"
@@ -222,20 +245,14 @@ const CreateKnowledgeBaseModal = ({
             {advancedOpen ? '▾' : '▸'} 고급 옵션
           </button>
           {advancedOpen && (
-            <label className="mt-2 flex cursor-pointer items-center gap-2.5">
-              <input
-                type="checkbox"
-                checked={useClauseChunking}
-                onChange={(e) => setUseClauseChunking(e.target.checked)}
-                className="h-4 w-4 accent-violet-600"
+            <div className="mt-2">
+              <ChunkingModeSelector
+                mode={chunkingMode}
+                onModeChange={setChunkingMode}
+                customForm={customForm}
+                onCustomFormChange={setCustomForm}
               />
-              <span className="text-[13px] text-zinc-700">
-                조항 단위 청킹 사용
-              </span>
-              <span className="text-[12px] text-zinc-400">
-                규정/내규 문서를 조·항 경계로 분할합니다
-              </span>
-            </label>
+            </div>
           )}
         </div>
 

@@ -38,6 +38,22 @@ class KnowledgeBaseRepositoryInterface(ABC):
     async def soft_delete(self, kb_id: str, request_id: str) -> None:
         ...
 
+    @abstractmethod
+    async def update_chunking(
+        self,
+        kb_id: str,
+        *,
+        use_clause_chunking: bool,
+        chunking_profile_id: str | None,
+        chunk_size: int | None,
+        chunk_overlap: int | None,
+        use_custom_chunking: bool,
+        custom_chunking_config: dict | None,
+        request_id: str,
+    ) -> None:
+        """청킹 설정 6개 컬럼만 전체 교체 (kb-custom-chunking D7/D8)."""
+        ...
+
 
 class CollectionAssignerInterface(ABC):
     """KB가 사용할 물리 컬렉션 결정 전략 (Design D6).

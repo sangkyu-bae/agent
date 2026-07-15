@@ -33,7 +33,16 @@
       "PowerShell(npx vitest run --pool=threads src/components/agent-builder/DocumentExtractorConfigModal.test.tsx src/components/agent-builder/DocumentExtractorConfigPanel.test.tsx src/components/agent-builder/LeftConfigPanel.test.tsx)",
       "Read(//c/sangplus/sangplusbot/docs/archive/2026-07/**)",
       "Read(//c/sangplus/sangplusbot/idt/docs/archive/2026-07/**)",
-      "PowerShell(Select-String -Path \"C:\\\\Users\\\\tkdrb\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--sangplus-sangplusbot-idt-front\\\\b649649b-7dba-4b56-982b-ce9c92a77ec5\\\\tasks\\\\bokwmgfo2.output\" -Pattern \"failed\" | Select-Object -First 12 | ForEach-Object { $_.Line })"
+      "PowerShell(Select-String -Path \"C:\\\\Users\\\\tkdrb\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--sangplus-sangplusbot-idt-front\\\\b649649b-7dba-4b56-982b-ce9c92a77ec5\\\\tasks\\\\bokwmgfo2.output\" -Pattern \"failed\" | Select-Object -First 12 | ForEach-Object { $_.Line })",
+      "PowerShell(npx vitest run --pool=threads src/utils/documentTemplate.test.ts 2>$null)",
+      "PowerShell(npx vitest run --pool=threads src/components/agent-builder/DocumentExtractorConfigPanel.test.tsx 2>$null)",
+      "PowerShell(npx vitest run --pool=threads src/components/agent-builder/DocumentExtractorConfigPanel.test.tsx src/utils/documentTemplate.test.ts 2>$null)",
+      "PowerShell(npx vitest run --pool=threads src/components/agent-builder 2>$null)",
+      "PowerShell(npx vitest run --pool=threads src/utils/documentTemplate.test.ts src/components/agent-builder/DocumentExtractorConfigPanel.test.tsx 2>$null)",
+      "PowerShell(npx eslint src/pages/AdminLlmModelsPage src/hooks/useLlmModels.ts src/hooks/useLlmModels.test.ts src/services/llmModelService.ts src/types/llmModel.ts src/constants/adminNav.ts src/constants/adminNav.test.ts src/constants/api.ts src/lib/queryKeys.ts src/App.tsx src/__tests__/mocks/handlers.ts)",
+      "PowerShell(Get-Content *)",
+      "PowerShell(npx eslint src/hooks/useLlmModels.ts src/pages/AdminLlmModelsPage)",
+      "PowerShell(New-Item *)"
     ]
   }
 }

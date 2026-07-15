@@ -79,6 +79,11 @@ class KnowledgeBasePolicy:
         return kb.owner_id == user.id
 
     @staticmethod
+    def can_manage_settings(user: User, kb: KnowledgeBase) -> bool:
+        """청킹 등 KB 구조 설정 변경 — 소유자/ADMIN만 (kb-custom-chunking D9)."""
+        return KnowledgeBasePolicy.can_delete(user, kb)
+
+    @staticmethod
     def validate_scope(
         scope: CollectionScope,
         department_id: str | None,

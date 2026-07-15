@@ -4,9 +4,16 @@ import type { KnowledgeBaseInfo } from '@/types/ragToolConfig';
 import type {
   CreateKnowledgeBaseRequest,
   KbCreateResponse,
+  KbDocumentChunksParams,
+  KbDocumentChunksResponse,
   KbDocumentListResponse,
+  KbDocumentSummaryResponse,
   KbMessageResponse,
+  KbSectionSummaryListResponse,
+  KbStoreSource,
   KbUploadResponse,
+  SectionSummaryStatusResponse,
+  UpdateKbChunkingRequest,
 } from '@/types/knowledgeBase';
 
 interface KnowledgeBasesResponse {
@@ -34,6 +41,18 @@ const knowledgeBaseService = {
   ): Promise<KbCreateResponse> => {
     const { data } = await authApiClient.post<KbCreateResponse>(
       API_ENDPOINTS.KNOWLEDGE_BASES,
+      body,
+    );
+    return data;
+  },
+
+  // kb-custom-chunking D7: 청킹 설정 전체 교체 (신규 업로드부터 적용)
+  updateKbChunking: async (
+    kbId: string,
+    body: UpdateKbChunkingRequest,
+  ): Promise<KnowledgeBaseInfo> => {
+    const { data } = await authApiClient.patch<KnowledgeBaseInfo>(
+      API_ENDPOINTS.KNOWLEDGE_BASE_CHUNKING(kbId),
       body,
     );
     return data;
@@ -71,6 +90,64 @@ const knowledgeBaseService = {
         headers: { 'Content-Type': 'multipart/form-data' },
         timeout: 120_000,
       },
+    );
+    return data;
+  },
+
+  // ── KB 저장 내용 조회 (kb-content-browser) ─────────────────
+
+  getKbDocumentSummary: async (
+    kbId: string,
+    documentId: string,
+    source: KbStoreSource,
+  ): Promise<KbDocumentSummaryResponse> => {
+    const { data } = await authApiClient.get<KbDocumentSummaryResponse>(
+      API_ENDPOINTS.KNOWLEDGE_BASE_DOCUMENT_SUMMARY(kbId, documentId),
+      { params: { source } },
+    );
+    return data;
+  },
+
+  getKbSectionSummaries: async (
+    kbId: string,
+    documentId: string,
+    source: KbStoreSource,
+  ): Promise<KbSectionSummaryListResponse> => {
+    const { data } = await authApiClient.get<KbSectionSummaryListResponse>(
+      API_ENDPOINTS.KNOWLEDGE_BASE_SECTION_SUMMARIES(kbId, documentId),
+      { params: { source } },
+    );
+    return data;
+  },
+
+  getKbDocumentChunks: async (
+    kbId: string,
+    documentId: string,
+    params: KbDocumentChunksParams,
+  ): Promise<KbDocumentChunksResponse> => {
+    const { data } = await authApiClient.get<KbDocumentChunksResponse>(
+      API_ENDPOINTS.KNOWLEDGE_BASE_DOCUMENT_CHUNKS(kbId, documentId),
+      { params },
+    );
+    return data;
+  },
+
+  getSectionSummaryStatus: async (
+    kbId: string,
+    documentId: string,
+  ): Promise<SectionSummaryStatusResponse> => {
+    const { data } = await authApiClient.get<SectionSummaryStatusResponse>(
+      API_ENDPOINTS.KNOWLEDGE_BASE_SECTION_SUMMARY_STATUS(kbId, documentId),
+    );
+    return data;
+  },
+
+  retrySectionSummary: async (
+    kbId: string,
+    documentId: string,
+  ): Promise<SectionSummaryStatusResponse> => {
+    const { data } = await authApiClient.post<SectionSummaryStatusResponse>(
+      API_ENDPOINTS.KNOWLEDGE_BASE_SECTION_SUMMARY_RETRY(kbId, documentId),
     );
     return data;
   },

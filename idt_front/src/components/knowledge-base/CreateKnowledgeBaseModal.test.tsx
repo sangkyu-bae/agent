@@ -76,9 +76,7 @@ describe('CreateKnowledgeBaseModal — kb-management-ui', () => {
     ).toBeInTheDocument();
   });
 
-  it('고급 옵션의 조항 청킹 토글이 제출값에 반영된다 (Q3)', async () => {
-    const onSubmit = renderModal();
-
+  const fillRequiredFields = async () => {
     await userEvent.type(
       screen.getByPlaceholderText('여신 규정집'),
       '규정 KB',
@@ -89,12 +87,17 @@ describe('CreateKnowledgeBaseModal — kb-management-ui', () => {
     await userEvent.click(
       await screen.findByRole('option', { name: /documents/ }),
     );
+  };
+
+  it('고급 옵션의 조항 청킹 radio가 제출값에 반영된다 (Q3)', async () => {
+    const onSubmit = renderModal();
+    await fillRequiredFields();
 
     await userEvent.click(
       screen.getByRole('button', { name: /고급 옵션/ }),
     );
     await userEvent.click(
-      screen.getByRole('checkbox', { name: /조항 단위 청킹 사용/ }),
+      screen.getByRole('radio', { name: /조항 단위 청킹/ }),
     );
     await userEvent.click(screen.getByRole('button', { name: '생성' }));
 
@@ -103,8 +106,65 @@ describe('CreateKnowledgeBaseModal — kb-management-ui', () => {
         name: '규정 KB',
         collection_name: 'documents',
         use_clause_chunking: true,
+        use_custom_chunking: false,
         scope: 'PERSONAL',
       }),
     );
+  });
+
+  // ── kb-custom-chunking §6.1 ──────────────────────────────────
+
+  it('커스텀 청킹 radio 선택 시 설정 폼이 열리고 제출값에 config가 담긴다', async () => {
+    const onSubmit = renderModal();
+    await fillRequiredFields();
+
+    await userEvent.click(
+      screen.getByRole('button', { name: /고급 옵션/ }),
+    );
+    await userEvent.click(
+      screen.getByRole('radio', { name: /커스텀 청킹/ }),
+    );
+
+    const sizeInput = screen.getByLabelText(/^청크 크기/);
+    await userEvent.clear(sizeInput);
+    await userEvent.type(sizeInput, '1200');
+
+    await userEvent.click(screen.getByRole('button', { name: '생성' }));
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        use_clause_chunking: false,
+        use_custom_chunking: true,
+        custom_chunking_config: expect.objectContaining({
+          version: 1,
+          strategy: 'parent_child',
+          chunk_size: 1200,
+          chunk_overlap: 50,
+        }),
+      }),
+    );
+  });
+
+  it('커스텀 청킹 값이 범위를 벗어나면 제출이 차단되고 에러가 보인다', async () => {
+    const onSubmit = renderModal();
+    await fillRequiredFields();
+
+    await userEvent.click(
+      screen.getByRole('button', { name: /고급 옵션/ }),
+    );
+    await userEvent.click(
+      screen.getByRole('radio', { name: /커스텀 청킹/ }),
+    );
+
+    const sizeInput = screen.getByLabelText(/^청크 크기/);
+    await userEvent.clear(sizeInput);
+    await userEvent.type(sizeInput, '50');
+
+    await userEvent.click(screen.getByRole('button', { name: '생성' }));
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(
+      screen.getByText('청크 크기는 100~4000 사이여야 합니다'),
+    ).toBeInTheDocument();
   });
 });

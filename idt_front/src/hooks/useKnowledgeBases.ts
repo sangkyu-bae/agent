@@ -1,7 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
 import knowledgeBaseService from '@/services/knowledgeBaseService';
-import type { CreateKnowledgeBaseRequest } from '@/types/knowledgeBase';
+import type {
+  CreateKnowledgeBaseRequest,
+  KbDocumentChunksParams,
+  KbStoreSource,
+  SectionSummaryStatusResponse,
+  UpdateKbChunkingRequest,
+} from '@/types/knowledgeBase';
 
 export const useKnowledgeBases = () =>
   useQuery({
@@ -43,6 +49,20 @@ export const useCreateKnowledgeBase = () => {
   });
 };
 
+/** 청킹 설정 변경 (kb-custom-chunking D7) — 신규 업로드부터 적용 */
+export const useUpdateKbChunking = (kbId: string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: UpdateKbChunkingRequest) =>
+      knowledgeBaseService.updateKbChunking(kbId, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.knowledgeBases.all,
+      });
+    },
+  });
+};
+
 export const useDeleteKnowledgeBase = () => {
   const queryClient = useQueryClient();
   return useMutation({
@@ -51,6 +71,112 @@ export const useDeleteKnowledgeBase = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.knowledgeBases.all,
+      });
+    },
+  });
+};
+
+// ── KB 저장 내용 조회 (kb-content-browser Design §5.2) ──────────
+
+export const useKbDocumentSummary = (
+  kbId: string | undefined,
+  documentId: string | undefined,
+  source: KbStoreSource,
+) =>
+  useQuery({
+    queryKey: queryKeys.knowledgeBases.documentSummary(
+      kbId ?? '',
+      documentId ?? '',
+      source,
+    ),
+    queryFn: () =>
+      knowledgeBaseService.getKbDocumentSummary(
+        kbId as string,
+        documentId as string,
+        source,
+      ),
+    enabled: !!kbId && !!documentId,
+  });
+
+export const useKbSectionSummaries = (
+  kbId: string | undefined,
+  documentId: string | undefined,
+  source: KbStoreSource,
+) =>
+  useQuery({
+    queryKey: queryKeys.knowledgeBases.sectionSummaries(
+      kbId ?? '',
+      documentId ?? '',
+      source,
+    ),
+    queryFn: () =>
+      knowledgeBaseService.getKbSectionSummaries(
+        kbId as string,
+        documentId as string,
+        source,
+      ),
+    enabled: !!kbId && !!documentId,
+  });
+
+export const useKbDocumentChunks = (
+  kbId: string | undefined,
+  documentId: string | undefined,
+  params: KbDocumentChunksParams,
+) =>
+  useQuery({
+    queryKey: queryKeys.knowledgeBases.chunks(
+      kbId ?? '',
+      documentId ?? '',
+      params,
+    ),
+    queryFn: () =>
+      knowledgeBaseService.getKbDocumentChunks(
+        kbId as string,
+        documentId as string,
+        params,
+      ),
+    enabled: !!kbId && !!documentId,
+  });
+
+/** 잡 미완료(pending/processing) 동안 5초 폴링 (Design D9).
+ *  요약 비활성 프로파일 문서는 404 — retry 없이 조용히 종료. */
+export const useSectionSummaryStatus = (
+  kbId: string | undefined,
+  documentId: string | undefined,
+) =>
+  useQuery({
+    queryKey: queryKeys.knowledgeBases.sectionSummaryStatus(
+      kbId ?? '',
+      documentId ?? '',
+    ),
+    queryFn: () =>
+      knowledgeBaseService.getSectionSummaryStatus(
+        kbId as string,
+        documentId as string,
+      ),
+    enabled: !!kbId && !!documentId,
+    retry: false,
+    refetchInterval: (query) => {
+      const status = (query.state.data as SectionSummaryStatusResponse | undefined)
+        ?.status;
+      return status === 'pending' || status === 'processing' ? 5000 : false;
+    },
+  });
+
+export const useRetrySectionSummary = (kbId: string, documentId: string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      knowledgeBaseService.retrySectionSummary(kbId, documentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.knowledgeBases.sectionSummaryStatus(
+          kbId,
+          documentId,
+        ),
+      });
+      queryClient.invalidateQueries({
+        queryKey: [...queryKeys.knowledgeBases.all, 'sectionSummaries'],
       });
     },
   });

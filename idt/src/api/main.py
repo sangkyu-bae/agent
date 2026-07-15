@@ -238,6 +238,9 @@ from src.api.routes.knowledge_base_router import (
     router as knowledge_base_router,
     get_knowledge_base_use_case,
     get_kb_upload_use_case,
+    get_kb_document_chunks_use_case,
+    get_kb_document_summary_use_case,
+    get_kb_section_summaries_use_case,
     get_list_kb_documents_use_case,
     get_section_summary_query_use_case,
 )
@@ -2744,6 +2747,82 @@ def create_knowledge_base_factories(unified_upload_factory, summary_launcher=Non
     return kb_use_case_factory, kb_upload_factory, kb_documents_factory
 
 
+def create_kb_browse_factories(kb_use_case_factory):
+    """KB 저장 내용 조회 DI (kb-content-browser Design §4.4).
+
+    Qdrant/ES 클라이언트는 싱글턴, 가드(kb_use_case + doc_meta repo)는
+    per-request 세션으로 조립한다.
+    """
+    from src.application.knowledge_base.content_browse_guard import (
+        KbDocumentGuard,
+    )
+    from src.application.knowledge_base.get_kb_document_chunks_use_case import (
+        GetKbDocumentChunksUseCase,
+    )
+    from src.application.knowledge_base.get_kb_document_summary_use_case import (
+        GetKbDocumentSummaryUseCase,
+    )
+    from src.application.knowledge_base.list_kb_section_summaries_use_case import (
+        ListKbSectionSummariesUseCase,
+    )
+    from src.infrastructure.doc_browse.document_metadata_repository import (
+        DocumentMetadataRepository,
+    )
+
+    app_logger = get_app_logger()
+    qdrant_client = AsyncQdrantClient(
+        host=settings.qdrant_host,
+        port=settings.qdrant_port,
+    )
+    es_config = ElasticsearchConfig(
+        ES_HOST=settings.es_host,
+        ES_PORT=settings.es_port,
+        ES_SCHEME=settings.es_scheme,
+    )
+    es_client = ElasticsearchClient.from_config(es_config)
+    es_repo = ElasticsearchRepository(
+        client=es_client, logger=StructuredLogger("kb_browse.es")
+    )
+
+    def _guard(session: AsyncSession) -> KbDocumentGuard:
+        return KbDocumentGuard(
+            kb_use_case=kb_use_case_factory(session),
+            document_metadata_repo=DocumentMetadataRepository(
+                session, app_logger
+            ),
+            logger=StructuredLogger("kb_browse.guard"),
+        )
+
+    def summary_factory(session: AsyncSession = Depends(get_session)):
+        return GetKbDocumentSummaryUseCase(
+            guard=_guard(session),
+            qdrant_client=qdrant_client,
+            es_repo=es_repo,
+            es_index=settings.es_index,
+            logger=StructuredLogger("kb_browse.summary"),
+        )
+
+    def sections_factory(session: AsyncSession = Depends(get_session)):
+        return ListKbSectionSummariesUseCase(
+            guard=_guard(session),
+            qdrant_client=qdrant_client,
+            es_repo=es_repo,
+            es_index=settings.es_index,
+            logger=StructuredLogger("kb_browse.sections"),
+        )
+
+    def chunks_factory(session: AsyncSession = Depends(get_session)):
+        return GetKbDocumentChunksUseCase(
+            guard=_guard(session),
+            qdrant_client=qdrant_client,
+            es_repo=es_repo,
+            es_index=settings.es_index,
+            logger=StructuredLogger("kb_browse.chunks"),
+        )
+
+    return summary_factory, sections_factory, chunks_factory
+
+
 def create_chunking_profile_factories():
     """Return per-request DI factory for Chunking Profile (clause-aware-chunking Design §9)."""
     from src.infrastructure.chunking_profile.repository import ChunkingProfileRepository
@@ -3727,6 +3806,19 @@ def create_app() -> FastAPI:
     )
     app.dependency_overrides[get_section_summary_query_use_case] = (
         _section_summary_query_factory
+    )
+    # KB 저장 내용 조회 DI (kb-content-browser)
+    _kb_summary_factory, _kb_sections_factory, _kb_chunks_factory = (
+        create_kb_browse_factories(_kb_uc_factory)
+    )
+    app.dependency_overrides[get_kb_document_summary_use_case] = (
+        _kb_summary_factory
+    )
+    app.dependency_overrides[get_kb_section_summaries_use_case] = (
+        _kb_sections_factory
+    )
+    app.dependency_overrides[get_kb_document_chunks_use_case] = (
+        _kb_chunks_factory
     )
 
     # Chunking Profile DI (clause-aware-chunking)

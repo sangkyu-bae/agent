@@ -189,3 +189,22 @@ class TestValidateScope:
 
     def test_department_member_ok(self):
         KnowledgeBasePolicy.validate_scope(CollectionScope.DEPARTMENT, "d1", ["d1"])
+
+
+class TestCanManageSettings:
+    """kb-custom-chunking D9 — 청킹 설정 변경은 소유자/ADMIN만."""
+
+    def test_owner_allowed(self):
+        assert KnowledgeBasePolicy.can_manage_settings(
+            _user(user_id=1), _kb(owner_id=1)
+        )
+
+    def test_admin_allowed(self):
+        assert KnowledgeBasePolicy.can_manage_settings(
+            _user(user_id=2, role=UserRole.ADMIN), _kb(owner_id=1)
+        )
+
+    def test_other_user_denied(self):
+        assert not KnowledgeBasePolicy.can_manage_settings(
+            _user(user_id=2), _kb(owner_id=1)
+        )
