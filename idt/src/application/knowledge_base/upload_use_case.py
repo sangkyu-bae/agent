@@ -24,6 +24,7 @@ from src.domain.knowledge_base.interfaces import (
 )
 from src.domain.knowledge_base.policy import KnowledgeBasePolicy
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
+from src.domain.parser.supported_formats import FORMAT_EXCEL, resolve_format
 
 _DEFAULT_CHILD_SIZE = 500
 _DEFAULT_CHILD_OVERLAP = 50
@@ -70,8 +71,10 @@ class KnowledgeBaseUploadUseCase:
                 f"No write access to knowledge base '{kb_id}'"
             )
 
+        is_excel = resolve_format(filename) == FORMAT_EXCEL
         chunking_config = await self._resolve_chunking(
-            kb, child_chunk_size, child_chunk_overlap, request_id
+            kb, child_chunk_size, child_chunk_overlap, request_id,
+            is_excel=is_excel,
         )
         unified_req = UnifiedUploadRequest(
             file_bytes=file_bytes,
@@ -91,7 +94,9 @@ class KnowledgeBaseUploadUseCase:
             filename=filename,
         )
         result = await self._unified_upload.execute(unified_req, request_id)
-        summary_launch = await self._launch_summary(kb, result, request_id)
+        summary_launch = await self._launch_summary(
+            kb, result, request_id, is_excel=is_excel
+        )
         return result, kb, summary_launch
 
     async def _launch_summary(
@@ -99,12 +104,22 @@ class KnowledgeBaseUploadUseCase:
         kb: KnowledgeBase,
         result: UnifiedUploadResult,
         request_id: str,
+        *,
+        is_excel: bool = False,
     ) -> SectionSummaryLaunchInfo | None:
         """섹션 요약 잡 킥오프 (card-section-summary D14).
 
         요약 비활성/업로드 실패면 None. launcher 내부 실패도 None —
         업로드 결과에 영향을 주지 않는다 (FR-09).
+        엑셀은 조항 청킹 전제 기능이므로 스킵한다 (kb-excel-upload D8).
         """
+        if is_excel:
+            self._logger.info(
+                "Section summary skipped for excel upload",
+                request_id=request_id,
+                kb_id=kb.id,
+            )
+            return None
         if (
             self._summary_launcher is None
             or self._chunking_resolver is None
@@ -134,8 +149,22 @@ class KnowledgeBaseUploadUseCase:
         child_chunk_size: int,
         child_chunk_overlap: int,
         request_id: str,
+        *,
+        is_excel: bool = False,
     ):
-        """KB 청킹 설정 해석. clause/custom 활성 시 Query 파라미터 무시 (Design D6)."""
+        """KB 청킹 설정 해석. clause/custom 활성 시 Query 파라미터 무시 (Design D6).
+
+        엑셀은 텍스트 전제 청킹 설정(clause/custom)을 우회하고 기본
+        parent_child 경로를 쓴다 (kb-excel-upload D7).
+        """
+        if is_excel:
+            if kb.use_clause_chunking or kb.use_custom_chunking:
+                self._logger.warning(
+                    "Excel bypasses KB chunking settings",
+                    request_id=request_id,
+                    kb_id=kb.id,
+                )
+            return None
         if self._chunking_resolver is None:
             return None
         config = await self._chunking_resolver.resolve(kb, request_id)

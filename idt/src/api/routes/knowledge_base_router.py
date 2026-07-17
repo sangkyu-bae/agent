@@ -148,6 +148,7 @@ class KbUploadResponse(BaseModel):
     collection_name: str
     document_id: str
     filename: str
+    # PDF는 페이지 수, 엑셀은 시트 수 (kb-excel-upload D11)
     total_pages: int
     chunk_count: int
     chunking_strategy: str

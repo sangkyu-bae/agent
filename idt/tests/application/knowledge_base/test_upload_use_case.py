@@ -132,3 +132,82 @@ class TestExecute:
         unified_req = mock_unified.execute.call_args[0][0]
         assert unified_req.child_chunk_size == 1000
         assert unified_req.child_chunk_overlap == 100
+
+
+class TestExcelUpload:
+    """kb-excel-upload D7/D8 — 엑셀은 청킹 설정 우회 + 섹션 요약 스킵."""
+
+    @pytest.fixture
+    def mock_resolver(self) -> AsyncMock:
+        resolver = AsyncMock()
+        resolver.resolve.return_value = None
+        resolver.resolve_summary_spec.return_value = None
+        return resolver
+
+    @pytest.fixture
+    def mock_launcher(self) -> AsyncMock:
+        return AsyncMock()
+
+    @pytest.fixture
+    def logger(self) -> MagicMock:
+        return MagicMock()
+
+    @pytest.fixture
+    def use_case_with_resolver(
+        self,
+        mock_kb_repo: AsyncMock,
+        mock_dept_repo: AsyncMock,
+        mock_unified: AsyncMock,
+        mock_resolver: AsyncMock,
+        mock_launcher: AsyncMock,
+        logger: MagicMock,
+    ) -> KnowledgeBaseUploadUseCase:
+        return KnowledgeBaseUploadUseCase(
+            kb_repo=mock_kb_repo,
+            policy=KnowledgeBasePolicy(),
+            dept_repo=mock_dept_repo,
+            unified_upload=mock_unified,
+            logger=logger,
+            chunking_resolver=mock_resolver,
+            summary_launcher=mock_launcher,
+        )
+
+    async def test_excel_bypasses_chunking_resolver(
+        self, use_case_with_resolver, mock_unified, mock_resolver
+    ):
+        await use_case_with_resolver.execute(
+            "kb-1", _user(), b"xlsx", "한도표.xlsx", "req-1"
+        )
+        mock_resolver.resolve.assert_not_called()
+        unified_req = mock_unified.execute.call_args[0][0]
+        assert unified_req.chunking_config is None
+
+    async def test_excel_with_clause_kb_logs_bypass_warning(
+        self, use_case_with_resolver, mock_kb_repo, logger
+    ):
+        kb = _kb()
+        kb.use_clause_chunking = True
+        mock_kb_repo.find_by_id.return_value = kb
+        await use_case_with_resolver.execute(
+            "kb-1", _user(), b"xlsx", "한도표.xlsx", "req-1"
+        )
+        assert logger.warning.called
+
+    async def test_excel_skips_summary_launch(
+        self, use_case_with_resolver, mock_resolver, mock_launcher
+    ):
+        _, _, summary_launch = await use_case_with_resolver.execute(
+            "kb-1", _user(), b"xlsx", "한도표.xlsx", "req-1"
+        )
+        assert summary_launch is None
+        mock_resolver.resolve_summary_spec.assert_not_called()
+        mock_launcher.launch.assert_not_called()
+
+    async def test_pdf_still_uses_resolver(
+        self, use_case_with_resolver, mock_resolver
+    ):
+        # 회귀 가드: PDF 경로는 기존대로 resolver를 거친다
+        await use_case_with_resolver.execute(
+            "kb-1", _user(), b"pdf", "test.pdf", "req-1"
+        )
+        mock_resolver.resolve.assert_called_once()

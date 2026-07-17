@@ -89,14 +89,15 @@ const KbUploadDocumentModal = ({
           <input
             ref={inputRef}
             type="file"
-            accept=".pdf,.docx,.txt,.md"
+            accept=".pdf,.xlsx,.xls"
             aria-label="업로드할 문서 파일"
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             className="w-full rounded-xl border border-zinc-300 px-4 py-2.5 text-[14px] text-zinc-700 file:mr-3 file:rounded-lg file:border-0 file:bg-violet-50 file:px-3 file:py-1.5 file:text-[13px] file:font-medium file:text-violet-600"
           />
           <p className="text-[12px] text-zinc-400">
-            문서 파싱과 임베딩이 함께 진행되어 크기에 따라 수십 초가 걸릴 수
-            있습니다.
+            지원 형식: PDF, 엑셀(.xlsx/.xls) — 엑셀은 시트 단위로
+            저장됩니다. 문서 파싱과 임베딩이 함께 진행되어 크기에 따라 수십
+            초가 걸릴 수 있습니다.
           </p>
 
           {status === 'error' && (
