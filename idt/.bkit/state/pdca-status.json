@@ -1,6 +1,6 @@
 {
   "version": "2.0",
-  "lastUpdated": "2026-07-15T01:32:49.786Z",
+  "lastUpdated": "2026-07-17T10:40:35.646Z",
   "activeFeatures": [
     "websocket-common-module",
     "agent-chat-multiturn",
@@ -131,10 +131,29 @@
     "knowledge-base",
     "KnowledgeBasesPage",
     "KnowledgeBaseDetailPage",
-    "kb-management-ui"
+    "kb-management-ui",
+    "chunking-profile-admin-ui",
+    "AdminChunkingProfilesPage",
+    "excel"
   ],
   "primaryFeature": "knowledge_base",
   "archivedFeatures": {
+    "kb-excel-upload": {
+      "phase": "archived",
+      "matchRate": 97.6,
+      "iterationCount": 0,
+      "startedAt": "2026-07-17T00:00:00.000Z",
+      "archivedAt": "2026-07-17T00:00:00.000Z",
+      "archivedTo": "docs/archive/2026-07/kb-excel-upload/"
+    },
+    "chunking-profile-admin-ui": {
+      "phase": "archived",
+      "matchRate": 95,
+      "iterationCount": 0,
+      "startedAt": "2026-07-15T00:00:00.000Z",
+      "archivedAt": "2026-07-17T00:00:00.000Z",
+      "archivedTo": "docs/archive/2026-07/chunking-profile-admin-ui/"
+    },
     "analysis-source-preservation": {
       "phase": "archived",
       "matchRate": 98,
@@ -548,9 +567,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-04T10:53:02.380Z",
-        "lastUpdated": "2026-07-14T08:24:33.346Z"
+        "lastUpdated": "2026-07-17T10:20:37.673Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\api\\test_knowledge_base_router.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\api\\main.py"
     },
     "routes": {
       "phase": "do",
@@ -561,7 +580,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-04T10:57:06.857Z",
-        "lastUpdated": "2026-07-14T08:24:58.987Z"
+        "lastUpdated": "2026-07-17T10:20:40.130Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\api\\routes\\knowledge_base_router.py"
     },
@@ -652,7 +671,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-16T13:14:48.990Z",
-        "lastUpdated": "2026-07-09T06:21:18.651Z"
+        "lastUpdated": "2026-07-17T10:20:23.937Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\config.py"
     },
@@ -769,9 +788,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-17T14:07:58.706Z",
-        "lastUpdated": "2026-07-10T05:52:29.792Z"
+        "lastUpdated": "2026-07-17T10:20:14.947Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\application\\agent_run\\use_cases\\get_message_retrievals_use_case.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\application\\use_cases\\excel_upload_use_case.py"
     },
     "parser": {
       "phase": "do",
@@ -782,9 +801,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-17T14:08:30.450Z",
-        "lastUpdated": "2026-05-14T03:09:11.433Z"
+        "lastUpdated": "2026-07-17T10:19:46.650Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\infrastructure\\parser\\parser_factory.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\infrastructure\\parser\\extension_routing_parser.py"
     },
     "ingest": {
       "phase": "do",
@@ -915,9 +934,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-04-01T11:13:23.704Z",
-        "lastUpdated": "2026-07-14T23:42:12.242Z"
+        "lastUpdated": "2026-07-15T06:19:29.192Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\constants\\api.ts"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\constants\\adminNav.test.ts"
     },
     "idt_front": {
       "phase": "do",
@@ -928,9 +947,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-04-01T11:13:30.494Z",
-        "lastUpdated": "2026-07-14T23:44:23.531Z"
+        "lastUpdated": "2026-07-15T06:44:29.044Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\hooks\\useKnowledgeBases.ts"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\services\\chunkingProfileService.test.ts"
     },
     "ChatPage": {
       "phase": "do",
@@ -2048,9 +2067,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-07-07T07:10:12.139Z",
-        "lastUpdated": "2026-07-15T01:32:49.785Z"
+        "lastUpdated": "2026-07-17T10:20:10.637Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\infrastructure\\knowledge_base\\test_repository.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\application\\knowledge_base\\upload_use_case.py"
     },
     "knowledge-base-scoping": {
       "phase": "act",
@@ -2187,9 +2206,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-07-10T07:44:37.447Z",
-        "lastUpdated": "2026-07-14T23:57:46.158Z"
+        "lastUpdated": "2026-07-17T10:31:16.507Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\components\\knowledge-base\\KbChunkingSettingsCard.tsx"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\components\\knowledge-base\\KbUploadDocumentModal.test.tsx"
     },
     "KnowledgeBasesPage": {
       "phase": "do",
@@ -2238,6 +2257,32 @@
       "startedAt": "2026-07-13T00:00:00.000Z",
       "archivedAt": "2026-07-13T05:00:00.000Z",
       "archivedTo": "docs/archive/2026-07/agent-builder-edit-mapping/"
+    },
+    "AdminChunkingProfilesPage": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-07-15T06:16:41.835Z",
+        "lastUpdated": "2026-07-15T06:44:34.575Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\AdminChunkingProfilesPage\\index.test.tsx"
+    },
+    "excel": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-07-17T10:17:39.537Z",
+        "lastUpdated": "2026-07-17T10:19:38.720Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\infrastructure\\excel\\excel_document_parser_adapter.py"
     }
   },
   "pipeline": {
@@ -2248,7 +2293,7 @@
   "session": {
     "startedAt": "2026-03-04T10:49:14.367Z",
     "onboardingCompleted": false,
-    "lastActivity": "2026-07-15T01:32:49.786Z"
+    "lastActivity": "2026-07-17T10:40:35.646Z"
   },
   "history": [
     {
@@ -16601,6 +16646,312 @@
       "timestamp": "2026-07-15T01:32:49.785Z",
       "feature": "knowledge_base",
       "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-15T06:15:26.684Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-15T06:15:30.756Z",
+      "feature": "constants",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-15T06:15:51.097Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-15T06:16:03.684Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-15T06:16:10.193Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-15T06:16:26.034Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-15T06:16:41.835Z",
+      "feature": "AdminChunkingProfilesPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-15T06:16:56.443Z",
+      "feature": "AdminChunkingProfilesPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-15T06:17:46.337Z",
+      "feature": "AdminChunkingProfilesPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-15T06:19:10.587Z",
+      "feature": "AdminChunkingProfilesPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-15T06:19:25.959Z",
+      "feature": "constants",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-15T06:19:26.448Z",
+      "feature": "constants",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-15T06:19:29.192Z",
+      "feature": "constants",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-15T06:19:31.048Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-15T06:19:32.348Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-15T06:23:45.549Z",
+      "feature": "AdminChunkingProfilesPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-15T06:23:48.316Z",
+      "feature": "AdminChunkingProfilesPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-15T06:23:50.070Z",
+      "feature": "AdminChunkingProfilesPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-15T06:44:27.251Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-15T06:44:29.044Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-15T06:44:33.822Z",
+      "feature": "AdminChunkingProfilesPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-15T06:44:34.575Z",
+      "feature": "AdminChunkingProfilesPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-17T09:07:48.868Z",
+      "feature": "chunking-profile-admin-ui",
+      "phase": "report",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-17T10:12:41.036Z",
+      "feature": "parser",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-17T10:17:38.864Z",
+      "feature": "parser",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-17T10:17:39.537Z",
+      "feature": "excel",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-17T10:17:58.914Z",
+      "feature": "excel",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-17T10:18:09.343Z",
+      "feature": "parser",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-17T10:18:27.766Z",
+      "feature": "knowledge_base",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-17T10:18:39.889Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-17T10:19:11.793Z",
+      "feature": "parser",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-17T10:19:14.663Z",
+      "feature": "parser",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-17T10:19:21.054Z",
+      "feature": "excel",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-17T10:19:25.422Z",
+      "feature": "excel",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-17T10:19:38.720Z",
+      "feature": "excel",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-17T10:19:46.650Z",
+      "feature": "parser",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-17T10:19:56.187Z",
+      "feature": "knowledge_base",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-17T10:19:58.325Z",
+      "feature": "knowledge_base",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-17T10:20:05.975Z",
+      "feature": "knowledge_base",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-17T10:20:10.637Z",
+      "feature": "knowledge_base",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-17T10:20:12.151Z",
+      "feature": "use_cases",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-17T10:20:14.947Z",
+      "feature": "use_cases",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-17T10:20:23.937Z",
+      "feature": "idt",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-17T10:20:27.888Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-17T10:20:37.673Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-17T10:20:40.130Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-17T10:22:41.232Z",
+      "feature": "knowledge-base",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-17T10:27:41.269Z",
+      "feature": "knowledge-base",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-17T10:28:08.889Z",
+      "feature": "knowledge-base",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-17T10:31:16.507Z",
+      "feature": "knowledge-base",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-17T10:40:35.646Z",
+      "feature": "kb-excel-upload",
+      "phase": "report",
       "action": "updated"
     }
   ],
