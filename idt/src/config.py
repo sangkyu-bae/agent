@@ -32,6 +32,8 @@ class Settings(BaseSettings):
 
     # Parser
     parser_type: str = "pymupdf"
+    # KB 엑셀 업로드 시트당 행 수 상한 — 초과 시 422 (kb-excel-upload D6)
+    kb_excel_max_rows_per_sheet: int = 20000
 
     # Chunking
     default_chunk_size: int = 1000

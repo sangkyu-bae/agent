@@ -328,6 +328,12 @@ from src.infrastructure.config.elasticsearch_config import ElasticsearchConfig
 from src.infrastructure.keyword.simple_keyword_extractor import SimpleKeywordExtractor
 from src.infrastructure.morph.kiwi_morph_analyzer import KiwiMorphAnalyzer
 from src.infrastructure.parser.parser_factory import ParserFactory
+from src.infrastructure.parser.extension_routing_parser import (
+    ExtensionRoutingParser,
+)
+from src.infrastructure.excel.excel_document_parser_adapter import (
+    ExcelDocumentParserAdapter,
+)
 from src.infrastructure.embeddings.openai_embedding import OpenAIEmbedding
 from src.infrastructure.vector.qdrant_vectorstore import QdrantVectorStore
 from src.infrastructure.compressor.providers.openai_provider import OpenAIProvider
@@ -2620,7 +2626,14 @@ def create_unified_upload_factories():
     )
     collection_repo = QdrantCollectionRepository(qdrant_client)
     embedding_factory = EmbeddingFactory()
-    parser = ParserFactory.create_from_string(settings.parser_type)
+    # kb-excel-upload D9: 확장자 라우팅 — pdf는 기존 파서, xlsx/xls는 어댑터
+    parser = ExtensionRoutingParser(
+        pdf_parser=ParserFactory.create_from_string(settings.parser_type),
+        excel_parser=ExcelDocumentParserAdapter(
+            excel_parser=PandasExcelParser(),
+            max_rows_per_sheet=settings.kb_excel_max_rows_per_sheet,
+        ),
+    )
     morph_analyzer = KiwiMorphAnalyzer()
 
     es_config = ElasticsearchConfig(

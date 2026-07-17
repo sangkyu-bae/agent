@@ -20,6 +20,7 @@ import AdminUsersPage from '@/pages/AdminUsersPage';
 import AdminDepartmentsPage from '@/pages/AdminDepartmentsPage';
 import AdminMcpServersPage from '@/pages/AdminMcpServersPage';
 import AdminLlmModelsPage from '@/pages/AdminLlmModelsPage';
+import AdminChunkingProfilesPage from '@/pages/AdminChunkingProfilesPage';
 import AdminSkillsPage from '@/pages/AdminSkillsPage';
 import AdminRagasPage from '@/pages/AdminRagasPage';
 import AdminAgentRunsPage from '@/pages/AdminAgentRunsPage';
@@ -70,6 +71,7 @@ const App = () => (
           <Route path="/admin/departments" element={<AdminDepartmentsPage />} />
           <Route path="/admin/mcp-servers" element={<AdminMcpServersPage />} />
           <Route path="/admin/llm-models" element={<AdminLlmModelsPage />} />
+          <Route path="/admin/chunking-profiles" element={<AdminChunkingProfilesPage />} />
           <Route path="/admin/skills" element={<AdminSkillsPage />} />
           <Route path="/admin/ragas" element={<AdminRagasPage />} />
           <Route path="/admin/agent-runs" element={<AdminAgentRunsPage />} />

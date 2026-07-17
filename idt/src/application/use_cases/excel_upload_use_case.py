@@ -7,6 +7,7 @@ from src.domain.chunking.interfaces import ChunkingStrategy
 from src.domain.excel.interfaces.excel_parser_interface import ExcelParserInterface
 from src.domain.excel.entities.excel_data import ExcelData
 from src.domain.excel.entities.sheet_data import SheetData
+from src.domain.excel.services.sheet_text_serializer import sheet_to_text
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.domain.pipeline.schemas.excel_upload_schema import ExcelUploadResponse
 from src.domain.vector.entities import Document as VectorDocument
@@ -127,15 +128,8 @@ class ExcelUploadUseCase:
         return docs
 
     def _sheet_to_text(self, sheet: SheetData) -> str:
-        """Serialize sheet rows to text.
-
-        Format: "col1: val1 | col2: val2" per row, newline-separated.
-        """
-        lines = []
-        for row in sheet.data:
-            parts = [f"{col}: {row.get(col, '')}" for col in sheet.columns]
-            lines.append(" | ".join(parts))
-        return "\n".join(lines)
+        """Serialize sheet rows to text (kb-excel-upload D5 공용 함수 위임)."""
+        return sheet_to_text(sheet)
 
     async def _store_chunks(
         self, chunks: List[Document], user_id: str

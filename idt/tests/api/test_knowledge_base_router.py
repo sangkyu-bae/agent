@@ -405,6 +405,22 @@ class TestUploadDocument:
         assert data["chunking_strategy"] == "parent_child"
         assert data["section_summary"] is None
 
+    def test_unsupported_extension_returns_422(
+        self, client: TestClient, mock_upload_use_case: AsyncMock
+    ):
+        """미지원 확장자는 파싱 500 대신 명시적 422 (kb-excel-upload D2)."""
+        from src.domain.parser.exceptions import UnsupportedFileFormatError
+
+        mock_upload_use_case.execute.side_effect = UnsupportedFileFormatError(
+            ".docx"
+        )
+        resp = client.post(
+            f"/api/v1/knowledge-bases/{KB_ID}/documents",
+            files={"file": ("doc.docx", b"PK", "application/octet-stream")},
+        )
+        assert resp.status_code == 422
+        assert ".docx" in resp.json()["detail"]
+
     def test_clause_strategy_surfaced_in_response(
         self, client: TestClient, mock_upload_use_case: AsyncMock
     ):
