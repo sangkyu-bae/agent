@@ -115,6 +115,13 @@ export const API_ENDPOINTS = {
   LLM_MODEL_DETAIL: (id: string) => `/api/v1/llm-models/${id}`,
   LLM_MODEL_PRICING: (id: string) => `/api/v1/llm-models/${id}/pricing`,
 
+  // Admin — Chunking Profiles (chunking-profile-admin-ui)
+  ADMIN_CHUNKING_PROFILES: '/api/v1/admin/chunking/profiles',
+  ADMIN_CHUNKING_PROFILE_DETAIL: (id: string) =>
+    `/api/v1/admin/chunking/profiles/${id}`,
+  ADMIN_CHUNKING_PROFILE_DEFAULT: (id: string) =>
+    `/api/v1/admin/chunking/profiles/${id}/default`,
+
   // Admin — User approval
   ADMIN_USERS_PENDING: '/api/v1/admin/users/pending',
   ADMIN_USER_APPROVE: (userId: number) => `/api/v1/admin/users/${userId}/approve`,

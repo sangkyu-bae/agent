@@ -86,6 +86,12 @@ export const queryKeys = {
     detail: (id: string) => [...queryKeys.llmModels.all, 'detail', id] as const,
   },
 
+  // ── Chunking Profiles (admin) ──────────────────────────
+  chunkingProfiles: {
+    all: ['chunkingProfiles'] as const,
+    list: () => [...queryKeys.chunkingProfiles.all, 'list'] as const,
+  },
+
   // ── RAG Tools ──────────────────────────────────────────
   ragTools: {
     all: ['ragTools'] as const,
