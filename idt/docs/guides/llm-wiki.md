@@ -1,7 +1,7 @@
 # LLM Wiki (Self-Improving RAG) — 등록·사용 가이드
 
 > Task ID: LLM-WIKI-001
-> Last Updated: 2026-07-18 (§10에 distill 중복 검사 부재 한계 추가)
+> Last Updated: 2026-07-20 (§10 갱신 — distill 중복 검사 해소 · human 작성 API 반영)
 > 관련 마이그레이션: `db/migration/V036__create_wiki_article.sql`
 
 ---
@@ -245,7 +245,7 @@ HybridSearchResponse  (위키 결과는 source="wiki", score=confidence,
 
 - **환류 생성 미구현** — `conversation`/`websearch` source_type은 예약만 됨(Phase 3). confidence를 환류 신호로 갱신하는 로직도 미구현(`WikiPolicy.clamp_confidence`만 준비됨).
 - **ES(BM25) 위키 색인 미도입** — 위키 검색은 현재 Qdrant 벡터 검색만 사용.
-- **human 신규 작성 API 없음** — 사람은 기존 항목 편집만 가능, 신규 작성은 distill 경로뿐.
+- ~~human 신규 작성 API 없음~~ — **해소(wiki-user-facing)**: `POST /api/v1/wiki`로 소유자 직접 작성 가능 (source_type=human, 즉시 approved).
 - **만료 항목 자동 정리 없음** — `valid_until` 경과 항목은 검색에서만 제외되고 별도 배치 정리는 없다.
-- **distill 중복 검사 없음** — 같은 컬렉션에 distill을 재실행하면 동일 문서에서 draft가 다시 생성된다 (`distill_use_case.py`에 기존 항목 조회/비교 로직 없음). draft 단계의 사람 검수가 유일한 방어선이며, 승인된(approved) 항목 간 중복을 막는 장치도 없다. 항목 수가 늘면 유사 항목 난립으로 top_k 랭킹이 희석될 수 있다.
+- ~~distill 중복 검사 없음~~ — **해소(fix-wiki-distill-dedup, 2026-07-20)**: 동일 agent에 같은 `source_refs` 집합(순서·공백 무관 정확 일치)으로 정제된 문서가 있으면 LLM 호출 전에 스킵한다 — 재실행 멱등, 응답 `skipped_count`로 관측. **남는 한계**: 내용 유사도는 판정하지 않으며(그룹핑이 바뀌어 refs가 달라지면 신규 취급), 기존에 이미 쌓인 중복 draft의 소급 정리는 수동이다.
 - 위키 항목 삭제 API는 라우터에 노출되어 있지 않다(repository `delete`는 존재).

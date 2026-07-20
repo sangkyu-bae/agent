@@ -1,6 +1,6 @@
 {
   "version": "2.0",
-  "lastUpdated": "2026-07-20T04:32:03.000Z",
+  "lastUpdated": "2026-07-20T06:08:36.000Z",
   "activeFeatures": [
     "websocket-common-module",
     "agent-chat-multiturn",
@@ -419,6 +419,13 @@
       "iterationCount": 0,
       "archivedAt": "2026-07-20T04:32:03.000Z",
       "archivedTo": "docs/archive/2026-07/agent-memory-extraction/"
+    },
+    "fix-wiki-distill-dedup": {
+      "phase": "archived",
+      "matchRate": 100,
+      "iterationCount": 0,
+      "archivedAt": "2026-07-20T06:08:36.000Z",
+      "archivedTo": "docs/archive/2026-07/fix-wiki-distill-dedup/"
     }
   },
   "features": {
@@ -607,9 +614,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-04T10:53:02.380Z",
-        "lastUpdated": "2026-07-20T02:51:17.074Z"
+        "lastUpdated": "2026-07-20T05:24:57.336Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\api\\main.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\api\\test_wiki_router.py"
     },
     "routes": {
       "phase": "do",
@@ -620,9 +627,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-04T10:57:06.857Z",
-        "lastUpdated": "2026-07-20T02:50:44.447Z"
+        "lastUpdated": "2026-07-20T05:25:03.379Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\api\\routes\\memory_router.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\api\\routes\\wiki_router.py"
     },
     "retrieval": {
       "phase": "do",
@@ -1177,7 +1184,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-04-26T09:34:24.626Z",
-        "lastUpdated": "2026-07-20T02:53:48.339Z"
+        "lastUpdated": "2026-07-20T05:25:33.087Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\__tests__\\mocks\\handlers.ts"
     },
@@ -2415,7 +2422,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-07-18T09:51:27.503Z",
-        "lastUpdated": "2026-07-18T09:57:47.776Z"
+        "lastUpdated": "2026-07-20T05:24:59.686Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\application\\wiki\\api_schemas.py"
     },
@@ -2484,6 +2491,20 @@
       },
       "previousPhase": "check",
       "autoAdvanced": true
+    },
+    "fix-wiki-distill-dedup": {
+      "phase": "act",
+      "phaseNumber": 5,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-07-20T05:44:04.626Z",
+        "lastUpdated": "2026-07-20T05:44:04.626Z"
+      },
+      "previousPhase": "check",
+      "autoAdvanced": true
     }
   },
   "pipeline": {
@@ -2494,7 +2515,7 @@
   "session": {
     "startedAt": "2026-03-04T10:49:14.367Z",
     "onboardingCompleted": false,
-    "lastActivity": "2026-07-20T04:27:10.361Z"
+    "lastActivity": "2026-07-20T05:44:04.627Z"
   },
   "history": [
     {
@@ -18736,6 +18757,48 @@
     {
       "timestamp": "2026-07-20T04:27:10.361Z",
       "feature": "agent-memory-extraction",
+      "phase": "act",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T05:23:16.054Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T05:24:54.984Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T05:24:57.336Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T05:24:59.686Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T05:25:03.379Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T05:25:33.087Z",
+      "feature": "mocks",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T05:44:04.626Z",
+      "feature": "fix-wiki-distill-dedup",
       "phase": "act",
       "action": "updated"
     }
