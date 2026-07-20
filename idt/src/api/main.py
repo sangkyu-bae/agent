@@ -208,6 +208,20 @@ from src.api.routes.memory_router import (
     router as memory_router,
     get_memory_crud_use_case,
 )
+from src.api.routes.eval_router import (
+    router as eval_router,
+    get_submit_feedback_use_case,
+    get_get_feedback_use_case,
+    get_delete_feedback_use_case,
+    get_agent_eval_stats_use_case,
+)
+from src.application.eval.use_cases import (
+    SubmitFeedbackUseCase,
+    GetFeedbackUseCase,
+    DeleteFeedbackUseCase,
+    AgentEvalStatsUseCase,
+)
+from src.infrastructure.eval.repository import MessageFeedbackRepository
 from src.application.memory.crud_use_case import MemoryCrudUseCase
 from src.application.memory.context_assembler import MemoryContextAssembler
 from src.application.memory.extraction_service import MemoryExtractionService
@@ -4040,6 +4054,35 @@ def create_app() -> FastAPI:
     _memory_crud_f = create_memory_factories()
     app.dependency_overrides[get_memory_crud_use_case] = _memory_crud_f
 
+    # Eval Gate DI (agent-eval-gate)
+    def _eval_submit_f(session: AsyncSession = Depends(get_session)):
+        return SubmitFeedbackUseCase(
+            feedback_repo=MessageFeedbackRepository(session, get_app_logger()),
+            message_repo=SQLAlchemyConversationMessageRepository(session),
+            logger=get_app_logger(),
+        )
+
+    def _eval_get_f(session: AsyncSession = Depends(get_session)):
+        return GetFeedbackUseCase(
+            feedback_repo=MessageFeedbackRepository(session, get_app_logger())
+        )
+
+    def _eval_delete_f(session: AsyncSession = Depends(get_session)):
+        return DeleteFeedbackUseCase(
+            feedback_repo=MessageFeedbackRepository(session, get_app_logger())
+        )
+
+    def _eval_stats_f(session: AsyncSession = Depends(get_session)):
+        return AgentEvalStatsUseCase(
+            feedback_repo=MessageFeedbackRepository(session, get_app_logger()),
+            recent_negative_limit=settings.eval_recent_negative_limit,
+        )
+
+    app.dependency_overrides[get_submit_feedback_use_case] = _eval_submit_f
+    app.dependency_overrides[get_get_feedback_use_case] = _eval_get_f
+    app.dependency_overrides[get_delete_feedback_use_case] = _eval_delete_f
+    app.dependency_overrides[get_agent_eval_stats_use_case] = _eval_stats_f
+
     # Skill Builder DI
     (
         _skill_create_f, _skill_get_f, _skill_list_f,
@@ -4285,6 +4328,7 @@ def create_app() -> FastAPI:
     app.include_router(mcp_registry_router)
     app.include_router(wiki_router)
     app.include_router(memory_router)
+    app.include_router(eval_router)
     app.include_router(skill_builder_router)
     app.include_router(middleware_agent_router)
     app.include_router(collection_router)

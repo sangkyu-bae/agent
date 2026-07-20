@@ -178,7 +178,7 @@ class TestStreamIntegration:
         uc._try_chart_edit = AsyncMock(
             return_value=("차트 수정 완료", [{"type": "bar"}])
         )
-        uc._persist_messages = AsyncMock(return_value=1)
+        uc._persist_messages = AsyncMock(return_value=(1, 2))  # (user_id, assistant_id)
 
         req = GeneralChatRequest(user_id="u1", session_id="s1", message="색 바꿔줘")
         async for _ in uc.stream(req, request_id="req-1"):
