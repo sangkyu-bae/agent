@@ -11,14 +11,17 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from src.application.memory.api_schemas import (
     CreateMemoryRequest,
+    CreateOrgMemoryRequest,
     MemoryListResponse,
     MemoryResponse,
+    PromoteMemoryRequest,
     UpdateMemoryRequest,
     to_response,
 )
-from src.domain.auth.entities import User
+from src.domain.agent_run.auth_context import AuthContext
+from src.domain.auth.entities import User, UserRole
 from src.domain.memory.entity import MemoryStatus
-from src.interfaces.dependencies.auth import get_current_user
+from src.interfaces.dependencies.auth import get_auth_context, get_current_user
 
 router = APIRouter(prefix="/api/v1/memories", tags=["Memory"])
 
@@ -64,6 +67,73 @@ async def list_memories(
         total=len(items),
         max_count=max_count,
     )
+
+
+# ── Phase 3: org(부서) 스코프 ──────────────────────────────────────
+
+def _require_dept_membership(ctx: AuthContext, dept_id: str) -> None:
+    """admin이 아닌 경우 소속 부서만 관리 가능 — 403."""
+    if ctx.role == "admin":
+        return
+    if dept_id not in ctx.department_ids:
+        raise HTTPException(status_code=403, detail="해당 부서에 대한 권한이 없습니다.")
+
+
+@router.get("/org", response_model=MemoryListResponse)
+async def list_org_memories(
+    use_case=Depends(get_memory_crud_use_case),
+    ctx: AuthContext = Depends(get_auth_context),
+):
+    """소속 부서 공유 메모리 목록 (전원 열람)."""
+    request_id = str(uuid.uuid4())
+    items = await use_case.list_org(list(ctx.department_ids), request_id)
+    return MemoryListResponse(
+        items=[to_response(m) for m in items],
+        total=len(items),
+        max_count=use_case.max_active_per_department,
+    )
+
+
+@router.post("/org", response_model=MemoryResponse, status_code=201)
+async def create_org_memory(
+    body: CreateOrgMemoryRequest,
+    use_case=Depends(get_memory_crud_use_case),
+    ctx: AuthContext = Depends(get_auth_context),
+):
+    """부서 메모리 작성 — admin 또는 소속 부서원."""
+    _require_dept_membership(ctx, body.dept_id)
+    request_id = str(uuid.uuid4())
+    try:
+        memory = await use_case.create_org(
+            body.dept_id, body.mem_type, body.content, request_id
+        )
+    except ValueError as e:
+        _raise_memory_error(e)
+    return to_response(memory)
+
+
+@router.post("/{memory_id}/promote", response_model=MemoryResponse, status_code=201)
+async def promote_memory(
+    memory_id: int,
+    body: PromoteMemoryRequest,
+    use_case=Depends(get_memory_crud_use_case),
+    ctx: AuthContext = Depends(get_auth_context),
+):
+    """본인 개인 메모리를 부서 메모리로 승격(복사) — 중복 시 409."""
+    _require_dept_membership(ctx, body.dept_id)
+    request_id = str(uuid.uuid4())
+    try:
+        memory = await use_case.promote(
+            str(ctx.user_id), memory_id, body.dept_id, request_id
+        )
+    except ValueError as e:
+        msg = str(e)
+        if "찾을 수 없" in msg:
+            raise HTTPException(status_code=404, detail=msg)
+        if "이미 부서" in msg:
+            raise HTTPException(status_code=409, detail=msg)
+        raise HTTPException(status_code=422, detail=msg)
+    return to_response(memory)
 
 
 @router.post("", response_model=MemoryResponse, status_code=201)

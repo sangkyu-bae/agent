@@ -7,8 +7,11 @@ import { createWrapper } from '@/__tests__/mocks/wrapper';
 import {
   useApproveMemory,
   useCreateMemory,
+  useCreateOrgMemory,
   useDeleteMemory,
   useMemories,
+  useOrgMemories,
+  usePromoteMemory,
   useRejectMemory,
   useUpdateMemory,
 } from '@/hooks/useMemories';
@@ -56,6 +59,35 @@ describe('useApproveMemory / useRejectMemory', () => {
     });
     result.current.mutate(9);
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
+  });
+});
+
+describe('org 스코프 (agent-memory-org-scope)', () => {
+  it('부서 공유 메모리 목록과 상한을 조회한다', async () => {
+    const { result } = renderHook(() => useOrgMemories(), {
+      wrapper: createWrapper(),
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.max_count).toBe(50);
+    expect(result.current.data?.items[0].content).toBe("'한도'는 동일인 여신한도");
+  });
+
+  it('부서 메모리를 작성한다', async () => {
+    const { result } = renderHook(() => useCreateOrgMemory(), {
+      wrapper: createWrapper(),
+    });
+    result.current.mutate({ dept_id: 'd1', mem_type: 'domain_term', content: '부서 용어' });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.content).toBe('부서 용어');
+  });
+
+  it('개인 메모리를 부서로 승격한다', async () => {
+    const { result } = renderHook(() => usePromoteMemory(), {
+      wrapper: createWrapper(),
+    });
+    result.current.mutate({ id: 5, deptId: 'd1' });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.content).toBe('승격됨');
   });
 });
 

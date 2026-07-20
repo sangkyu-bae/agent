@@ -2144,6 +2144,7 @@ def create_memory_factories():
             logger=app_logger,
             max_active_per_user=settings.memory_max_active_per_user,
             max_pending_per_user=settings.memory_max_pending_per_user,
+            max_active_per_department=settings.memory_max_active_per_department,
         )
 
     return crud_factory

@@ -38,16 +38,49 @@ class MemoryRepository(MemoryRepositoryInterface):
         return self._to_entity(model) if model is not None else None
 
     async def find_active_by_user(self, user_id: str, request_id: str) -> list[Memory]:
+        # FR-07(org-scope): scope='user' 명시 — user_id 슬롯을 부서가 재사용하므로
+        # 이 조건이 없으면 org 행(user_id=부서id)이 개인 조회에 섞인다.
         stmt = (
             select(MemoryModel)
             .where(
                 MemoryModel.user_id == user_id,
+                MemoryModel.scope == MemoryScope.USER.value,
                 MemoryModel.status == MemoryStatus.ACTIVE.value,
             )
             .order_by(MemoryModel.updated_at.desc(), MemoryModel.id.desc())
         )
         rows = (await self._session.execute(stmt)).scalars().all()
         return [self._to_entity(row) for row in rows]
+
+    async def find_active_by_departments(
+        self, dept_ids: list[str], request_id: str
+    ) -> list[Memory]:
+        """scope='org' AND user_id IN dept_ids AND status='active'. 빈 리스트면 []."""
+        if not dept_ids:
+            return []
+        stmt = (
+            select(MemoryModel)
+            .where(
+                MemoryModel.scope == MemoryScope.ORG.value,
+                MemoryModel.user_id.in_(dept_ids),
+                MemoryModel.status == MemoryStatus.ACTIVE.value,
+            )
+            .order_by(MemoryModel.updated_at.desc(), MemoryModel.id.desc())
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return [self._to_entity(row) for row in rows]
+
+    async def count_active_by_department(self, dept_id: str, request_id: str) -> int:
+        stmt = (
+            select(func.count())
+            .select_from(MemoryModel)
+            .where(
+                MemoryModel.scope == MemoryScope.ORG.value,
+                MemoryModel.user_id == dept_id,
+                MemoryModel.status == MemoryStatus.ACTIVE.value,
+            )
+        )
+        return (await self._session.execute(stmt)).scalar() or 0
 
     async def count_active_by_user(self, user_id: str, request_id: str) -> int:
         return await self.count_by_user_and_status(
@@ -61,6 +94,7 @@ class MemoryRepository(MemoryRepositoryInterface):
             select(MemoryModel)
             .where(
                 MemoryModel.user_id == user_id,
+                MemoryModel.scope == MemoryScope.USER.value,  # org 행 배제 (FR-07)
                 MemoryModel.status == status.value,
             )
             .order_by(MemoryModel.updated_at.desc(), MemoryModel.id.desc())
@@ -76,6 +110,7 @@ class MemoryRepository(MemoryRepositoryInterface):
             .select_from(MemoryModel)
             .where(
                 MemoryModel.user_id == user_id,
+                MemoryModel.scope == MemoryScope.USER.value,  # org 행 배제 (FR-07)
                 MemoryModel.status == status.value,
             )
         )

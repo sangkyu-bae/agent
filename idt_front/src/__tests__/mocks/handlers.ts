@@ -1198,6 +1198,26 @@ export const handlers = [
   http.patch('*/api/v1/memories/:id/reject', ({ params }) =>
     HttpResponse.json(mockMemory(Number(params.id), 'profile', '거부됨')),
   ),
+  // agent-memory-org-scope: 부서 공유 메모리 (:id/promote·org는 :id 패턴보다 먼저)
+  http.get('*/api/v1/memories/org', () =>
+    HttpResponse.json({
+      items: [mockMemory(20, 'domain_term', "'한도'는 동일인 여신한도")],
+      total: 1,
+      max_count: 50,
+    }),
+  ),
+  http.post('*/api/v1/memories/org', async ({ request }) => {
+    const body = (await request.json()) as { mem_type?: string; content?: string };
+    return HttpResponse.json(
+      mockMemory(21, body.mem_type ?? 'domain_term', body.content ?? '부서 용어'),
+      { status: 201 },
+    );
+  }),
+  http.post('*/api/v1/memories/:id/promote', ({ params }) =>
+    HttpResponse.json(mockMemory(Number(params.id) + 100, 'profile', '승격됨'), {
+      status: 201,
+    }),
+  ),
   http.post(`*${API_ENDPOINTS.MEMORIES}`, async ({ request }) => {
     const body = (await request.json()) as { mem_type?: string; content?: string };
     return HttpResponse.json(

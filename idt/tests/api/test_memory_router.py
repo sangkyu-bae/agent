@@ -10,9 +10,10 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from src.api.routes.memory_router import router, get_memory_crud_use_case
+from src.domain.agent_run.auth_context import AuthContext
 from src.domain.auth.entities import User, UserRole, UserStatus
 from src.domain.memory.entity import Memory, MemoryScope, MemoryStatus, MemoryType
-from src.interfaces.dependencies.auth import get_current_user
+from src.interfaces.dependencies.auth import get_auth_context, get_current_user
 
 NOW = datetime(2026, 7, 18, 12, 0, 0)
 
@@ -29,6 +30,24 @@ def _memory(memory_id=1, content="여신 심사팀 소속") -> Memory:
         id=memory_id, scope=MemoryScope.USER, user_id="7", tier=0,
         mem_type=MemoryType.PROFILE, content=content,
         status=MemoryStatus.ACTIVE, created_at=NOW, updated_at=NOW,
+    )
+
+
+def _org_memory(memory_id=20, content="부서 용어") -> Memory:
+    return Memory(
+        id=memory_id, scope=MemoryScope.ORG, user_id="d1", tier=0,
+        mem_type=MemoryType.DOMAIN_TERM, content=content,
+        status=MemoryStatus.ACTIVE, created_at=NOW, updated_at=NOW,
+    )
+
+
+def _ctx(role="user", dept_ids=("d1",)) -> AuthContext:
+    return AuthContext(
+        user_id=7, display_name="배상규", role=role,
+        primary_department_id=dept_ids[0] if dept_ids else None,
+        primary_department_name="여신심사팀",
+        department_ids=tuple(dept_ids), department_names=("여신심사팀",),
+        permissions=frozenset(),
     )
 
 
@@ -51,6 +70,10 @@ def crud_uc():
     uc.delete = AsyncMock(return_value=None)
     uc.approve = AsyncMock(return_value=_memory(9, "승인됨"))
     uc.reject = AsyncMock(return_value=_memory(9, "거부됨"))
+    uc.max_active_per_department = 50
+    uc.list_org = AsyncMock(return_value=[_org_memory(20)])
+    uc.create_org = AsyncMock(return_value=_org_memory(21))
+    uc.promote = AsyncMock(return_value=_org_memory(22))
     return uc
 
 
@@ -58,6 +81,7 @@ def crud_uc():
 def client(app, crud_uc):
     app.dependency_overrides[get_memory_crud_use_case] = lambda: crud_uc
     app.dependency_overrides[get_current_user] = _user
+    app.dependency_overrides[get_auth_context] = lambda: _ctx()
     return TestClient(app)
 
 
@@ -133,6 +157,68 @@ class TestApproveReject:
         c = TestClient(app)
 
         assert c.patch("/api/v1/memories/99/approve").status_code == 404
+
+
+class TestOrgScope:
+    def test_부서_메모리_목록은_dept_상한을_max_count로(self, client):
+        r = client.get("/api/v1/memories/org")
+
+        assert r.status_code == 200
+        body = r.json()
+        assert body["max_count"] == 50
+        assert body["items"][0]["content"] == "부서 용어"
+
+    def test_부서_메모리_작성은_201(self, client, crud_uc):
+        r = client.post(
+            "/api/v1/memories/org",
+            json={"dept_id": "d1", "mem_type": "domain_term", "content": "부서 용어"},
+        )
+
+        assert r.status_code == 201
+        assert crud_uc.create_org.await_args.args[0] == "d1"
+
+    def test_소속외_부서_작성은_403(self, app, crud_uc):
+        app.dependency_overrides[get_memory_crud_use_case] = lambda: crud_uc
+        app.dependency_overrides[get_current_user] = _user
+        app.dependency_overrides[get_auth_context] = lambda: _ctx(dept_ids=("d1",))
+        c = TestClient(app)
+
+        r = c.post(
+            "/api/v1/memories/org",
+            json={"dept_id": "d9", "mem_type": "domain_term", "content": "x"},
+        )
+
+        assert r.status_code == 403
+
+    def test_admin은_타부서도_작성_가능(self, app, crud_uc):
+        app.dependency_overrides[get_memory_crud_use_case] = lambda: crud_uc
+        app.dependency_overrides[get_current_user] = _user
+        app.dependency_overrides[get_auth_context] = lambda: _ctx(role="admin", dept_ids=())
+        c = TestClient(app)
+
+        r = c.post(
+            "/api/v1/memories/org",
+            json={"dept_id": "d9", "mem_type": "domain_term", "content": "x"},
+        )
+
+        assert r.status_code == 201
+
+    def test_승격은_201(self, client, crud_uc):
+        r = client.post("/api/v1/memories/5/promote", json={"dept_id": "d1"})
+
+        assert r.status_code == 201
+        assert crud_uc.promote.await_args.args[:3] == ("7", 5, "d1")
+
+    def test_승격_중복은_409(self, app, crud_uc):
+        crud_uc.promote = AsyncMock(side_effect=ValueError("이미 부서에 등록된 내용입니다."))
+        app.dependency_overrides[get_memory_crud_use_case] = lambda: crud_uc
+        app.dependency_overrides[get_current_user] = _user
+        app.dependency_overrides[get_auth_context] = lambda: _ctx()
+        c = TestClient(app)
+
+        r = c.post("/api/v1/memories/5/promote", json={"dept_id": "d1"})
+
+        assert r.status_code == 409
 
 
 class TestCreate:

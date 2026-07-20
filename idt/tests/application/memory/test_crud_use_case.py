@@ -20,7 +20,7 @@ def _memory(
     )
 
 
-def _make(count=0, found=None):
+def _make(count=0, found=None, org_count=0, org_existing=None):
     repo = MagicMock()
     repo.save = AsyncMock(side_effect=lambda m, request_id: m)
     repo.count_active_by_user = AsyncMock(return_value=count)
@@ -29,9 +29,12 @@ def _make(count=0, found=None):
     repo.find_by_id = AsyncMock(return_value=found)
     repo.update = AsyncMock(side_effect=lambda m, request_id: m)
     repo.delete = AsyncMock(return_value=True)
+    repo.find_active_by_departments = AsyncMock(return_value=org_existing or [])
+    repo.count_active_by_department = AsyncMock(return_value=org_count)
     uc = MemoryCrudUseCase(
         memory_repo=repo, logger=MagicMock(),
         max_active_per_user=30, max_pending_per_user=20,
+        max_active_per_department=50,
     )
     return uc, repo
 
@@ -156,6 +159,52 @@ class TestListByStatus:
     async def test_pending_cap_노출(self):
         uc, _ = _make()
         assert uc.max_pending_per_user == 20
+
+
+class TestOrgScope:
+    async def test_부서_메모리_작성(self):
+        uc, repo = _make(org_count=0)
+
+        created = await uc.create_org("d1", "domain_term", "부서 용어", "req-1")
+
+        assert created.scope == MemoryScope.ORG
+        assert created.user_id == "d1"
+        assert created.mem_type == MemoryType.DOMAIN_TERM
+        repo.save.assert_awaited_once()
+
+    async def test_부서_상한_초과_거부(self):
+        uc, _ = _make(org_count=50)
+        with pytest.raises(ValueError, match="상한"):
+            await uc.create_org("d1", "domain_term", "내용", "req-1")
+
+    async def test_list_org(self):
+        uc, repo = _make()
+        await uc.list_org(["d1", "d2"], "req-1")
+        repo.find_active_by_departments.assert_awaited_once_with(["d1", "d2"], "req-1")
+
+    async def test_승격은_org_복사_원본유지(self):
+        uc, repo = _make(found=_memory(user_id="u1", content="승격 대상"))
+
+        promoted = await uc.promote("u1", 1, "d1", "req-1")
+
+        assert promoted.scope == MemoryScope.ORG
+        assert promoted.user_id == "d1"
+        assert promoted.content == "승격 대상"
+        repo.save.assert_awaited_once()  # 신규 org 저장
+        repo.delete.assert_not_awaited()  # 원본 유지
+
+    async def test_승격_부서_중복은_거부(self):
+        uc, _ = _make(
+            found=_memory(user_id="u1", content="중복 내용"),
+            org_existing=[_memory(user_id="d1", content="중복 내용")],
+        )
+        with pytest.raises(ValueError, match="이미 부서"):
+            await uc.promote("u1", 1, "d1", "req-1")
+
+    async def test_승격_타인_메모리는_찾을_수_없음(self):
+        uc, _ = _make(found=_memory(user_id="other", content="x"))
+        with pytest.raises(ValueError, match="찾을 수 없"):
+            await uc.promote("u1", 1, "d1", "req-1")
 
 
 class TestDelete:

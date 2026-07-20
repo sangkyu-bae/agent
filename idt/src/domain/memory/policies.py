@@ -86,6 +86,26 @@ class MemoryPolicy:
         return result
 
     @staticmethod
+    def sort_for_injection_scoped(memories: list[Memory]) -> list[Memory]:
+        """개인(user) 우선 → 부서(org), 각 스코프 내 TYPE_PRIORITY → 최신순.
+
+        agent-memory-org-scope 결정 ③: 개인 맥락이 부서 일반론보다 우선 주입된다.
+        원본 목록은 변경하지 않는다.
+        """
+        from datetime import datetime
+
+        from src.domain.memory.entity import MemoryScope
+
+        def _scope_rank(m: Memory) -> int:
+            return 0 if m.scope == MemoryScope.USER else 1
+
+        by_recent = sorted(
+            memories, key=lambda m: m.updated_at or datetime.min, reverse=True
+        )
+        by_type = sorted(by_recent, key=lambda m: MemoryPolicy.TYPE_PRIORITY[m.mem_type])
+        return sorted(by_type, key=_scope_rank)
+
+    @staticmethod
     def truncate_to_budget(
         memories: list[Memory], token_cap: int
     ) -> tuple[list[Memory], bool]:

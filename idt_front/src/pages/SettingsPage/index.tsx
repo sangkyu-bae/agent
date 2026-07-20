@@ -7,6 +7,7 @@ import {
   useCreateMemory,
   useDeleteMemory,
   useMemories,
+  useOrgMemories,
   useRejectMemory,
   useUpdateMemory,
 } from '@/hooks/useMemories';
@@ -183,6 +184,45 @@ const PendingSection = () => {
   );
 };
 
+// agent-memory-org-scope: 소속 부서가 공유하는 메모리 — 읽기 전용 열람.
+// 서버가 사용자 소속 부서로 스코프하므로 부서 id를 프론트가 알 필요 없음.
+const OrgSection = () => {
+  const { data } = useOrgMemories();
+
+  if (!data || data.items.length === 0) return null;
+
+  return (
+    <section className="mb-8">
+      <div className="mb-1 flex items-center justify-between">
+        <h2 className="text-[15px] font-semibold text-zinc-900">
+          부서 공유 메모리
+        </h2>
+        <span className="text-[12px] text-zinc-400">
+          {data.total}/{data.max_count}
+        </span>
+      </div>
+      <p className="mb-4 text-[12px] text-zinc-400">
+        같은 부서가 공유하는 배경 정보입니다. 답변에 함께 반영됩니다.
+      </p>
+      <ul className="space-y-2">
+        {data.items.map((m) => (
+          <li
+            key={m.id}
+            className="rounded-2xl border border-sky-200 bg-sky-50/40 p-4"
+          >
+            <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[11px] text-sky-700">
+              {MEMORY_TYPE_LABELS[m.mem_type]}
+            </span>
+            <p className="mt-1.5 whitespace-pre-wrap text-sm leading-6 text-zinc-700">
+              {m.content}
+            </p>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+};
+
 const SettingsPage = () => {
   const { data, isLoading } = useMemories();
   const createMutation = useCreateMemory();
@@ -211,6 +251,8 @@ const SettingsPage = () => {
         </h1>
 
         <PendingSection />
+
+        <OrgSection />
 
         <section>
           <div className="mb-1 flex items-center justify-between">

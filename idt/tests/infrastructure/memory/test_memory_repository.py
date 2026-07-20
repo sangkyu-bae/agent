@@ -163,6 +163,63 @@ class TestFindByStatus:
         )
 
 
+def _org_memory(dept_id="d1", content="부서 용어") -> Memory:
+    return Memory(
+        id=None, scope=MemoryScope.ORG, user_id=dept_id, tier=0,
+        mem_type=MemoryType.DOMAIN_TERM, content=content, status=MemoryStatus.ACTIVE,
+    )
+
+
+class TestOrgScope:
+    """agent-memory-org-scope: user_id 슬롯 재사용 + scope 가드 (FR-07)."""
+
+    async def test_find_active_by_user는_org행을_배제한다(self, session):
+        """user_id에 부서 id가 들어간 org 행이 개인 조회에 섞이면 안 됨 (핵심 안전장치)."""
+        repo = _repo(session)
+        await repo.save(_memory(user_id="d1"), request_id="r")  # 개인 (user_id=d1 우연 일치)
+        await repo.save(_org_memory(dept_id="d1"), request_id="r")  # 부서 (user_id=d1)
+
+        personal = await repo.find_active_by_user("d1", request_id="r")
+
+        assert len(personal) == 1
+        assert personal[0].scope == MemoryScope.USER
+
+    async def test_find_active_by_departments는_org만_조회(self, session):
+        repo = _repo(session)
+        await repo.save(_org_memory(dept_id="d1", content="d1 용어"), request_id="r")
+        await repo.save(_org_memory(dept_id="d2", content="d2 용어"), request_id="r")
+        await repo.save(_memory(user_id="d1"), request_id="r")  # 개인 — 배제
+
+        org = await repo.find_active_by_departments(["d1"], request_id="r")
+
+        assert len(org) == 1
+        assert org[0].content == "d1 용어"
+        assert org[0].scope == MemoryScope.ORG
+
+    async def test_다부서_IN_조회(self, session):
+        repo = _repo(session)
+        await repo.save(_org_memory(dept_id="d1", content="a"), request_id="r")
+        await repo.save(_org_memory(dept_id="d2", content="b"), request_id="r")
+        await repo.save(_org_memory(dept_id="d3", content="c"), request_id="r")
+
+        org = await repo.find_active_by_departments(["d1", "d2"], request_id="r")
+
+        assert {m.content for m in org} == {"a", "b"}
+
+    async def test_빈_부서_리스트는_빈_결과(self, session):
+        repo = _repo(session)
+        await repo.save(_org_memory(dept_id="d1"), request_id="r")
+        assert await repo.find_active_by_departments([], request_id="r") == []
+
+    async def test_count_active_by_department(self, session):
+        repo = _repo(session)
+        await repo.save(_org_memory(dept_id="d1", content="a"), request_id="r")
+        await repo.save(_org_memory(dept_id="d1", content="b"), request_id="r")
+
+        assert await repo.count_active_by_department("d1", request_id="r") == 2
+        assert await repo.count_active_by_department("d2", request_id="r") == 0
+
+
 class TestUpdateAndDelete:
     async def test_update는_타입과_내용을_갱신(self, session):
         repo = _repo(session)

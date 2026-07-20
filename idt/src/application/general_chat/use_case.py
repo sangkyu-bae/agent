@@ -347,10 +347,14 @@ class GeneralChatUseCase:
                 top_k=request.top_k, request_id=request_id, auth_ctx=auth_ctx,
             )
             # agent-memory 결정 ③: 블록 조립은 agent 생성 직전 1회 (비동기).
+            # agent-memory-org-scope: 소속 부서 org 메모리도 병합 (auth_ctx 기반).
             memory_block = ""
             if self._memory_assembler is not None:
+                dept_ids = (
+                    list(auth_ctx.department_ids) if auth_ctx is not None else None
+                )
                 memory_block = await self._memory_assembler.build_block(
-                    request.user_id, request_id
+                    request.user_id, request_id, dept_ids=dept_ids
                 )
             agent = self._create_agent(
                 tools, auth_ctx=auth_ctx, memory_block=memory_block
