@@ -33,6 +33,8 @@ class WikiArticleResponse(BaseModel):
 class DistillResponse(BaseModel):
     agent_id: str
     created_count: int
+    # fix-wiki-distill-dedup: 이미 정제된 그룹 스킵 수 (additive, 기본 0)
+    skipped_count: int = 0
     items: list[WikiArticleResponse]
 
 

@@ -26,6 +26,7 @@ const article: WikiArticle = {
   reviewer_id: null,
   created_at: '2026-06-30T00:00:00Z',
   updated_at: '2026-06-30T00:00:00Z',
+  path: null,
 };
 
 describe('WikiDetailPanel', () => {

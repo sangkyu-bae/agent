@@ -45,7 +45,8 @@ def app():
 @pytest.fixture
 def distill_uc():
     uc = MagicMock()
-    uc.execute = AsyncMock(return_value=[_entity("w1"), _entity("w2")])
+    # fix-wiki-distill-dedup: (생성 목록, 스킵 수) 튜플 반환
+    uc.execute = AsyncMock(return_value=([_entity("w1"), _entity("w2")], 3))
     return uc
 
 
@@ -94,6 +95,7 @@ class TestDistill:
         assert r.status_code == 200
         body = r.json()
         assert body["created_count"] == 2
+        assert body["skipped_count"] == 3  # fix-wiki-distill-dedup
         assert len(body["items"]) == 2
         assert body["items"][0]["status"] == "draft"
 

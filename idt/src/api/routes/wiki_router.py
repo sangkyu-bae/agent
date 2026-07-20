@@ -71,7 +71,7 @@ async def distill_wiki(
     """특정 에이전트 컬렉션을 정제해 draft 위키 항목을 생성한다."""
     request_id = str(uuid.uuid4())
     try:
-        created = await use_case.execute(
+        created, skipped = await use_case.execute(
             body.agent_id, body.collection_name, body.max_articles, request_id
         )
     except ValueError as e:
@@ -79,6 +79,7 @@ async def distill_wiki(
     return DistillResponse(
         agent_id=body.agent_id,
         created_count=len(created),
+        skipped_count=skipped,
         items=[to_response(a) for a in created],
     )
 

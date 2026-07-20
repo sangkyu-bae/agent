@@ -197,3 +197,27 @@ class TestCanManage:
         assert not WikiPolicy.can_manage(
             self._human(), actor_id="8", actor_is_admin=False, agent_owner_id="7"
         )
+
+
+class TestRefsDedup:
+    """fix-wiki-distill-dedup: refs 정체성 키·중복 판정 (정확 일치만)."""
+
+    def test_refs_key는_순서_무관(self):
+        assert WikiPolicy.refs_key(["doc:1", "doc:2"]) == WikiPolicy.refs_key(
+            ["doc:2", "doc:1"]
+        )
+
+    def test_refs_key는_공백_strip(self):
+        assert WikiPolicy.refs_key([" doc:1 "]) == WikiPolicy.refs_key(["doc:1"])
+
+    def test_동일_refs는_중복(self):
+        existing = {WikiPolicy.refs_key(["doc:1", "doc:2"])}
+        assert WikiPolicy.is_duplicate_group(["doc:2", "doc:1"], existing) is True
+
+    def test_부분_겹침은_신규(self):
+        existing = {WikiPolicy.refs_key(["doc:1", "doc:2"])}
+        assert WikiPolicy.is_duplicate_group(["doc:1"], existing) is False
+        assert WikiPolicy.is_duplicate_group(["doc:1", "doc:2", "doc:3"], existing) is False
+
+    def test_빈_기존_집합은_항상_신규(self):
+        assert WikiPolicy.is_duplicate_group(["doc:1"], set()) is False
