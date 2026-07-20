@@ -9,10 +9,23 @@ import type { CreateMemoryRequest, UpdateMemoryRequest } from '@/types/memory';
 const invalidateMemories = () =>
   queryClient.invalidateQueries({ queryKey: queryKeys.memories.all });
 
-export const useMemories = () =>
+export const useMemories = (status?: 'active' | 'pending') =>
   useQuery({
-    queryKey: queryKeys.memories.list(),
-    queryFn: () => memoryService.getMemories(),
+    queryKey: queryKeys.memories.list(status),
+    queryFn: () => memoryService.getMemories(status),
+  });
+
+// agent-memory-extraction: 추출 후보 승인/거부 — active·pending 동시 갱신
+export const useApproveMemory = () =>
+  useMutation({
+    mutationFn: (id: number) => memoryService.approve(id),
+    onSuccess: invalidateMemories,
+  });
+
+export const useRejectMemory = () =>
+  useMutation({
+    mutationFn: (id: number) => memoryService.reject(id),
+    onSuccess: invalidateMemories,
   });
 
 export const useCreateMemory = () =>

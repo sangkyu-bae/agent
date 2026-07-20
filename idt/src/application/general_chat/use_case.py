@@ -142,6 +142,7 @@ class GeneralChatUseCase:
         snapshot_excluded_tools: frozenset[str] | None = None,
         tracker: "RunTracker | None" = None,
         memory_assembler=None,
+        memory_extractor=None,
     ) -> None:
         self._tool_builder = chat_tool_builder
         self._msg_repo = message_repo
@@ -171,6 +172,9 @@ class GeneralChatUseCase:
         # agent-memory: 미주입(None) 시 메모리 주입 비활성 (하위호환).
         # MemoryContextAssembler — 실패 격리("" 반환)는 assembler 내부 책임.
         self._memory_assembler = memory_assembler
+        # agent-memory-extraction: 미주입(None) 시 추출 비활성 (하위호환).
+        # kickoff는 fire-and-forget — 실패 격리는 서비스 내부 책임.
+        self._memory_extractor = memory_extractor
 
     async def _begin_observability(
         self, request: GeneralChatRequest, session_id_str: str,
@@ -386,6 +390,14 @@ class GeneralChatUseCase:
 
             # retrieval-observability D2: 메시지 commit 후 attach + complete.
             await self._finish_observability(run_id, user_message_id)
+
+            # agent-memory-extraction 결정 ⑤: 답변 확정 후 후보 추출 킥오프.
+            # sync 즉시 반환(fire-and-forget) — yield 지연 0, 실패는 서비스가 격리.
+            if self._memory_extractor is not None:
+                self._memory_extractor.kickoff(
+                    request.user_id, request.message, answer,
+                    str(run_id) if run_id is not None else None, request_id,
+                )
 
             yield self._build_event(
                 seq, ChatEventType.ANSWER_COMPLETED, session_id_str,

@@ -119,6 +119,50 @@ class TestFindActiveByUser:
         assert await repo.count_active_by_user("u2", request_id="req-1") == 0
 
 
+class TestFindByStatus:
+    async def test_상태별_조회(self, session):
+        repo = _repo(session)
+        await repo.save(_memory(user_id="u1"), request_id="req-1")
+        await repo.save(
+            _memory(user_id="u1", status=MemoryStatus.PENDING, content="후보"),
+            request_id="req-1",
+        )
+        await repo.save(
+            _memory(user_id="u2", status=MemoryStatus.PENDING), request_id="req-1"
+        )
+
+        pending = await repo.find_by_user_and_status(
+            "u1", MemoryStatus.PENDING, request_id="req-1"
+        )
+
+        assert len(pending) == 1
+        assert pending[0].content == "후보"
+
+    async def test_상태별_카운트(self, session):
+        repo = _repo(session)
+        await repo.save(
+            _memory(user_id="u1", status=MemoryStatus.PENDING), request_id="req-1"
+        )
+        await repo.save(
+            _memory(user_id="u1", status=MemoryStatus.PENDING, content="둘"),
+            request_id="req-1",
+        )
+        await repo.save(_memory(user_id="u1"), request_id="req-1")
+
+        assert (
+            await repo.count_by_user_and_status(
+                "u1", MemoryStatus.PENDING, request_id="req-1"
+            )
+            == 2
+        )
+        assert (
+            await repo.count_by_user_and_status(
+                "u2", MemoryStatus.PENDING, request_id="req-1"
+            )
+            == 0
+        )
+
+
 class TestUpdateAndDelete:
     async def test_update는_타입과_내용을_갱신(self, session):
         repo = _repo(session)
@@ -131,6 +175,19 @@ class TestUpdateAndDelete:
         found = await repo.find_by_id(updated.id, request_id="req-1")
         assert found.mem_type == MemoryType.DOMAIN_TERM
         assert found.content == "'한도'는 동일인 여신한도"
+
+    async def test_update는_status_전이도_영속화(self, session):
+        """repo update 화이트리스트에 status 누락 시 조용히 미저장 — 회귀 가드."""
+        repo = _repo(session)
+        saved = await repo.save(
+            _memory(status=MemoryStatus.PENDING), request_id="req-1"
+        )
+        saved.status = MemoryStatus.ACTIVE
+
+        await repo.update(saved, request_id="req-1")
+
+        found = await repo.find_by_id(saved.id, request_id="req-1")
+        assert found.status == MemoryStatus.ACTIVE
 
     async def test_delete_성공과_미존재(self, session):
         repo = _repo(session)

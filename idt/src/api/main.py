@@ -210,6 +210,8 @@ from src.api.routes.memory_router import (
 )
 from src.application.memory.crud_use_case import MemoryCrudUseCase
 from src.application.memory.context_assembler import MemoryContextAssembler
+from src.application.memory.extraction_service import MemoryExtractionService
+from src.infrastructure.memory.extractor import MemoryCandidateExtractor
 from src.infrastructure.memory.repository import MemoryRepository
 from src.application.wiki.distill_use_case import DistillToWikiUseCase
 from src.application.wiki.human_write_use_case import HumanWikiWriteUseCase
@@ -2141,9 +2143,35 @@ def create_memory_factories():
             memory_repo=MemoryRepository(session=session, logger=app_logger),
             logger=app_logger,
             max_active_per_user=settings.memory_max_active_per_user,
+            max_pending_per_user=settings.memory_max_pending_per_user,
         )
 
     return crud_factory
+
+
+# agent-memory-extraction §3-4: 추출 서비스 lazy singleton.
+# enabled 판정은 서비스 내부(kickoff no-op) — off여도 주입은 항상(코드 경로 단일화).
+_memory_extraction_singleton: MemoryExtractionService | None = None
+
+
+def get_memory_extraction_service() -> MemoryExtractionService:
+    global _memory_extraction_singleton
+    if _memory_extraction_singleton is None:
+        app_logger = get_app_logger()
+        extractor = MemoryCandidateExtractor.from_openai(
+            model_name=settings.memory_extraction_model_name,
+            api_key=settings.openai_api_key,
+            logger=app_logger,
+        )
+        _memory_extraction_singleton = MemoryExtractionService(
+            session_factory=get_session_factory(),
+            extractor=extractor,
+            logger=app_logger,
+            enabled=settings.memory_extraction_enabled,
+            max_per_turn=settings.memory_extraction_max_per_turn,
+            pending_cap=settings.memory_max_pending_per_user,
+        )
+    return _memory_extraction_singleton
 
 
 def create_general_chat_use_case_factory():
@@ -2233,6 +2261,7 @@ def create_general_chat_use_case_factory():
             snapshot_excluded_tools=_analysis_snapshot_excluded_tools(),
             tracker=get_run_tracker(),
             memory_assembler=get_memory_assembler(),
+            memory_extractor=get_memory_extraction_service(),
         )
 
     return _factory

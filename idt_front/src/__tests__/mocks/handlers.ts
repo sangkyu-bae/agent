@@ -1175,12 +1175,27 @@ export const handlers = [
   ),
 
   // ── Memory (agent-memory) ───────────────────────────────
-  http.get(`*${API_ENDPOINTS.MEMORIES}`, () =>
-    HttpResponse.json({
+  http.get(`*${API_ENDPOINTS.MEMORIES}`, ({ request }) => {
+    const status = new URL(request.url).searchParams.get('status');
+    if (status === 'pending') {
+      return HttpResponse.json({
+        items: [mockMemory(9, 'profile', '여신 기획팀으로 이동')],
+        total: 1,
+        max_count: 20,
+      });
+    }
+    return HttpResponse.json({
       items: [mockMemory(1), mockMemory(2, 'preference', '근거 조문 번호 인용 선호')],
       total: 2,
       max_count: 30,
-    }),
+    });
+  }),
+  // agent-memory-extraction: 승인/거부 — :id 패턴보다 먼저 선언
+  http.patch('*/api/v1/memories/:id/approve', ({ params }) =>
+    HttpResponse.json(mockMemory(Number(params.id), 'profile', '승인됨')),
+  ),
+  http.patch('*/api/v1/memories/:id/reject', ({ params }) =>
+    HttpResponse.json(mockMemory(Number(params.id), 'profile', '거부됨')),
   ),
   http.post(`*${API_ENDPOINTS.MEMORIES}`, async ({ request }) => {
     const body = (await request.json()) as { mem_type?: string; content?: string };

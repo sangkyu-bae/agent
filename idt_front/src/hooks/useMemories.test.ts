@@ -5,9 +5,11 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { server } from '@/__tests__/mocks/server';
 import { createWrapper } from '@/__tests__/mocks/wrapper';
 import {
+  useApproveMemory,
   useCreateMemory,
   useDeleteMemory,
   useMemories,
+  useRejectMemory,
   useUpdateMemory,
 } from '@/hooks/useMemories';
 
@@ -24,6 +26,36 @@ describe('useMemories', () => {
     expect(result.current.data?.total).toBe(2);
     expect(result.current.data?.max_count).toBe(30);
     expect(result.current.data?.items[0].mem_type).toBe('profile');
+  });
+});
+
+describe('useMemories(pending) — agent-memory-extraction', () => {
+  it('승인 대기 목록과 pending 상한을 조회한다', async () => {
+    const { result } = renderHook(() => useMemories('pending'), {
+      wrapper: createWrapper(),
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.max_count).toBe(20);
+    expect(result.current.data?.items[0].content).toBe('여신 기획팀으로 이동');
+  });
+});
+
+describe('useApproveMemory / useRejectMemory', () => {
+  it('승인하면 갱신된 메모리를 반환한다', async () => {
+    const { result } = renderHook(() => useApproveMemory(), {
+      wrapper: createWrapper(),
+    });
+    result.current.mutate(9);
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.id).toBe(9);
+  });
+
+  it('거부가 성공한다', async () => {
+    const { result } = renderHook(() => useRejectMemory(), {
+      wrapper: createWrapper(),
+    });
+    result.current.mutate(9);
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
   });
 });
 

@@ -43,10 +43,14 @@ def app():
 def crud_uc():
     uc = MagicMock()
     uc.max_active_per_user = 30
+    uc.max_pending_per_user = 20
     uc.list_active = AsyncMock(return_value=[_memory(1), _memory(2, "둘째")])
+    uc.list_by_status = AsyncMock(return_value=[_memory(9, "승인 대기 후보")])
     uc.create = AsyncMock(return_value=_memory(3))
     uc.update = AsyncMock(return_value=_memory(1, "수정됨"))
     uc.delete = AsyncMock(return_value=None)
+    uc.approve = AsyncMock(return_value=_memory(9, "승인됨"))
+    uc.reject = AsyncMock(return_value=_memory(9, "거부됨"))
     return uc
 
 
@@ -77,6 +81,58 @@ class TestList:
         # 인증 사용자 id의 str 변환이 그대로 전달된다 (agent_builder 선례)
         crud_uc.list_active.assert_awaited_once()
         assert crud_uc.list_active.await_args.args[0] == "7"
+
+
+class TestListByStatus:
+    def test_pending_조회는_pending_상한을_max_count로(self, client, crud_uc):
+        r = client.get("/api/v1/memories?status=pending")
+
+        assert r.status_code == 200
+        body = r.json()
+        assert body["max_count"] == 20
+        assert body["items"][0]["content"] == "승인 대기 후보"
+        crud_uc.list_by_status.assert_awaited_once()
+
+    def test_status_active는_기존_경로(self, client, crud_uc):
+        r = client.get("/api/v1/memories?status=active")
+        assert r.status_code == 200
+        assert r.json()["max_count"] == 30
+        crud_uc.list_active.assert_awaited_once()
+
+    def test_불량_status는_422(self, client):
+        assert client.get("/api/v1/memories?status=weird").status_code == 422
+
+
+class TestApproveReject:
+    def test_승인은_200(self, client, crud_uc):
+        r = client.patch("/api/v1/memories/9/approve")
+
+        assert r.status_code == 200
+        assert crud_uc.approve.await_args.args[:2] == ("7", 9)
+
+    def test_거부는_200(self, client, crud_uc):
+        r = client.patch("/api/v1/memories/9/reject")
+
+        assert r.status_code == 200
+        assert crud_uc.reject.await_args.args[:2] == ("7", 9)
+
+    def test_비pending_승인은_422(self, app, crud_uc):
+        crud_uc.approve = AsyncMock(
+            side_effect=ValueError("승인 대기 상태의 메모리만 승인/거부할 수 있습니다.")
+        )
+        app.dependency_overrides[get_memory_crud_use_case] = lambda: crud_uc
+        app.dependency_overrides[get_current_user] = _user
+        c = TestClient(app)
+
+        assert c.patch("/api/v1/memories/1/approve").status_code == 422
+
+    def test_타인_미존재_승인은_404_은닉(self, app, crud_uc):
+        crud_uc.approve = AsyncMock(side_effect=ValueError("메모리를 찾을 수 없습니다."))
+        app.dependency_overrides[get_memory_crud_use_case] = lambda: crud_uc
+        app.dependency_overrides[get_current_user] = _user
+        c = TestClient(app)
+
+        assert c.patch("/api/v1/memories/99/approve").status_code == 404
 
 
 class TestCreate:

@@ -17,6 +17,7 @@ from src.application.memory.api_schemas import (
     to_response,
 )
 from src.domain.auth.entities import User
+from src.domain.memory.entity import MemoryStatus
 from src.interfaces.dependencies.auth import get_current_user
 
 router = APIRouter(prefix="/api/v1/memories", tags=["Memory"])
@@ -39,16 +40,29 @@ def _raise_memory_error(exc: ValueError) -> None:
 
 @router.get("", response_model=MemoryListResponse)
 async def list_memories(
+    status: str = "active",
     use_case=Depends(get_memory_crud_use_case),
     user: User = Depends(get_current_user),
 ):
-    """본인 활성 메모리 목록 — max_count로 프론트 상한 안내."""
+    """본인 메모리 목록 — 기본 active, status=pending은 승인 대기 (Phase 2).
+
+    max_count는 조회 status의 상한(active=30, pending=20)으로 프론트 안내.
+    """
     request_id = str(uuid.uuid4())
-    items = await use_case.list_active(str(user.id), request_id)
+    if status == "active":
+        items = await use_case.list_active(str(user.id), request_id)
+        max_count = use_case.max_active_per_user
+    elif status == "pending":
+        items = await use_case.list_by_status(
+            str(user.id), MemoryStatus.PENDING, request_id
+        )
+        max_count = use_case.max_pending_per_user
+    else:
+        raise HTTPException(status_code=422, detail=f"Invalid status: {status}")
     return MemoryListResponse(
         items=[to_response(m) for m in items],
         total=len(items),
-        max_count=use_case.max_active_per_user,
+        max_count=max_count,
     )
 
 
@@ -82,6 +96,36 @@ async def update_memory(
         memory = await use_case.update(
             str(user.id), memory_id, body.mem_type, body.content, request_id
         )
+    except ValueError as e:
+        _raise_memory_error(e)
+    return to_response(memory)
+
+
+@router.patch("/{memory_id}/approve", response_model=MemoryResponse)
+async def approve_memory(
+    memory_id: int,
+    use_case=Depends(get_memory_crud_use_case),
+    user: User = Depends(get_current_user),
+):
+    """추출 후보 승인 (pending→active) — 승인 후 주입 대상이 된다."""
+    request_id = str(uuid.uuid4())
+    try:
+        memory = await use_case.approve(str(user.id), memory_id, request_id)
+    except ValueError as e:
+        _raise_memory_error(e)
+    return to_response(memory)
+
+
+@router.patch("/{memory_id}/reject", response_model=MemoryResponse)
+async def reject_memory(
+    memory_id: int,
+    use_case=Depends(get_memory_crud_use_case),
+    user: User = Depends(get_current_user),
+):
+    """추출 후보 거부 (pending→rejected) — 재노출되지 않는다."""
+    request_id = str(uuid.uuid4())
+    try:
+        memory = await use_case.reject(str(user.id), memory_id, request_id)
     except ValueError as e:
         _raise_memory_error(e)
     return to_response(memory)

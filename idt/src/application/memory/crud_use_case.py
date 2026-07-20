@@ -17,15 +17,22 @@ class MemoryCrudUseCase:
         memory_repo: MemoryRepositoryInterface,
         logger: LoggerInterface,
         max_active_per_user: int,
+        max_pending_per_user: int = 20,
     ) -> None:
         self._repo = memory_repo
         self._logger = logger
         self._max_active = max_active_per_user
+        self._max_pending = max_pending_per_user
 
     @property
     def max_active_per_user(self) -> int:
         """개수 상한 — 목록 응답(max_count)으로 프론트에 안내된다."""
         return self._max_active
+
+    @property
+    def max_pending_per_user(self) -> int:
+        """pending 상한 — status=pending 목록 응답의 max_count."""
+        return self._max_pending
 
     async def create(
         self, user_id: str, mem_type: str, content: str, request_id: str
@@ -72,6 +79,38 @@ class MemoryCrudUseCase:
         updated = await self._repo.update(memory, request_id)
         self._logger.info(
             "memory updated", request_id=request_id, user_id=user_id,
+            memory_id=memory_id,
+        )
+        return updated
+
+    async def list_by_status(
+        self, user_id: str, status: MemoryStatus, request_id: str
+    ) -> list[Memory]:
+        """상태별 본인 메모리 목록 (Phase 2 — pending 승인 대기)."""
+        return await self._repo.find_by_user_and_status(user_id, status, request_id)
+
+    async def approve(self, user_id: str, memory_id: int, request_id: str) -> Memory:
+        """pending → active. 승인 시점에 active 상한을 재검증한다 (FR-07 계승)."""
+        memory = await self._find_owned(user_id, memory_id, request_id)
+        MemoryPolicy.validate_transition(memory)
+        current = await self._repo.count_active_by_user(user_id, request_id)
+        MemoryPolicy.validate_active_count(current, self._max_active)
+        memory.status = MemoryStatus.ACTIVE
+        updated = await self._repo.update(memory, request_id)
+        self._logger.info(
+            "memory approved", request_id=request_id, user_id=user_id,
+            memory_id=memory_id,
+        )
+        return updated
+
+    async def reject(self, user_id: str, memory_id: int, request_id: str) -> Memory:
+        """pending → rejected — 거부된 후보는 재노출되지 않는다."""
+        memory = await self._find_owned(user_id, memory_id, request_id)
+        MemoryPolicy.validate_transition(memory)
+        memory.status = MemoryStatus.REJECTED
+        updated = await self._repo.update(memory, request_id)
+        self._logger.info(
+            "memory rejected", request_id=request_id, user_id=user_id,
             memory_id=memory_id,
         )
         return updated

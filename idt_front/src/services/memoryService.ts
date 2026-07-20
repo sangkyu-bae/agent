@@ -9,10 +9,22 @@ import type {
 } from '@/types/memory';
 
 export const memoryService = {
-  getMemories: async (): Promise<MemoryListResponse> => {
+  getMemories: async (status?: 'active' | 'pending'): Promise<MemoryListResponse> => {
     const res = await authApiClient.get<MemoryListResponse>(
       API_ENDPOINTS.MEMORIES,
+      { params: status ? { status } : undefined },
     );
+    return res.data;
+  },
+
+  // agent-memory-extraction: 추출 후보 승인/거부
+  approve: async (id: number): Promise<Memory> => {
+    const res = await authApiClient.patch<Memory>(API_ENDPOINTS.MEMORY_APPROVE(id));
+    return res.data;
+  },
+
+  reject: async (id: number): Promise<Memory> => {
+    const res = await authApiClient.patch<Memory>(API_ENDPOINTS.MEMORY_REJECT(id));
     return res.data;
   },
 

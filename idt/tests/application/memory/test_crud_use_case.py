@@ -10,10 +10,13 @@ from src.application.memory.crud_use_case import MemoryCrudUseCase
 from src.domain.memory.entity import Memory, MemoryScope, MemoryStatus, MemoryType
 
 
-def _memory(memory_id=1, user_id="u1", mem_type=MemoryType.PROFILE, content="여신 심사팀") -> Memory:
+def _memory(
+    memory_id=1, user_id="u1", mem_type=MemoryType.PROFILE,
+    content="여신 심사팀", status=MemoryStatus.ACTIVE,
+) -> Memory:
     return Memory(
         id=memory_id, scope=MemoryScope.USER, user_id=user_id, tier=0,
-        mem_type=mem_type, content=content,
+        mem_type=mem_type, content=content, status=status,
     )
 
 
@@ -22,10 +25,14 @@ def _make(count=0, found=None):
     repo.save = AsyncMock(side_effect=lambda m, request_id: m)
     repo.count_active_by_user = AsyncMock(return_value=count)
     repo.find_active_by_user = AsyncMock(return_value=[])
+    repo.find_by_user_and_status = AsyncMock(return_value=[])
     repo.find_by_id = AsyncMock(return_value=found)
     repo.update = AsyncMock(side_effect=lambda m, request_id: m)
     repo.delete = AsyncMock(return_value=True)
-    uc = MemoryCrudUseCase(memory_repo=repo, logger=MagicMock(), max_active_per_user=30)
+    uc = MemoryCrudUseCase(
+        memory_repo=repo, logger=MagicMock(),
+        max_active_per_user=30, max_pending_per_user=20,
+    )
     return uc, repo
 
 
@@ -98,6 +105,57 @@ class TestUpdate:
         uc, _ = _make(found=_memory(user_id="u1"))
         with pytest.raises(ValueError):
             await uc.update("u1", 1, None, "가" * 501, "req-1")
+
+
+class TestApproveReject:
+    async def test_pending_승인은_ACTIVE_전이(self):
+        uc, repo = _make(count=0, found=_memory(status=MemoryStatus.PENDING))
+
+        approved = await uc.approve("u1", 1, "req-1")
+
+        assert approved.status == MemoryStatus.ACTIVE
+        repo.update.assert_awaited_once()
+
+    async def test_승인_시_active_상한_검증(self):
+        uc, _ = _make(count=30, found=_memory(status=MemoryStatus.PENDING))
+        with pytest.raises(ValueError, match="상한"):
+            await uc.approve("u1", 1, "req-1")
+
+    async def test_비pending_승인은_422_경로(self):
+        uc, _ = _make(found=_memory(status=MemoryStatus.ACTIVE))
+        with pytest.raises(ValueError, match="승인 대기"):
+            await uc.approve("u1", 1, "req-1")
+
+    async def test_타인_소유_승인은_404_은닉(self):
+        uc, _ = _make(found=_memory(user_id="other", status=MemoryStatus.PENDING))
+        with pytest.raises(ValueError, match="찾을 수 없"):
+            await uc.approve("u1", 1, "req-1")
+
+    async def test_pending_거부는_REJECTED_전이(self):
+        uc, repo = _make(found=_memory(status=MemoryStatus.PENDING))
+
+        rejected = await uc.reject("u1", 1, "req-1")
+
+        assert rejected.status == MemoryStatus.REJECTED
+        repo.update.assert_awaited_once()
+
+    async def test_비pending_거부는_422_경로(self):
+        uc, _ = _make(found=_memory(status=MemoryStatus.REJECTED))
+        with pytest.raises(ValueError, match="승인 대기"):
+            await uc.reject("u1", 1, "req-1")
+
+
+class TestListByStatus:
+    async def test_상태별_목록_조회(self):
+        uc, repo = _make()
+        await uc.list_by_status("u1", MemoryStatus.PENDING, "req-1")
+        repo.find_by_user_and_status.assert_awaited_once_with(
+            "u1", MemoryStatus.PENDING, "req-1"
+        )
+
+    async def test_pending_cap_노출(self):
+        uc, _ = _make()
+        assert uc.max_pending_per_user == 20
 
 
 class TestDelete:
