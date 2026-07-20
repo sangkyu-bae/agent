@@ -1105,6 +1105,7 @@ export const handlers = [
     HttpResponse.json({
       agent_id: 'agent-1',
       created_count: 2,
+      skipped_count: 0,
       items: [mockWikiArticle('w1'), mockWikiArticle('w2')],
     }),
   ),

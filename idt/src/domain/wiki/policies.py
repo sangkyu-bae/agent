@@ -30,6 +30,24 @@ class WikiPolicy:
     }
 
     @staticmethod
+    def refs_key(source_refs: list[str]) -> frozenset[str]:
+        """중복 판정용 정체성 키 — strip 후 frozenset (순서·공백 무관).
+
+        fix-wiki-distill-dedup: 동일 소스 그룹 재정제 방지의 비교 단위.
+        """
+        return frozenset(r.strip() for r in source_refs)
+
+    @staticmethod
+    def is_duplicate_group(
+        group_refs: list[str], existing_keys: set[frozenset[str]]
+    ) -> bool:
+        """그룹 refs가 기존 키 집합과 정확 일치하면 True.
+
+        부분 겹침(그룹핑 변화)은 신규로 취급한다 — 보수적 스킵.
+        """
+        return WikiPolicy.refs_key(group_refs) in existing_keys
+
+    @staticmethod
     def validate_for_creation(article: WikiArticle) -> None:
         """위키 항목 생성 시 불변식 검증. 위반 시 ValueError."""
         if not article.title or not article.title.strip():

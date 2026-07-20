@@ -75,6 +75,8 @@ const WikiPage = () => {
         {distill.isSuccess && (
           <p className="mt-2 text-[12px] text-emerald-600">
             {distill.data?.created_count}개 초안이 생성되었습니다 (승인 대기)
+            {(distill.data?.skipped_count ?? 0) > 0 &&
+              ` · ${distill.data?.skipped_count}건은 이미 정제되어 건너뜀`}
           </p>
         )}
       </div>

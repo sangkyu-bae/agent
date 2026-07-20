@@ -53,6 +53,8 @@ export interface DistillRequest {
 export interface DistillResponse {
   agent_id: string;
   created_count: number;
+  /** fix-wiki-distill-dedup: 이미 정제된 그룹 스킵 수 (additive) */
+  skipped_count?: number;
   items: WikiArticle[];
 }
 

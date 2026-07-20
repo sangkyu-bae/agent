@@ -5,7 +5,7 @@
     "platform": "claude",
     "level": "Starter"
   },
-  "currentFeature": "agent-memory-extraction",
+  "currentFeature": "fix-wiki-distill-dedup",
   "currentPhase": "design",
   "milestones": {},
   "phase": "archived",

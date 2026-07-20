@@ -36,7 +36,12 @@ class DistillToWikiUseCase:
 
     async def execute(
         self, agent_id: str, collection_name: str, max_articles: int, request_id: str
-    ) -> list[WikiArticle]:
+    ) -> tuple[list[WikiArticle], int]:
+        """정제 실행 — (생성 목록, 스킵 수) 반환.
+
+        fix-wiki-distill-dedup: 동일 refs로 이미 정제된 그룹은 LLM 호출 전에
+        스킵해 재실행을 멱등하게 만든다 (FR-01/02).
+        """
         self._logger.info(
             "DistillToWikiUseCase start",
             request_id=request_id,
@@ -46,20 +51,37 @@ class DistillToWikiUseCase:
         groups = await self._source.fetch_source_groups(
             agent_id, collection_name, max_articles, request_id
         )
+
+        # 기존 distilled 문서의 refs 키 집합 1회 구축 — 전 상태 포함(결정 ①).
+        # human 문서(human:{id})는 정체성 비교에서 제외한다(결정 ②).
+        existing = await self._repo.find_by_agent(agent_id, request_id)
+        existing_keys = {
+            WikiPolicy.refs_key(a.source_refs)
+            for a in existing
+            if a.source_type == WikiSourceType.DISTILLED
+        }
+
         created: list[WikiArticle] = []
+        skipped = 0
         for group in groups:
+            if WikiPolicy.is_duplicate_group(group.refs, existing_keys):
+                skipped += 1
+                continue  # FR-02: distiller(LLM) 호출 전 스킵
             article = await self._distill_one(
                 agent_id, group, collection_name, request_id
             )
             if article is not None:
                 created.append(article)
+                # 동일 실행 내 중복 그룹 방어
+                existing_keys.add(WikiPolicy.refs_key(article.source_refs))
         self._logger.info(
             "DistillToWikiUseCase done",
             request_id=request_id,
             agent_id=agent_id,
             created_count=len(created),
+            skipped_count=skipped,
         )
-        return created
+        return created, skipped
 
     async def _distill_one(
         self, agent_id: str, group: WikiSourceGroup, collection_name: str,
