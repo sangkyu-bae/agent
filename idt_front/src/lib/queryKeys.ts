@@ -158,7 +158,8 @@ export const queryKeys = {
   // ── Memory (agent-memory) ───────────────────────────────
   memories: {
     all: ['memories'] as const,
-    list: () => [...queryKeys.memories.all, 'list'] as const,
+    list: (status?: string) =>
+      [...queryKeys.memories.all, 'list', status ?? 'active'] as const,
   },
 
   // ── Agent Builder ──────────────────────────────────────

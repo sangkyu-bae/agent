@@ -3,9 +3,11 @@
 import { useState } from 'react';
 
 import {
+  useApproveMemory,
   useCreateMemory,
   useDeleteMemory,
   useMemories,
+  useRejectMemory,
   useUpdateMemory,
 } from '@/hooks/useMemories';
 import {
@@ -110,6 +112,77 @@ const MemoryItem = ({ memory }: MemoryItemProps) => {
   );
 };
 
+// agent-memory-extraction: 대화에서 자동 추출된 후보 — 승인해야만 주입 대상이 된다.
+const PendingSection = () => {
+  const { data } = useMemories('pending');
+  const approveMutation = useApproveMemory();
+  const rejectMutation = useRejectMemory();
+  const [error, setError] = useState<string | null>(null);
+
+  if (!data || data.items.length === 0) return null;
+
+  const act = (mutation: typeof approveMutation, id: number) => {
+    setError(null);
+    mutation.mutate(id, { onError: (err) => setError(errorDetail(err)) });
+  };
+
+  return (
+    <section className="mb-8">
+      <div className="mb-1 flex items-center justify-between">
+        <h2 className="text-[15px] font-semibold text-zinc-900">
+          승인 대기 {data.total}건
+        </h2>
+        <span className="text-[12px] text-zinc-400">
+          {data.total}/{data.max_count}
+        </span>
+      </div>
+      <p className="mb-4 text-[12px] text-zinc-400">
+        대화에서 자동으로 추출된 후보입니다. 승인해야만 답변에 반영됩니다.
+      </p>
+      <ul className="space-y-2">
+        {data.items.map((m) => (
+          <li
+            key={m.id}
+            className="rounded-2xl border border-amber-200 bg-amber-50/40 p-4"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1">
+                <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] text-amber-700">
+                  {MEMORY_TYPE_LABELS[m.mem_type]}
+                </span>
+                <p className="mt-1.5 whitespace-pre-wrap text-sm leading-6 text-zinc-700">
+                  {m.content}
+                </p>
+                <p className="mt-1 text-[11px] text-zinc-400">
+                  대화에서 자동 추출
+                  {m.created_at && ` · ${m.created_at.slice(0, 10)}`}
+                </p>
+              </div>
+              <div className="flex shrink-0 gap-1">
+                <button
+                  type="button"
+                  onClick={() => act(approveMutation, m.id)}
+                  className="rounded-xl bg-violet-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-violet-700"
+                >
+                  승인
+                </button>
+                <button
+                  type="button"
+                  onClick={() => act(rejectMutation, m.id)}
+                  className="rounded-xl border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-red-50 hover:text-red-500"
+                >
+                  거부
+                </button>
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
+      {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
+    </section>
+  );
+};
+
 const SettingsPage = () => {
   const { data, isLoading } = useMemories();
   const createMutation = useCreateMemory();
@@ -136,6 +209,8 @@ const SettingsPage = () => {
         <h1 className="mb-6 text-3xl font-bold tracking-tight text-zinc-900">
           설정
         </h1>
+
+        <PendingSection />
 
         <section>
           <div className="mb-1 flex items-center justify-between">

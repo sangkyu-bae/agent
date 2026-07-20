@@ -37,7 +37,7 @@ def _auth_ctx() -> AuthContext:
     )
 
 
-def _make_uc(memory_assembler=None) -> GeneralChatUseCase:
+def _make_uc(memory_assembler=None, memory_extractor=None) -> GeneralChatUseCase:
     mock_llm_factory = MagicMock(spec=LLMFactoryInterface)
     mock_llm_factory.create.return_value = MagicMock()
     return GeneralChatUseCase(
@@ -50,6 +50,7 @@ def _make_uc(memory_assembler=None) -> GeneralChatUseCase:
         llm_factory=mock_llm_factory,
         llm_model=_make_llm_model(),
         memory_assembler=memory_assembler,
+        memory_extractor=memory_extractor,
     )
 
 
@@ -133,6 +134,55 @@ class TestStreamIntegration:
             pass
 
         assert captured["memory_block"] == ""
+
+    @pytest.mark.asyncio
+    async def test_extractor_주입_시_답변_후_kickoff_호출(self):
+        """agent-memory-extraction 결정 ⑤: 답변 완료 후 fire-and-forget 추출."""
+        extractor = MagicMock()
+        uc = _make_uc(memory_extractor=extractor)
+        _wire_stream_agent(uc)
+
+        req = GeneralChatRequest(user_id="u1", session_id="s1", message="질문")
+        async for _ in uc.stream(req, request_id="req-1"):
+            pass
+
+        extractor.kickoff.assert_called_once()
+        args = extractor.kickoff.call_args.args
+        assert args[0] == "u1"       # user_id
+        assert args[1] == "질문"      # question
+        assert args[2] == "답변"      # answer (fake agent 응답)
+        assert args[3] is None       # run_id — tracker 미주입이면 None (FR-03 계약)
+        assert args[4] == "req-1"    # request_id
+
+    @pytest.mark.asyncio
+    async def test_chart_edit_조기_리턴_경로는_추출_제외(self):
+        """결정 ⑤: 차트 편집 턴은 저장 가치가 낮아 kickoff 미호출."""
+        extractor = MagicMock()
+        uc = _make_uc(memory_extractor=extractor)
+        _wire_stream_agent(uc)
+        uc._try_chart_edit = AsyncMock(
+            return_value=("차트 수정 완료", [{"type": "bar"}])
+        )
+        uc._persist_messages = AsyncMock(return_value=1)
+
+        req = GeneralChatRequest(user_id="u1", session_id="s1", message="색 바꿔줘")
+        async for _ in uc.stream(req, request_id="req-1"):
+            pass
+
+        extractor.kickoff.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_extractor_미주입이면_기존_동작_불변(self):
+        uc = _make_uc(memory_extractor=None)
+        captured = _wire_stream_agent(uc)
+
+        req = GeneralChatRequest(user_id="u1", session_id="s1", message="질문")
+        events = []
+        async for ev in uc.stream(req, request_id="req-1"):
+            events.append(ev)
+
+        assert captured["memory_block"] == ""
+        assert len(events) >= 2  # 회귀 0
 
     @pytest.mark.asyncio
     async def test_assembler가_빈_문자열이어도_스트림_정상(self):

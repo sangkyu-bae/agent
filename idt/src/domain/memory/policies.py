@@ -19,6 +19,11 @@ class MemoryPolicy:
     # Design 결정 ④: 한글 최악 기준 1자≈1토큰 보수 근사 — 캡은 문자 예산으로 적용
     CHARS_PER_TOKEN = 1
 
+    # Phase 2 추출 (agent-memory-extraction 결정 ①)
+    EXTRACT_INPUT_MAX = 4000  # question+answer 합산 절단
+    CONFIDENCE_MIN = 0
+    CONFIDENCE_MAX = 100
+
     @staticmethod
     def validate_content(content: str) -> None:
         """빈 내용(공백만 포함) 또는 CONTENT_MAX 초과 시 ValueError."""
@@ -48,6 +53,37 @@ class MemoryPolicy:
             memories, key=lambda m: m.updated_at or datetime.min, reverse=True
         )
         return sorted(by_recent, key=lambda m: MemoryPolicy.TYPE_PRIORITY[m.mem_type])
+
+    @staticmethod
+    def validate_transition(memory: Memory) -> None:
+        """승인/거부는 승인 대기(PENDING) 상태에서만 가능 — 라우터에서 422."""
+        from src.domain.memory.entity import MemoryStatus
+
+        if memory.status != MemoryStatus.PENDING:
+            raise ValueError("승인 대기 상태의 메모리만 승인/거부할 수 있습니다.")
+
+    @staticmethod
+    def clamp_confidence(value: int) -> int:
+        """LLM 자체 평가 confidence를 0~100으로 clamp."""
+        return max(MemoryPolicy.CONFIDENCE_MIN, min(MemoryPolicy.CONFIDENCE_MAX, value))
+
+    @staticmethod
+    def dedup_candidates(candidates: list, existing_contents: set[str]) -> list:
+        """content.strip() 정확 일치 기준 중복 제거 (FR-04).
+
+        기존 메모리와 일치하는 후보 + 후보 목록 내 중복을 제거한다.
+        candidates는 content 속성만 요구 (duck-typed — application 타입 미참조).
+        """
+        normalized_existing = {c.strip() for c in existing_contents}
+        seen: set[str] = set()
+        result = []
+        for candidate in candidates:
+            key = candidate.content.strip()
+            if key in normalized_existing or key in seen:
+                continue
+            seen.add(key)
+            result.append(candidate)
+        return result
 
     @staticmethod
     def truncate_to_budget(

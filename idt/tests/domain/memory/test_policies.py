@@ -131,3 +131,71 @@ class TestEntityDefaults:
         assert memory.status == MemoryStatus.ACTIVE
         assert memory.confidence == 100
         assert memory.source_run_id is None
+
+
+# ── Phase 2: 추출·승인 게이트 정책 (agent-memory-extraction) ──────────
+
+
+def _pending(memory_id: int = 1) -> Memory:
+    m = _memory(memory_id=memory_id)
+    m.status = MemoryStatus.PENDING
+    return m
+
+
+class TestValidateTransition:
+    def test_pending은_전이_가능(self):
+        MemoryPolicy.validate_transition(_pending())
+
+    def test_active는_전이_불가(self):
+        with pytest.raises(ValueError, match="승인 대기"):
+            MemoryPolicy.validate_transition(_memory())
+
+    def test_rejected는_전이_불가(self):
+        m = _memory()
+        m.status = MemoryStatus.REJECTED
+        with pytest.raises(ValueError, match="승인 대기"):
+            MemoryPolicy.validate_transition(m)
+
+
+class TestClampConfidence:
+    def test_범위_내_값은_유지(self):
+        assert MemoryPolicy.clamp_confidence(70) == 70
+
+    def test_상한_초과는_100(self):
+        assert MemoryPolicy.clamp_confidence(250) == 100
+
+    def test_음수는_0(self):
+        assert MemoryPolicy.clamp_confidence(-5) == 0
+
+
+class _Candidate:
+    """content 속성만 갖는 duck-typed 후보 (domain은 application 타입 미참조)."""
+
+    def __init__(self, content: str) -> None:
+        self.content = content
+
+
+class TestDedupCandidates:
+    def test_기존_content와_일치하면_제거(self):
+        result = MemoryPolicy.dedup_candidates(
+            [_Candidate("여신 심사팀 소속"), _Candidate("새 정보")],
+            existing_contents={"여신 심사팀 소속"},
+        )
+        assert [c.content for c in result] == ["새 정보"]
+
+    def test_공백_차이는_동일_취급(self):
+        result = MemoryPolicy.dedup_candidates(
+            [_Candidate("  여신 심사팀 소속  ")],
+            existing_contents={"여신 심사팀 소속"},
+        )
+        assert result == []
+
+    def test_후보_내_중복도_제거(self):
+        result = MemoryPolicy.dedup_candidates(
+            [_Candidate("같은 내용"), _Candidate("같은 내용")],
+            existing_contents=set(),
+        )
+        assert len(result) == 1
+
+    def test_빈_입력은_빈_결과(self):
+        assert MemoryPolicy.dedup_candidates([], existing_contents=set()) == []

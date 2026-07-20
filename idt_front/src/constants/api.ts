@@ -251,4 +251,7 @@ export const API_ENDPOINTS = {
   // ── Memory (agent-memory) ───────────────────────────────
   MEMORIES: '/api/v1/memories',
   MEMORY_DETAIL: (id: number) => `/api/v1/memories/${id}`,
+  // agent-memory-extraction: 추출 후보 승인 게이트
+  MEMORY_APPROVE: (id: number) => `/api/v1/memories/${id}/approve`,
+  MEMORY_REJECT: (id: number) => `/api/v1/memories/${id}/reject`,
 } as const;

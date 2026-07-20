@@ -131,6 +131,78 @@ describe('SettingsPage — AI가 기억하는 내용', () => {
     ).toBeInTheDocument();
   });
 
+  it('승인 대기 후보가 있으면 섹션과 승인/거부 버튼을 렌더한다', async () => {
+    renderPage();
+
+    expect(await screen.findByText('승인 대기 1건')).toBeInTheDocument();
+    expect(screen.getByText('여신 기획팀으로 이동')).toBeInTheDocument();
+    expect(screen.getByText(/대화에서 자동 추출/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '승인' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '거부' })).toBeInTheDocument();
+  });
+
+  it('승인 대기 0건이면 섹션을 렌더하지 않는다', async () => {
+    server.use(
+      http.get('*/api/v1/memories', ({ request }) => {
+        const status = new URL(request.url).searchParams.get('status');
+        if (status === 'pending') {
+          return HttpResponse.json({ items: [], total: 0, max_count: 20 });
+        }
+        return HttpResponse.json({
+          items: [{
+            id: 1, mem_type: 'profile', content: '여신 심사팀 소속',
+            created_at: '2026-07-18T00:00:00Z', updated_at: '2026-07-18T00:00:00Z',
+          }],
+          total: 1, max_count: 30,
+        });
+      }),
+    );
+    renderPage();
+
+    await screen.findByText('여신 심사팀 소속');
+    expect(screen.queryByText(/승인 대기/)).not.toBeInTheDocument();
+  });
+
+  it('승인 버튼 클릭 시 approve 요청을 보낸다', async () => {
+    const user = userEvent.setup();
+    let approvedId: string | null = null;
+    server.use(
+      http.patch('*/api/v1/memories/:id/approve', ({ params }) => {
+        approvedId = String(params.id);
+        return HttpResponse.json({
+          id: Number(params.id), mem_type: 'profile', content: '승인됨',
+          created_at: '2026-07-18T00:00:00Z', updated_at: '2026-07-18T00:00:00Z',
+        });
+      }),
+    );
+    renderPage();
+    await screen.findByText('승인 대기 1건');
+
+    await user.click(screen.getByRole('button', { name: '승인' }));
+
+    await waitFor(() => expect(approvedId).toBe('9'));
+  });
+
+  it('거부 버튼 클릭 시 reject 요청을 보낸다', async () => {
+    const user = userEvent.setup();
+    let rejectedId: string | null = null;
+    server.use(
+      http.patch('*/api/v1/memories/:id/reject', ({ params }) => {
+        rejectedId = String(params.id);
+        return HttpResponse.json({
+          id: Number(params.id), mem_type: 'profile', content: '거부됨',
+          created_at: '2026-07-18T00:00:00Z', updated_at: '2026-07-18T00:00:00Z',
+        });
+      }),
+    );
+    renderPage();
+    await screen.findByText('승인 대기 1건');
+
+    await user.click(screen.getByRole('button', { name: '거부' }));
+
+    await waitFor(() => expect(rejectedId).toBe('9'));
+  });
+
   it('등록 422 에러 detail을 그대로 표시한다', async () => {
     const user = userEvent.setup();
     server.use(

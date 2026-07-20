@@ -170,6 +170,13 @@ class Settings(BaseSettings):
     memory_max_active_per_user: int = 30
     memory_inject_token_cap: int = 800
 
+    # Agent Memory Extraction (agent-memory-extraction Design §3-4)
+    # 대화 후 백그라운드 후보 추출 — 기본 off 배포, 검증 후 on.
+    memory_extraction_enabled: bool = False
+    memory_extraction_model_name: str = "gpt-4o-mini"
+    memory_extraction_max_per_turn: int = 3
+    memory_max_pending_per_user: int = 20
+
     # Application
     debug: bool = False
 

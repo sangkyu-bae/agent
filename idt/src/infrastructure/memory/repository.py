@@ -50,12 +50,33 @@ class MemoryRepository(MemoryRepositoryInterface):
         return [self._to_entity(row) for row in rows]
 
     async def count_active_by_user(self, user_id: str, request_id: str) -> int:
+        return await self.count_by_user_and_status(
+            user_id, MemoryStatus.ACTIVE, request_id
+        )
+
+    async def find_by_user_and_status(
+        self, user_id: str, status: MemoryStatus, request_id: str
+    ) -> list[Memory]:
+        stmt = (
+            select(MemoryModel)
+            .where(
+                MemoryModel.user_id == user_id,
+                MemoryModel.status == status.value,
+            )
+            .order_by(MemoryModel.updated_at.desc(), MemoryModel.id.desc())
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return [self._to_entity(row) for row in rows]
+
+    async def count_by_user_and_status(
+        self, user_id: str, status: MemoryStatus, request_id: str
+    ) -> int:
         stmt = (
             select(func.count())
             .select_from(MemoryModel)
             .where(
                 MemoryModel.user_id == user_id,
-                MemoryModel.status == MemoryStatus.ACTIVE.value,
+                MemoryModel.status == status.value,
             )
         )
         return (await self._session.execute(stmt)).scalar() or 0
@@ -66,6 +87,8 @@ class MemoryRepository(MemoryRepositoryInterface):
             raise ValueError("메모리를 찾을 수 없습니다.")
         model.mem_type = memory.mem_type.value
         model.content = memory.content
+        # Phase 2: 승인/거부 상태 전이 — 누락 시 조용히 미저장되므로 필수
+        model.status = memory.status.value
         await self._session.flush()
         return self._to_entity(model)
 
