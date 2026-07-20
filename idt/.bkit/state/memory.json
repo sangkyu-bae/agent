@@ -5,10 +5,10 @@
     "platform": "claude",
     "level": "Starter"
   },
-  "currentFeature": "agent-memory-org-scope",
+  "currentFeature": "expose-user-department",
   "currentPhase": "design",
   "milestones": {},
   "phase": "archived",
   "lastUpdated": "2026-07-20T02:19:54.000Z",
-  "matchRate": 91
+  "matchRate": 100
 }
