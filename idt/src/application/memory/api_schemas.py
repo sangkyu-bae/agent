@@ -15,6 +15,16 @@ class CreateMemoryRequest(BaseModel):
     content: str
 
 
+class CreateOrgMemoryRequest(BaseModel):
+    dept_id: str
+    mem_type: str
+    content: str
+
+
+class PromoteMemoryRequest(BaseModel):
+    dept_id: str
+
+
 class UpdateMemoryRequest(BaseModel):
     mem_type: str | None = None
     content: str | None = None

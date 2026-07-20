@@ -1,6 +1,6 @@
 {
   "version": "2.0",
-  "lastUpdated": "2026-07-20T07:53:26.000Z",
+  "lastUpdated": "2026-07-20T10:40:37.000Z",
   "activeFeatures": [
     "websocket-common-module",
     "agent-chat-multiturn",
@@ -435,6 +435,13 @@
       "iterationCount": 0,
       "archivedAt": "2026-07-20T07:53:26.000Z",
       "archivedTo": "docs/archive/2026-07/agent-workspace-view/"
+    },
+    "agent-memory-org-scope": {
+      "phase": "archived",
+      "matchRate": 91,
+      "iterationCount": 0,
+      "archivedAt": "2026-07-20T10:40:37.000Z",
+      "archivedTo": "docs/archive/2026-07/agent-memory-org-scope/"
     }
   },
   "features": {
@@ -623,9 +630,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-04T10:53:02.380Z",
-        "lastUpdated": "2026-07-20T05:24:57.336Z"
+        "lastUpdated": "2026-07-20T10:03:22.918Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\api\\test_wiki_router.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\api\\test_memory_router.py"
     },
     "routes": {
       "phase": "do",
@@ -636,9 +643,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-04T10:57:06.857Z",
-        "lastUpdated": "2026-07-20T05:25:03.379Z"
+        "lastUpdated": "2026-07-20T10:02:28.280Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\api\\routes\\wiki_router.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\api\\routes\\memory_router.py"
     },
     "retrieval": {
       "phase": "do",
@@ -727,7 +734,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-16T13:14:48.990Z",
-        "lastUpdated": "2026-07-20T02:51:05.517Z"
+        "lastUpdated": "2026-07-20T10:02:41.611Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\config.py"
     },
@@ -990,7 +997,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-04-01T11:13:23.704Z",
-        "lastUpdated": "2026-07-20T02:53:32.005Z"
+        "lastUpdated": "2026-07-20T10:09:58.537Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\constants\\api.ts"
     },
@@ -1003,9 +1010,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-04-01T11:13:30.494Z",
-        "lastUpdated": "2026-07-20T06:53:54.242Z"
+        "lastUpdated": "2026-07-20T10:10:56.081Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\App.tsx"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\hooks\\useMemories.test.ts"
     },
     "ChatPage": {
       "phase": "do",
@@ -1029,7 +1036,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-04-12T06:31:25.528Z",
-        "lastUpdated": "2026-07-20T04:26:12.055Z"
+        "lastUpdated": "2026-07-20T10:01:18.273Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\application\\general_chat\\test_memory_injection.py"
     },
@@ -1193,7 +1200,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-04-26T09:34:24.626Z",
-        "lastUpdated": "2026-07-20T05:25:33.087Z"
+        "lastUpdated": "2026-07-20T10:10:42.999Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\__tests__\\mocks\\handlers.ts"
     },
@@ -2470,9 +2477,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-07-19T23:58:43.289Z",
-        "lastUpdated": "2026-07-20T04:26:15.109Z"
+        "lastUpdated": "2026-07-20T10:02:02.192Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\application\\memory\\test_extraction_service.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\application\\memory\\api_schemas.py"
     },
     "SettingsPage": {
       "phase": "do",
@@ -2483,9 +2490,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-07-20T00:25:28.374Z",
-        "lastUpdated": "2026-07-20T02:56:01.109Z"
+        "lastUpdated": "2026-07-20T10:14:45.821Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\SettingsPage\\index.tsx"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\SettingsPage\\index.test.tsx"
     },
     "agent-memory-extraction": {
       "phase": "act",
@@ -2554,6 +2561,20 @@
       },
       "previousPhase": "check",
       "autoAdvanced": true
+    },
+    "agent-memory-org-scope": {
+      "phase": "act",
+      "phaseNumber": 5,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-07-20T10:26:33.492Z",
+        "lastUpdated": "2026-07-20T10:26:33.506Z"
+      },
+      "previousPhase": "check",
+      "autoAdvanced": true
     }
   },
   "pipeline": {
@@ -2564,7 +2585,7 @@
   "session": {
     "startedAt": "2026-03-04T10:49:14.367Z",
     "onboardingCompleted": false,
-    "lastActivity": "2026-07-20T07:38:52.182Z"
+    "lastActivity": "2026-07-20T10:26:33.508Z"
   },
   "history": [
     {
@@ -18926,6 +18947,264 @@
     {
       "timestamp": "2026-07-20T07:38:52.182Z",
       "feature": "agent-workspace-view",
+      "phase": "act",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T09:56:36.351Z",
+      "feature": "memory",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T09:56:49.089Z",
+      "feature": "memory",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T09:57:01.336Z",
+      "feature": "memory",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T09:57:09.833Z",
+      "feature": "memory",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T09:57:30.180Z",
+      "feature": "memory",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T09:57:34.847Z",
+      "feature": "memory",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T09:57:56.472Z",
+      "feature": "memory",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T09:57:59.453Z",
+      "feature": "memory",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T09:58:13.963Z",
+      "feature": "memory",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T09:58:28.308Z",
+      "feature": "memory",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T09:58:34.201Z",
+      "feature": "memory",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T09:58:54.187Z",
+      "feature": "memory",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T09:59:15.008Z",
+      "feature": "memory",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T09:59:38.719Z",
+      "feature": "memory",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T09:59:49.759Z",
+      "feature": "memory",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T09:59:58.077Z",
+      "feature": "memory",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T10:01:00.187Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T10:01:18.273Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T10:02:02.192Z",
+      "feature": "memory",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T10:02:05.710Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T10:02:28.280Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T10:02:41.611Z",
+      "feature": "idt",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T10:02:44.438Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T10:02:57.830Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T10:03:03.612Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T10:03:13.568Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T10:03:22.918Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T10:09:58.537Z",
+      "feature": "constants",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T10:09:59.653Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T10:10:02.741Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T10:10:04.410Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T10:10:11.601Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T10:10:22.536Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T10:10:26.359Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T10:10:42.999Z",
+      "feature": "mocks",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T10:10:50.600Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T10:10:56.081Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T10:13:31.578Z",
+      "feature": "SettingsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T10:13:38.844Z",
+      "feature": "SettingsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T10:13:39.896Z",
+      "feature": "SettingsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T10:13:56.275Z",
+      "feature": "SettingsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T10:14:45.821Z",
+      "feature": "SettingsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T10:26:33.507Z",
+      "feature": "agent-memory-org-scope",
       "phase": "act",
       "action": "updated"
     }

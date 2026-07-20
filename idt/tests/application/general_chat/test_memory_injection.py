@@ -121,8 +121,23 @@ class TestStreamIntegration:
         async for _ in uc.stream(req, request_id="req-1"):
             pass
 
-        assembler.build_block.assert_awaited_once_with("u1", "req-1")
+        # agent-memory-org-scope: dept_ids 키워드 전달 (auth_ctx 없으면 None)
+        assembler.build_block.assert_awaited_once_with("u1", "req-1", dept_ids=None)
         assert captured["memory_block"] == _MEMORY_BLOCK
+
+    @pytest.mark.asyncio
+    async def test_auth_ctx_부서가_dept_ids로_전달(self):
+        assembler = MagicMock()
+        assembler.build_block = AsyncMock(return_value=_MEMORY_BLOCK)
+        uc = _make_uc(memory_assembler=assembler)
+        _wire_stream_agent(uc)
+
+        req = GeneralChatRequest(user_id="u1", session_id="s1", message="질문")
+        async for _ in uc.stream(req, request_id="req-1", auth_ctx=_auth_ctx()):
+            pass
+
+        # _auth_ctx()의 department_ids=("d1",)가 리스트로 전달
+        assert assembler.build_block.await_args.kwargs["dept_ids"] == ["d1"]
 
     @pytest.mark.asyncio
     async def test_assembler_미주입이면_빈_블록(self):

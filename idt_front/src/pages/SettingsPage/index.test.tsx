@@ -203,6 +203,26 @@ describe('SettingsPage — AI가 기억하는 내용', () => {
     await waitFor(() => expect(rejectedId).toBe('9'));
   });
 
+  it('부서 공유 메모리 섹션이 렌더된다 (agent-memory-org-scope)', async () => {
+    renderPage();
+
+    expect(await screen.findByText('부서 공유 메모리')).toBeInTheDocument();
+    expect(screen.getByText("'한도'는 동일인 여신한도")).toBeInTheDocument();
+    expect(screen.getByText('1/50')).toBeInTheDocument(); // total/max_count
+  });
+
+  it('부서 공유 메모리 0건이면 섹션을 렌더하지 않는다', async () => {
+    server.use(
+      http.get('*/api/v1/memories/org', () =>
+        HttpResponse.json({ items: [], total: 0, max_count: 50 }),
+      ),
+    );
+    renderPage();
+
+    await screen.findByText('여신 심사팀 소속');
+    expect(screen.queryByText('부서 공유 메모리')).not.toBeInTheDocument();
+  });
+
   it('등록 422 에러 detail을 그대로 표시한다', async () => {
     const user = userEvent.setup();
     server.use(

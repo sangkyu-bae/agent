@@ -38,6 +38,16 @@ class MemoryRepositoryInterface(ABC):
         """해당 사용자의 특정 status 개수 (Phase 2 — pending 상한 검증)."""
 
     @abstractmethod
+    async def find_active_by_departments(
+        self, dept_ids: list[str], request_id: str
+    ) -> list[Memory]:
+        """scope=org·소속 부서 active 메모리 (Phase 3 — 병합 주입). 빈 리스트면 []."""
+
+    @abstractmethod
+    async def count_active_by_department(self, dept_id: str, request_id: str) -> int:
+        """부서 active 메모리 개수 (Phase 3 — 부서 상한 검증)."""
+
+    @abstractmethod
     async def update(self, memory: Memory, request_id: str) -> Memory:
         """mem_type/content 갱신 후 최신 엔티티 반환."""
 

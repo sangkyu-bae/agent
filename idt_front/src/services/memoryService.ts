@@ -3,6 +3,7 @@ import authApiClient from './api/authClient';
 import { API_ENDPOINTS } from '@/constants/api';
 import type {
   CreateMemoryRequest,
+  CreateOrgMemoryRequest,
   Memory,
   MemoryListResponse,
   UpdateMemoryRequest,
@@ -43,5 +44,24 @@ export const memoryService = {
 
   remove: async (id: number): Promise<void> => {
     await authApiClient.delete(API_ENDPOINTS.MEMORY_DETAIL(id));
+  },
+
+  // agent-memory-org-scope: 부서 공유 메모리
+  getOrgMemories: async (): Promise<MemoryListResponse> => {
+    const res = await authApiClient.get<MemoryListResponse>(API_ENDPOINTS.MEMORY_ORG);
+    return res.data;
+  },
+
+  createOrg: async (data: CreateOrgMemoryRequest): Promise<Memory> => {
+    const res = await authApiClient.post<Memory>(API_ENDPOINTS.MEMORY_ORG, data);
+    return res.data;
+  },
+
+  promote: async (id: number, deptId: string): Promise<Memory> => {
+    const res = await authApiClient.post<Memory>(
+      API_ENDPOINTS.MEMORY_PROMOTE(id),
+      { dept_id: deptId },
+    );
+    return res.data;
   },
 };

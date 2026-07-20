@@ -37,3 +37,10 @@ export interface UpdateMemoryRequest {
   mem_type?: MemoryType;
   content?: string;
 }
+
+// agent-memory-org-scope: 부서 공유 메모리 작성
+export interface CreateOrgMemoryRequest {
+  dept_id: string;
+  mem_type: MemoryType;
+  content: string;
+}

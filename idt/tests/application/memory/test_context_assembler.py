@@ -10,10 +10,10 @@ from src.application.memory.context_assembler import MemoryContextAssembler
 from src.domain.memory.entity import Memory, MemoryScope, MemoryType
 
 
-def _memory(memory_id, mem_type, content, updated_at=None) -> Memory:
+def _memory(memory_id, mem_type, content, updated_at=None, scope=MemoryScope.USER) -> Memory:
     return Memory(
-        id=memory_id, scope=MemoryScope.USER, user_id="u1", tier=0,
-        mem_type=mem_type, content=content,
+        id=memory_id, scope=scope, user_id="u1" if scope == MemoryScope.USER else "d1",
+        tier=0, mem_type=mem_type, content=content,
         updated_at=updated_at or datetime(2026, 7, 18, 12, 0, 0),
     )
 
@@ -31,7 +31,7 @@ class _SessionCtx:
         return False
 
 
-def _make(memories=None, token_cap=800, repo_error=None):
+def _make(memories=None, token_cap=800, repo_error=None, org_memories=None):
     counter = {"opened": 0, "closed": 0}
 
     def session_factory():
@@ -42,6 +42,11 @@ def _make(memories=None, token_cap=800, repo_error=None):
         repo.find_active_by_user = AsyncMock(side_effect=repo_error)
     else:
         repo.find_active_by_user = AsyncMock(return_value=memories or [])
+    # 실 저장소처럼 빈 부서 리스트면 [] 반환 (assembler가 dept_ids 없으면 []로 호출)
+    async def _find_org(dept_ids, request_id):
+        return list(org_memories or []) if dept_ids else []
+
+    repo.find_active_by_departments = AsyncMock(side_effect=_find_org)
 
     logger = MagicMock()
     assembler = MemoryContextAssembler(
@@ -104,6 +109,55 @@ class TestBuildBlock:
         block = await assembler.build_block("u1", "req-1")
 
         assert block == ""  # FR-06
+
+    async def test_개인과_부서_메모리를_병합_렌더(self):
+        assembler, _, _ = _make(
+            memories=[_memory(1, MemoryType.PROFILE, "여신 심사팀 소속")],
+            org_memories=[
+                _memory(2, MemoryType.DOMAIN_TERM, "'한도'는 동일인 여신한도",
+                        scope=MemoryScope.ORG),
+            ],
+        )
+
+        block = await assembler.build_block("u1", "req-1", dept_ids=["d1"])
+
+        assert "여신 심사팀 소속" in block
+        assert "'한도'는 동일인 여신한도" in block
+        assert "(부서 공유)" in block  # FR-06 출처 라벨
+
+    async def test_개인이_부서보다_먼저_렌더(self):
+        assembler, _, _ = _make(
+            memories=[_memory(1, MemoryType.EPISODE, "개인 참고사항")],
+            org_memories=[
+                _memory(2, MemoryType.PROFILE, "부서 프로필", scope=MemoryScope.ORG),
+            ],
+        )
+
+        block = await assembler.build_block("u1", "req-1", dept_ids=["d1"])
+
+        assert block.index("개인 참고사항") < block.index("부서 프로필")
+
+    async def test_dept_ids_없으면_개인만_렌더_회귀(self):
+        assembler, _, _ = _make(
+            memories=[_memory(1, MemoryType.PROFILE, "개인만")],
+            org_memories=[_memory(2, MemoryType.PROFILE, "부서", scope=MemoryScope.ORG)],
+        )
+
+        block = await assembler.build_block("u1", "req-1")  # dept_ids 미전달
+
+        assert "개인만" in block
+        assert "부서" not in block
+
+    async def test_개인과_부서_content_중복은_개인_유지(self):
+        assembler, _, _ = _make(
+            memories=[_memory(1, MemoryType.PROFILE, "공통 내용")],
+            org_memories=[_memory(2, MemoryType.PROFILE, "공통 내용", scope=MemoryScope.ORG)],
+        )
+
+        block = await assembler.build_block("u1", "req-1", dept_ids=["d1"])
+
+        assert block.count("공통 내용") == 1
+        assert "(부서 공유)" not in block  # 개인이 우선 남음
 
     async def test_저장소_예외_시_빈_문자열과_warning(self):
         assembler, logger, _ = _make(repo_error=RuntimeError("db down"))

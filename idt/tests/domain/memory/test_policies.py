@@ -91,6 +91,44 @@ class TestSortForInjection:
         assert [m.id for m in items] == [1, 2]
 
 
+class TestSortForInjectionScoped:
+    """agent-memory-org-scope: 개인(user) 우선 → 부서(org), 그 안에서 타입 우선순위."""
+
+    def _scoped(self, scope: MemoryScope, mem_type: MemoryType, memory_id: int) -> Memory:
+        return Memory(
+            id=memory_id, scope=scope,
+            user_id="u1" if scope == MemoryScope.USER else "d1",
+            tier=0, mem_type=mem_type, content=f"m{memory_id}",
+            updated_at=datetime(2026, 7, 18, 12, 0, 0),
+        )
+
+    def test_개인이_부서보다_우선(self):
+        org_profile = self._scoped(MemoryScope.ORG, MemoryType.PROFILE, 1)
+        user_episode = self._scoped(MemoryScope.USER, MemoryType.EPISODE, 2)
+
+        ordered = MemoryPolicy.sort_for_injection_scoped([org_profile, user_episode])
+
+        # 개인 episode가 부서 profile보다 앞 (스코프가 1차 정렬 키)
+        assert ordered[0].id == 2
+        assert ordered[1].id == 1
+
+    def test_동일_스코프_내는_타입_우선순위(self):
+        org_episode = self._scoped(MemoryScope.ORG, MemoryType.EPISODE, 1)
+        org_profile = self._scoped(MemoryScope.ORG, MemoryType.PROFILE, 2)
+
+        ordered = MemoryPolicy.sort_for_injection_scoped([org_episode, org_profile])
+
+        assert ordered[0].id == 2  # profile 우선
+
+    def test_원본_불변(self):
+        items = [
+            self._scoped(MemoryScope.ORG, MemoryType.PROFILE, 1),
+            self._scoped(MemoryScope.USER, MemoryType.PROFILE, 2),
+        ]
+        MemoryPolicy.sort_for_injection_scoped(items)
+        assert [m.id for m in items] == [1, 2]
+
+
 class TestTruncateToBudget:
     def test_예산_내면_전부_포함_절단_없음(self):
         items = [_memory(content="가" * 100, memory_id=i) for i in range(3)]

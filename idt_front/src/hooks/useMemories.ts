@@ -4,7 +4,11 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { queryClient } from '@/lib/queryClient';
 import { queryKeys } from '@/lib/queryKeys';
 import { memoryService } from '@/services/memoryService';
-import type { CreateMemoryRequest, UpdateMemoryRequest } from '@/types/memory';
+import type {
+  CreateMemoryRequest,
+  CreateOrgMemoryRequest,
+  UpdateMemoryRequest,
+} from '@/types/memory';
 
 const invalidateMemories = () =>
   queryClient.invalidateQueries({ queryKey: queryKeys.memories.all });
@@ -25,6 +29,26 @@ export const useApproveMemory = () =>
 export const useRejectMemory = () =>
   useMutation({
     mutationFn: (id: number) => memoryService.reject(id),
+    onSuccess: invalidateMemories,
+  });
+
+// agent-memory-org-scope: 부서 공유 메모리
+export const useOrgMemories = () =>
+  useQuery({
+    queryKey: queryKeys.memories.org(),
+    queryFn: () => memoryService.getOrgMemories(),
+  });
+
+export const useCreateOrgMemory = () =>
+  useMutation({
+    mutationFn: (data: CreateOrgMemoryRequest) => memoryService.createOrg(data),
+    onSuccess: invalidateMemories,
+  });
+
+export const usePromoteMemory = () =>
+  useMutation({
+    mutationFn: ({ id, deptId }: { id: number; deptId: string }) =>
+      memoryService.promote(id, deptId),
     onSuccess: invalidateMemories,
   });
 

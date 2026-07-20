@@ -42,15 +42,20 @@ class MemoryContextAssembler:
         self._token_cap = token_cap
         self._repo_builder = repo_builder or self._default_repo_builder
 
-    async def build_block(self, user_id: str, request_id: str) -> str:
+    async def build_block(
+        self, user_id: str, request_id: str, dept_ids: list[str] | None = None
+    ) -> str:
         try:
             async with self._session_factory() as session:
                 repo = self._repo_builder(session)
-                memories = await repo.find_active_by_user(user_id, request_id)
+                personal = await repo.find_active_by_user(user_id, request_id)
+                # agent-memory-org-scope: 소속 부서 org 메모리 병합 (dept_ids 없으면 개인만)
+                org = await repo.find_active_by_departments(dept_ids or [], request_id)
+            memories = self._merge(personal, org)
             if not memories:
                 return ""  # FR-06
 
-            ordered = MemoryPolicy.sort_for_injection(memories)
+            ordered = MemoryPolicy.sort_for_injection_scoped(memories)
             included, truncated = MemoryPolicy.truncate_to_budget(
                 ordered, self._token_cap
             )
@@ -80,8 +85,24 @@ class MemoryContextAssembler:
         return MemoryRepository(session, self._logger)
 
     @staticmethod
+    def _merge(personal: list[Memory], org: list[Memory]) -> list[Memory]:
+        """개인 + 부서 병합 — content 정확 일치 시 개인 유지(부서 중복 제거)."""
+        seen = {m.content.strip() for m in personal}
+        merged = list(personal)
+        for memory in org:
+            if memory.content.strip() not in seen:
+                merged.append(memory)
+                seen.add(memory.content.strip())
+        return merged
+
+    @staticmethod
     def _render(memories: list[Memory]) -> str:
-        lines = "\n".join(
-            f"- ({_TYPE_LABELS[m.mem_type]}) {m.content}" for m in memories
-        )
+        from src.domain.memory.entity import MemoryScope
+
+        def _line(m: Memory) -> str:
+            label = _TYPE_LABELS[m.mem_type]
+            suffix = " (부서 공유)" if m.scope == MemoryScope.ORG else ""
+            return f"- ({label}) {m.content}{suffix}"
+
+        lines = "\n".join(_line(m) for m in memories)
         return f"{_BLOCK_HEADER}{lines}\n---\n\n"

@@ -169,6 +169,8 @@ class Settings(BaseSettings):
     # 사용자당 활성 메모리 개수 상한 / 주입 블록 문자 예산(한글 1자≈1토큰 보수 근사)
     memory_max_active_per_user: int = 30
     memory_inject_token_cap: int = 800
+    # agent-memory-org-scope: 부서(org) 공유 메모리 개수 상한
+    memory_max_active_per_department: int = 50
 
     # Agent Memory Extraction (agent-memory-extraction Design §3-4)
     # 대화 후 백그라운드 후보 추출 — 기본 off 배포, 검증 후 on.

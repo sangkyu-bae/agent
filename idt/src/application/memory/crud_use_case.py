@@ -18,11 +18,13 @@ class MemoryCrudUseCase:
         logger: LoggerInterface,
         max_active_per_user: int,
         max_pending_per_user: int = 20,
+        max_active_per_department: int = 50,
     ) -> None:
         self._repo = memory_repo
         self._logger = logger
         self._max_active = max_active_per_user
         self._max_pending = max_pending_per_user
+        self._max_org = max_active_per_department
 
     @property
     def max_active_per_user(self) -> int:
@@ -33,6 +35,11 @@ class MemoryCrudUseCase:
     def max_pending_per_user(self) -> int:
         """pending 상한 — status=pending 목록 응답의 max_count."""
         return self._max_pending
+
+    @property
+    def max_active_per_department(self) -> int:
+        """부서 메모리 상한 — org 목록 응답의 max_count."""
+        return self._max_org
 
     async def create(
         self, user_id: str, mem_type: str, content: str, request_id: str
@@ -88,6 +95,59 @@ class MemoryCrudUseCase:
     ) -> list[Memory]:
         """상태별 본인 메모리 목록 (Phase 2 — pending 승인 대기)."""
         return await self._repo.find_by_user_and_status(user_id, status, request_id)
+
+    # ── Phase 3: org(부서) 스코프 ──────────────────────────────────
+
+    async def list_org(self, dept_ids: list[str], request_id: str) -> list[Memory]:
+        """소속 부서 org 메모리 목록."""
+        return await self._repo.find_active_by_departments(dept_ids, request_id)
+
+    async def create_org(
+        self, dept_id: str, mem_type: str, content: str, request_id: str
+    ) -> Memory:
+        """부서 메모리 직접 작성 (권한은 라우터에서 admin+소속 검증)."""
+        parsed_type = self._parse_type(mem_type)
+        MemoryPolicy.validate_content(content)
+        current = await self._repo.count_active_by_department(dept_id, request_id)
+        MemoryPolicy.validate_active_count(current, self._max_org)
+
+        memory = Memory(
+            id=None, scope=MemoryScope.ORG, user_id=dept_id, tier=0,
+            mem_type=parsed_type, content=content, confidence=100,
+            status=MemoryStatus.ACTIVE,
+        )
+        saved = await self._repo.save(memory, request_id)
+        self._logger.info(
+            "org memory created", request_id=request_id, dept_id=dept_id,
+            memory_id=saved.id,
+        )
+        return saved
+
+    async def promote(
+        self, user_id: str, memory_id: int, dept_id: str, request_id: str
+    ) -> Memory:
+        """개인 active 메모리를 부서 메모리로 복사 (원본 유지, 결정 ②).
+
+        부서에 동일 content가 이미 있으면 ValueError → 라우터 409.
+        """
+        memory = await self._find_owned(user_id, memory_id, request_id)
+        existing = await self._repo.find_active_by_departments([dept_id], request_id)
+        if any(m.content.strip() == memory.content.strip() for m in existing):
+            raise ValueError("이미 부서에 등록된 내용입니다.")
+        current = await self._repo.count_active_by_department(dept_id, request_id)
+        MemoryPolicy.validate_active_count(current, self._max_org)
+
+        promoted = Memory(
+            id=None, scope=MemoryScope.ORG, user_id=dept_id, tier=0,
+            mem_type=memory.mem_type, content=memory.content, confidence=100,
+            status=MemoryStatus.ACTIVE,
+        )
+        saved = await self._repo.save(promoted, request_id)
+        self._logger.info(
+            "memory promoted to org", request_id=request_id, user_id=user_id,
+            memory_id=memory_id, dept_id=dept_id, new_id=saved.id,
+        )
+        return saved
 
     async def approve(self, user_id: str, memory_id: int, request_id: str) -> Memory:
         """pending → active. 승인 시점에 active 상한을 재검증한다 (FR-07 계승)."""

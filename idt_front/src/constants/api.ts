@@ -254,4 +254,7 @@ export const API_ENDPOINTS = {
   // agent-memory-extraction: 추출 후보 승인 게이트
   MEMORY_APPROVE: (id: number) => `/api/v1/memories/${id}/approve`,
   MEMORY_REJECT: (id: number) => `/api/v1/memories/${id}/reject`,
+  // agent-memory-org-scope: 부서 공유 메모리 + 승격
+  MEMORY_ORG: '/api/v1/memories/org',
+  MEMORY_PROMOTE: (id: number) => `/api/v1/memories/${id}/promote`,
 } as const;
