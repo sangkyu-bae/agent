@@ -2,12 +2,12 @@
   "version": "1.0",
   "enabled": false,
   "teamName": "",
-  "feature": "agent-workspace-view",
+  "feature": "agent-memory-org-scope",
   "pdcaPhase": "plan",
   "orchestrationPattern": "leader",
   "ctoAgent": "opus",
-  "startedAt": "2026-07-20T07:34:25.014Z",
-  "lastUpdated": "2026-07-20T07:50:40.146Z",
+  "startedAt": "2026-07-20T10:17:48.577Z",
+  "lastUpdated": "2026-07-20T10:38:45.643Z",
   "teammates": [],
   "progress": {
     "totalTasks": 0,
@@ -21,7 +21,7 @@
       "from": "system",
       "to": "all",
       "content": "Phase check → act (auto-advanced)",
-      "timestamp": "2026-07-20T07:38:52.205Z"
+      "timestamp": "2026-07-20T10:26:33.551Z"
     }
   ],
   "sessionId": "7a940094-f11e-4770-a042-40618340e9b5"
