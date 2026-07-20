@@ -1175,6 +1175,19 @@ export const handlers = [
     HttpResponse.json({ ...mockWikiArticle(String(params.id)), version: 2 }),
   ),
 
+  // ── Auth /me (expose-user-department) ───────────────────
+  http.get(`*${API_ENDPOINTS.AUTH_ME}`, () =>
+    HttpResponse.json({
+      id: 7,
+      email: 'user@example.com',
+      role: 'user',
+      status: 'approved',
+      departments: [
+        { id: 'd1', name: '여신심사팀', is_primary: true },
+      ],
+    }),
+  ),
+
   // ── Memory (agent-memory) ───────────────────────────────
   http.get(`*${API_ENDPOINTS.MEMORIES}`, ({ request }) => {
     const status = new URL(request.url).searchParams.get('status');

@@ -5,18 +5,29 @@ import { useState } from 'react';
 import {
   useApproveMemory,
   useCreateMemory,
+  useCreateOrgMemory,
   useDeleteMemory,
   useMemories,
   useOrgMemories,
+  usePromoteMemory,
   useRejectMemory,
   useUpdateMemory,
 } from '@/hooks/useMemories';
+import { useMe } from '@/hooks/useAuth';
 import {
   MEMORY_CONTENT_MAX,
   MEMORY_TYPE_LABELS,
   type Memory,
   type MemoryType,
 } from '@/types/memory';
+import type { DepartmentBrief } from '@/types/auth';
+
+// expose-user-department: /me의 소속 부서 — 승격/작성 대상. primary 우선 정렬.
+const useMyDepartments = (): DepartmentBrief[] => {
+  const { data } = useMe();
+  const depts = data?.departments ?? [];
+  return [...depts].sort((a, b) => Number(b.is_primary) - Number(a.is_primary));
+};
 
 const errorDetail = (err: unknown): string => {
   // authApiClient 인터셉터가 detail을 ApiError(message)로 변환해 전달한다
@@ -32,8 +43,25 @@ const MemoryItem = ({ memory }: MemoryItemProps) => {
   const [editing, setEditing] = useState(false);
   const [content, setContent] = useState(memory.content);
   const [error, setError] = useState<string | null>(null);
+  const [showDeptPick, setShowDeptPick] = useState(false);
   const updateMutation = useUpdateMemory();
   const deleteMutation = useDeleteMemory();
+  const promoteMutation = usePromoteMemory();
+  const departments = useMyDepartments();
+
+  const promote = (deptId: string) => {
+    setError(null);
+    setShowDeptPick(false);
+    promoteMutation.mutate(
+      { id: memory.id, deptId },
+      { onError: (err) => setError(errorDetail(err)) },
+    );
+  };
+
+  const onPromoteClick = () => {
+    if (departments.length === 1) promote(departments[0].id);
+    else setShowDeptPick(true); // 다부서: 선택 UI (결정 ②)
+  };
 
   const save = () => {
     setError(null);
@@ -91,6 +119,15 @@ const MemoryItem = ({ memory }: MemoryItemProps) => {
         </div>
         {!editing && (
           <div className="flex shrink-0 gap-1">
+            {departments.length > 0 && (
+              <button
+                type="button"
+                onClick={onPromoteClick}
+                className="rounded-lg border border-sky-200 px-2 py-1 text-[11px] text-sky-600 hover:bg-sky-50"
+              >
+                부서로 승격
+              </button>
+            )}
             <button
               type="button"
               onClick={() => setEditing(true)}
@@ -108,6 +145,21 @@ const MemoryItem = ({ memory }: MemoryItemProps) => {
           </div>
         )}
       </div>
+      {/* 다부서 승격 선택 (결정 ②) */}
+      {showDeptPick && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {departments.map((d) => (
+            <button
+              key={d.id}
+              type="button"
+              onClick={() => promote(d.id)}
+              className="rounded-lg border border-sky-200 px-2 py-1 text-[11px] text-sky-700 hover:bg-sky-50"
+            >
+              {d.name}
+            </button>
+          ))}
+        </div>
+      )}
       {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
     </li>
   );
@@ -188,8 +240,33 @@ const PendingSection = () => {
 // 서버가 사용자 소속 부서로 스코프하므로 부서 id를 프론트가 알 필요 없음.
 const OrgSection = () => {
   const { data } = useOrgMemories();
+  const { data: me } = useMe();
+  const departments = useMyDepartments();
+  const createOrg = useCreateOrgMemory();
+  const [deptId, setDeptId] = useState('');
+  const [memType, setMemType] = useState<MemoryType>('domain_term');
+  const [content, setContent] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
-  if (!data || data.items.length === 0) return null;
+  const isAdmin = me?.role === 'admin';
+  const canWrite = isAdmin && departments.length > 0;
+  const items = data?.items ?? [];
+
+  // 부서 열람 대상도 없고 작성 권한도 없으면 섹션 미표시
+  if (items.length === 0 && !canWrite) return null;
+
+  const submit = () => {
+    setError(null);
+    const targetDept = deptId || departments[0]?.id;
+    if (!targetDept) return;
+    createOrg.mutate(
+      { dept_id: targetDept, mem_type: memType, content },
+      {
+        onSuccess: () => setContent(''),
+        onError: (err) => setError(errorDetail(err)),
+      },
+    );
+  };
 
   return (
     <section className="mb-8">
@@ -197,15 +274,17 @@ const OrgSection = () => {
         <h2 className="text-[15px] font-semibold text-zinc-900">
           부서 공유 메모리
         </h2>
-        <span className="text-[12px] text-zinc-400">
-          {data.total}/{data.max_count}
-        </span>
+        {data && (
+          <span className="text-[12px] text-zinc-400">
+            {data.total}/{data.max_count}
+          </span>
+        )}
       </div>
       <p className="mb-4 text-[12px] text-zinc-400">
         같은 부서가 공유하는 배경 정보입니다. 답변에 함께 반영됩니다.
       </p>
       <ul className="space-y-2">
-        {data.items.map((m) => (
+        {items.map((m) => (
           <li
             key={m.id}
             className="rounded-2xl border border-sky-200 bg-sky-50/40 p-4"
@@ -219,6 +298,66 @@ const OrgSection = () => {
           </li>
         ))}
       </ul>
+
+      {/* admin 작성 폼 (expose-user-department FR-04) */}
+      {canWrite && (
+        <div className="mt-4 rounded-2xl border border-sky-200 bg-sky-50/30 p-4">
+          <div className="flex flex-col gap-2">
+            {departments.length > 1 && (
+              <>
+                <label className="text-[12px] text-zinc-500" htmlFor="org-dept">
+                  대상 부서
+                </label>
+                <select
+                  id="org-dept"
+                  value={deptId || departments[0].id}
+                  onChange={(e) => setDeptId(e.target.value)}
+                  className="w-40 rounded-xl border border-zinc-300 bg-white p-2 text-sm"
+                >
+                  {departments.map((d) => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </select>
+              </>
+            )}
+            <label className="text-[12px] text-zinc-500" htmlFor="org-type">
+              메모리 타입
+            </label>
+            <select
+              id="org-type"
+              value={memType}
+              onChange={(e) => setMemType(e.target.value as MemoryType)}
+              className="w-40 rounded-xl border border-zinc-300 bg-white p-2 text-sm"
+            >
+              {Object.entries(MEMORY_TYPE_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+            <label className="text-[12px] text-zinc-500" htmlFor="org-content">
+              부서 메모리 내용
+            </label>
+            <textarea
+              id="org-content"
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              maxLength={MEMORY_CONTENT_MAX}
+              rows={2}
+              className="block w-full resize-none rounded-xl border border-zinc-300 bg-white p-2 text-sm"
+            />
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={submit}
+                disabled={createOrg.isPending}
+                className="rounded-xl bg-sky-600 px-4 py-2 text-[13.5px] font-medium text-white hover:bg-sky-700 disabled:bg-zinc-300"
+              >
+                부서에 등록
+              </button>
+            </div>
+            {error && <p className="text-xs text-red-500">{error}</p>}
+          </div>
+        </div>
+      )}
     </section>
   );
 };
