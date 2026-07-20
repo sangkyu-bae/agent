@@ -4,6 +4,7 @@ import knowledgeBaseService from '@/services/knowledgeBaseService';
 import type {
   CreateKnowledgeBaseRequest,
   KbDocumentChunksParams,
+  KbSearchRequest,
   KbStoreSource,
   SectionSummaryStatusResponse,
   UpdateKbChunkingRequest,
@@ -181,6 +182,32 @@ export const useRetrySectionSummary = (kbId: string, documentId: string) => {
     },
   });
 };
+
+// ── KB 리트리버 테스트 (kb-retrieval-test) ─────────────────
+
+export const useKbSearch = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ kbId, data }: { kbId: string; data: KbSearchRequest }) =>
+      knowledgeBaseService.searchKb(kbId, data),
+    onSuccess: (_, { kbId }) => {
+      queryClient.invalidateQueries({
+        queryKey: [...queryKeys.knowledgeBases.all, 'searchHistory', kbId],
+      });
+    },
+  });
+};
+
+export const useKbSearchHistory = (
+  kbId: string | undefined,
+  params?: { limit?: number; offset?: number },
+) =>
+  useQuery({
+    queryKey: queryKeys.knowledgeBases.searchHistory(kbId ?? '', params),
+    queryFn: () =>
+      knowledgeBaseService.getKbSearchHistory(kbId as string, params),
+    enabled: !!kbId,
+  });
 
 export const useUploadKbDocument = (kbId: string) => {
   const queryClient = useQueryClient();

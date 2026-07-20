@@ -9,6 +9,8 @@ import type { KbDocumentInfo } from '@/types/knowledgeBase';
 import KbChunkingSettingsCard from '@/components/knowledge-base/KbChunkingSettingsCard';
 import KbDocumentContentPanel from '@/components/knowledge-base/KbDocumentContentPanel';
 import KbDocumentTable from '@/components/knowledge-base/KbDocumentTable';
+import KbSearchSection from '@/components/knowledge-base/KbSearchSection';
+import KbStatusCards from '@/components/knowledge-base/KbStatusCards';
 import KbUploadDocumentModal from '@/components/knowledge-base/KbUploadDocumentModal';
 
 const KnowledgeBaseDetailPage = () => {
@@ -17,6 +19,11 @@ const KnowledgeBaseDetailPage = () => {
   const [uploadOpen, setUploadOpen] = useState(false);
   // kb-content-browser: 문서 행 클릭 드릴다운 (재클릭 시 닫기)
   const [selectedDoc, setSelectedDoc] = useState<KbDocumentInfo | null>(null);
+  // kb-retrieval-test D10: 검색 스코프 — 드릴다운 선택과 독립
+  const [searchScopeDoc, setSearchScopeDoc] = useState<{
+    document_id: string;
+    filename: string;
+  } | null>(null);
 
   const kbQuery = useKnowledgeBase(kbId);
   const docsQuery = useKbDocuments(kbId);
@@ -70,6 +77,11 @@ const KnowledgeBaseDetailPage = () => {
 
             <KbChunkingSettingsCard kb={kb} />
 
+            <KbStatusCards
+              documents={docsQuery.data?.documents ?? []}
+              total={docsQuery.data?.total ?? 0}
+            />
+
             <div className="mt-8 flex items-center justify-between">
               <h2 className="text-[17px] font-semibold text-zinc-900">
                 문서{' '}
@@ -97,6 +109,12 @@ const KnowledgeBaseDetailPage = () => {
                   )
                 }
                 selectedId={selectedDoc?.document_id ?? null}
+                onSearchInDocument={(doc) =>
+                  setSearchScopeDoc({
+                    document_id: doc.document_id,
+                    filename: doc.filename,
+                  })
+                }
               />
             </div>
 
@@ -107,6 +125,12 @@ const KnowledgeBaseDetailPage = () => {
                 onClose={() => setSelectedDoc(null)}
               />
             )}
+
+            <KbSearchSection
+              kbId={kbId}
+              scopeDoc={searchScopeDoc}
+              onClearScope={() => setSearchScopeDoc(null)}
+            />
 
             <KbUploadDocumentModal
               isOpen={uploadOpen}

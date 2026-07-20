@@ -1,4 +1,7 @@
 from src.application.collection.permission_service import CollectionPermissionService
+from src.application.collection_search.embedding_resolver import (
+    resolve_collection_embedding_model,
+)
 from src.application.hybrid_search.use_case import HybridSearchUseCase
 from src.domain.auth.entities import User
 from src.domain.collection.interfaces import (
@@ -131,27 +134,12 @@ class CollectionSearchUseCase:
     async def _resolve_embedding_model(
         self, collection_name: str, request_id: str
     ):
-        logs = await self._activity_log_repo.find_all(
-            request_id=request_id,
+        return await resolve_collection_embedding_model(
             collection_name=collection_name,
-            action="CREATE",
-            limit=1,
+            activity_log_repo=self._activity_log_repo,
+            embedding_model_repo=self._embedding_model_repo,
+            request_id=request_id,
         )
-        if not logs or not logs[0].detail:
-            raise ValueError(
-                f"Cannot determine embedding model for '{collection_name}'"
-            )
-        model_name = logs[0].detail.get("embedding_model")
-        if not model_name:
-            raise ValueError(
-                f"Cannot determine embedding model for '{collection_name}'"
-            )
-        model = await self._embedding_model_repo.find_by_model_name(
-            model_name, request_id
-        )
-        if model is None:
-            raise ValueError(f"Embedding model '{model_name}' not registered")
-        return model
 
     async def _save_history_safe(
         self, request, user, hybrid_result, request_id

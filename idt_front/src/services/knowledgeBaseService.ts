@@ -9,6 +9,9 @@ import type {
   KbDocumentListResponse,
   KbDocumentSummaryResponse,
   KbMessageResponse,
+  KbSearchHistoryResponse,
+  KbSearchRequest,
+  KbSearchResponse,
   KbSectionSummaryListResponse,
   KbStoreSource,
   KbUploadResponse,
@@ -138,6 +141,30 @@ const knowledgeBaseService = {
   ): Promise<SectionSummaryStatusResponse> => {
     const { data } = await authApiClient.get<SectionSummaryStatusResponse>(
       API_ENDPOINTS.KNOWLEDGE_BASE_SECTION_SUMMARY_STATUS(kbId, documentId),
+    );
+    return data;
+  },
+
+  // ── KB 리트리버 테스트 (kb-retrieval-test) ─────────────────
+
+  searchKb: async (
+    kbId: string,
+    body: KbSearchRequest,
+  ): Promise<KbSearchResponse> => {
+    const { data } = await authApiClient.post<KbSearchResponse>(
+      API_ENDPOINTS.KNOWLEDGE_BASE_SEARCH(kbId),
+      body,
+    );
+    return data;
+  },
+
+  getKbSearchHistory: async (
+    kbId: string,
+    params?: { limit?: number; offset?: number },
+  ): Promise<KbSearchHistoryResponse> => {
+    const { data } = await authApiClient.get<KbSearchHistoryResponse>(
+      API_ENDPOINTS.KNOWLEDGE_BASE_SEARCH_HISTORY(kbId),
+      { params },
     );
     return data;
   },

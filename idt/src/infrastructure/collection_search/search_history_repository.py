@@ -27,11 +27,13 @@ class SearchHistoryRepository(SearchHistoryRepositoryInterface):
         result_count: int,
         request_id: str,
         document_id: Optional[str] = None,
+        kb_id: Optional[str] = None,
     ) -> None:
         model = SearchHistoryModel(
             user_id=user_id,
             collection_name=collection_name,
             document_id=document_id,
+            kb_id=kb_id,
             query=query,
             bm25_weight=bm25_weight,
             vector_weight=vector_weight,
@@ -70,20 +72,54 @@ class SearchHistoryRepository(SearchHistoryRepositoryInterface):
             .offset(offset)
         )
         rows = (await self._session.execute(stmt)).scalars().all()
+        return [self._to_entry(row) for row in rows], total
 
-        entries = [
-            SearchHistoryEntry(
-                id=row.id,
-                user_id=row.user_id,
-                collection_name=row.collection_name,
-                query=row.query,
-                bm25_weight=row.bm25_weight,
-                vector_weight=row.vector_weight,
-                top_k=row.top_k,
-                result_count=row.result_count,
-                created_at=row.created_at,
-                document_id=row.document_id,
+    async def find_by_user_and_kb(
+        self,
+        user_id: str,
+        kb_id: str,
+        limit: int,
+        offset: int,
+        request_id: str,
+    ) -> tuple[list[SearchHistoryEntry], int]:
+        count_stmt = (
+            select(func.count())
+            .select_from(SearchHistoryModel)
+            .where(
+                SearchHistoryModel.user_id == user_id,
+                SearchHistoryModel.kb_id == kb_id,
             )
-            for row in rows
-        ]
-        return entries, total
+        )
+        total = (await self._session.execute(count_stmt)).scalar() or 0
+
+        stmt = (
+            select(SearchHistoryModel)
+            .where(
+                SearchHistoryModel.user_id == user_id,
+                SearchHistoryModel.kb_id == kb_id,
+            )
+            .order_by(
+                SearchHistoryModel.created_at.desc(),
+                SearchHistoryModel.id.desc(),
+            )
+            .limit(limit)
+            .offset(offset)
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return [self._to_entry(row) for row in rows], total
+
+    @staticmethod
+    def _to_entry(row: SearchHistoryModel) -> SearchHistoryEntry:
+        return SearchHistoryEntry(
+            id=row.id,
+            user_id=row.user_id,
+            collection_name=row.collection_name,
+            query=row.query,
+            bm25_weight=row.bm25_weight,
+            vector_weight=row.vector_weight,
+            top_k=row.top_k,
+            result_count=row.result_count,
+            created_at=row.created_at,
+            document_id=row.document_id,
+            kb_id=row.kb_id,
+        )
