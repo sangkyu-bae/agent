@@ -165,6 +165,11 @@ class Settings(BaseSettings):
     # 응답에서 vault에 없는 신규 PII를 [REDACTED_<TYPE>]로 처리할지 여부.
     pii_masking_output_redact: bool = True
 
+    # Agent Memory (agent-memory Design §3-4)
+    # 사용자당 활성 메모리 개수 상한 / 주입 블록 문자 예산(한글 1자≈1토큰 보수 근사)
+    memory_max_active_per_user: int = 30
+    memory_inject_token_cap: int = 800
+
     # Application
     debug: bool = False
 

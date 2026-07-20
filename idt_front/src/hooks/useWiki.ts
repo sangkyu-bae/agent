@@ -5,6 +5,7 @@ import { queryClient } from '@/lib/queryClient';
 import { queryKeys } from '@/lib/queryKeys';
 import { wikiService } from '@/services/wikiService';
 import type {
+  CreateWikiRequest,
   DistillRequest,
   ReviewActionRequest,
   UpdateWikiRequest,
@@ -62,5 +63,20 @@ export const useUpdateArticle = () =>
   useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateWikiRequest }) =>
       wikiService.update(id, data),
+    onSuccess: invalidateWiki,
+  });
+
+// ── wiki-user-facing: 소유자 직접 작성 + 지식 트리 ──────────────
+
+export const useWikiTree = (agentId: string) =>
+  useQuery({
+    queryKey: queryKeys.wiki.tree(agentId),
+    queryFn: () => wikiService.getTree(agentId),
+    enabled: !!agentId,
+  });
+
+export const useCreateWiki = () =>
+  useMutation({
+    mutationFn: (data: CreateWikiRequest) => wikiService.create(data),
     onSuccess: invalidateWiki,
   });

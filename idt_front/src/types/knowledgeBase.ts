@@ -179,6 +179,45 @@ export interface KbDocumentChunksParams {
   q?: string;
 }
 
+// ── KB 리트리버 테스트 (kb-retrieval-test Design §3.2) ──────────
+// 백엔드 계약: knowledge_base_router.py KbSearch*
+// 결과/히스토리 항목은 컬렉션 검색과 동일 형태 — 타입 재사용
+
+import type { SearchHistoryItem, SearchResultItem } from '@/types/collection';
+
+export interface KbSearchRequest {
+  query: string;
+  top_k?: number;
+  bm25_weight?: number;
+  vector_weight?: number;
+  bm25_top_k?: number;
+  vector_top_k?: number;
+  rrf_k?: number;
+  /** D4: 문서 단위 검색 — KB 소속 아니면 404 */
+  document_id?: string;
+}
+
+export interface KbSearchResponse {
+  query: string;
+  kb_id: string;
+  kb_name: string;
+  collection_name: string;
+  results: SearchResultItem[];
+  total_found: number;
+  bm25_weight: number;
+  vector_weight: number;
+  request_id: string;
+  document_id: string | null;
+}
+
+export interface KbSearchHistoryResponse {
+  kb_id: string;
+  histories: SearchHistoryItem[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 /** 섹션 요약 잡 상태 — 기존 백엔드 API의 첫 프론트 연동 (Design D9) */
 export interface SectionSummaryStatusResponse {
   job_id: string;

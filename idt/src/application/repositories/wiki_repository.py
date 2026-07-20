@@ -6,6 +6,7 @@ request_id는 로깅/추적(LOG-001)을 위해 모든 연산에 전달한다.
 from abc import ABC, abstractmethod
 from datetime import datetime
 
+from src.application.wiki.schemas import WikiTreeItem
 from src.domain.wiki.entity import WikiArticle, WikiStatus
 
 
@@ -42,3 +43,9 @@ class WikiArticleRepository(ABC):
 
         만료/미승인(draft, deprecated) 항목은 결과에서 제외해야 한다.
         """
+
+    @abstractmethod
+    async def list_tree_items(
+        self, agent_id: str, request_id: str
+    ) -> list[WikiTreeItem]:
+        """지식 트리용 경량 목록(본문 제외) — path·updated_at 정렬 (wiki-user-facing)."""

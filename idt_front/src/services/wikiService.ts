@@ -2,12 +2,14 @@
 import authApiClient from './api/authClient';
 import { API_ENDPOINTS } from '@/constants/api';
 import type {
+  CreateWikiRequest,
   DistillRequest,
   DistillResponse,
   ReviewActionRequest,
   UpdateWikiRequest,
   WikiArticle,
   WikiListResponse,
+  WikiTreeResponse,
 } from '@/types/wiki';
 
 export const wikiService = {
@@ -77,6 +79,23 @@ export const wikiService = {
     const res = await authApiClient.put<WikiArticle>(
       API_ENDPOINTS.WIKI_UPDATE(id),
       data,
+    );
+    return res.data;
+  },
+
+  // wiki-user-facing: 소유자 직접 작성 + 지식 트리
+  create: async (data: CreateWikiRequest): Promise<WikiArticle> => {
+    const res = await authApiClient.post<WikiArticle>(
+      API_ENDPOINTS.WIKI_CREATE,
+      data,
+    );
+    return res.data;
+  },
+
+  getTree: async (agentId: string): Promise<WikiTreeResponse> => {
+    const res = await authApiClient.get<WikiTreeResponse>(
+      API_ENDPOINTS.WIKI_TREE,
+      { params: { agent_id: agentId } },
     );
     return res.data;
   },

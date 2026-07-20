@@ -1,3 +1,5 @@
+import { useNavigate } from 'react-router-dom';
+
 import type { DocumentSource } from '@/types/chat';
 
 interface SourceCitationProps {
@@ -5,6 +7,8 @@ interface SourceCitationProps {
 }
 
 const SourceCitation = ({ sources }: SourceCitationProps) => {
+  const navigate = useNavigate();
+
   if (sources.length === 0) return null;
 
   return (
@@ -13,18 +17,35 @@ const SourceCitation = ({ sources }: SourceCitationProps) => {
         참고 문서
       </p>
       <div className="flex flex-wrap gap-2">
-        {sources.map((source, idx) => (
-          <button
-            key={source.chunk_id}
-            className="group flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-[11.5px] text-zinc-600 shadow-sm transition-all hover:border-violet-300 hover:bg-violet-50 hover:shadow-md"
-          >
-            <span className="flex h-4 w-4 items-center justify-center rounded bg-zinc-100 text-[10px] font-bold text-zinc-500 group-hover:bg-violet-100 group-hover:text-violet-600">
-              {idx + 1}
-            </span>
-            <span className="max-w-[140px] truncate">{source.source}</span>
-            <span className="font-semibold text-violet-500">{Math.round(source.score * 100)}%</span>
-          </button>
-        ))}
+        {sources.map((source, idx) =>
+          source.source === 'wiki' ? (
+            // wiki-user-facing: 위키 유래 출처 — chunk_id가 위키 문서 id
+            <button
+              key={source.chunk_id}
+              onClick={() => navigate(`/knowledge/${source.chunk_id}`)}
+              className="group flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11.5px] text-amber-700 shadow-sm transition-all hover:border-amber-400 hover:bg-amber-100 hover:shadow-md"
+            >
+              <span aria-hidden>📖</span>
+              <span>위키 근거</span>
+              <span className="font-semibold text-amber-600">
+                {Math.round(source.score * 100)}%
+              </span>
+            </button>
+          ) : (
+            <button
+              key={source.chunk_id}
+              className="group flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-[11.5px] text-zinc-600 shadow-sm transition-all hover:border-violet-300 hover:bg-violet-50 hover:shadow-md"
+            >
+              <span className="flex h-4 w-4 items-center justify-center rounded bg-zinc-100 text-[10px] font-bold text-zinc-500 group-hover:bg-violet-100 group-hover:text-violet-600">
+                {idx + 1}
+              </span>
+              <span className="max-w-[140px] truncate">{source.source}</span>
+              <span className="font-semibold text-violet-500">
+                {Math.round(source.score * 100)}%
+              </span>
+            </button>
+          ),
+        )}
       </div>
     </div>
   );

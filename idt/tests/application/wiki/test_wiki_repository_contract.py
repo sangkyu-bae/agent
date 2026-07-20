@@ -8,6 +8,7 @@ from datetime import datetime
 import pytest
 
 from src.application.repositories.wiki_repository import WikiArticleRepository
+from src.application.wiki.schemas import WikiTreeItem
 from src.domain.wiki.entity import WikiArticle, WikiSourceType, WikiStatus
 
 
@@ -55,6 +56,19 @@ class _FakeWikiRepo(WikiArticleRepository):
             a for a in self._store.values()
             if a.agent_id == agent_id and a.is_searchable(now)
         ][:top_k]
+
+    async def list_tree_items(
+        self, agent_id: str, request_id: str
+    ) -> list[WikiTreeItem]:
+        return [
+            WikiTreeItem(
+                id=a.id, title=a.title, status=a.status.value,
+                source_type=a.source_type.value, path=a.path,
+                updated_at=a.updated_at,
+            )
+            for a in self._store.values()
+            if a.agent_id == agent_id
+        ]
 
 
 class TestAbstractContract:

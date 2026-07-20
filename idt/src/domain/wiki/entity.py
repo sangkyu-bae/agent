@@ -45,6 +45,7 @@ class WikiArticle:
         reviewer_id: 승인자
         created_at: 생성 시각
         updated_at: 최종 수정 시각
+        path: 가상 폴더 경로("여신/한도"). None=미분류 (wiki-user-facing)
     """
 
     id: str
@@ -61,6 +62,7 @@ class WikiArticle:
     reviewer_id: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
+    path: str | None = None
 
     def mark_approved(self, reviewer_id: str, now: datetime) -> None:
         """승인 상태로 전이한다(전이 검증은 호출 측 정책이 선행)."""

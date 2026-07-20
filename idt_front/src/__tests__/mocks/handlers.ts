@@ -513,6 +513,67 @@ export const handlers = [
       })
   ),
 
+  // KB (kb-retrieval-test): KB 단위 하이브리드 검색
+  http.post(
+    `*${API_ENDPOINTS.KNOWLEDGE_BASE_SEARCH(':kbId')}`,
+    async ({ params, request }) => {
+      const body = (await request.json()) as {
+        query: string;
+        bm25_weight?: number;
+        vector_weight?: number;
+        document_id?: string;
+      };
+      return HttpResponse.json({
+        query: body.query,
+        kb_id: params.kbId,
+        kb_name: '전사 규정',
+        collection_name: 'admin-coll-01',
+        results: [
+          {
+            id: 'chunk-1',
+            content: '여신 한도는 연소득의 일정 배수로 제한한다.',
+            score: 0.031,
+            bm25_rank: 1,
+            bm25_score: 9.2,
+            vector_rank: 1,
+            vector_score: 0.88,
+            source: 'both',
+            metadata: { document_id: 'doc-1' },
+          },
+        ],
+        total_found: 1,
+        bm25_weight: body.bm25_weight ?? 0.5,
+        vector_weight: body.vector_weight ?? 0.5,
+        request_id: 'req-mock-1',
+        document_id: body.document_id ?? null,
+      });
+    },
+  ),
+
+  // KB (kb-retrieval-test): KB 검색 히스토리
+  http.get(
+    `*${API_ENDPOINTS.KNOWLEDGE_BASE_SEARCH_HISTORY(':kbId')}`,
+    ({ params }) =>
+      HttpResponse.json({
+        kb_id: params.kbId,
+        histories: [
+          {
+            id: 1,
+            query: '연체 기준',
+            document_id: null,
+            bm25_weight: 0.7,
+            vector_weight: 0.3,
+            top_k: 5,
+            result_count: 4,
+            created_at: '2026-07-18T09:00:00Z',
+          },
+        ],
+        total: 1,
+        limit: 20,
+        offset: 0,
+      })
+  ),
+
   // RAG-TOOL: 메타데이터 키
   http.get(`*${API_ENDPOINTS.RAG_TOOL_METADATA_KEYS}`, () =>
     HttpResponse.json({
@@ -1055,6 +1116,45 @@ export const handlers = [
       : [mockWikiArticle('w1'), mockWikiArticle('w2', 'approved')];
     return HttpResponse.json({ items, total: items.length });
   }),
+  // wiki-user-facing: tree는 ':id' 패턴보다 먼저 선언해야 한다
+  http.get(`*${API_ENDPOINTS.WIKI_TREE}`, () =>
+    HttpResponse.json({
+      agent_id: 'agent-1',
+      groups: [
+        {
+          path: '여신/한도',
+          items: [
+            {
+              id: 'w1', title: '위키-w1', status: 'approved',
+              source_type: 'human', updated_at: '2026-07-18T00:00:00Z',
+            },
+          ],
+        },
+        {
+          path: null,
+          items: [
+            {
+              id: 'w2', title: '위키-w2', status: 'draft',
+              source_type: 'distilled', updated_at: '2026-07-18T00:00:00Z',
+            },
+          ],
+        },
+      ],
+      total: 2,
+    }),
+  ),
+  http.post(`*${API_ENDPOINTS.WIKI_CREATE}`, async ({ request }) => {
+    const body = (await request.json()) as { title?: string; path?: string };
+    return HttpResponse.json(
+      {
+        ...mockWikiArticle('w-new', 'approved'),
+        title: body.title ?? '새 문서',
+        source_type: 'human',
+        path: body.path ?? null,
+      },
+      { status: 201 },
+    );
+  }),
   http.get('*/api/v1/wiki/:id', ({ params }) =>
     HttpResponse.json(mockWikiArticle(String(params.id))),
   ),
@@ -1073,7 +1173,42 @@ export const handlers = [
   http.put('*/api/v1/wiki/:id', ({ params }) =>
     HttpResponse.json({ ...mockWikiArticle(String(params.id)), version: 2 }),
   ),
+
+  // ── Memory (agent-memory) ───────────────────────────────
+  http.get(`*${API_ENDPOINTS.MEMORIES}`, () =>
+    HttpResponse.json({
+      items: [mockMemory(1), mockMemory(2, 'preference', '근거 조문 번호 인용 선호')],
+      total: 2,
+      max_count: 30,
+    }),
+  ),
+  http.post(`*${API_ENDPOINTS.MEMORIES}`, async ({ request }) => {
+    const body = (await request.json()) as { mem_type?: string; content?: string };
+    return HttpResponse.json(
+      mockMemory(3, body.mem_type ?? 'profile', body.content ?? '내용'),
+      { status: 201 },
+    );
+  }),
+  http.patch('*/api/v1/memories/:id', async ({ params, request }) => {
+    const body = (await request.json()) as { mem_type?: string; content?: string };
+    return HttpResponse.json(
+      mockMemory(Number(params.id), body.mem_type ?? 'profile', body.content ?? '내용'),
+    );
+  }),
+  http.delete('*/api/v1/memories/:id', () =>
+    new HttpResponse(null, { status: 204 }),
+  ),
 ];
+
+function mockMemory(id: number, memType = 'profile', content = '여신 심사팀 소속') {
+  return {
+    id,
+    mem_type: memType,
+    content,
+    created_at: '2026-07-18T00:00:00Z',
+    updated_at: '2026-07-18T00:00:00Z',
+  };
+}
 
 function mockWikiArticle(id: string, status = 'draft') {
   return {
@@ -1091,5 +1226,6 @@ function mockWikiArticle(id: string, status = 'draft') {
     reviewer_id: null,
     created_at: '2026-06-30T00:00:00Z',
     updated_at: '2026-06-30T00:00:00Z',
+    path: null,
   };
 }

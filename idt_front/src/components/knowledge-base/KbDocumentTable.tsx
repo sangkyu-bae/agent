@@ -8,6 +8,8 @@ interface KbDocumentTableProps {
   /** 행 클릭 → 저장 내용 드릴다운 (kb-content-browser) */
   onRowClick?: (doc: KbDocumentInfo) => void;
   selectedId?: string | null;
+  /** 문서 단위 검색 스코프 지정 (kb-retrieval-test D10) — 드릴다운과 독립 */
+  onSearchInDocument?: (doc: KbDocumentInfo) => void;
 }
 
 const STRATEGY_LABELS: Record<string, string> = {
@@ -22,6 +24,7 @@ const KbDocumentTable = ({
   onRetry,
   onRowClick,
   selectedId,
+  onSearchInDocument,
 }: KbDocumentTableProps) => {
   if (isLoading) {
     return (
@@ -64,6 +67,9 @@ const KbDocumentTable = ({
             <th className="px-4 py-3 font-medium">청크 수</th>
             <th className="px-4 py-3 font-medium">청킹 방식</th>
             <th className="px-4 py-3 font-medium">업로드일</th>
+            {onSearchInDocument && (
+              <th className="px-4 py-3 font-medium">검색</th>
+            )}
           </tr>
         </thead>
         <tbody className="divide-y divide-zinc-100">
@@ -89,6 +95,19 @@ const KbDocumentTable = ({
               <td className="px-4 py-3 text-zinc-500">
                 {doc.created_at ? doc.created_at.slice(0, 10) : '—'}
               </td>
+              {onSearchInDocument && (
+                <td className="px-4 py-3">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSearchInDocument(doc);
+                    }}
+                    className="rounded-lg border border-zinc-200 px-2.5 py-1 text-[12px] text-zinc-500 transition-colors hover:border-violet-300 hover:text-violet-600"
+                  >
+                    이 문서에서 검색
+                  </button>
+                </td>
+              )}
             </tr>
           ))}
         </tbody>

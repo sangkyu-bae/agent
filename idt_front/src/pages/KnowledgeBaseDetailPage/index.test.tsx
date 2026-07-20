@@ -216,3 +216,50 @@ describe('KnowledgeBaseDetailPage — kb-management-ui', () => {
     ).toBeInTheDocument();
   });
 });
+
+describe('KnowledgeBaseDetailPage — kb-retrieval-test', () => {
+  it('상태 요약 카드 4종을 렌더링한다 (chunk_count 판정)', async () => {
+    renderPage();
+    await screen.findByRole('heading', { name: '전사 규정' });
+
+    // mock 문서 2건 모두 chunk_count > 0
+    expect(screen.getByTestId('kb-total-count')).toHaveTextContent('2');
+    expect(screen.getByTestId('kb-ready-count')).toHaveTextContent('2');
+    expect(screen.getByTestId('kb-processing-count')).toHaveTextContent('0');
+    expect(screen.getByTestId('kb-error-count')).toHaveTextContent('0');
+  });
+
+  it('리트리버 테스트 섹션에서 검색을 실행하면 결과가 표시된다', async () => {
+    renderPage();
+    await screen.findByRole('heading', { name: '전사 규정' });
+
+    await userEvent.type(
+      screen.getByPlaceholderText(/검색 쿼리를 입력하세요/),
+      '여신 한도',
+    );
+    await userEvent.click(screen.getByRole('button', { name: '검색' }));
+
+    expect(
+      await screen.findByText(/여신 한도는 연소득의 일정 배수로 제한한다/),
+    ).toBeInTheDocument();
+  });
+
+  it('문서 행의 "이 문서에서 검색" 클릭 시 스코프 배지가 전환된다', async () => {
+    renderPage();
+    await screen.findByText('여신규정.pdf');
+
+    expect(screen.getByText('KB 전체에서 검색')).toBeInTheDocument();
+
+    await userEvent.click(
+      screen.getAllByRole('button', { name: '이 문서에서 검색' })[0],
+    );
+
+    expect(screen.getByText(/여신규정\.pdf에서 검색/)).toBeInTheDocument();
+
+    // 스코프 해제 → KB 전체 복귀
+    await userEvent.click(
+      screen.getByRole('button', { name: 'KB 전체 검색으로 전환' }),
+    );
+    expect(screen.getByText('KB 전체에서 검색')).toBeInTheDocument();
+  });
+});

@@ -84,6 +84,13 @@ class TestDistill:
         assert all(a.agent_id == "agent_1" for a in created)
 
     @pytest.mark.asyncio
+    async def test_default_path_is_collection_name(self):
+        """wiki-user-facing FR-10: 신규 정제 문서에 컬렉션명 기본 path 부여."""
+        uc, _, _ = _make_uc([_group()])
+        created = await uc.execute("agent_1", "policy", 10, "r")
+        assert created[0].path == "policy"
+
+    @pytest.mark.asyncio
     async def test_title_and_content_from_distiller(self):
         uc, _, _ = _make_uc([_group(topic="여신 한도", texts=["A", "B"])])
         created = await uc.execute("agent_1", "policy", 10, "r")

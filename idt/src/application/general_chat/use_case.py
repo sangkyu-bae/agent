@@ -141,6 +141,7 @@ class GeneralChatUseCase:
         snapshot_policy: AnalysisSnapshotPolicy | None = None,
         snapshot_excluded_tools: frozenset[str] | None = None,
         tracker: "RunTracker | None" = None,
+        memory_assembler=None,
     ) -> None:
         self._tool_builder = chat_tool_builder
         self._msg_repo = message_repo
@@ -167,6 +168,9 @@ class GeneralChatUseCase:
         )
         # retrieval-observability: 미주입(None) 시 관측성 완전 비활성 (하위호환).
         self._tracker = tracker
+        # agent-memory: 미주입(None) 시 메모리 주입 비활성 (하위호환).
+        # MemoryContextAssembler — 실패 격리("" 반환)는 assembler 내부 책임.
+        self._memory_assembler = memory_assembler
 
     async def _begin_observability(
         self, request: GeneralChatRequest, session_id_str: str,
@@ -234,15 +238,21 @@ class GeneralChatUseCase:
             run_id, langsmith_trace_id=trace_id, langsmith_run_url=run_url,
         )
 
-    def _create_agent(self, tools: list, auth_ctx: AuthContext | None = None):
+    def _create_agent(
+        self,
+        tools: list,
+        auth_ctx: AuthContext | None = None,
+        memory_block: str = "",
+    ):
         """ReAct 에이전트 생성 (테스트에서 패치 가능).
 
         agent-user-context Design §4.4.3:
         - auth_ctx가 있으면 system prompt 앞에 사용자 컨텍스트 블록 prepend.
         - render_user_context_block은 None/anonymous면 빈 문자열 반환 (graceful).
+        agent-memory 결정 ③: 메모리 블록은 사용자 정보 다음, 시스템 규칙 앞.
         """
         llm = self._llm_factory.create(self._llm_model, temperature=0)
-        prompt = render_user_context_block(auth_ctx) + _SYSTEM_PROMPT
+        prompt = render_user_context_block(auth_ctx) + memory_block + _SYSTEM_PROMPT
         return create_react_agent(llm, tools=tools, prompt=prompt)
 
     # ── Public API ──────────────────────────────────────────────────────────
@@ -332,7 +342,15 @@ class GeneralChatUseCase:
             tools = await self._tool_builder.build(
                 top_k=request.top_k, request_id=request_id, auth_ctx=auth_ctx,
             )
-            agent = self._create_agent(tools, auth_ctx=auth_ctx)
+            # agent-memory 결정 ③: 블록 조립은 agent 생성 직전 1회 (비동기).
+            memory_block = ""
+            if self._memory_assembler is not None:
+                memory_block = await self._memory_assembler.build_block(
+                    request.user_id, request_id
+                )
+            agent = self._create_agent(
+                tools, auth_ctx=auth_ctx, memory_block=memory_block
+            )
 
             state = _ChatStreamState()
             # D4: callback 부착 시 general_chat LLM 호출도 ai_llm_call에 기록.

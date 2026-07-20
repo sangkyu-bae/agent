@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.application.knowledge_base.get_kb_document_chunks_use_case import (
     GetKbDocumentChunksUseCase,
@@ -17,6 +17,10 @@ from src.application.knowledge_base.list_documents_use_case import (
 from src.application.knowledge_base.list_kb_section_summaries_use_case import (
     ListKbSectionSummariesUseCase,
 )
+from src.application.knowledge_base.search_history_use_case import (
+    KbSearchHistoryUseCase,
+)
+from src.application.knowledge_base.search_use_case import KbSearchUseCase
 from src.application.knowledge_base.upload_use_case import (
     KnowledgeBaseUploadUseCase,
 )
@@ -31,6 +35,7 @@ from src.application.section_summary.schemas import (
 from src.domain.auth.entities import User
 from src.domain.collection.permission_schemas import CollectionScope
 from src.domain.knowledge_base.entities import KnowledgeBase
+from src.domain.knowledge_base.search_schemas import KbSearchRequest
 from src.interfaces.dependencies.auth import get_current_user
 
 router = APIRouter(prefix="/api/v1/knowledge-bases", tags=["KnowledgeBases"])
@@ -63,6 +68,14 @@ def get_kb_section_summaries_use_case() -> "ListKbSectionSummariesUseCase":
 
 
 def get_kb_document_chunks_use_case() -> "GetKbDocumentChunksUseCase":
+    raise NotImplementedError
+
+
+def get_kb_search_use_case() -> "KbSearchUseCase":
+    raise NotImplementedError
+
+
+def get_kb_search_history_use_case() -> "KbSearchHistoryUseCase":
     raise NotImplementedError
 
 
@@ -747,4 +760,173 @@ async def get_kb_document_chunks(
             if result.parents is not None
             else None
         ),
+    )
+
+
+# ── KB 검색 / 히스토리 (kb-retrieval-test §3.2) ──────────────────
+
+
+class KbSearchBody(BaseModel):
+    query: str = Field(..., min_length=1, description="검색 쿼리")
+    top_k: int = Field(default=10, ge=1, le=50)
+    bm25_top_k: int = Field(default=20, ge=1, le=100)
+    vector_top_k: int = Field(default=20, ge=1, le=100)
+    rrf_k: int = Field(default=60, ge=1)
+    bm25_weight: float = Field(default=0.5, ge=0.0, le=1.0)
+    vector_weight: float = Field(default=0.5, ge=0.0, le=1.0)
+    # D4: 문서 단위 검색 — KB 소속 검증 후 필터에 반영
+    document_id: str | None = None
+
+
+class KbSearchResultItemResponse(BaseModel):
+    id: str
+    content: str
+    score: float
+    bm25_rank: int | None
+    bm25_score: float | None
+    vector_rank: int | None
+    vector_score: float | None
+    source: str
+    metadata: dict[str, str]
+
+
+class KbSearchAPIResponse(BaseModel):
+    query: str
+    kb_id: str
+    kb_name: str
+    collection_name: str
+    results: list[KbSearchResultItemResponse]
+    total_found: int
+    bm25_weight: float
+    vector_weight: float
+    request_id: str
+    document_id: str | None = None
+
+
+class KbSearchHistoryItemResponse(BaseModel):
+    id: int
+    query: str
+    document_id: str | None
+    bm25_weight: float
+    vector_weight: float
+    top_k: int
+    result_count: int
+    created_at: str
+
+
+class KbSearchHistoryAPIResponse(BaseModel):
+    kb_id: str
+    histories: list[KbSearchHistoryItemResponse]
+    total: int
+    limit: int
+    offset: int
+
+
+@router.post(
+    "/{kb_id}/search",
+    response_model=KbSearchAPIResponse,
+    description=(
+        "지식베이스 문서만 대상으로 하이브리드 검색을 실행한다 "
+        "(kb-retrieval-test D5). kb_id payload 필터로 같은 물리 컬렉션의 "
+        "다른 KB 문서는 결과에 포함되지 않으며, V047 이전 업로드 문서"
+        "(kb_id NULL)도 제외된다. document_id 지정 시 해당 문서로 범위를 "
+        "좁히되 KB 소속이 아니면 404."
+    ),
+)
+async def search_in_kb(
+    kb_id: str,
+    body: KbSearchBody,
+    current_user: User = Depends(get_current_user),
+    use_case: KbSearchUseCase = Depends(get_kb_search_use_case),
+):
+    request_id = str(uuid.uuid4())
+    domain_request = KbSearchRequest(
+        query=body.query,
+        top_k=body.top_k,
+        bm25_top_k=body.bm25_top_k,
+        vector_top_k=body.vector_top_k,
+        rrf_k=body.rrf_k,
+        bm25_weight=body.bm25_weight,
+        vector_weight=body.vector_weight,
+        document_id=body.document_id,
+    )
+    try:
+        result = await use_case.execute(
+            kb_id, domain_request, current_user, request_id
+        )
+    except (PermissionError, ValueError) as e:
+        _raise_http(e)
+    return KbSearchAPIResponse(
+        query=result.query,
+        kb_id=result.kb_id,
+        kb_name=result.kb_name,
+        collection_name=result.collection_name,
+        results=[
+            KbSearchResultItemResponse(
+                id=r.id,
+                content=r.content,
+                score=r.score,
+                bm25_rank=r.bm25_rank,
+                bm25_score=r.bm25_score,
+                vector_rank=r.vector_rank,
+                vector_score=r.vector_score,
+                source=r.source,
+                metadata=r.metadata,
+            )
+            for r in result.results
+        ],
+        total_found=result.total_found,
+        bm25_weight=result.bm25_weight,
+        vector_weight=result.vector_weight,
+        request_id=result.request_id,
+        document_id=result.document_id,
+    )
+
+
+@router.get(
+    "/{kb_id}/search-history",
+    response_model=KbSearchHistoryAPIResponse,
+    description=(
+        "본인(user) + KB 단위 검색 히스토리를 최신순으로 조회한다 "
+        "(kb-retrieval-test D8)."
+    ),
+)
+async def get_kb_search_history(
+    kb_id: str,
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    current_user: User = Depends(get_current_user),
+    use_case: KbSearchHistoryUseCase = Depends(
+        get_kb_search_history_use_case
+    ),
+):
+    request_id = str(uuid.uuid4())
+    try:
+        result = await use_case.execute(
+            kb_id=kb_id,
+            user=current_user,
+            limit=limit,
+            offset=offset,
+            request_id=request_id,
+        )
+    except (PermissionError, ValueError) as e:
+        _raise_http(e)
+    return KbSearchHistoryAPIResponse(
+        kb_id=result.kb_id,
+        histories=[
+            KbSearchHistoryItemResponse(
+                id=h.id,
+                query=h.query,
+                document_id=h.document_id,
+                bm25_weight=h.bm25_weight,
+                vector_weight=h.vector_weight,
+                top_k=h.top_k,
+                result_count=h.result_count,
+                created_at=h.created_at.isoformat(),
+            )
+            for h in result.histories
+        ],
+        total=result.total,
+        limit=result.limit,
+        offset=result.offset,
     )

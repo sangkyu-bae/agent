@@ -15,11 +15,23 @@ class SearchHistoryEntry:
     result_count: int
     created_at: datetime
     document_id: Optional[str] = None
+    kb_id: Optional[str] = None
 
 
 @dataclass(frozen=True)
 class SearchHistoryListResult:
     collection_name: str
+    histories: list[SearchHistoryEntry]
+    total: int
+    limit: int
+    offset: int
+
+
+@dataclass(frozen=True)
+class KbSearchHistoryListResult:
+    """KB 단위 히스토리 조회 결과 (kb-retrieval-test D8)."""
+
+    kb_id: str
     histories: list[SearchHistoryEntry]
     total: int
     limit: int

@@ -12,7 +12,8 @@ const ACCENT_CLASSES: Record<NonNullable<CardProps['accent']>, string> = {
   sky: 'border-sky-200 bg-sky-50 text-sky-700',
 };
 
-const Card = ({ label, value, hint, accent = 'violet' }: CardProps) => (
+/** 범용 스탯 카드 — 운영 대시보드(admin-dashboard D6) 등 cross-page 재사용 */
+export const Card = ({ label, value, hint, accent = 'violet' }: CardProps) => (
   <div
     className={[
       'flex flex-col rounded-lg border p-4',

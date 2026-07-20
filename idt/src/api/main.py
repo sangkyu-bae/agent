@@ -200,10 +200,19 @@ from src.api.routes.agent_composer_router import (
 from src.api.routes.wiki_router import (
     router as wiki_router,
     get_distill_use_case as get_wiki_distill_use_case,
+    get_human_write_use_case as get_wiki_human_write_use_case,
     get_query_use_case as get_wiki_query_use_case,
     get_review_use_case as get_wiki_review_use_case,
 )
+from src.api.routes.memory_router import (
+    router as memory_router,
+    get_memory_crud_use_case,
+)
+from src.application.memory.crud_use_case import MemoryCrudUseCase
+from src.application.memory.context_assembler import MemoryContextAssembler
+from src.infrastructure.memory.repository import MemoryRepository
 from src.application.wiki.distill_use_case import DistillToWikiUseCase
+from src.application.wiki.human_write_use_case import HumanWikiWriteUseCase
 from src.application.wiki.query_use_case import WikiQueryUseCase
 from src.application.wiki.review_use_case import WikiReviewUseCase
 from src.infrastructure.wiki.wiki_repository import WikiArticleRepository
@@ -243,6 +252,8 @@ from src.api.routes.knowledge_base_router import (
     get_kb_section_summaries_use_case,
     get_list_kb_documents_use_case,
     get_section_summary_query_use_case,
+    get_kb_search_use_case,
+    get_kb_search_history_use_case,
 )
 from src.api.routes.admin_collection_router import (
     router as admin_collection_router,
@@ -357,7 +368,11 @@ from src.infrastructure.web_search.tavily_tool import TavilySearchTool
 from src.application.hallucination.use_case import HallucinationEvaluatorUseCase
 from src.infrastructure.hallucination.adapter import HallucinationEvaluatorAdapter
 from src.infrastructure.search_decision.adapter import LLMSearchDecisionAdapter
-from src.infrastructure.persistence.database import get_session, get_session_factory
+from src.infrastructure.persistence.database import (
+    get_engine,
+    get_session,
+    get_session_factory,
+)
 from src.infrastructure.persistence.repositories.conversation_repository import (
     SQLAlchemyConversationMessageRepository,
 )
@@ -472,6 +487,28 @@ from src.api.routes.llm_model_router import (
     get_get_llm_model_use_case,
     get_list_llm_models_use_case,
     get_update_llm_model_pricing_use_case,
+)
+from src.api.routes.admin_dashboard_router import (
+    router as admin_dashboard_router,
+    get_dashboard_stats_use_case,
+    get_kb_breakdown_use_case,
+    get_recent_documents_use_case,
+    get_storage_health_use_case,
+)
+from src.application.admin_dashboard.use_cases import (
+    GetDashboardStatsUseCase,
+    GetKbBreakdownUseCase,
+    GetRecentDocumentsUseCase,
+    StorageHealthCheckUseCase,
+)
+from src.infrastructure.admin_dashboard.aggregation_repository import (
+    SqlAlchemyDashboardAggregationRepository,
+)
+from src.infrastructure.admin_dashboard.health_adapter import (
+    StorageHealthAdapter,
+    build_es_check,
+    build_mysql_check,
+    build_qdrant_check,
 )
 from src.api.routes.agent_run_router import (
     router as agent_run_router,
@@ -1749,6 +1786,68 @@ def create_llm_model_factories(cost_calculator: CostCalculator | None = None):
     )
 
 
+def create_admin_dashboard_factories():
+    """admin-dashboard DI factories (Design D2/D5).
+
+    집계 유스케이스는 request-scope 세션, 헬스 어댑터는 app-scope 클라이언트 1회 생성.
+    """
+    app_logger = get_app_logger()
+
+    def stats_factory(
+        session: AsyncSession = Depends(get_session),
+    ) -> GetDashboardStatsUseCase:
+        return GetDashboardStatsUseCase(
+            repo=SqlAlchemyDashboardAggregationRepository(session, app_logger),
+            logger=app_logger,
+        )
+
+    def kb_breakdown_factory(
+        session: AsyncSession = Depends(get_session),
+    ) -> GetKbBreakdownUseCase:
+        return GetKbBreakdownUseCase(
+            repo=SqlAlchemyDashboardAggregationRepository(session, app_logger),
+            logger=app_logger,
+        )
+
+    def recent_documents_factory(
+        session: AsyncSession = Depends(get_session),
+    ) -> GetRecentDocumentsUseCase:
+        return GetRecentDocumentsUseCase(
+            repo=SqlAlchemyDashboardAggregationRepository(session, app_logger),
+            logger=app_logger,
+        )
+
+    qdrant_client = AsyncQdrantClient(
+        host=settings.qdrant_host,
+        port=settings.qdrant_port,
+    )
+    es_client = ElasticsearchClient.from_config(
+        ElasticsearchConfig(
+            ES_HOST=settings.es_host,
+            ES_PORT=settings.es_port,
+            ES_SCHEME=settings.es_scheme,
+        )
+    )
+    health_adapter = StorageHealthAdapter(
+        checks={
+            "mysql": build_mysql_check(get_engine()),
+            "qdrant": build_qdrant_check(qdrant_client),
+            "elasticsearch": build_es_check(es_client),
+        },
+        logger=app_logger,
+    )
+
+    def health_factory() -> StorageHealthCheckUseCase:
+        return StorageHealthCheckUseCase(port=health_adapter, logger=app_logger)
+
+    return (
+        stats_factory,
+        kb_breakdown_factory,
+        recent_documents_factory,
+        health_factory,
+    )
+
+
 def create_agent_run_factories():
     """Return per-request DI factories for Agent Run Observability (M4).
 
@@ -2017,6 +2116,36 @@ def get_tracker_cost_calculator() -> CostCalculator:
     return _tracker_cost_calculator
 
 
+# agent-memory §3-4: 주입용 assembler lazy singleton.
+# 상태 없는 파사드(session_factory만 보유)라 앱 전역 공유 안전 — RunTracker 선례.
+_memory_assembler_singleton: MemoryContextAssembler | None = None
+
+
+def get_memory_assembler() -> MemoryContextAssembler:
+    global _memory_assembler_singleton
+    if _memory_assembler_singleton is None:
+        _memory_assembler_singleton = MemoryContextAssembler(
+            session_factory=get_session_factory(),
+            logger=get_app_logger(),
+            token_cap=settings.memory_inject_token_cap,
+        )
+    return _memory_assembler_singleton
+
+
+def create_memory_factories():
+    """Return per-request DI factory for Memory CRUD use case (agent-memory)."""
+    app_logger = get_app_logger()
+
+    def crud_factory(session: AsyncSession = Depends(get_session)):
+        return MemoryCrudUseCase(
+            memory_repo=MemoryRepository(session=session, logger=app_logger),
+            logger=app_logger,
+            max_active_per_user=settings.memory_max_active_per_user,
+        )
+
+    return crud_factory
+
+
 def create_general_chat_use_case_factory():
     """Return a per-request factory for GeneralChatUseCase.
 
@@ -2103,6 +2232,7 @@ def create_general_chat_use_case_factory():
             snapshot_policy=_make_analysis_snapshot_policy(),
             snapshot_excluded_tools=_analysis_snapshot_excluded_tools(),
             tracker=get_run_tracker(),
+            memory_assembler=get_memory_assembler(),
         )
 
     return _factory
@@ -2836,6 +2966,80 @@ def create_kb_browse_factories(kb_use_case_factory):
     return summary_factory, sections_factory, chunks_factory
 
 
+def create_kb_search_factories(kb_use_case_factory):
+    """KB 단위 검색/히스토리 DI (kb-retrieval-test §3.3).
+
+    Qdrant/ES 클라이언트는 싱글턴, 나머지는 per-request 세션으로
+    조립한다 — 한 UseCase 안에서 단일 세션 규칙 준수.
+    """
+    from src.application.knowledge_base.content_browse_guard import (
+        KbDocumentGuard,
+    )
+    from src.application.knowledge_base.search_history_use_case import (
+        KbSearchHistoryUseCase,
+    )
+    from src.application.knowledge_base.search_use_case import KbSearchUseCase
+    from src.infrastructure.collection.activity_log_repository import (
+        ActivityLogRepository,
+    )
+    from src.infrastructure.collection_search.search_history_repository import (
+        SearchHistoryRepository,
+    )
+    from src.infrastructure.doc_browse.document_metadata_repository import (
+        DocumentMetadataRepository,
+    )
+    from src.infrastructure.embeddings.embedding_factory import EmbeddingFactory
+
+    app_logger = get_app_logger()
+    qdrant_client = AsyncQdrantClient(
+        host=settings.qdrant_host,
+        port=settings.qdrant_port,
+    )
+    embedding_factory = EmbeddingFactory()
+    es_config = ElasticsearchConfig(
+        ES_HOST=settings.es_host,
+        ES_PORT=settings.es_port,
+        ES_SCHEME=settings.es_scheme,
+    )
+    es_client = ElasticsearchClient.from_config(es_config)
+    es_repo = ElasticsearchRepository(
+        client=es_client, logger=StructuredLogger("kb_search.es")
+    )
+
+    def kb_search_factory(session: AsyncSession = Depends(get_session)):
+        kb_use_case = kb_use_case_factory(session)
+        guard = KbDocumentGuard(
+            kb_use_case=kb_use_case,
+            document_metadata_repo=DocumentMetadataRepository(
+                session, app_logger
+            ),
+            logger=StructuredLogger("kb_search.guard"),
+        )
+        return KbSearchUseCase(
+            kb_use_case=kb_use_case,
+            document_guard=guard,
+            activity_log_repo=ActivityLogRepository(session, app_logger),
+            embedding_model_repo=EmbeddingModelRepository(
+                session=session, logger=app_logger
+            ),
+            embedding_factory=embedding_factory,
+            qdrant_client=qdrant_client,
+            es_repo=es_repo,
+            es_index=settings.es_index,
+            search_history_repo=SearchHistoryRepository(session, app_logger),
+            logger=StructuredLogger("kb_search"),
+        )
+
+    def kb_history_factory(session: AsyncSession = Depends(get_session)):
+        return KbSearchHistoryUseCase(
+            kb_use_case=kb_use_case_factory(session),
+            search_history_repo=SearchHistoryRepository(session, app_logger),
+            logger=StructuredLogger("kb_search.history"),
+        )
+
+    return kb_search_factory, kb_history_factory
+
+
 def create_chunking_profile_factories():
     """Return per-request DI factory for Chunking Profile (clause-aware-chunking Design §9)."""
     from src.infrastructure.chunking_profile.repository import ChunkingProfileRepository
@@ -3197,7 +3401,15 @@ def create_wiki_factories():
     def review_factory(session: AsyncSession = Depends(get_session)):
         return WikiReviewUseCase(repository=_make_repo(session), logger=app_logger)
 
-    return distill_factory, query_factory, review_factory
+    def human_write_factory(session: AsyncSession = Depends(get_session)):
+        # wiki-user-facing: wiki·agent 두 repo는 동일 세션 (한 UseCase 한 세션)
+        return HumanWikiWriteUseCase(
+            wiki_repo=_make_repo(session),
+            agent_repo=AgentDefinitionRepository(session=session, logger=app_logger),
+            logger=app_logger,
+        )
+
+    return distill_factory, query_factory, review_factory, human_write_factory
 
 
 def create_skill_builder_factories():
@@ -3746,6 +3958,18 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_my_usage_timeseries_use_case] = _my_usage_timeseries_f
     app.dependency_overrides[get_message_retrievals_use_case] = _message_retrievals_f
 
+    # Admin Dashboard DI (admin-dashboard Design D2)
+    (
+        _dash_stats_f,
+        _dash_kb_breakdown_f,
+        _dash_recent_docs_f,
+        _dash_health_f,
+    ) = create_admin_dashboard_factories()
+    app.dependency_overrides[get_dashboard_stats_use_case] = _dash_stats_f
+    app.dependency_overrides[get_kb_breakdown_use_case] = _dash_kb_breakdown_f
+    app.dependency_overrides[get_recent_documents_use_case] = _dash_recent_docs_f
+    app.dependency_overrides[get_storage_health_use_case] = _dash_health_f
+
     # Embedding Model Registry DI
     (_emb_list_f,) = create_embedding_model_factories()
     app.dependency_overrides[get_list_embedding_models_use_case] = _emb_list_f
@@ -3759,12 +3983,19 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_mcp_update_use_case] = _mcp_update_f
     app.dependency_overrides[get_mcp_delete_use_case] = _mcp_delete_f
 
-    # Wiki DI (LLM-WIKI-001)
-    (_wiki_distill_f, _wiki_query_f, _wiki_review_f) = create_wiki_factories()
+    # Wiki DI (LLM-WIKI-001 + wiki-user-facing)
+    (
+        _wiki_distill_f, _wiki_query_f, _wiki_review_f, _wiki_human_write_f,
+    ) = create_wiki_factories()
     app.dependency_overrides[get_wiki_distill_use_case] = _wiki_distill_f
     app.dependency_overrides[get_wiki_query_use_case] = _wiki_query_f
     app.dependency_overrides[get_wiki_review_use_case] = _wiki_review_f
+    app.dependency_overrides[get_wiki_human_write_use_case] = _wiki_human_write_f
     app.dependency_overrides[get_mcp_test_use_case] = _mcp_test_f
+
+    # Memory DI (agent-memory)
+    _memory_crud_f = create_memory_factories()
+    app.dependency_overrides[get_memory_crud_use_case] = _memory_crud_f
 
     # Skill Builder DI
     (
@@ -3832,6 +4063,14 @@ def create_app() -> FastAPI:
     )
     app.dependency_overrides[get_kb_document_chunks_use_case] = (
         _kb_chunks_factory
+    )
+    # KB 검색/히스토리 DI (kb-retrieval-test)
+    _kb_search_factory, _kb_search_history_factory = (
+        create_kb_search_factories(_kb_uc_factory)
+    )
+    app.dependency_overrides[get_kb_search_use_case] = _kb_search_factory
+    app.dependency_overrides[get_kb_search_history_use_case] = (
+        _kb_search_history_factory
     )
 
     # Chunking Profile DI (clause-aware-chunking)
@@ -4002,6 +4241,7 @@ def create_app() -> FastAPI:
     app.include_router(embedding_model_router)
     app.include_router(mcp_registry_router)
     app.include_router(wiki_router)
+    app.include_router(memory_router)
     app.include_router(skill_builder_router)
     app.include_router(middleware_agent_router)
     app.include_router(collection_router)
@@ -4020,6 +4260,7 @@ def create_app() -> FastAPI:
     app.include_router(ws_router)
     app.include_router(agent_run_router)  # M4 — observability read APIs
     app.include_router(admin_user_router)  # agent-user-context: admin permission mgmt
+    app.include_router(admin_dashboard_router)  # admin-dashboard: 운영 현황
 
     # Health check endpoint
     @app.get("/health")

@@ -18,6 +18,7 @@ class SearchHistoryRepositoryInterface(ABC):
         result_count: int,
         request_id: str,
         document_id: Optional[str] = None,
+        kb_id: Optional[str] = None,
     ) -> None: ...
 
     @abstractmethod
@@ -25,6 +26,16 @@ class SearchHistoryRepositoryInterface(ABC):
         self,
         user_id: str,
         collection_name: str,
+        limit: int,
+        offset: int,
+        request_id: str,
+    ) -> tuple[list[SearchHistoryEntry], int]: ...
+
+    @abstractmethod
+    async def find_by_user_and_kb(
+        self,
+        user_id: str,
+        kb_id: str,
         limit: int,
         offset: int,
         request_id: str,
