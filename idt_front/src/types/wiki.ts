@@ -35,6 +35,8 @@ export interface WikiArticle {
   reviewer_id: string | null;
   created_at: string | null;
   updated_at: string | null;
+  /** wiki-user-facing: 가상 폴더 경로. null=미분류 */
+  path: string | null;
 }
 
 export interface WikiListResponse {
@@ -61,5 +63,37 @@ export interface ReviewActionRequest {
 export interface UpdateWikiRequest {
   title: string;
   content: string;
-  editor_id: string;
+  /** @deprecated 서버는 인증 사용자를 기록한다 — 하위호환 필드 */
+  editor_id?: string;
+  path?: string | null;
+}
+
+// ── wiki-user-facing: 소유자 직접 작성 + 지식 트리 ──────────────
+
+export interface CreateWikiRequest {
+  agent_id: string;
+  title: string;
+  content: string;
+  path?: string | null;
+  valid_until?: string | null;
+}
+
+export interface WikiTreeItem {
+  id: string;
+  title: string;
+  status: WikiStatus;
+  source_type: WikiSourceType;
+  updated_at: string | null;
+}
+
+export interface WikiTreeGroup {
+  /** null = 미분류 */
+  path: string | null;
+  items: WikiTreeItem[];
+}
+
+export interface WikiTreeResponse {
+  agent_id: string;
+  groups: WikiTreeGroup[];
+  total: number;
 }

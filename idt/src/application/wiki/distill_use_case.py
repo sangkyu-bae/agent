@@ -48,7 +48,9 @@ class DistillToWikiUseCase:
         )
         created: list[WikiArticle] = []
         for group in groups:
-            article = await self._distill_one(agent_id, group, request_id)
+            article = await self._distill_one(
+                agent_id, group, collection_name, request_id
+            )
             if article is not None:
                 created.append(article)
         self._logger.info(
@@ -60,7 +62,8 @@ class DistillToWikiUseCase:
         return created
 
     async def _distill_one(
-        self, agent_id: str, group: WikiSourceGroup, request_id: str
+        self, agent_id: str, group: WikiSourceGroup, collection_name: str,
+        request_id: str,
     ) -> WikiArticle | None:
         """단일 그룹을 정제·검증·저장한다. 불변식 위반 시 None(건너뜀)."""
         distilled = await self._distiller.distill(group, request_id)
@@ -75,6 +78,7 @@ class DistillToWikiUseCase:
             status=WikiStatus.DRAFT,
             created_at=now,
             updated_at=now,
+            path=collection_name,  # wiki-user-facing FR-10: 기본 분류 = 컬렉션명
         )
         try:
             WikiPolicy.validate_for_creation(article)

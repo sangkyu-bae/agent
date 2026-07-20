@@ -1,5 +1,6 @@
 """Application DTO: 위키 정제 입출력 스키마 (LLM-WIKI-001)."""
 from dataclasses import dataclass, field
+from datetime import datetime
 
 
 @dataclass
@@ -23,3 +24,15 @@ class DistilledContent:
 
     title: str
     content: str
+
+
+@dataclass
+class WikiTreeItem:
+    """지식 트리 항목 — 본문 제외 경량 조회 (wiki-user-facing)."""
+
+    id: str
+    title: str
+    status: str
+    source_type: str
+    path: str | None
+    updated_at: datetime | None = None

@@ -1,7 +1,7 @@
 """SQLAlchemy ORM 모델: wiki_article (LLM-WIKI-001)."""
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, Integer, Numeric, String, Text
+from sqlalchemy import JSON, DateTime, Index, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.infrastructure.persistence.models.base import Base
@@ -9,6 +9,7 @@ from src.infrastructure.persistence.models.base import Base
 
 class WikiArticleModel(Base):
     __tablename__ = "wiki_article"
+    __table_args__ = (Index("idx_wiki_agent_path", "agent_id", "path"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     agent_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
@@ -24,3 +25,5 @@ class WikiArticleModel(Base):
     reviewer_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    # wiki-user-facing(V051): 가상 폴더 경로. NULL=미분류
+    path: Mapped[str | None] = mapped_column(String(255), nullable=True)
