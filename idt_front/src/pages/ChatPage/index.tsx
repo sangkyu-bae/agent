@@ -74,6 +74,8 @@ interface NormalizedView {
   sources: ChatSource[];
   // supervisor-chart-builder-node: 답변과 함께 렌더할 Chart.js 페이로드.
   charts: ChartPayload[];
+  // agent-eval-gate: 저장된 assistant 메시지 id (평가 대상). 부재 시 null.
+  assistantMessageId: number | null;
 }
 
 const ChatPage = () => {
@@ -147,6 +149,7 @@ const ChatPage = () => {
         toolEvents: chatStream.toolEvents,
         sources: chatStream.sources,
         charts: [],
+        assistantMessageId: chatStream.assistantMessageId,
       };
     }
     if (activeStream?.kind === 'agent') {
@@ -159,6 +162,8 @@ const ChatPage = () => {
         toolEvents: agentStepsToToolEvents(agentRun.steps),
         sources: [],
         charts: agentRun.charts,
+        // agent 경로 평가 연동은 후속 — 현재 미노출.
+        assistantMessageId: null,
       };
     }
     return null;
@@ -220,6 +225,8 @@ const ChatPage = () => {
         sources: view.sources,
         charts: view.charts,
         isStreaming: false,
+        // agent-eval-gate — 저장된 assistant 메시지 id를 부여해 평가 버튼 노출
+        feedbackMessageId: view.assistantMessageId ?? undefined,
       });
       const historyAgentId =
         activeStream.kind === 'agent' ? activeStream.agentId : agentId;

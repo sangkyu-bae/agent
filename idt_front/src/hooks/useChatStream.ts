@@ -17,6 +17,9 @@ import { useWebSocket, type WebSocketStatus } from '@/hooks/useWebSocket';
 import type { ChatMessage, ChatSource, WSEnvelope } from '@/types/websocket';
 import { wsUrl } from '@/utils/wsUrl';
 
+// ChatPage 등에서 동일 심볼을 소비하므로 re-export.
+export type { ChatSource };
+
 export interface ChatToolEvent {
   kind: 'started' | 'completed' | 'reasoning';
   toolName: string;
@@ -33,6 +36,8 @@ export interface ChatStreamState {
   answer: string | null;
   sources: ChatSource[];
   wasSummarized: boolean;
+  // agent-eval-gate — 저장된 assistant 메시지 id (평가 대상). 부재 시 평가 미노출.
+  assistantMessageId: number | null;
   error: { code: string; message: string } | null;
   isDone: boolean;
   isReplayed: boolean;
@@ -56,6 +61,7 @@ const INITIAL_STATE: Omit<ChatStreamState, 'streamId'> = {
   answer: null,
   sources: [],
   wasSummarized: false,
+  assistantMessageId: null,
   error: null,
   isDone: false,
   isReplayed: false,
@@ -139,6 +145,7 @@ export function useChatStream(opts: UseChatStreamOptions): ChatStreamState {
           answer: msg.data.answer,
           sources: msg.data.sources ?? [],
           wasSummarized: Boolean(msg.data.was_summarized),
+          assistantMessageId: msg.data.assistant_message_id ?? null,
         }));
         break;
       case 'chat_done':

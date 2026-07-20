@@ -163,6 +163,15 @@ export const queryKeys = {
     org: () => [...queryKeys.memories.all, 'org'] as const,
   },
 
+  // ── Eval Gate (agent-eval-gate) ─────────────────────────
+  eval: {
+    all: ['eval'] as const,
+    feedback: (messageId: number) =>
+      [...queryKeys.eval.all, 'feedback', messageId] as const,
+    agents: () => [...queryKeys.eval.all, 'agents'] as const,
+    recentNegative: () => [...queryKeys.eval.all, 'recentNegative'] as const,
+  },
+
   // ── Agent Builder ──────────────────────────────────────
   agentBuilder: {
     all: ['agentBuilder'] as const,

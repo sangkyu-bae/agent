@@ -152,6 +152,11 @@ export interface ChatAnswerCompletedData {
    * 백엔드 협의 후 연동 — 필드 부재 시 차트 미표시(하위호환).
    */
   charts?: ChartPayload[];
+  /**
+   * 저장된 assistant 메시지 id. agent-eval-gate 평가(👍/👎)의 대상 키.
+   * 필드 부재 시 평가 버튼 미표시(하위호환).
+   */
+  assistant_message_id?: number;
 }
 
 export interface ChatDoneData {

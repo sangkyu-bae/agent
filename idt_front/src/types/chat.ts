@@ -19,6 +19,12 @@ export interface Message {
   sources?: DocumentSource[];
   /** 차트 페이로드 (Chart.js config 패스스루). chat-chart-rendering */
   charts?: ChartPayload[];
+  /**
+   * agent-eval-gate — 평가(👍/👎) 대상 assistant 메시지 id.
+   * placeholder(UUID) 메시지가 스트리밍 완료 시 ANSWER_COMPLETED의
+   * assistant_message_id로 채워진다. 부재 시 평가 미노출.
+   */
+  feedbackMessageId?: number;
 }
 
 /** @deprecated Use DocumentSource instead */

@@ -3,6 +3,7 @@ import type { Message } from '@/types/chat';
 import SourceCitation from './SourceCitation';
 import ChartRenderer from './ChartRenderer';
 import MarkdownRenderer from './MarkdownRenderer';
+import MessageFeedback from './MessageFeedback';
 
 interface MessageBubbleProps {
   message: Message;
@@ -53,10 +54,24 @@ const AssistantMessage = ({ message }: { message: Message }) => (
         {message.sources && message.sources.length > 0 && (
           <SourceCitation sources={message.sources} />
         )}
+        {/* agent-eval-gate: 스트리밍 완료된 답변에 평가 버튼 (평가 대상 id 확정 시) */}
+        {!message.isStreaming && feedbackId(message) !== null && (
+          <MessageFeedback messageId={feedbackId(message) as number} />
+        )}
       </div>
     </div>
   </div>
 );
+
+// 평가 대상 메시지 id 결정:
+// - 히스토리 메시지: 서버 저장 numeric id (String으로 변환되어 있음)
+// - 방금 스트리밍 완료된 메시지: feedbackMessageId (ANSWER_COMPLETED의 assistant_message_id)
+// 둘 다 없으면(임시 placeholder 등) 평가 미노출.
+const feedbackId = (message: Message): number | null => {
+  if (typeof message.feedbackMessageId === 'number') return message.feedbackMessageId;
+  if (/^\d+$/.test(message.id)) return Number(message.id);
+  return null;
+};
 
 const MessageBubble = ({ message }: MessageBubbleProps) => {
   if (message.role === 'user') return <UserMessage content={message.content} />;
