@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Modal from '@/components/common/Modal';
 import {
   useAgentDetail,
@@ -22,6 +23,7 @@ const VISIBILITY_LABEL: Record<string, string> = {
 };
 
 const AgentDetailModal = ({ agentId, isOpen, onClose }: AgentDetailModalProps) => {
+  const navigate = useNavigate();
   const { user } = useAuthStore();
   const { data: agent, isLoading, isError } = useAgentDetail(isOpen ? agentId : null);
   const { data: stats } = useForkStats(
@@ -111,6 +113,14 @@ const AgentDetailModal = ({ agentId, isOpen, onClose }: AgentDetailModalProps) =
                 <h2 className="text-[18px] font-bold text-zinc-900">{agent.name}</h2>
                 <p className="mt-0.5 text-[13px] text-zinc-400">
                   @{agent.owner_user_id} · {VISIBILITY_LABEL[agent.visibility] ?? agent.visibility}
+                  {/* agent-workspace-view: 폴더형 열람 진입점 */}
+                  <button
+                    type="button"
+                    onClick={() => { onClose(); navigate(`/agents/${agent.agent_id}/workspace`); }}
+                    className="ml-2 text-[12px] text-violet-600 hover:underline"
+                  >
+                    워크스페이스 보기 →
+                  </button>
                 </p>
                 {agent.department_name && (
                   <p className="mt-1 text-[12px] text-zinc-500">
