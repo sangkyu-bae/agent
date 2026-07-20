@@ -1,8 +1,17 @@
 export type UserStatus = 'pending' | 'approved' | 'rejected';
 export type UserRole = 'user' | 'admin';
 
+// expose-user-department: /me 응답에 소속 부서 노출
+export interface DepartmentBrief {
+  id: string;
+  name: string;
+  is_primary: boolean;
+}
+
 export interface User {
   id: number;
+  // expose-user-department: /me가 소속 부서를 함께 반환 (다른 응답에는 없어 optional)
+  departments?: DepartmentBrief[];
   email: string;
   role: UserRole;
   status: UserStatus;

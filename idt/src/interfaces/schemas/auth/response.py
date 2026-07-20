@@ -22,6 +22,22 @@ class UserResponse(BaseModel):
     display_name: Optional[str] = None  # agent-user-context: 가입 후 노출
 
 
+# expose-user-department: /me 전용 응답 — 소속 부서 노출 (UserResponse 무변경)
+class DepartmentBriefResponse(BaseModel):
+    id: str
+    name: str
+    is_primary: bool
+
+
+class MeResponse(BaseModel):
+    id: int
+    email: str
+    role: str
+    status: str
+    display_name: Optional[str] = None
+    departments: list[DepartmentBriefResponse] = []
+
+
 class PendingUserResponse(BaseModel):
     id: int
     email: str

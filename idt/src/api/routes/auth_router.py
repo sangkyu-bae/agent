@@ -17,6 +17,8 @@ from src.interfaces.schemas.auth.request import (
 )
 from src.interfaces.schemas.auth.response import (
     AccessTokenResponse,
+    DepartmentBriefResponse,
+    MeResponse,
     TokenResponse,
     UserResponse,
 )
@@ -26,6 +28,10 @@ router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
 def get_register_use_case() -> RegisterUseCase:
     raise NotImplementedError("RegisterUseCase not initialized")
+
+
+def get_user_departments_use_case():
+    raise NotImplementedError("GetUserDepartmentsUseCase not initialized")
 
 
 def get_login_use_case() -> LoginUseCase:
@@ -119,12 +125,21 @@ async def logout(
     )
 
 
-@router.get("/me", response_model=UserResponse)
-async def me(current_user: User = Depends(get_current_user)) -> UserResponse:
-    """현재 로그인된 사용자 정보 조회."""
-    return UserResponse(
+@router.get("/me", response_model=MeResponse)
+async def me(
+    current_user: User = Depends(get_current_user),
+    dept_uc=Depends(get_user_departments_use_case),
+) -> MeResponse:
+    """현재 로그인된 사용자 정보 조회 — 소속 부서 포함 (expose-user-department)."""
+    request_id = str(uuid.uuid4())
+    briefs = await dept_uc.execute(current_user.id, request_id)
+    return MeResponse(
         id=current_user.id,
         email=current_user.email,
         role=current_user.role.value,
         status=current_user.status.value,
+        departments=[
+            DepartmentBriefResponse(id=b.id, name=b.name, is_primary=b.is_primary)
+            for b in briefs
+        ],
     )

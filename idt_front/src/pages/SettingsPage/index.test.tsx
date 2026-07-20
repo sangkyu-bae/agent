@@ -6,11 +6,22 @@ import { http, HttpResponse } from 'msw';
 
 import { server } from '@/__tests__/mocks/server';
 import { createWrapper } from '@/__tests__/mocks/wrapper';
+import { useAuthStore } from '@/store/authStore';
 import SettingsPage from './index';
 
 beforeAll(() => server.listen());
-afterEach(() => server.resetHandlers());
+afterEach(() => {
+  server.resetHandlers();
+  useAuthStore.setState({ isAuthenticated: false, user: null });
+});
 afterAll(() => server.close());
+
+// expose-user-department: /me(useMe)가 부서를 반환하려면 인증 상태 필요
+const authAs = (role: 'user' | 'admin') =>
+  useAuthStore.setState({
+    isAuthenticated: true,
+    user: { id: 7, email: 'user@example.com', role, status: 'approved' } as never,
+  });
 
 const renderPage = () => {
   const Wrapper = createWrapper();
@@ -221,6 +232,90 @@ describe('SettingsPage — AI가 기억하는 내용', () => {
 
     await screen.findByText('여신 심사팀 소속');
     expect(screen.queryByText('부서 공유 메모리')).not.toBeInTheDocument();
+  });
+
+  it('부서 소속 시 개인 메모리에 "부서로 승격" 버튼이 보인다 (expose-user-department)', async () => {
+    authAs('user');
+    renderPage();
+
+    await screen.findByText('여신 심사팀 소속');
+    expect(
+      (await screen.findAllByRole('button', { name: '부서로 승격' })).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it('부서 미소속이면 승격 버튼이 없다', async () => {
+    authAs('user');
+    server.use(
+      http.get('*/api/v1/auth/me', () =>
+        HttpResponse.json({
+          id: 7, email: 'user@example.com', role: 'user', status: 'approved',
+          departments: [],
+        }),
+      ),
+    );
+    renderPage();
+
+    await screen.findByText('여신 심사팀 소속');
+    expect(screen.queryByRole('button', { name: '부서로 승격' })).not.toBeInTheDocument();
+  });
+
+  it('승격 버튼 클릭 시 primary 부서로 promote 요청', async () => {
+    authAs('user');
+    let promotedDept: string | null = null;
+    server.use(
+      http.post('*/api/v1/memories/:id/promote', async ({ request }) => {
+        const body = (await request.json()) as { dept_id?: string };
+        promotedDept = body.dept_id ?? null;
+        return HttpResponse.json(
+          {
+            id: 100, mem_type: 'profile', content: '승격됨',
+            created_at: '2026-07-18T00:00:00Z', updated_at: '2026-07-18T00:00:00Z',
+          },
+          { status: 201 },
+        );
+      }),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('여신 심사팀 소속');
+
+    await user.click((await screen.findAllByRole('button', { name: '부서로 승격' }))[0]);
+
+    await waitFor(() => expect(promotedDept).toBe('d1'));
+  });
+
+  it('admin이면 부서 작성 폼이 보이고 작성한다', async () => {
+    authAs('admin');
+    let created: { dept_id?: string; content?: string } | null = null;
+    server.use(
+      http.get('*/api/v1/auth/me', () =>
+        HttpResponse.json({
+          id: 7, email: 'a@example.com', role: 'admin', status: 'approved',
+          departments: [{ id: 'd1', name: '여신심사팀', is_primary: true }],
+        }),
+      ),
+      http.post('*/api/v1/memories/org', async ({ request }) => {
+        created = (await request.json()) as typeof created;
+        return HttpResponse.json(
+          {
+            id: 30, mem_type: 'domain_term', content: created?.content,
+            created_at: '2026-07-18T00:00:00Z', updated_at: '2026-07-18T00:00:00Z',
+          },
+          { status: 201 },
+        );
+      }),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('부서 공유 메모리');
+
+    await user.type(screen.getByLabelText('부서 메모리 내용'), '부서 전용 용어');
+    await user.click(screen.getByRole('button', { name: '부서에 등록' }));
+
+    await waitFor(() => expect(created).not.toBeNull());
+    expect(created!.dept_id).toBe('d1');
+    expect(created!.content).toBe('부서 전용 용어');
   });
 
   it('등록 422 에러 detail을 그대로 표시한다', async () => {

@@ -456,6 +456,10 @@ from src.api.routes.auth_router import (
     get_login_use_case,
     get_refresh_use_case,
     get_logout_use_case,
+    get_user_departments_use_case,
+)
+from src.application.department.get_user_departments_use_case import (
+    GetUserDepartmentsUseCase,
 )
 from src.api.routes.admin_router import (
     router as admin_router,
@@ -3901,6 +3905,15 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_reject_use_case] = _reject_f
     app.dependency_overrides[get_jwt_adapter] = _jwt_f
     app.dependency_overrides[get_user_repository] = _user_repo_f
+
+    # expose-user-department: /me 부서 노출 — DepartmentRepository per-request 재사용
+    def _user_departments_f(session: AsyncSession = Depends(get_session)):
+        return GetUserDepartmentsUseCase(
+            repository=DepartmentRepository(session=session, logger=get_app_logger()),
+            logger=get_app_logger(),
+        )
+
+    app.dependency_overrides[get_user_departments_use_case] = _user_departments_f
 
     # Auth Context DI (agent-user-context Design §6.1 + §6.4)
     (
