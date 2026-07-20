@@ -24,9 +24,13 @@ import AdminChunkingProfilesPage from '@/pages/AdminChunkingProfilesPage';
 import AdminSkillsPage from '@/pages/AdminSkillsPage';
 import AdminRagasPage from '@/pages/AdminRagasPage';
 import AdminAgentRunsPage from '@/pages/AdminAgentRunsPage';
+import AdminDashboardPage from '@/pages/AdminDashboardPage';
 import WikiPage from '@/pages/WikiPage';
+import AgentKnowledgePage from '@/pages/AgentKnowledgePage';
+import KnowledgeArticlePage from '@/pages/KnowledgeArticlePage';
 import AgentRunDetailPage from '@/pages/AgentRunDetailPage';
 import UsageMePage from '@/pages/UsageMePage';
+import SettingsPage from '@/pages/SettingsPage';
 import AdminLayout from '@/components/layout/AdminLayout';
 import { useInitAuth } from '@/hooks/useAuth';
 
@@ -60,13 +64,19 @@ const App = () => (
           <Route path="/collections/:collectionName/documents" element={<CollectionDocumentsPage />} />
           <Route path="/knowledge-bases" element={<KnowledgeBasesPage />} />
           <Route path="/knowledge-bases/:kbId" element={<KnowledgeBaseDetailPage />} />
+          {/* wiki-user-facing: 에이전트 지식 브라우저 + 문서 단독 뷰 */}
+          <Route path="/agents/:agentId/knowledge" element={<AgentKnowledgePage />} />
+          <Route path="/knowledge/:articleId" element={<KnowledgeArticlePage />} />
           <Route path="/usage" element={<UsageMePage />} />
+          {/* agent-memory: AI 메모리 관리 */}
+          <Route path="/settings" element={<SettingsPage />} />
         </Route>
       </Route>
 
       {/* Admin 전용 라우트 */}
       <Route element={<AdminRoute />}>
         <Route element={<AdminLayout />}>
+          <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
           <Route path="/admin/users" element={<AdminUsersPage />} />
           <Route path="/admin/departments" element={<AdminDepartmentsPage />} />
           <Route path="/admin/mcp-servers" element={<AdminMcpServersPage />} />

@@ -117,6 +117,9 @@ export const queryKeys = {
       [...queryKeys.knowledgeBases.all, 'chunks', kbId, docId, params] as const,
     sectionSummaryStatus: (kbId: string, docId: string) =>
       [...queryKeys.knowledgeBases.all, 'sectionSummaryStatus', kbId, docId] as const,
+    // KB 리트리버 테스트 (kb-retrieval-test)
+    searchHistory: (kbId: string, params?: { limit?: number; offset?: number }) =>
+      [...queryKeys.knowledgeBases.all, 'searchHistory', kbId, params] as const,
   },
 
   // ── Embedding Models ────────────────────────────────────
@@ -149,6 +152,13 @@ export const queryKeys = {
     list: (params?: { agent_id?: string; status?: string }) =>
       [...queryKeys.wiki.all, 'list', params] as const,
     detail: (id: string) => [...queryKeys.wiki.all, 'detail', id] as const,
+    tree: (agentId: string) => [...queryKeys.wiki.all, 'tree', agentId] as const,
+  },
+
+  // ── Memory (agent-memory) ───────────────────────────────
+  memories: {
+    all: ['memories'] as const,
+    list: () => [...queryKeys.memories.all, 'list'] as const,
   },
 
   // ── Agent Builder ──────────────────────────────────────
@@ -247,6 +257,18 @@ export const queryKeys = {
     /** 노드별 집계 */
     byNode: (from?: string, to?: string) =>
       [...queryKeys.agentRunAdmin.all, 'byNode', { from, to }] as const,
+  },
+
+  // ── 운영 대시보드 (admin-dashboard) ────────────────────
+  adminDashboard: {
+    /** 도메인 전체 키 — 새로고침 invalidate 대상 */
+    all: ['adminDashboard'] as const,
+    stats: () => [...queryKeys.adminDashboard.all, 'stats'] as const,
+    kbBreakdown: () =>
+      [...queryKeys.adminDashboard.all, 'kbBreakdown'] as const,
+    recentDocuments: (limit?: number) =>
+      [...queryKeys.adminDashboard.all, 'recentDocuments', { limit }] as const,
+    health: () => [...queryKeys.adminDashboard.all, 'health'] as const,
   },
 
   // ── My Usage (M5) ────────────────────────────────────

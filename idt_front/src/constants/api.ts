@@ -109,6 +109,11 @@ export const API_ENDPOINTS = {
     `/api/v1/knowledge-bases/${kbId}/documents/${docId}/section-summary`,
   KNOWLEDGE_BASE_SECTION_SUMMARY_RETRY: (kbId: string, docId: string) =>
     `/api/v1/knowledge-bases/${kbId}/documents/${docId}/section-summary/retry`,
+  // KB 리트리버 테스트 (kb-retrieval-test)
+  KNOWLEDGE_BASE_SEARCH: (kbId: string) =>
+    `/api/v1/knowledge-bases/${kbId}/search`,
+  KNOWLEDGE_BASE_SEARCH_HISTORY: (kbId: string) =>
+    `/api/v1/knowledge-bases/${kbId}/search-history`,
 
   // LLM Models
   LLM_MODELS: '/api/v1/llm-models',
@@ -164,6 +169,12 @@ export const API_ENDPOINTS = {
   ADMIN_USAGE_BY_NODE: '/api/v1/admin/usage/by-node',
   ADMIN_USAGE_SUMMARY: '/api/v1/admin/usage/summary',
   ADMIN_USAGE_TIMESERIES: '/api/v1/admin/usage/timeseries',
+
+  // Admin — 운영 대시보드 (admin-dashboard)
+  ADMIN_DASHBOARD_STATS: '/api/v1/admin/dashboard/stats',
+  ADMIN_DASHBOARD_KB_BREAKDOWN: '/api/v1/admin/dashboard/kb-breakdown',
+  ADMIN_DASHBOARD_RECENT_DOCUMENTS: '/api/v1/admin/dashboard/recent-documents',
+  ADMIN_DASHBOARD_HEALTH: '/api/v1/admin/dashboard/health',
 
   // User — My Usage
   USAGE_ME: '/api/v1/usage/me',
@@ -233,4 +244,11 @@ export const API_ENDPOINTS = {
   WIKI_DEPRECATE: (id: string) => `/api/v1/wiki/${id}/deprecate`,
   WIKI_RESTORE: (id: string) => `/api/v1/wiki/${id}/restore`,
   WIKI_UPDATE: (id: string) => `/api/v1/wiki/${id}`,
+  // wiki-user-facing: 소유자 직접 작성 + 지식 트리
+  WIKI_CREATE: '/api/v1/wiki',
+  WIKI_TREE: '/api/v1/wiki/tree',
+
+  // ── Memory (agent-memory) ───────────────────────────────
+  MEMORIES: '/api/v1/memories',
+  MEMORY_DETAIL: (id: number) => `/api/v1/memories/${id}`,
 } as const;
