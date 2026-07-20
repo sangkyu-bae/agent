@@ -1,6 +1,6 @@
 {
   "version": "2.0",
-  "lastUpdated": "2026-07-17T10:40:35.646Z",
+  "lastUpdated": "2026-07-20T00:56:27.000Z",
   "activeFeatures": [
     "websocket-common-module",
     "agent-chat-multiturn",
@@ -134,9 +134,19 @@
     "kb-management-ui",
     "chunking-profile-admin-ui",
     "AdminChunkingProfilesPage",
-    "excel"
+    "excel",
+    "admin_dashboard",
+    "kb-retrieval-test",
+    "AdminAgentRunsPage",
+    "AdminDashboardPage",
+    "wiki",
+    "KnowledgeArticlePage",
+    "AgentKnowledgePage",
+    "wiki-user-facing",
+    "memory",
+    "SettingsPage"
   ],
-  "primaryFeature": "knowledge_base",
+  "primaryFeature": null,
   "archivedFeatures": {
     "kb-excel-upload": {
       "phase": "archived",
@@ -379,6 +389,29 @@
       "startedAt": "2026-07-14T00:00:00.000Z",
       "archivedAt": "2026-07-14T08:00:00.000Z",
       "archivedTo": "docs/archive/2026-07/kb-content-browser/"
+    },
+    "admin-dashboard": {
+      "phase": "archived",
+      "matchRate": 94.4,
+      "iterationCount": 0,
+      "startedAt": "2026-07-18T00:00:00.000Z",
+      "archivedAt": "2026-07-18T00:00:00.000Z",
+      "archivedTo": "docs/archive/2026-07/admin-dashboard/"
+    },
+    "wiki-user-facing": {
+      "phase": "archived",
+      "matchRate": 100,
+      "iterationCount": 0,
+      "startedAt": "2026-07-18T00:00:00.000Z",
+      "archivedAt": "2026-07-18T10:17:36.000Z",
+      "archivedTo": "docs/archive/2026-07/wiki-user-facing/"
+    },
+    "agent-memory": {
+      "phase": "archived",
+      "matchRate": 98,
+      "iterationCount": 0,
+      "archivedAt": "2026-07-20T00:56:27.000Z",
+      "archivedTo": "docs/archive/2026-07/agent-memory/"
     }
   },
   "features": {
@@ -567,7 +600,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-04T10:53:02.380Z",
-        "lastUpdated": "2026-07-17T10:20:37.673Z"
+        "lastUpdated": "2026-07-20T00:10:10.350Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\api\\main.py"
     },
@@ -580,9 +613,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-04T10:57:06.857Z",
-        "lastUpdated": "2026-07-17T10:20:40.130Z"
+        "lastUpdated": "2026-07-20T00:05:57.827Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\api\\routes\\knowledge_base_router.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\api\\routes\\memory_router.py"
     },
     "retrieval": {
       "phase": "do",
@@ -671,7 +704,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-16T13:14:48.990Z",
-        "lastUpdated": "2026-07-17T10:20:23.937Z"
+        "lastUpdated": "2026-07-20T00:07:22.587Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\config.py"
     },
@@ -934,9 +967,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-04-01T11:13:23.704Z",
-        "lastUpdated": "2026-07-15T06:19:29.192Z"
+        "lastUpdated": "2026-07-20T00:19:51.373Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\constants\\adminNav.test.ts"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\constants\\api.ts"
     },
     "idt_front": {
       "phase": "do",
@@ -947,9 +980,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-04-01T11:13:30.494Z",
-        "lastUpdated": "2026-07-15T06:44:29.044Z"
+        "lastUpdated": "2026-07-20T00:37:52.878Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\services\\chunkingProfileService.test.ts"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\App.tsx"
     },
     "ChatPage": {
       "phase": "do",
@@ -973,7 +1006,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-04-12T06:31:25.528Z",
-        "lastUpdated": "2026-07-10T07:26:40.579Z"
+        "lastUpdated": "2026-07-20T00:08:51.078Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\application\\general_chat\\use_case.py"
     },
@@ -1013,9 +1046,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-04-17T06:40:30.209Z",
-        "lastUpdated": "2026-07-10T05:29:45.422Z"
+        "lastUpdated": "2026-07-18T09:53:41.139Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\infrastructure\\persistence\\repositories\\agent_run_repository.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\application\\repositories\\wiki_repository.py"
     },
     "auth": {
       "phase": "do",
@@ -1137,7 +1170,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-04-26T09:34:24.626Z",
-        "lastUpdated": "2026-07-10T07:43:20.762Z"
+        "lastUpdated": "2026-07-20T00:20:26.427Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\__tests__\\mocks\\handlers.ts"
     },
@@ -1185,17 +1218,18 @@
       "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\infrastructure\\logging\\test_exception_handler_middleware.py"
     },
     "collection_search": {
-      "phase": "archived",
-      "phaseNumber": 6,
+      "phase": "do",
+      "phaseNumber": 3,
       "matchRate": 98,
       "iterationCount": 0,
       "requirements": [],
       "documents": {},
       "timestamps": {
         "started": "2026-04-28T10:37:22.011Z",
-        "lastUpdated": "2026-04-28T12:45:00.000Z"
+        "lastUpdated": "2026-07-18T05:46:18.759Z"
       },
-      "archivedTo": "docs/archive/2026-04/collection-scoped-search/"
+      "archivedTo": "docs/archive/2026-04/collection-scoped-search/",
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\infrastructure\\collection_search\\models.py"
     },
     "agent-subscription-customization": {
       "phase": "archived",
@@ -1430,9 +1464,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-05-14T03:00:44.615Z",
-        "lastUpdated": "2026-07-10T07:48:37.464Z"
+        "lastUpdated": "2026-07-20T00:37:32.982Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\components\\layout\\AppSidebar.tsx"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\components\\layout\\TopNav.tsx"
     },
     "strategies": {
       "phase": "do",
@@ -1654,9 +1688,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-06-06T07:22:01.703Z",
-        "lastUpdated": "2026-07-02T05:49:45.236Z"
+        "lastUpdated": "2026-07-18T10:04:05.872Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\components\\chat\\MarkdownRenderer.tsx"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\components\\chat\\SourceCitation.test.tsx"
     },
     "search_decision": {
       "phase": "do",
@@ -2067,9 +2101,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-07-07T07:10:12.139Z",
-        "lastUpdated": "2026-07-17T10:20:10.637Z"
+        "lastUpdated": "2026-07-18T05:38:01.101Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\application\\knowledge_base\\upload_use_case.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\application\\knowledge_base\\search_history_use_case.py"
     },
     "knowledge-base-scoping": {
       "phase": "act",
@@ -2193,9 +2227,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-07-10T05:52:38.901Z",
-        "lastUpdated": "2026-07-10T05:52:59.716Z"
+        "lastUpdated": "2026-07-18T06:14:48.929Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\interfaces\\schemas\\agent_run_response.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\interfaces\\schemas\\admin_dashboard_response.py"
     },
     "knowledge-base": {
       "phase": "do",
@@ -2206,9 +2240,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-07-10T07:44:37.447Z",
-        "lastUpdated": "2026-07-17T10:31:16.507Z"
+        "lastUpdated": "2026-07-18T05:58:55.411Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\components\\knowledge-base\\KbUploadDocumentModal.test.tsx"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\components\\knowledge-base\\KbDocumentTable.tsx"
     },
     "KnowledgeBasesPage": {
       "phase": "do",
@@ -2232,9 +2266,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-07-10T07:46:22.716Z",
-        "lastUpdated": "2026-07-14T23:47:41.955Z"
+        "lastUpdated": "2026-07-18T06:01:24.089Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\KnowledgeBaseDetailPage\\index.tsx"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\KnowledgeBaseDetailPage\\index.test.tsx"
     },
     "kb-management-ui": {
       "phase": "act",
@@ -2283,6 +2317,152 @@
         "lastUpdated": "2026-07-17T10:19:38.720Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\infrastructure\\excel\\excel_document_parser_adapter.py"
+    },
+    "admin_dashboard": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-07-18T06:05:04.929Z",
+        "lastUpdated": "2026-07-18T06:34:05.660Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\infrastructure\\admin_dashboard\\test_aggregation_repository.py"
+    },
+    "kb-retrieval-test": {
+      "phase": "act",
+      "phaseNumber": 5,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-07-18T06:18:49.873Z",
+        "lastUpdated": "2026-07-18T06:18:49.874Z"
+      },
+      "previousPhase": "check",
+      "autoAdvanced": true
+    },
+    "AdminAgentRunsPage": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-07-18T07:49:57.177Z",
+        "lastUpdated": "2026-07-18T07:49:57.177Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\AdminAgentRunsPage\\components\\SummaryCards.tsx"
+    },
+    "AdminDashboardPage": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-07-18T07:50:08.445Z",
+        "lastUpdated": "2026-07-18T08:02:21.011Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\AdminDashboardPage\\index.test.tsx"
+    },
+    "agent-memory": {
+      "phase": "act",
+      "updatedAt": "2026-07-18T10:21:49.000Z",
+      "documents": {
+        "plan": "docs/01-plan/features/agent-memory.plan.md",
+        "design": "docs/02-design/features/agent-memory.design.md"
+      },
+      "phaseNumber": 5,
+      "previousPhase": "check",
+      "autoAdvanced": true,
+      "timestamps": {
+        "lastUpdated": "2026-07-20T00:51:59.546Z"
+      }
+    },
+    "wiki-user-facing": {
+      "phase": "report",
+      "matchRate": 100,
+      "iterationCount": 0,
+      "startedAt": "2026-07-18T00:00:00.000Z",
+      "archivedAt": "2026-07-18T10:17:11.000Z",
+      "archivedTo": "docs/archive/2026-07/wiki-user-facing/",
+      "phaseNumber": 6,
+      "previousPhase": "check",
+      "autoAdvanced": true,
+      "timestamps": {
+        "lastUpdated": "2026-07-18T10:17:23.650Z"
+      }
+    },
+    "wiki": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-07-18T09:51:27.503Z",
+        "lastUpdated": "2026-07-18T09:57:47.776Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\application\\wiki\\api_schemas.py"
+    },
+    "KnowledgeArticlePage": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-07-18T10:02:30.859Z",
+        "lastUpdated": "2026-07-18T10:13:09.456Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\KnowledgeArticlePage\\index.tsx"
+    },
+    "AgentKnowledgePage": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-07-18T10:03:01.138Z",
+        "lastUpdated": "2026-07-18T10:13:07.656Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\AgentKnowledgePage\\index.tsx"
+    },
+    "memory": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-07-19T23:58:43.289Z",
+        "lastUpdated": "2026-07-20T00:06:03.916Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\application\\memory\\crud_use_case.py"
+    },
+    "SettingsPage": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-07-20T00:25:28.374Z",
+        "lastUpdated": "2026-07-20T00:40:00.741Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\SettingsPage\\index.test.tsx"
     }
   },
   "pipeline": {
@@ -2293,7 +2473,7 @@
   "session": {
     "startedAt": "2026-03-04T10:49:14.367Z",
     "onboardingCompleted": false,
-    "lastActivity": "2026-07-17T10:40:35.646Z"
+    "lastActivity": "2026-07-20T00:51:59.565Z"
   },
   "history": [
     {
@@ -16953,21 +17133,1308 @@
       "feature": "kb-excel-upload",
       "phase": "report",
       "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:34:57.973Z",
+      "feature": "collection_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:35:15.054Z",
+      "feature": "collection_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:35:43.852Z",
+      "feature": "knowledge_base",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:35:53.378Z",
+      "feature": "knowledge_base",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:36:16.125Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:36:43.567Z",
+      "feature": "collection_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:36:45.380Z",
+      "feature": "collection_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:36:49.361Z",
+      "feature": "collection_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:36:51.411Z",
+      "feature": "collection_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:36:58.533Z",
+      "feature": "collection_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:37:03.582Z",
+      "feature": "collection_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:37:13.480Z",
+      "feature": "collection_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:37:17.702Z",
+      "feature": "collection_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:37:19.506Z",
+      "feature": "collection_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:37:29.396Z",
+      "feature": "knowledge_base",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:37:45.783Z",
+      "feature": "knowledge_base",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:37:52.729Z",
+      "feature": "knowledge_base",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:37:55.431Z",
+      "feature": "knowledge_base",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:38:01.102Z",
+      "feature": "knowledge_base",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:38:07.347Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:38:09.709Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:38:12.110Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:38:43.234Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:38:48.835Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:46:18.759Z",
+      "feature": "collection_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:48:28.419Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:48:38.709Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:48:41.874Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:50:33.610Z",
+      "feature": "constants",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:55:22.362Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:55:24.794Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:55:33.044Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:55:40.372Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:55:42.195Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:55:45.028Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:56:29.292Z",
+      "feature": "mocks",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:57:18.174Z",
+      "feature": "knowledge-base",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:57:33.714Z",
+      "feature": "knowledge-base",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:57:50.534Z",
+      "feature": "knowledge-base",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:58:05.813Z",
+      "feature": "knowledge-base",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:58:32.682Z",
+      "feature": "knowledge-base",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:58:47.641Z",
+      "feature": "knowledge-base",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:58:49.926Z",
+      "feature": "knowledge-base",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:58:52.221Z",
+      "feature": "knowledge-base",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:58:55.411Z",
+      "feature": "knowledge-base",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T05:59:02.089Z",
+      "feature": "KnowledgeBaseDetailPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T06:01:00.510Z",
+      "feature": "KnowledgeBaseDetailPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T06:01:00.835Z",
+      "feature": "KnowledgeBaseDetailPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T06:01:01.140Z",
+      "feature": "KnowledgeBaseDetailPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T06:01:01.506Z",
+      "feature": "KnowledgeBaseDetailPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T06:01:24.089Z",
+      "feature": "KnowledgeBaseDetailPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T06:05:04.929Z",
+      "feature": "admin_dashboard",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T06:05:18.690Z",
+      "feature": "admin_dashboard",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T06:05:19.653Z",
+      "feature": "admin_dashboard",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T06:05:28.628Z",
+      "feature": "admin_dashboard",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T06:05:51.783Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T06:06:11.514Z",
+      "feature": "admin_dashboard",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T06:13:35.929Z",
+      "feature": "admin_dashboard",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T06:13:40.648Z",
+      "feature": "admin_dashboard",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T06:13:46.296Z",
+      "feature": "admin_dashboard",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T06:13:47.203Z",
+      "feature": "admin_dashboard",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T06:13:57.522Z",
+      "feature": "admin_dashboard",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T06:14:04.338Z",
+      "feature": "admin_dashboard",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T06:14:14.968Z",
+      "feature": "admin_dashboard",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T06:14:33.543Z",
+      "feature": "admin_dashboard",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T06:14:48.929Z",
+      "feature": "schemas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T06:15:01.810Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T06:16:12.006Z",
+      "feature": "admin_dashboard",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T06:18:49.874Z",
+      "feature": "kb-retrieval-test",
+      "phase": "act",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T06:34:05.660Z",
+      "feature": "admin_dashboard",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T06:47:39.708Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T06:47:42.014Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T06:47:53.466Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T06:47:57.132Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T06:47:59.145Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T07:49:29.327Z",
+      "feature": "constants",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T07:49:34.763Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T07:49:41.404Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T07:49:45.005Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T07:49:54.763Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T07:49:57.177Z",
+      "feature": "AdminAgentRunsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T07:50:08.445Z",
+      "feature": "AdminDashboardPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T07:50:15.221Z",
+      "feature": "AdminDashboardPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T07:50:25.404Z",
+      "feature": "AdminDashboardPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T07:50:33.545Z",
+      "feature": "AdminDashboardPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T07:50:52.798Z",
+      "feature": "AdminDashboardPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T07:51:09.350Z",
+      "feature": "AdminDashboardPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T07:51:18.982Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T07:51:20.796Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T07:51:27.315Z",
+      "feature": "constants",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T07:52:08.026Z",
+      "feature": "AdminDashboardPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T07:52:13.065Z",
+      "feature": "AdminDashboardPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T07:52:19.385Z",
+      "feature": "AdminDashboardPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T08:02:21.011Z",
+      "feature": "AdminDashboardPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T08:19:50.849Z",
+      "feature": "admin-dashboard",
+      "phase": "act",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T09:51:27.503Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T09:51:42.766Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T09:51:46.913Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T09:51:59.071Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T09:52:42.898Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T09:52:52.906Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T09:52:54.791Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T09:53:01.807Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T09:53:04.298Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T09:53:05.747Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T09:53:17.515Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T09:53:23.902Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T09:53:31.023Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T09:53:36.342Z",
+      "feature": "repositories",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T09:53:41.139Z",
+      "feature": "repositories",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T09:53:45.766Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T09:53:50.227Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T09:54:27.005Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T09:54:35.468Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T09:55:20.926Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T09:55:31.296Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T09:56:06.293Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T09:56:09.667Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T09:56:43.857Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T09:56:51.140Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T09:57:02.775Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T09:57:17.312Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T09:57:38.058Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T09:57:43.207Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T09:57:47.776Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T09:58:04.561Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T09:58:21.569Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T09:58:32.417Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T09:58:37.704Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T09:59:18.201Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T09:59:21.177Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T09:59:27.020Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T10:01:13.445Z",
+      "feature": "constants",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T10:01:28.221Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T10:01:32.473Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T10:01:34.961Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T10:01:39.067Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T10:01:44.001Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T10:01:47.608Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T10:01:59.094Z",
+      "feature": "mocks",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T10:02:01.312Z",
+      "feature": "mocks",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T10:02:14.225Z",
+      "feature": "chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T10:02:30.859Z",
+      "feature": "KnowledgeArticlePage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T10:03:01.138Z",
+      "feature": "AgentKnowledgePage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T10:03:12.621Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T10:03:15.909Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T10:03:47.977Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T10:03:53.781Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T10:04:05.872Z",
+      "feature": "chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T10:04:12.254Z",
+      "feature": "KnowledgeArticlePage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T10:04:28.519Z",
+      "feature": "AgentKnowledgePage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T10:12:18.385Z",
+      "feature": "AgentKnowledgePage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T10:12:22.661Z",
+      "feature": "KnowledgeArticlePage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T10:12:41.521Z",
+      "feature": "AgentKnowledgePage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T10:12:45.137Z",
+      "feature": "AgentKnowledgePage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T10:12:52.304Z",
+      "feature": "AgentKnowledgePage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T10:12:55.566Z",
+      "feature": "AgentKnowledgePage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T10:13:07.656Z",
+      "feature": "AgentKnowledgePage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T10:13:09.456Z",
+      "feature": "KnowledgeArticlePage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-18T10:17:23.652Z",
+      "feature": "wiki-user-facing",
+      "phase": "report",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-19T23:58:43.289Z",
+      "feature": "memory",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-19T23:59:05.510Z",
+      "feature": "memory",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-19T23:59:18.159Z",
+      "feature": "memory",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:00:20.492Z",
+      "feature": "memory",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:00:32.111Z",
+      "feature": "memory",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:00:41.468Z",
+      "feature": "memory",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:01:21.169Z",
+      "feature": "memory",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:01:38.052Z",
+      "feature": "memory",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:01:42.813Z",
+      "feature": "memory",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:01:47.656Z",
+      "feature": "memory",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:02:01.674Z",
+      "feature": "memory",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:02:37.537Z",
+      "feature": "memory",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:02:54.468Z",
+      "feature": "memory",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:03:15.944Z",
+      "feature": "memory",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:03:20.020Z",
+      "feature": "memory",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:03:32.108Z",
+      "feature": "memory",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:03:47.259Z",
+      "feature": "memory",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:04:20.388Z",
+      "feature": "memory",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:05:38.624Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:05:46.275Z",
+      "feature": "memory",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:05:57.827Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:06:03.916Z",
+      "feature": "memory",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:07:22.587Z",
+      "feature": "idt",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:08:33.468Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:08:40.139Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:08:42.989Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:08:49.138Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:08:51.078Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:09:52.963Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:09:55.893Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:10:05.103Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:10:07.859Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:10:10.350Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:18:22.886Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:19:51.373Z",
+      "feature": "constants",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:19:54.731Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:19:57.980Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:20:09.086Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:20:12.045Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:20:26.427Z",
+      "feature": "mocks",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:25:28.374Z",
+      "feature": "SettingsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:26:37.024Z",
+      "feature": "SettingsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:33:49.832Z",
+      "feature": "SettingsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:33:51.259Z",
+      "feature": "SettingsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:33:54.736Z",
+      "feature": "SettingsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:34:49.393Z",
+      "feature": "SettingsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:37:32.982Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:37:36.241Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:37:52.878Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:39:54.101Z",
+      "feature": "SettingsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:39:56.783Z",
+      "feature": "SettingsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:39:59.331Z",
+      "feature": "SettingsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:40:00.741Z",
+      "feature": "SettingsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-20T00:51:59.565Z",
+      "feature": "agent-memory",
+      "phase": "act",
+      "action": "updated"
     }
   ],
   "featurePhases": {
     "self-hosted-qwen-endpoint": "archived",
-    "document-template-extractor": "archived"
+    "document-template-extractor": "archived",
+    "wiki-user-facing": "archived"
   },
   "matchRates": {
     "self-hosted-qwen-endpoint": 100,
     "document-template-extractor": 99,
-    "agent-recursion-limit": 98
+    "agent-recursion-limit": 98,
+    "wiki-user-facing": 100
   },
   "archivedTo": {
     "self-hosted-qwen-endpoint": "docs/archive/2026-06/self-hosted-qwen-endpoint/",
     "document-template-extractor": "docs/archive/2026-07/document-template-extractor/",
-    "doc-extractor-preview-highlight": "docs/archive/2026-07/doc-extractor-preview-highlight/"
+    "doc-extractor-preview-highlight": "docs/archive/2026-07/doc-extractor-preview-highlight/",
+    "wiki-user-facing": "docs/archive/2026-07/wiki-user-facing/"
   },
-  "currentFeature": null
+  "currentFeature": "agent-memory"
 }
