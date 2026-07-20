@@ -69,6 +69,12 @@ describe('AgentKnowledgePage', () => {
     expect(screen.getByText('위키-w1')).toBeInTheDocument();
   });
 
+  it('워크스페이스 링크가 렌더된다 (agent-workspace-view)', async () => {
+    renderPage();
+    const link = await screen.findByRole('link', { name: /워크스페이스/ });
+    expect(link).toHaveAttribute('href', '/agents/agent-1/workspace');
+  });
+
   it('문서 선택 시 본문·출처·갱신일이 표시된다', async () => {
     const user = userEvent.setup();
     renderPage();

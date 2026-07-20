@@ -2,12 +2,12 @@
   "version": "1.0",
   "enabled": false,
   "teamName": "",
-  "feature": "fix-wiki-distill-dedup",
+  "feature": "agent-workspace-view",
   "pdcaPhase": "plan",
   "orchestrationPattern": "leader",
   "ctoAgent": "opus",
-  "startedAt": "2026-07-20T05:41:46.689Z",
-  "lastUpdated": "2026-07-20T06:08:03.047Z",
+  "startedAt": "2026-07-20T07:34:25.014Z",
+  "lastUpdated": "2026-07-20T07:50:40.146Z",
   "teammates": [],
   "progress": {
     "totalTasks": 0,
@@ -21,7 +21,7 @@
       "from": "system",
       "to": "all",
       "content": "Phase check → act (auto-advanced)",
-      "timestamp": "2026-07-20T05:44:04.645Z"
+      "timestamp": "2026-07-20T07:38:52.205Z"
     }
   ],
   "sessionId": "7a940094-f11e-4770-a042-40618340e9b5"

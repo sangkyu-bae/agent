@@ -1,7 +1,7 @@
 // wiki-user-facing: 에이전트 지식 브라우저 — path 트리 탐색 + 문서 뷰 + 소유자 작성/관리.
 // 저장은 DB, 경험은 파일 위키(폴더·문서성). 서버가 최종 인가 — 프론트는 표시 제어만.
 import { useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 
 import { useAgentDetail } from '@/hooks/useAgentStore';
 import {
@@ -131,6 +131,13 @@ const AgentKnowledgePage = () => {
           <h2 className="text-sm font-bold text-zinc-700">
             📖 지식 {tree ? `(${tree.total})` : ''}
           </h2>
+          {/* agent-workspace-view: 워크스페이스 상호 링크 */}
+          <Link
+            to={`/agents/${agentId}/workspace`}
+            className="text-[11px] text-violet-600 hover:underline"
+          >
+            워크스페이스 →
+          </Link>
           {isOwner && (
             <button
               onClick={openCreate}

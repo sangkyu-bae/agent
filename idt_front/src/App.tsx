@@ -27,6 +27,7 @@ import AdminAgentRunsPage from '@/pages/AdminAgentRunsPage';
 import AdminDashboardPage from '@/pages/AdminDashboardPage';
 import WikiPage from '@/pages/WikiPage';
 import AgentKnowledgePage from '@/pages/AgentKnowledgePage';
+import AgentWorkspacePage from '@/pages/AgentWorkspacePage';
 import KnowledgeArticlePage from '@/pages/KnowledgeArticlePage';
 import AgentRunDetailPage from '@/pages/AgentRunDetailPage';
 import UsageMePage from '@/pages/UsageMePage';
@@ -66,6 +67,8 @@ const App = () => (
           <Route path="/knowledge-bases/:kbId" element={<KnowledgeBaseDetailPage />} />
           {/* wiki-user-facing: 에이전트 지식 브라우저 + 문서 단독 뷰 */}
           <Route path="/agents/:agentId/knowledge" element={<AgentKnowledgePage />} />
+          {/* agent-workspace-view: 에이전트 구성 폴더형 열람 */}
+          <Route path="/agents/:agentId/workspace" element={<AgentWorkspacePage />} />
           <Route path="/knowledge/:articleId" element={<KnowledgeArticlePage />} />
           <Route path="/usage" element={<UsageMePage />} />
           {/* agent-memory: AI 메모리 관리 */}
