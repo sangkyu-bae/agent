@@ -257,4 +257,10 @@ export const API_ENDPOINTS = {
   // agent-memory-org-scope: 부서 공유 메모리 + 승격
   MEMORY_ORG: '/api/v1/memories/org',
   MEMORY_PROMOTE: (id: number) => `/api/v1/memories/${id}/promote`,
+
+  // ── Eval Gate (agent-eval-gate) ─────────────────────────
+  MESSAGE_FEEDBACK: (messageId: number) =>
+    `/api/v1/conversations/messages/${messageId}/feedback`,
+  ADMIN_EVAL_AGENTS: '/api/v1/admin/eval/agents',
+  ADMIN_EVAL_RECENT_NEGATIVE: '/api/v1/admin/eval/recent-negative',
 } as const;

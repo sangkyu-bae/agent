@@ -23,6 +23,7 @@ import HealthBadges from './components/HealthBadges';
 import KbBreakdownTable from './components/KbBreakdownTable';
 import RecentDocumentsTable from './components/RecentDocumentsTable';
 import RecentRunsPanel from './components/RecentRunsPanel';
+import AgentSatisfactionPanel from './components/AgentSatisfactionPanel';
 
 const initialPeriod: PeriodValue = (() => {
   const r = resolvePeriod('30d');
@@ -127,6 +128,13 @@ const AdminDashboardPage = () => {
         loading={recentRunsQ.isLoading || failedRunsQ.isLoading}
         onRowClick={(runId) => navigate(`/admin/agent-runs/${runId}`)}
       />
+
+      <section className="flex flex-col gap-2">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+          답변 품질 (사용자 평가)
+        </h2>
+        <AgentSatisfactionPanel />
+      </section>
     </div>
   );
 };

@@ -3,6 +3,7 @@
 _maybe_build_charts 판단 분기 + stream/execute charts 주입 검증.
 """
 from datetime import datetime
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 from langchain_core.messages import AIMessage
@@ -168,6 +169,42 @@ class TestMaybeBuildCharts:
         uc = _make_uc("매출 100 130", chart_builder=builder)
         charts = await _charts_from_stream(uc, "그래프 그려줘")
         assert charts == []  # 예외에도 빈 배열, 흐름 유지
+
+
+async def _answer_completed_payload(uc, message: str) -> dict:
+    req = GeneralChatRequest(user_id="u1", session_id="s1", message=message)
+    async for ev in uc.stream(req, request_id="r1"):
+        if ev.event_type == ChatEventType.ANSWER_COMPLETED:
+            return ev.payload
+    raise AssertionError("ANSWER_COMPLETED 이벤트 없음")
+
+
+class TestAssistantMessageId:
+    """agent-eval-gate 결정 ④ — ANSWER_COMPLETED payload에 assistant_message_id 노출."""
+
+    async def test_answer_completed_exposes_saved_assistant_message_id(self) -> None:
+        uc = _make_uc("간단 설명", chart_builder=None)
+        # save: user → assistant 순서. assistant 저장 엔티티 id.value = 777 노출 기대.
+        uc._msg_repo.save = AsyncMock(
+            side_effect=[
+                SimpleNamespace(id=SimpleNamespace(value=101)),  # user
+                SimpleNamespace(id=SimpleNamespace(value=777)),  # assistant
+            ]
+        )
+        payload = await _answer_completed_payload(uc, "설명해줘")
+        assert payload["assistant_message_id"] == 777
+
+    async def test_answer_completed_message_id_none_on_save_failure(self) -> None:
+        # 저장 실패(id 없는 엔티티) → None (FR-07 하위호환)
+        uc = _make_uc("간단 설명", chart_builder=None)
+        uc._msg_repo.save = AsyncMock(
+            side_effect=[
+                SimpleNamespace(id=None),
+                SimpleNamespace(id=None),
+            ]
+        )
+        payload = await _answer_completed_payload(uc, "설명해줘")
+        assert payload["assistant_message_id"] is None
 
 
 class TestExecuteCharts:

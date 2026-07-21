@@ -179,6 +179,10 @@ class Settings(BaseSettings):
     memory_extraction_max_per_turn: int = 3
     memory_max_pending_per_user: int = 20
 
+    # Agent Eval Gate (agent-eval-gate)
+    # 관리자 최근 부정 피드백 조회 상한
+    eval_recent_negative_limit: int = 20
+
     # Application
     debug: bool = False
 

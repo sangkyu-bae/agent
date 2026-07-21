@@ -308,7 +308,7 @@ class GeneralChatUseCase:
             edited = await self._try_chart_edit(request.message, history)
             if edited is not None:
                 answer, charts = edited
-                await self._persist_messages(
+                _, assistant_message_id = await self._persist_messages(
                     user_id, session_id, request.message, answer, len(history),
                     charts=charts,
                 )
@@ -320,6 +320,7 @@ class GeneralChatUseCase:
                         "sources": [],
                         "was_summarized": False,
                         "charts": charts,
+                        "assistant_message_id": assistant_message_id,
                     },
                 )
                 yield self._build_event(
@@ -386,7 +387,7 @@ class GeneralChatUseCase:
             snapshot = self._collect_snapshot(
                 request.message, state.final_messages,
             )
-            user_message_id = await self._persist_messages(
+            user_message_id, assistant_message_id = await self._persist_messages(
                 user_id, session_id, request.message, answer, len(history),
                 charts=charts or None,
                 analysis_data=snapshot,
@@ -411,6 +412,7 @@ class GeneralChatUseCase:
                     "sources": [s.model_dump() for s in sources],
                     "was_summarized": was_summarized,
                     "charts": charts,
+                    "assistant_message_id": assistant_message_id,
                 },
             )
             yield self._build_event(
@@ -770,8 +772,13 @@ class GeneralChatUseCase:
             charts=charts,
             analysis_data=analysis_data,
         )
-        await self._msg_repo.save(ai_msg)
-        saved_id = getattr(saved_user, "id", None)
+        saved_ai = await self._msg_repo.save(ai_msg)
+        # agent-eval-gate 결정 ④: assistant 메시지 id도 반환 → ANSWER_COMPLETED 노출
+        return (self._message_id_of(saved_user), self._message_id_of(saved_ai))
+
+    @staticmethod
+    def _message_id_of(saved) -> int | None:
+        saved_id = getattr(saved, "id", None)
         return getattr(saved_id, "value", None) if saved_id is not None else None
 
     # ── Conversation helpers (기존 그대로) ──────────────────────────────────
