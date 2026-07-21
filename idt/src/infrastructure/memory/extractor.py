@@ -72,6 +72,7 @@ class MemoryCandidateExtractor(MemoryExtractorInterface):
         answer: str,
         existing_contents: list[str],
         request_id: str,
+        feedback_note: str | None = None,
     ) -> list[MemoryCandidate]:
         turn_text = f"[사용자 질문]\n{question}\n\n[답변]\n{answer}"
         turn_text = turn_text[: MemoryPolicy.EXTRACT_INPUT_MAX]  # 결정 ①
@@ -81,9 +82,21 @@ class MemoryCandidateExtractor(MemoryExtractorInterface):
             listed = "\n".join(f"- {c}" for c in existing_contents)
             existing_block = f"\n\n[기존 메모리 — 중복 금지]\n{listed}"
 
+        # eval-feedback-loop §3-2: 이유 블록은 절단 후 부착 (신호 유실 방지)
+        feedback_block = ""
+        if feedback_note:
+            feedback_block = (
+                "\n\n[사용자 평가 신호]\n"
+                "사용자가 이 답변에 '싫어요'를 누르고 이유를 남겼습니다: "
+                f'"{feedback_note}"\n'
+                "이 이유가 드러내는 사용자 선호(preference)·용어 교정(domain_term)을 "
+                "우선 추출하세요.\n"
+                "이유에 없는 원인을 추측하지 마세요."
+            )
+
         messages = [
             SystemMessage(content=_SYSTEM_PROMPT),
-            HumanMessage(content=turn_text + existing_block),
+            HumanMessage(content=turn_text + existing_block + feedback_block),
         ]
         response = await self._llm.ainvoke(messages)
         return self._parse(_coerce_text(response.content), request_id)

@@ -82,3 +82,38 @@ class TestExtract:
 
         human_text = llm.ainvoke.call_args.args[0][1].content
         assert len(human_text) < 6000  # 절단 반영 (4000 + 고정 문구)
+
+
+class TestFeedbackNote:
+    """eval-feedback-loop Design §3-2 — 부정 평가 이유 블록."""
+
+    async def test_feedback_note_있으면_평가_블록과_이유_원문_포함(self):
+        extractor, llm, _ = _make("[]")
+
+        await extractor.extract(
+            "질문", "답변", [], "req-1", feedback_note="근거 조문이 빠져 있음"
+        )
+
+        human_text = llm.ainvoke.call_args.args[0][1].content
+        assert "[사용자 평가 신호]" in human_text
+        assert "근거 조문이 빠져 있음" in human_text
+        assert "추측하지 마세요" in human_text
+
+    async def test_feedback_note_없으면_기존_프롬프트에_평가_블록_없음(self):
+        extractor, llm, _ = _make("[]")
+
+        await extractor.extract("질문", "답변", ["기존"], "req-1")
+
+        human_text = llm.ainvoke.call_args.args[0][1].content
+        assert "[사용자 평가 신호]" not in human_text
+
+    async def test_절단_후에도_평가_블록_보존(self):
+        extractor, llm, _ = _make("[]")
+
+        await extractor.extract(
+            "가" * 5000, "나" * 5000, [], "req-1", feedback_note="형식 불만"
+        )
+
+        human_text = llm.ainvoke.call_args.args[0][1].content
+        assert "[사용자 평가 신호]" in human_text
+        assert "형식 불만" in human_text

@@ -183,6 +183,11 @@ class Settings(BaseSettings):
     # 관리자 최근 부정 피드백 조회 상한
     eval_recent_negative_limit: int = 20
 
+    # Eval Feedback Loop (eval-feedback-loop §3-1)
+    # 이유(comment) 있는 👎 저장 시 부정 맥락 메모리 추출 트리거.
+    # memory_extraction_enabled(매 턴 추출)와 독립 opt-in — 기본 off 배포.
+    eval_feedback_extraction_enabled: bool = False
+
     # Application
     debug: bool = False
 

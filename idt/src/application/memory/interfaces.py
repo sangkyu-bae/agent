@@ -24,5 +24,10 @@ class MemoryExtractorInterface(ABC):
         answer: str,
         existing_contents: list[str],
         request_id: str,
+        feedback_note: str | None = None,
     ) -> list[MemoryCandidate]:
-        """마지막 턴에서 저장 가치가 있는 후보를 추출한다. 없으면 []."""
+        """마지막 턴에서 저장 가치가 있는 후보를 추출한다. 없으면 [].
+
+        feedback_note: 사용자가 👎와 함께 남긴 이유 (eval-feedback-loop).
+        None이면 기존 매 턴 추출과 동일하게 동작한다.
+        """

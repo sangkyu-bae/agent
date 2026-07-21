@@ -1,7 +1,7 @@
 // agent-eval-gate: 답변 평가 TanStack Query 훅.
-import { useMutation, useQuery } from '@tanstack/react-query';
+// eval-feedback-loop: 전역 싱글톤 대신 useQueryClient() — 프로바이더의 클라이언트에 캐시 갱신.
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { queryClient } from '@/lib/queryClient';
 import { queryKeys } from '@/lib/queryKeys';
 import { messageFeedbackService } from '@/services/messageFeedbackService';
 import type { Rating } from '@/types/messageFeedback';
@@ -13,8 +13,9 @@ export const useMessageFeedback = (messageId: number | null) =>
     enabled: !!messageId,
   });
 
-export const useSubmitFeedback = (messageId: number) =>
-  useMutation({
+export const useSubmitFeedback = (messageId: number) => {
+  const queryClient = useQueryClient();
+  return useMutation({
     mutationFn: ({ rating, comment }: { rating: Rating; comment?: string }) =>
       messageFeedbackService.submit(messageId, rating, comment),
     onSuccess: (data) => {
@@ -23,6 +24,7 @@ export const useSubmitFeedback = (messageId: number) =>
       queryClient.invalidateQueries({ queryKey: queryKeys.eval.agents() });
     },
   });
+};
 
 // admin
 export const useAgentEvalStats = () =>
