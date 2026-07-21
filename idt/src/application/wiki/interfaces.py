@@ -4,7 +4,11 @@
 """
 from abc import ABC, abstractmethod
 
-from src.application.wiki.schemas import DistilledContent, WikiSourceGroup
+from src.application.wiki.schemas import (
+    DistilledContent,
+    FeedbackWikiDraft,
+    WikiSourceGroup,
+)
 
 
 class WikiSourceProvider(ABC):
@@ -25,3 +29,13 @@ class WikiDistillerInterface(ABC):
         self, group: WikiSourceGroup, request_id: str
     ) -> DistilledContent:
         """청크 그룹 → 정제된 제목/본문."""
+
+
+class FeedbackWikiDistillerInterface(ABC):
+    """부정 평가(Q/A+이유)에서 팀 지식 초안을 판정·정제한다 (wiki-feedback-loop)."""
+
+    @abstractmethod
+    async def distill_feedback(
+        self, question: str, answer: str, feedback_note: str, request_id: str,
+    ) -> FeedbackWikiDraft | None:
+        """팀 일반화 가치가 없으면 None(강제 생성 금지)."""

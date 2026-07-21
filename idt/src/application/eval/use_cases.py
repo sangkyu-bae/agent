@@ -10,6 +10,7 @@ from src.application.memory.extraction_service import MemoryExtractionService
 from src.application.repositories.conversation_repository import (
     ConversationMessageRepository,
 )
+from src.application.wiki.feedback_service import FeedbackWikiService
 from src.domain.conversation.entities import ConversationMessage, MessageId
 from src.domain.conversation.value_objects import MessageRole
 from src.domain.eval.entity import MessageFeedback, Rating
@@ -37,11 +38,13 @@ class SubmitFeedbackUseCase:
         message_repo: ConversationMessageRepository,
         logger: LoggerInterface,
         extraction: MemoryExtractionService | None = None,
+        wiki_feedback: FeedbackWikiService | None = None,
     ) -> None:
         self._repo = feedback_repo
         self._msg_repo = message_repo
         self._logger = logger
         self._extraction = extraction
+        self._wiki_feedback = wiki_feedback
 
     async def execute(
         self, user_id: str, message_id: int, rating: str, comment: str | None,
@@ -75,8 +78,8 @@ class SubmitFeedbackUseCase:
             message_id=message_id, rating=parsed.value,
         )
         # eval-feedback-loop 결정 ⑤: comment 있는 down + 이전 상태와 다를 때만
-        if self._should_trigger_extraction(parsed, comment, existing):
-            await self._kickoff_feedback_extraction(message, comment, request_id)
+        if self._is_actionable_negative(parsed, comment, existing):
+            await self._kickoff_feedback_fanout(message, comment, request_id)
         return saved
 
     async def _resolve_message(self, message_id: int) -> ConversationMessage:
@@ -85,12 +88,11 @@ class SubmitFeedbackUseCase:
             raise ValueError(_NOT_FOUND_MSG)
         return message
 
-    def _should_trigger_extraction(
+    def _is_actionable_negative(
         self, parsed: Rating, comment: str | None,
         existing: MessageFeedback | None,
     ) -> bool:
-        if self._extraction is None or not self._extraction.feedback_enabled:
-            return False
+        """순수 트리거 조건 — 서비스별 enabled 판정은 팬아웃이 담당."""
         if parsed != Rating.DOWN or not (comment and comment.strip()):
             return False  # bare 👎는 통계만 — 추측 추출 금지 (rev1)
         return (
@@ -99,11 +101,20 @@ class SubmitFeedbackUseCase:
             or existing.comment != comment
         )
 
-    async def _kickoff_feedback_extraction(
+    async def _kickoff_feedback_fanout(
         self, message: ConversationMessage, comment: str, request_id: str,
     ) -> None:
-        question = await self._find_question(message)
+        """Q/A 복원 1회를 memory·wiki 환류가 공유 (wiki-feedback-loop §3-5)."""
+        memory_on = (
+            self._extraction is not None and self._extraction.feedback_enabled
+        )
+        wiki_on = (
+            self._wiki_feedback is not None and self._wiki_feedback.enabled
+        )
+        if not (memory_on or wiki_on):
+            return  # 복원 조회 0회 — off 경로 기존 동일 (FR-05)
         message_id = message.id.value if message.id is not None else None
+        question = await self._find_question(message)
         if question is None:
             self._logger.warning(
                 "feedback extraction skipped — question not found",
@@ -114,10 +125,16 @@ class SubmitFeedbackUseCase:
             "feedback extraction kickoff",
             request_id=request_id, message_id=message_id,
         )  # 결정 ④ provenance: 로그로만 추적
-        self._extraction.kickoff_feedback(
-            message.user_id.value, question.content, message.content,
-            comment, request_id,
-        )
+        if memory_on:
+            self._extraction.kickoff_feedback(
+                message.user_id.value, question.content, message.content,
+                comment, request_id,
+            )
+        if wiki_on:
+            self._wiki_feedback.kickoff_draft(
+                message.agent_id.value, message_id, question.content,
+                message.content, comment, request_id,
+            )
 
     async def _find_question(
         self, message: ConversationMessage,

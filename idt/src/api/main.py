@@ -228,11 +228,13 @@ from src.application.memory.extraction_service import MemoryExtractionService
 from src.infrastructure.memory.extractor import MemoryCandidateExtractor
 from src.infrastructure.memory.repository import MemoryRepository
 from src.application.wiki.distill_use_case import DistillToWikiUseCase
+from src.application.wiki.feedback_service import FeedbackWikiService
 from src.application.wiki.human_write_use_case import HumanWikiWriteUseCase
 from src.application.wiki.query_use_case import WikiQueryUseCase
 from src.application.wiki.review_use_case import WikiReviewUseCase
 from src.infrastructure.wiki.wiki_repository import WikiArticleRepository
 from src.infrastructure.wiki.wiki_distiller import WikiDistiller
+from src.infrastructure.wiki.feedback_distiller import FeedbackWikiDistiller
 from src.infrastructure.wiki.wiki_source_provider import ElasticsearchWikiSourceProvider
 from src.api.routes.skill_builder_router import (
     router as skill_builder_router,
@@ -2194,6 +2196,29 @@ def get_memory_extraction_service() -> MemoryExtractionService:
     return _memory_extraction_singleton
 
 
+# wiki-feedback-loop §3-6: 위키 환류 서비스 lazy singleton.
+# enabled 판정은 서비스 내부(kickoff no-op) — off여도 주입은 항상(코드 경로 단일화).
+_feedback_wiki_singleton: FeedbackWikiService | None = None
+
+
+def get_feedback_wiki_service() -> FeedbackWikiService:
+    global _feedback_wiki_singleton
+    if _feedback_wiki_singleton is None:
+        app_logger = get_app_logger()
+        distiller = FeedbackWikiDistiller.from_openai(
+            model_name=settings.openai_llm_model,
+            api_key=settings.openai_api_key,
+            logger=app_logger,
+        )
+        _feedback_wiki_singleton = FeedbackWikiService(
+            session_factory=get_session_factory(),
+            distiller=distiller,
+            logger=app_logger,
+            enabled=settings.wiki_feedback_draft_enabled,
+        )
+    return _feedback_wiki_singleton
+
+
 def create_general_chat_use_case_factory():
     """Return a per-request factory for GeneralChatUseCase.
 
@@ -4057,12 +4082,13 @@ def create_app() -> FastAPI:
 
     # Eval Gate DI (agent-eval-gate)
     def _eval_submit_f(session: AsyncSession = Depends(get_session)):
-        # eval-feedback-loop §3-5: off여도 주입은 항상(코드 경로 단일화)
+        # eval/wiki-feedback-loop: off여도 주입은 항상(코드 경로 단일화)
         return SubmitFeedbackUseCase(
             feedback_repo=MessageFeedbackRepository(session, get_app_logger()),
             message_repo=SQLAlchemyConversationMessageRepository(session),
             logger=get_app_logger(),
             extraction=get_memory_extraction_service(),
+            wiki_feedback=get_feedback_wiki_service(),
         )
 
     def _eval_get_f(session: AsyncSession = Depends(get_session)):

@@ -13,6 +13,7 @@ from src.domain.eval.entity import MessageFeedback, Rating
 
 def _message(agent_id="a1", turn=4, content="답변 내용", role=MessageRole.ASSISTANT):
     msg = MagicMock()
+    msg.id = MagicMock(value=1)
     msg.agent_id = MagicMock(value=agent_id)
     msg.user_id = MagicMock(value="u1")
     msg.session_id = MagicMock()
@@ -36,7 +37,17 @@ def _extraction(feedback_enabled=True):
     return ext
 
 
-def _make_submit(message=None, existing=None, extraction=None, session_msgs=None):
+def _wiki(enabled=True):
+    wiki = MagicMock()
+    wiki.enabled = enabled
+    wiki.kickoff_draft = MagicMock()
+    return wiki
+
+
+def _make_submit(
+    message=None, existing=None, extraction=None, session_msgs=None,
+    wiki_feedback=None,
+):
     fb_repo = MagicMock()
     fb_repo.find_by_message_and_user = AsyncMock(return_value=existing)
     fb_repo.upsert = AsyncMock(side_effect=lambda f, request_id: f)
@@ -45,7 +56,10 @@ def _make_submit(message=None, existing=None, extraction=None, session_msgs=None
     msg_repo.find_by_id = AsyncMock(return_value=message)
     msg_repo.find_by_session = AsyncMock(return_value=session_msgs or [])
     logger = MagicMock()
-    uc = SubmitFeedbackUseCase(fb_repo, msg_repo, logger, extraction=extraction)
+    uc = SubmitFeedbackUseCase(
+        fb_repo, msg_repo, logger, extraction=extraction,
+        wiki_feedback=wiki_feedback,
+    )
     return uc, fb_repo, msg_repo, logger
 
 
@@ -212,6 +226,72 @@ class TestFeedbackTrigger:
         assert saved.rating == Rating.DOWN  # 평가 저장은 유지 (FR-02)
         ext.kickoff_feedback.assert_not_called()
         logger.warning.assert_called_once()
+
+
+class TestWikiFanout:
+    """wiki-feedback-loop Design §3-5 — memory·wiki 팬아웃, Q/A 복원 1회 공유."""
+
+    def _setup(self, extraction=None, wiki_feedback=None):
+        answer = _message(agent_id="super", turn=4, content="답변 내용")
+        answer.id = MagicMock(value=77)
+        question = _message(turn=3, content="질문 내용", role=MessageRole.USER)
+        return _make_submit(
+            message=answer, extraction=extraction,
+            wiki_feedback=wiki_feedback, session_msgs=[question, answer],
+        )
+
+    async def test_wiki_on_memory_off면_kickoff_draft만_호출(self):
+        wiki = _wiki(enabled=True)
+        uc, _, _, _ = self._setup(extraction=None, wiki_feedback=wiki)
+
+        await uc.execute("u1", 77, "down", "70%가 맞음", "r")
+
+        wiki.kickoff_draft.assert_called_once()
+        args = wiki.kickoff_draft.call_args.args
+        assert args[0] == "super"        # message.agent_id (결정 ①)
+        assert args[1] == 77             # message_id
+        assert args[2] == "질문 내용"
+        assert args[3] == "답변 내용"
+        assert args[4] == "70%가 맞음"
+        assert args[5] == "r"
+
+    async def test_둘_다_on이면_복원_1회에_양쪽_호출(self):
+        ext = _extraction(feedback_enabled=True)
+        wiki = _wiki(enabled=True)
+        uc, _, msg_repo, _ = self._setup(extraction=ext, wiki_feedback=wiki)
+
+        await uc.execute("u1", 77, "down", "이유", "r")
+
+        assert msg_repo.find_by_session.await_count == 1  # Q/A 복원 공유
+        ext.kickoff_feedback.assert_called_once()
+        wiki.kickoff_draft.assert_called_once()
+
+    async def test_둘_다_off면_복원_조회_0회(self):
+        ext = _extraction(feedback_enabled=False)
+        wiki = _wiki(enabled=False)
+        uc, _, msg_repo, _ = self._setup(extraction=ext, wiki_feedback=wiki)
+
+        saved = await uc.execute("u1", 77, "down", "이유", "r")
+
+        assert saved.rating == Rating.DOWN
+        msg_repo.find_by_session.assert_not_awaited()  # FR-05 off 경로 동일
+        wiki.kickoff_draft.assert_not_called()
+
+    async def test_bare_down은_wiki도_미호출(self):
+        wiki = _wiki(enabled=True)
+        uc, _, _, _ = self._setup(wiki_feedback=wiki)
+
+        await uc.execute("u1", 77, "down", None, "r")
+
+        wiki.kickoff_draft.assert_not_called()
+
+    async def test_wiki_미주입이면_기존_동작(self):
+        ext = _extraction(feedback_enabled=True)
+        uc, _, _, _ = self._setup(extraction=ext, wiki_feedback=None)
+
+        await uc.execute("u1", 77, "down", "이유", "r")
+
+        ext.kickoff_feedback.assert_called_once()  # memory 단독 경로 불변
 
 
 class TestAgentStats:
