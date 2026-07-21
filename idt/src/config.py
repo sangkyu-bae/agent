@@ -188,6 +188,10 @@ class Settings(BaseSettings):
     # memory_extraction_enabled(매 턴 추출)와 독립 opt-in — 기본 off 배포.
     eval_feedback_extraction_enabled: bool = False
 
+    # Wiki Feedback Loop (wiki-feedback-loop §3-1)
+    # 이유 있는 👎 → 위키 draft 환류 — memory 환류와 독립 opt-in, 기본 off.
+    wiki_feedback_draft_enabled: bool = False
+
     # Application
     debug: bool = False
 
