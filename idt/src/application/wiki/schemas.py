@@ -27,6 +27,18 @@ class DistilledContent:
 
 
 @dataclass
+class FeedbackWikiDraft:
+    """부정 평가 환류 초안 (wiki-feedback-loop §3-2).
+
+    confidence는 LLM 판정 점수(0~100)를 /100 클램프한 값.
+    """
+
+    title: str
+    content: str
+    confidence: float
+
+
+@dataclass
 class WikiTreeItem:
     """지식 트리 항목 — 본문 제외 경량 조회 (wiki-user-facing)."""
 
