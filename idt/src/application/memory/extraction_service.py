@@ -26,15 +26,22 @@ class MemoryExtractionService:
         max_per_turn: int,
         pending_cap: int,
         repo_builder: Callable | None = None,
+        feedback_enabled: bool = False,
     ) -> None:
         self._session_factory = session_factory
         self._extractor = extractor
         self._logger = logger
         self._enabled = enabled
+        self._feedback_enabled = feedback_enabled
         self._max_per_turn = max_per_turn
         self._pending_cap = pending_cap
         self._repo_builder = repo_builder or self._default_repo_builder
         self._tasks: set[asyncio.Task] = set()
+
+    @property
+    def feedback_enabled(self) -> bool:
+        """eval-feedback-loop: 부정 평가 트리거 추출 opt-in — 매 턴 추출과 독립."""
+        return self._feedback_enabled
 
     def kickoff(
         self,
@@ -47,8 +54,38 @@ class MemoryExtractionService:
         """fire-and-forget 추출 — enabled=False면 no-op (FR-09)."""
         if not self._enabled:
             return
+        self._spawn(user_id, question, answer, run_id, request_id, None)
+
+    def kickoff_feedback(
+        self,
+        user_id: str,
+        question: str,
+        answer: str,
+        feedback_note: str,
+        request_id: str,
+    ) -> None:
+        """부정 평가 트리거 추출 — feedback_enabled=False면 no-op.
+
+        eval-feedback-loop 결정 ④: run_id 없음(source_run_id=None),
+        결정 ③: pending cap은 매 턴 추출과 동일 적용.
+        """
+        if not self._feedback_enabled:
+            return
+        self._spawn(user_id, question, answer, None, request_id, feedback_note)
+
+    def _spawn(
+        self,
+        user_id: str,
+        question: str,
+        answer: str,
+        run_id: str | None,
+        request_id: str,
+        feedback_note: str | None,
+    ) -> None:
         task = asyncio.create_task(
-            self._run_guarded(user_id, question, answer, run_id, request_id)
+            self._run_guarded(
+                user_id, question, answer, run_id, request_id, feedback_note
+            )
         )
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
@@ -76,10 +113,11 @@ class MemoryExtractionService:
         answer: str,
         run_id: str | None,
         request_id: str,
+        feedback_note: str | None = None,
     ) -> None:
         try:
             await self._extract_and_store(
-                user_id, question, answer, run_id, request_id
+                user_id, question, answer, run_id, request_id, feedback_note
             )
         except Exception as e:
             self._logger.warning(
@@ -96,6 +134,7 @@ class MemoryExtractionService:
         answer: str,
         run_id: str | None,
         request_id: str,
+        feedback_note: str | None = None,
     ) -> None:
         # 1) 기존 메모리 조회 + pending 상한 검사 (짧은 세션)
         async with self._session_factory() as session:
@@ -122,7 +161,8 @@ class MemoryExtractionService:
 
         # 2) LLM 추출 (세션 밖 — DB 점유 없이)
         candidates = await self._extractor.extract(
-            question, answer, existing_contents, request_id
+            question, answer, existing_contents, request_id,
+            feedback_note=feedback_note,
         )
 
         # 3) 검증·중복 제거·절단
@@ -153,6 +193,7 @@ class MemoryExtractionService:
             user_id=user_id,
             saved=len(valid),
             run_id=run_id,
+            trigger="feedback" if feedback_note else "turn",  # 결정 ④ provenance
         )
 
     async def _save_all(

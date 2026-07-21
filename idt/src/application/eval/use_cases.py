@@ -2,13 +2,16 @@
 
 세션·트랜잭션은 라우터 DI가 관리한다.
 결정 ②: 같은 rating 재요청이면 삭제(취소). 타 메시지·미존재는 "찾을 수 없" → 404 은닉.
+eval-feedback-loop §3-4: comment 있는 down 저장 시 부정 맥락 메모리 추출 트리거.
 """
 from dataclasses import dataclass
 
+from src.application.memory.extraction_service import MemoryExtractionService
 from src.application.repositories.conversation_repository import (
     ConversationMessageRepository,
 )
-from src.domain.conversation.entities import MessageId
+from src.domain.conversation.entities import ConversationMessage, MessageId
+from src.domain.conversation.value_objects import MessageRole
 from src.domain.eval.entity import MessageFeedback, Rating
 from src.domain.eval.interfaces import MessageFeedbackRepositoryInterface
 from src.domain.eval.policies import EvalPolicy
@@ -33,10 +36,12 @@ class SubmitFeedbackUseCase:
         feedback_repo: MessageFeedbackRepositoryInterface,
         message_repo: ConversationMessageRepository,
         logger: LoggerInterface,
+        extraction: MemoryExtractionService | None = None,
     ) -> None:
         self._repo = feedback_repo
         self._msg_repo = message_repo
         self._logger = logger
+        self._extraction = extraction
 
     async def execute(
         self, user_id: str, message_id: int, rating: str, comment: str | None,
@@ -44,7 +49,7 @@ class SubmitFeedbackUseCase:
     ) -> MessageFeedback | None:
         parsed = self._parse_rating(rating)
         EvalPolicy.validate_comment(comment)
-        agent_id = await self._resolve_agent_id(message_id, request_id)
+        message = await self._resolve_message(message_id)
 
         existing = await self._repo.find_by_message_and_user(
             message_id, user_id, request_id
@@ -61,7 +66,7 @@ class SubmitFeedbackUseCase:
         saved = await self._repo.upsert(
             MessageFeedback(
                 id=None, message_id=message_id, user_id=user_id,
-                agent_id=agent_id, rating=parsed, comment=comment,
+                agent_id=message.agent_id.value, rating=parsed, comment=comment,
             ),
             request_id,
         )
@@ -69,13 +74,63 @@ class SubmitFeedbackUseCase:
             "feedback submitted", request_id=request_id, user_id=user_id,
             message_id=message_id, rating=parsed.value,
         )
+        # eval-feedback-loop 결정 ⑤: comment 있는 down + 이전 상태와 다를 때만
+        if self._should_trigger_extraction(parsed, comment, existing):
+            await self._kickoff_feedback_extraction(message, comment, request_id)
         return saved
 
-    async def _resolve_agent_id(self, message_id: int, request_id: str) -> str:
+    async def _resolve_message(self, message_id: int) -> ConversationMessage:
         message = await self._msg_repo.find_by_id(MessageId(message_id))
         if message is None:
             raise ValueError(_NOT_FOUND_MSG)
-        return message.agent_id.value
+        return message
+
+    def _should_trigger_extraction(
+        self, parsed: Rating, comment: str | None,
+        existing: MessageFeedback | None,
+    ) -> bool:
+        if self._extraction is None or not self._extraction.feedback_enabled:
+            return False
+        if parsed != Rating.DOWN or not (comment and comment.strip()):
+            return False  # bare 👎는 통계만 — 추측 추출 금지 (rev1)
+        return (
+            existing is None
+            or existing.rating != Rating.DOWN
+            or existing.comment != comment
+        )
+
+    async def _kickoff_feedback_extraction(
+        self, message: ConversationMessage, comment: str, request_id: str,
+    ) -> None:
+        question = await self._find_question(message)
+        message_id = message.id.value if message.id is not None else None
+        if question is None:
+            self._logger.warning(
+                "feedback extraction skipped — question not found",
+                request_id=request_id, message_id=message_id,
+            )  # FR-02: 평가 저장은 유지
+            return
+        self._logger.info(
+            "feedback extraction kickoff",
+            request_id=request_id, message_id=message_id,
+        )  # 결정 ④ provenance: 로그로만 추적
+        self._extraction.kickoff_feedback(
+            message.user_id.value, question.content, message.content,
+            comment, request_id,
+        )
+
+    async def _find_question(
+        self, message: ConversationMessage,
+    ) -> ConversationMessage | None:
+        """같은 세션에서 직전 turn의 user 메시지(질문) 복원 — 모호하면 None."""
+        messages = await self._msg_repo.find_by_session(
+            message.user_id, message.session_id
+        )
+        target_turn = message.turn_index.value - 1
+        for m in messages:
+            if m.turn_index.value == target_turn and m.role == MessageRole.USER:
+                return m
+        return None
 
     @staticmethod
     def _parse_rating(rating: str) -> Rating:

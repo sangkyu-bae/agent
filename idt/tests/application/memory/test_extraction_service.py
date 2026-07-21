@@ -48,6 +48,7 @@ def _make(
     max_per_turn=3,
     pending_cap=20,
     extract_error=None,
+    feedback_enabled=False,
 ):
     counter = {"opened": 0, "closed": 0}
 
@@ -84,6 +85,7 @@ def _make(
         max_per_turn=max_per_turn,
         pending_cap=pending_cap,
         repo_builder=lambda session: repo,
+        feedback_enabled=feedback_enabled,
     )
     return service, repo, extractor, logger, saved, counter
 
@@ -205,3 +207,67 @@ class TestRun:
         existing_arg = extractor.extract.await_args.args[2]
         assert "활성 내용" in existing_arg
         assert "대기 내용" in existing_arg
+
+
+class TestKickoffFeedback:
+    """eval-feedback-loop Design §3-3 — 부정 평가 트리거 추출."""
+
+    async def test_feedback_enabled_False면_no_op(self):
+        service, _, extractor, _, _, counter = _make(feedback_enabled=False)
+
+        service.kickoff_feedback("u1", "질문", "답변", "근거 부족", "req-1")
+        await service.drain()
+
+        extractor.extract.assert_not_awaited()
+        assert counter["opened"] == 0
+        assert service.feedback_enabled is False
+
+    async def test_on이면_extract에_feedback_note_전달_후_PENDING_저장(self):
+        service, _, extractor, _, saved, _ = _make(
+            feedback_enabled=True,
+            candidates=[MemoryCandidate("preference", "조문 근거 포함 선호", 80)],
+        )
+
+        service.kickoff_feedback("u1", "질문", "답변", "근거 부족", "req-1")
+        await service.drain()
+
+        assert extractor.extract.await_args.kwargs["feedback_note"] == "근거 부족"
+        assert len(saved) == 1
+        assert saved[0].status == MemoryStatus.PENDING
+        assert saved[0].source_run_id is None  # provenance 결정 ④
+        assert service.feedback_enabled is True
+
+    async def test_매_턴_추출_off여도_feedback은_독립_동작(self):
+        service, _, extractor, _, saved, _ = _make(
+            enabled=False,  # 매 턴 추출 off
+            feedback_enabled=True,
+            candidates=[MemoryCandidate("preference", "새 선호", 70)],
+        )
+
+        service.kickoff_feedback("u1", "질문", "답변", "이유", "req-1")
+        await service.drain()
+
+        assert len(saved) == 1  # 독립 opt-in (FR-05)
+
+    async def test_pending_cap_도달_시_동일하게_skip(self):
+        service, _, extractor, _, saved, _ = _make(
+            feedback_enabled=True,
+            pending=[_existing(i, f"후보{i}", MemoryStatus.PENDING) for i in range(20)],
+            pending_cap=20,
+        )
+
+        service.kickoff_feedback("u1", "질문", "답변", "이유", "req-1")
+        await service.drain()
+
+        extractor.extract.assert_not_awaited()  # 결정 ③: cap 우회 없음
+        assert saved == []
+
+    async def test_기존_kickoff는_feedback_note_None(self):
+        service, _, extractor, _, _, _ = _make(
+            candidates=[MemoryCandidate("profile", "내용", 80)],
+        )
+
+        service.kickoff("u1", "질문", "답변", "run-1", "req-1")
+        await service.drain()
+
+        assert extractor.extract.await_args.kwargs.get("feedback_note") is None

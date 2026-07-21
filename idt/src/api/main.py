@@ -2189,6 +2189,7 @@ def get_memory_extraction_service() -> MemoryExtractionService:
             enabled=settings.memory_extraction_enabled,
             max_per_turn=settings.memory_extraction_max_per_turn,
             pending_cap=settings.memory_max_pending_per_user,
+            feedback_enabled=settings.eval_feedback_extraction_enabled,
         )
     return _memory_extraction_singleton
 
@@ -4056,10 +4057,12 @@ def create_app() -> FastAPI:
 
     # Eval Gate DI (agent-eval-gate)
     def _eval_submit_f(session: AsyncSession = Depends(get_session)):
+        # eval-feedback-loop §3-5: off여도 주입은 항상(코드 경로 단일화)
         return SubmitFeedbackUseCase(
             feedback_repo=MessageFeedbackRepository(session, get_app_logger()),
             message_repo=SQLAlchemyConversationMessageRepository(session),
             logger=get_app_logger(),
+            extraction=get_memory_extraction_service(),
         )
 
     def _eval_get_f(session: AsyncSession = Depends(get_session)):
