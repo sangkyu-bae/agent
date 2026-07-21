@@ -37,5 +37,10 @@ class FeedbackWikiDistillerInterface(ABC):
     @abstractmethod
     async def distill_feedback(
         self, question: str, answer: str, feedback_note: str, request_id: str,
+        candidates: list[tuple[str, str]] | None = None,
     ) -> FeedbackWikiDraft | None:
-        """팀 일반화 가치가 없으면 None(강제 생성 금지)."""
+        """팀 일반화 가치가 없으면 None(강제 생성 금지).
+
+        candidates: 같은 주제 병합 후보 (id, title) 목록
+        (recurring-feedback-promotion). None이면 기존 판정과 동일.
+        """

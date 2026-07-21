@@ -221,3 +221,20 @@ class TestRefsDedup:
 
     def test_빈_기존_집합은_항상_신규(self):
         assert WikiPolicy.is_duplicate_group(["doc:1"], set()) is False
+
+
+class TestReinforceConfidence:
+    """recurring-feedback-promotion 결정 ③ — 지지 1회당 +STEP, CAP 클램프."""
+
+    def test_단조_증가(self):
+        assert WikiPolicy.reinforce_confidence(0.5) == 0.6
+
+    def test_CAP_클램프(self):
+        assert WikiPolicy.reinforce_confidence(0.93) == WikiPolicy.REINFORCE_CAP
+        assert WikiPolicy.reinforce_confidence(0.95) == WikiPolicy.REINFORCE_CAP
+
+    def test_승인_전_1_0_도달_금지(self):
+        conf = 0.5
+        for _ in range(20):
+            conf = WikiPolicy.reinforce_confidence(conf)
+        assert conf < 1.0

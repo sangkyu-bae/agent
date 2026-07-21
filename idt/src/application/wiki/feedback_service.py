@@ -17,6 +17,7 @@ from src.domain.wiki.entity import WikiArticle, WikiSourceType, WikiStatus
 from src.domain.wiki.policies import WikiPolicy
 
 _FEEDBACK_PATH = "피드백"  # 결정 ④: 승인 큐 트리 노드 고정 분류
+_MATCH_CANDIDATES_MAX = 20  # recurring-feedback-promotion 결정 ④: 후보 상한
 
 
 class FeedbackWikiService:
@@ -28,11 +29,13 @@ class FeedbackWikiService:
         *,
         enabled: bool,
         repo_builder: Callable | None = None,
+        reinforce_enabled: bool = False,
     ) -> None:
         self._session_factory = session_factory
         self._distiller = distiller
         self._logger = logger
         self._enabled = enabled
+        self._reinforce_enabled = reinforce_enabled
         self._repo_builder = repo_builder or self._default_repo_builder
         self._tasks: set[asyncio.Task] = set()
 
@@ -112,11 +115,19 @@ class FeedbackWikiService:
             return
 
         # 2) LLM 판정+정제 (세션 밖 — DB 점유 없음)
+        # recurring-feedback-promotion: reinforce on이면 병합 후보 동봉
         draft = await self._distiller.distill_feedback(
-            question, answer, feedback_note, request_id
+            question, answer, feedback_note, request_id,
+            candidates=self._match_candidates(existing),
         )
         if draft is None:
             return  # FR-02: 승격 가치 없음 — 강제 생성 금지
+
+        # 2.5) 같은 주제 match → 기존 draft 강화 (성공 시 종료, 실패 시 신규 폴백)
+        if draft.match_id is not None and await self._reinforce(
+            existing, draft.match_id, message_id, request_id
+        ):
+            return
 
         # 3) 구성 + 불변식 검증 (자동 승인 금지 — DRAFT 고정)
         now = datetime.utcnow()
@@ -158,6 +169,63 @@ class FeedbackWikiService:
             article_id=article.id,
             trigger="feedback",
         )
+
+    def _match_candidates(
+        self, existing: list[WikiArticle],
+    ) -> list[tuple[str, str]] | None:
+        """병합 후보 (id, title) — CONVERSATION+DRAFT, updated_at desc 상위 N.
+
+        reinforce off·후보 0이면 None (distiller 프롬프트 기존과 동일 — FR-05).
+        """
+        if not self._reinforce_enabled:
+            return None
+        drafts = [
+            a for a in existing
+            if a.source_type == WikiSourceType.CONVERSATION
+            and a.status == WikiStatus.DRAFT
+        ]
+        drafts.sort(
+            key=lambda a: a.updated_at or datetime.min, reverse=True
+        )
+        candidates = [(a.id, a.title) for a in drafts[:_MATCH_CANDIDATES_MAX]]
+        return candidates or None
+
+    async def _reinforce(
+        self,
+        existing: list[WikiArticle],
+        match_id: str,
+        message_id: int,
+        request_id: str,
+    ) -> bool:
+        """대상 draft 강화 — 미실재·비DRAFT면 False(신규 draft 폴백, FR-04)."""
+        target = next((a for a in existing if a.id == match_id), None)
+        if target is None or target.status != WikiStatus.DRAFT:
+            self._logger.warning(
+                "feedback wiki reinforce fallback — match invalid",
+                request_id=request_id,
+                message_id=message_id,
+                match_id=match_id,
+            )
+            return False
+        target.add_support(
+            f"feedback:{message_id}",
+            WikiPolicy.reinforce_confidence(target.confidence),
+            datetime.utcnow(),
+        )
+        async with self._session_factory() as session:
+            async with session.begin():
+                repo = self._repo_builder(session)
+                await repo.update(target, request_id)
+        self._logger.info(
+            "feedback wiki draft reinforced",
+            request_id=request_id,
+            message_id=message_id,
+            article_id=target.id,
+            support=len(target.source_refs),
+            reinforced=True,  # §3-4: 필드 기반 관측 파싱용
+            trigger="feedback",
+        )
+        return True
 
     def _default_repo_builder(self, session):
         from src.infrastructure.wiki.wiki_repository import WikiArticleRepository

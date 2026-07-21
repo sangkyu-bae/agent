@@ -87,6 +87,16 @@ class WikiArticle:
         self.version += 1
         self.updated_at = now
 
+    def add_support(self, ref: str, confidence: float, now: datetime) -> None:
+        """반복 피드백 지지 축적 — refs 추가·신뢰도 갱신·버전 증가.
+
+        recurring-feedback-promotion 결정 ⑤: 제목·본문은 불변(매칭 키 안정성).
+        """
+        self.source_refs = [*self.source_refs, ref]
+        self.confidence = confidence
+        self.version += 1
+        self.updated_at = now
+
     def is_expired(self, now: datetime) -> bool:
         """만료 시각이 지났는지 여부."""
         return self.valid_until is not None and self.valid_until <= now

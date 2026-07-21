@@ -2215,6 +2215,7 @@ def get_feedback_wiki_service() -> FeedbackWikiService:
             distiller=distiller,
             logger=app_logger,
             enabled=settings.wiki_feedback_draft_enabled,
+            reinforce_enabled=settings.wiki_feedback_reinforce_enabled,
         )
     return _feedback_wiki_singleton
 

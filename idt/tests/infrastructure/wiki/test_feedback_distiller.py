@@ -90,3 +90,61 @@ class TestDistillFeedback:
             {"worthy": True, "title": "", "content": "본문"}
         ))
         assert await distiller.distill_feedback("질문", "답변", "이유", "req-1") is None
+
+
+class TestMatchCandidates:
+    """recurring-feedback-promotion §3-3 — 기존 초안 후보 매칭."""
+
+    async def test_candidates_전달시_프롬프트에_후보와_병합_지시_포함(self):
+        distiller, llm, _ = _make(json.dumps({"worthy": False}))
+
+        await distiller.distill_feedback(
+            "질문", "답변", "이유", "req-1",
+            candidates=[("w1", "여신 한도 산정 기준"), ("w2", "금리 용어 정의")],
+        )
+
+        human_text = llm.ainvoke.call_args.args[0][1].content
+        assert "[기존 초안 후보" in human_text
+        assert "w1: 여신 한도 산정 기준" in human_text
+        assert "w2: 금리 용어 정의" in human_text
+        assert "match_id" in human_text
+
+    async def test_candidates_없으면_기존_프롬프트와_동일(self):
+        distiller, llm, _ = _make(json.dumps({"worthy": False}))
+
+        await distiller.distill_feedback("질문", "답변", "이유", "req-1")
+
+        human_text = llm.ainvoke.call_args.args[0][1].content
+        assert "[기존 초안 후보" not in human_text
+
+    async def test_match_id_파싱(self):
+        distiller, _, _ = _make(json.dumps({
+            "worthy": True, "title": "제목", "content": "본문",
+            "confidence": 70, "match_id": "w1",
+        }))
+
+        draft = await distiller.distill_feedback(
+            "질문", "답변", "이유", "req-1", candidates=[("w1", "제목")],
+        )
+
+        assert draft.match_id == "w1"
+
+    async def test_후보에_없는_match_id는_None_강등(self):
+        distiller, _, _ = _make(json.dumps({
+            "worthy": True, "title": "제목", "content": "본문",
+            "confidence": 70, "match_id": "환각-id",
+        }))
+
+        draft = await distiller.distill_feedback(
+            "질문", "답변", "이유", "req-1", candidates=[("w1", "제목")],
+        )
+
+        assert draft is not None
+        assert draft.match_id is None  # 환각 id 1차 차단
+
+    async def test_candidates_없이_match_id_응답은_None(self):
+        distiller, _, _ = _make(json.dumps({
+            "worthy": True, "title": "제목", "content": "본문", "match_id": "w1",
+        }))
+        draft = await distiller.distill_feedback("질문", "답변", "이유", "req-1")
+        assert draft.match_id is None
