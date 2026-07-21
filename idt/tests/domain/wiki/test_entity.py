@@ -97,3 +97,25 @@ class TestSearchability:
     def test_no_expiry_never_expired(self):
         a = _article(valid_until=None)
         assert a.is_expired(now=datetime(2026, 6, 28)) is False
+
+
+class TestAddSupport:
+    """recurring-feedback-promotion — 반복 피드백 지지 축적 (제목·본문 불변)."""
+
+    def test_refs_추가_version_증가_confidence_갱신(self):
+        a = _article(source_refs=["feedback:1"])
+        now = datetime(2026, 7, 21)
+
+        a.add_support("feedback:2", 0.6, now)
+
+        assert a.source_refs == ["feedback:1", "feedback:2"]
+        assert a.version == 2
+        assert a.confidence == 0.6
+        assert a.updated_at == now
+
+    def test_제목_본문_상태는_불변(self):
+        a = _article(source_refs=["feedback:1"])
+        a.add_support("feedback:2", 0.6, datetime(2026, 7, 21))
+        assert a.title == "여신 한도 산정 기준"
+        assert a.content == "여신 한도는 ..."
+        assert a.status == WikiStatus.DRAFT

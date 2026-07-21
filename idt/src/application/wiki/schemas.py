@@ -31,11 +31,14 @@ class FeedbackWikiDraft:
     """부정 평가 환류 초안 (wiki-feedback-loop §3-2).
 
     confidence는 LLM 판정 점수(0~100)를 /100 클램프한 값.
+    match_id: 같은 주제로 판정된 기존 draft id (recurring-feedback-promotion).
+    None이면 신규 draft 생성.
     """
 
     title: str
     content: str
     confidence: float
+    match_id: str | None = None
 
 
 @dataclass

@@ -23,6 +23,10 @@ class WikiPolicy:
     PATH_MAX_DEPTH = 3
     PATH_SEGMENT_MAX = 30
 
+    # recurring-feedback-promotion 결정 ③: 반복 지지 confidence 가중
+    REINFORCE_STEP = 0.1
+    REINFORCE_CAP = 0.95
+
     ALLOWED_TRANSITIONS: dict[WikiStatus, set[WikiStatus]] = {
         WikiStatus.DRAFT: {WikiStatus.APPROVED, WikiStatus.DEPRECATED},
         WikiStatus.APPROVED: {WikiStatus.DEPRECATED},
@@ -80,6 +84,11 @@ class WikiPolicy:
     def clamp_confidence(value: float) -> float:
         """confidence를 0.0~1.0 범위로 클램핑한다(환류 갱신용)."""
         return max(WikiPolicy.CONFIDENCE_MIN, min(WikiPolicy.CONFIDENCE_MAX, value))
+
+    @staticmethod
+    def reinforce_confidence(current: float) -> float:
+        """지지 1회당 +STEP, CAP 클램프 — 승인 전 1.0 도달 금지."""
+        return min(WikiPolicy.REINFORCE_CAP, current + WikiPolicy.REINFORCE_STEP)
 
     @staticmethod
     def validate_path(path: str | None) -> None:

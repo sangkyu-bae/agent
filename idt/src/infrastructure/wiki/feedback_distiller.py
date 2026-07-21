@@ -67,20 +67,34 @@ class FeedbackWikiDistiller(FeedbackWikiDistillerInterface):
 
     async def distill_feedback(
         self, question: str, answer: str, feedback_note: str, request_id: str,
+        candidates: list[tuple[str, str]] | None = None,
     ) -> FeedbackWikiDraft | None:
         human = (
             f"[사용자 질문]\n{question}\n\n"
             f"[AI 답변]\n{answer}\n\n"
             f"[싫어요 이유]\n{feedback_note}"
         )
+        # recurring-feedback-promotion §3-3: 같은 주제 병합 후보
+        if candidates:
+            listed = "\n".join(f"- {cid}: {title}" for cid, title in candidates)
+            human += (
+                "\n\n[기존 초안 후보 — 같은 주제면 병합]\n"
+                f"{listed}\n"
+                '신규 지식이 위 후보 중 하나와 **같은 주제**면 "match_id"에 그 id를 '
+                "넣으세요.\n"
+                "확실하지 않으면 match_id는 null — 잘못된 병합보다 새 초안이 낫습니다."
+            )
         messages = [
             SystemMessage(content=_SYSTEM_PROMPT),
             HumanMessage(content=human),
         ]
         response = await self._llm.ainvoke(messages)
-        return self._parse(_coerce_text(response.content), request_id)
+        return self._parse(_coerce_text(response.content), request_id, candidates)
 
-    def _parse(self, text: str, request_id: str) -> FeedbackWikiDraft | None:
+    def _parse(
+        self, text: str, request_id: str,
+        candidates: list[tuple[str, str]] | None = None,
+    ) -> FeedbackWikiDraft | None:
         try:
             parsed = json.loads(_strip_code_fence(text))
             if not isinstance(parsed, dict):
@@ -106,7 +120,18 @@ class FeedbackWikiDistiller(FeedbackWikiDistillerInterface):
         return FeedbackWikiDraft(
             title=title, content=content,
             confidence=self._parse_confidence(parsed.get("confidence")),
+            match_id=self._parse_match_id(parsed.get("match_id"), candidates),
         )
+
+    @staticmethod
+    def _parse_match_id(
+        raw, candidates: list[tuple[str, str]] | None,
+    ) -> str | None:
+        """후보 id 집합에 실재하는 match_id만 인정 — 환각 id 1차 차단."""
+        if not raw or not candidates:
+            return None
+        candidate_ids = {cid for cid, _ in candidates}
+        return raw if raw in candidate_ids else None
 
     @staticmethod
     def _parse_confidence(raw) -> float:
