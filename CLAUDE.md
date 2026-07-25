@@ -93,3 +93,26 @@ npm run dev
 ```
 
 백엔드/프론트엔드 전용 스킬은 각 서브프로젝트의 `.claude/skills/` 참조.
+
+---
+
+## 6. SoT 지도 — 판단 근거를 찾는 곳
+
+각 사실의 단일 진실 공급원(SoT). 내용이 충돌하면 아래 표의 SoT가 이긴다.
+
+| 질문 | SoT | 위치 |
+|------|-----|------|
+| 왜 만드는가 / 누구를 위해 / 스코프 밖 | 유저 시나리오 (approved) | `docs/USER-SCENARIOS.md` |
+| 어디로 가는가 (성장 철학·원칙·로드맵) | growing-agent 비전 | `idt/docs/architecture/growing-agent-vision.md` |
+| 현재 무엇이 있는가 (스택·API·스키마·화면 총람) | SOT 문서 | `docs/SOURCE-OF-TRUTH.md` |
+| DB 스키마 상세 | **코드** (Flyway + models.py) | `idt/db/migration/` |
+| API 상세 | **코드** (FastAPI 라우터/스키마) | `idt/src/api/main.py` |
+| 설계 결정·제약·패턴의 "왜" | 개발 위키 | `docs/wiki/_INDEX.md` |
+| 코딩 규칙 | CLAUDE.md 3종 + 세부 규칙 | `idt/docs/rules/` |
+
+**작업 규칙:**
+
+1. **기능 작업 시작 전 `docs/wiki/_INDEX.md`를 읽고** 관련 문서를 참조한다 (✅ approved 우선, 📝 draft는 미승인 표시).
+2. 기능 우선순위·스코프 판단은 `USER-SCENARIOS.md` 기준: **주인공은 P2(KB 운영자/에이전트 소유자)**, 특화 vs 일반화 충돌 시 **일반화가 이긴다** (여신 특화는 데이터로, 코어에 하드코딩 금지).
+3. 위키 **읽기는 자유, 갱신은 사용자가 `/wiki update`를 명시 호출할 때만** (자동 갱신 금지).
+4. SOT 문서와 코드가 어긋나면 **코드가 진실** — 어긋남을 발견하면 고치지 말고 사용자에게 보고한다.

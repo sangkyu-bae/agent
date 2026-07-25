@@ -28,6 +28,8 @@ class ToolFactory:
         run_observability_config: Any = None,      # ★ M4: RunObservabilityConfig | None
         wiki_search: Any = None,                   # ★ LLM-WIKI-001: RunScopedWikiSearch | None
         routed_retrieval_getter: Callable[[], Any] | None = None,  # ★ rag-routed-integration D2
+        wiki_session_factory: Any = None,          # ★ wiki-agentic-navigation: wiki_read용
+        wiki_repo_builder: Any = None,             # ★ (session) -> WikiArticleRepository
     ) -> None:
         self._logger = logger
         self._hybrid_search = hybrid_search_use_case
@@ -41,6 +43,9 @@ class ToolFactory:
         # rag-routed-integration D2: use_routed_search=True인 RAG 도구에 주입.
         # None이면 도구가 not_wired 강등 처리(기존 search_mode 경로).
         self._routed_retrieval_getter = routed_retrieval_getter
+        # wiki-agentic-navigation: wiki_read 도구용 per-call 세션 의존.
+        self._wiki_session_factory = wiki_session_factory
+        self._wiki_repo_builder = wiki_repo_builder
         # agent-user-context Design §7.1:
         # WorkflowCompiler.compile() 시점에 갱신되는 현재 요청의 AuthContext.
         # None이면 Tool은 ContextVar fallback 또는 public_anonymous 동작.
@@ -91,7 +96,9 @@ class ToolFactory:
                     metadata_filter=effective_filter,
                     collection_name=rag_config.collection_name,
                     es_index=rag_config.es_index,
-                    name=sanitize_tool_name(rag_config.tool_name),
+                    name=sanitize_tool_name(
+                        rag_config.tool_name, fallback="internal_document_search"
+                    ),
                     description=rag_config.tool_description,
                     # ── M4: retrieval 영속화 wiring (Optional — None이면 영속화 skip) ──
                     tracker=self._tracker,
@@ -112,6 +119,20 @@ class ToolFactory:
                     tracker=self._tracker,
                     logger=self._logger,
                     config=self._obs_config,
+                )
+            case "wiki_read":
+                from src.infrastructure.wiki.wiki_read_tool import WikiReadTool
+
+                if self._wiki_session_factory is None or self._wiki_repo_builder is None:
+                    raise ValueError(
+                        "wiki_read 도구는 wiki_session_factory/wiki_repo_builder "
+                        "주입이 필요합니다 (ToolFactory 설정 오류)"
+                    )
+                return WikiReadTool(
+                    session_factory=self._wiki_session_factory,
+                    repo_builder=self._wiki_repo_builder,
+                    request_id=request_id,
+                    logger=self._logger,
                 )
             case "excel_export":
                 from src.infrastructure.excel_export.excel_export_tool import ExcelExportTool

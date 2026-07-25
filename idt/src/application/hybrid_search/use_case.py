@@ -97,10 +97,26 @@ class HybridSearchUseCase:
                 }
             }
             es_query_body: dict = multi_match_clause
-            if request.metadata_filter:
-                filter_clauses = [
-                    {"term": {k: v}} for k, v in request.metadata_filter.items()
-                ]
+            filter_clauses = [
+                {"term": {k: v}} for k, v in request.metadata_filter.items()
+            ]
+            # rag-auth-filter-fix D2: "값 일치 OR 필드 부재" 완화 매칭
+            for key, value in request.lenient_filter.items():
+                filter_clauses.append({
+                    "bool": {
+                        "should": [
+                            {"term": {key: value}},
+                            {"bool": {"must_not": [{"exists": {"field": key}}]}},
+                        ],
+                        "minimum_should_match": 1,
+                    }
+                })
+            # rag-auth-filter-fix D4: Qdrant 축과 대칭인 컬렉션 격리 (opt-in)
+            if request.collection_name:
+                filter_clauses.append(
+                    {"term": {"collection_name": request.collection_name}}
+                )
+            if filter_clauses:
                 es_query_body = {
                     "bool": {
                         "must": [multi_match_clause],
@@ -139,9 +155,12 @@ class HybridSearchUseCase:
         try:
             query_vector = await self._embedding.embed_text(request.query)
             vector_filter = None
-            if request.metadata_filter:
+            if request.metadata_filter or request.lenient_filter:
                 from src.domain.vector.value_objects import SearchFilter
-                vector_filter = SearchFilter(metadata=request.metadata_filter)
+                vector_filter = SearchFilter(
+                    metadata=request.metadata_filter,
+                    metadata_lenient=request.lenient_filter,
+                )
             vector_docs = await self._vector_store.search_by_vector(
                 vector=query_vector,
                 top_k=request.vector_top_k,

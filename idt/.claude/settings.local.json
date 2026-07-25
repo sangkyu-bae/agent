@@ -346,7 +346,18 @@
       "Bash(git -C /c/sangplus/sangplusbot log --oneline -3)",
       "Bash(git -C /c/sangplus/sangplusbot pull origin master --ff-only)",
       "Bash(git -C /c/sangplus/sangplusbot checkout -b feature/kb-custom-chunking)",
-      "Bash(git *)"
+      "Bash(git *)",
+      "Bash(mkdir -p docs/archive/2026-07/agent-eval-gate)",
+      "Bash(mv docs/01-plan/features/agent-eval-gate.plan.md docs/archive/2026-07/agent-eval-gate/)",
+      "Bash(mv docs/02-design/features/agent-eval-gate.design.md docs/archive/2026-07/agent-eval-gate/)",
+      "Bash(mv docs/03-analysis/agent-eval-gate.analysis.md docs/archive/2026-07/agent-eval-gate/)",
+      "Bash(mv docs/04-report/agent-eval-gate.report.md docs/archive/2026-07/agent-eval-gate/)",
+      "PowerShell(git *)",
+      "Bash(.venv/Scripts/python.exe -X utf8 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('total:', d['hits']['total']['value']\\); [print\\(h['_source']\\) for h in d['hits']['hits']]\")",
+      "Bash(.venv/Scripts/python.exe -X utf8 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('WITH filter total:', d['hits']['total']['value']\\)\")",
+      "Bash(.venv/Scripts/python.exe -X utf8 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('WITHOUT filter total:', d['hits']['total']['value']\\); [print\\(h['_source']\\) for h in d['hits']['hits']]\")",
+      "Bash(.venv/Scripts/python.exe *)",
+      "PowerShell(Get-Content *)"
     ]
   }
 }

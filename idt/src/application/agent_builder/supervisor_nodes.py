@@ -12,6 +12,7 @@ from src.application.agent_builder.supervisor_hooks import SupervisorHooks
 from src.application.agent_builder.supervisor_state import SupervisorState
 from src.application.agent_run.context import get_current_run_context
 from src.domain.agent_builder.policies import QualityGatePolicy
+from src.domain.conversation.analysis_snapshot_policy import AnalysisSnapshotPolicy
 from src.domain.agent_builder.schemas import SupervisorConfig, WorkerDefinition
 from src.domain.agent_run.value_objects import RunPurpose
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
@@ -38,20 +39,45 @@ def _render_attachment_block(attachments: list[dict] | None) -> str:
     )
 
 
+# 인벤토리 항목 요약 head 절단 길이(자) — 항목당 1줄 유지 (토큰 절약).
+_ENTRY_HEAD_MAX_CHARS = 80
+
+
+def _entry_head(body_lines: list[str], reinjected: bool) -> str:
+    """항목 요약 head — 재주입 항목은 마커 헤더 라인을 건너뛰고 실데이터에서 추출."""
+    lines = body_lines[1:] if reinjected else body_lines
+    for line in lines:
+        if line.strip():
+            return line[:_ENTRY_HEAD_MAX_CHARS]
+    return ""
+
+
 def _summarize_data_entry(index: int, msg) -> str:
-    """검색결과 메시지 1건 → 인지 블록 요약 1줄 (본문 미포함 — 토큰 절약)."""
+    """검색결과 메시지 1건 → 인벤토리 요약 1줄 (본문 미포함 — 토큰 절약).
+
+    data-inventory-requery D3: 수집 구분([이번 턴 수집]/[이전 턴 보유])과
+    재주입 항목의 원 질문을 노출해 LLM의 범위 커버리지 판단 근거를 제공한다.
+    """
     content = getattr(msg, "content", "")
     body_lines = content.splitlines()[1:]  # 첫 줄은 "[worker 검색결과]" 헤더
-    head = body_lines[0][:80] if body_lines else ""
-    return f"{index}. {getattr(msg, 'name', '')} — {head} ({len(content)}자)"
+    reinjected = AnalysisSnapshotPolicy.is_reinjected(content)
+    label = "[이전 턴 보유]" if reinjected else "[이번 턴 수집]"
+    head = _entry_head(body_lines, reinjected)
+    name = getattr(msg, "name", "")
+    question = (
+        AnalysisSnapshotPolicy.extract_reinjected_question(content)
+        if reinjected else ""
+    )
+    q_part = f' 원 질문: "{question}" —' if question else ""
+    return f"{index}. {label} {name} —{q_part} {head} ({len(content)}자)"
 
 
 def _render_data_context_block(messages: list) -> str:
-    """state 내 검색결과(현재 턴 수집분 + 재주입분) → 보유 데이터 인지 블록.
+    """state 내 검색결과(현재 턴 수집분 + 재주입분) → 보유 데이터 인벤토리 블록.
 
     analysis-data-continuity Design §3.5 (D5): supervisor가 보유 데이터 범위를
     근거로 재사용(분석 직행) vs 재수집(검색 워커 우선)을 판단하게 한다.
-    없으면 빈 문자열.
+    data-inventory-requery D3: 항목 순회 판단 지시로 강화. 없으면 빈 문자열.
     """
     entries = [m for m in messages if is_search_result(m)]
     if not entries:
@@ -61,8 +87,10 @@ def _render_data_context_block(messages: list) -> str:
     )
     return (
         f"\n\n[보유 분석 데이터]\n{lines}\n"
-        f"- 요청이 보유 데이터 범위 안이면 데이터 재수집 없이 분석 워커를 호출하세요.\n"
-        f"- 요청이 보유 데이터 범위를 벗어나면(대상·기간·집단 확대 등) "
+        f"- 위 목록을 항목별로 순회하며 현재 요청의 대상·기간·집단을 "
+        f"보유 데이터가 커버하는지 확인하세요.\n"
+        f"- 전부 커버하면 데이터 재수집 없이 분석 워커를 호출하세요.\n"
+        f"- 하나라도 범위를 벗어나면(대상·기간·집단 확대 등) "
         f"먼저 검색 워커로 새 데이터를 수집한 뒤 분석 워커를 호출하세요."
     )
 
@@ -206,6 +234,9 @@ def create_supervisor_node(
             f"다음 중 선택하세요:\n"
             f"- 워커 호출이 필요하면 해당 worker_id를 선택\n"
             f"- 처리 가능한 워커가 사용 가능 목록에 있으면 거부하지 말고 그 워커를 선택\n"
+            f"- 권한·개인정보 보호는 각 워커의 도구가 자동으로 검증하므로, 그것을 이유로 "
+            f"'FINISH'를 선택하지 마세요. 관련 정보를 찾을 가능성이 있는 워커가 있으면 "
+            f"먼저 라우팅하세요\n"
             f"- 어떤 워커로도 처리할 수 없을 때만 'FINISH'를 선택하고 "
             f"answer 필드에 사용자에게 전달할 자연스러운 응답을 작성하세요\n"
             f"- 모든 작업이 완료되었으면 'FINISH'를 선택 (워커를 이미 호출했다면 "

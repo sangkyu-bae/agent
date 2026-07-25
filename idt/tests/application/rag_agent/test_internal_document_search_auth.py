@@ -71,13 +71,19 @@ class TestPermissionDenial:
 
 
 class TestMetadataFilterEnforcement:
+    """rag-auth-filter-fix D1: 주입 키는 hard가 아닌 lenient/ignored로 분류.
+
+    (기존: metadata_filter에 must 주입 → 미색인 페이로드에서 전 문서 탈락)
+    """
+
     @pytest.mark.asyncio
     async def test_no_dept_permission_forces_public_visibility(self):
         tool = _make_tool(auth_ctx=_ctx(perms={"USE_RAG_SEARCH"}))
         await tool._arun("query")
-        # 실제 HybridSearchRequest.metadata_filter에 visibility=public 강제 주입
+        # visibility=public은 lenient 완화 필터로 적용 ("값 일치 OR 필드 부재")
         sent = tool.hybrid_search_use_case.execute.call_args[0][0]
-        assert sent.metadata_filter["visibility"] == "public"
+        assert sent.lenient_filter["visibility"] == "public"
+        assert "visibility" not in sent.metadata_filter
 
     @pytest.mark.asyncio
     async def test_dept_permission_injects_viewer_departments(self):
@@ -88,11 +94,18 @@ class TestMetadataFilterEnforcement:
         await tool._arun("query")
         sent = tool.hybrid_search_use_case.execute.call_args[0][0]
         assert "visibility" not in sent.metadata_filter
-        assert sent.metadata_filter["viewer_department_ids"] == "dept-001,dept-002"
+        # viewer_department_ids는 미색인 키 — 검색에는 미적용(ignored),
+        # effective filter에는 유지되어 후속 실효화에 재사용된다.
+        assert "viewer_department_ids" not in sent.metadata_filter
+        assert "viewer_department_ids" not in sent.lenient_filter
+        assert (
+            tool._get_effective_filter()["viewer_department_ids"]
+            == "dept-001,dept-002"
+        )
 
     @pytest.mark.asyncio
     async def test_preserves_existing_metadata_filter(self):
-        """기존 metadata_filter는 유지하고 visibility만 추가."""
+        """기존 metadata_filter(hard)는 유지, visibility는 lenient로 추가."""
         tool = _make_tool(
             auth_ctx=_ctx(perms={"USE_RAG_SEARCH"}),
             metadata_filter={"doc_type": "policy"},
@@ -100,7 +113,7 @@ class TestMetadataFilterEnforcement:
         await tool._arun("query")
         sent = tool.hybrid_search_use_case.execute.call_args[0][0]
         assert sent.metadata_filter["doc_type"] == "policy"
-        assert sent.metadata_filter["visibility"] == "public"
+        assert sent.lenient_filter["visibility"] == "public"
 
 
 class TestAuthContextResolutionPriority:

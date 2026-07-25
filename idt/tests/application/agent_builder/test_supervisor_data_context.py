@@ -127,3 +127,63 @@ class TestAnalysisPromptDataGapGuide:
         system_content = mock_llm.ainvoke.call_args[0][0][0]["content"]
         assert "데이터 제공을 요청하지 마세요" in system_content
         assert "추가 수집" in system_content
+
+
+def _reinjected_msg(
+    worker: str = "search_worker", question: str = "나의 남은 휴가 개수"
+) -> AIMessage:
+    """재주입 경로와 동형 픽스처 (data-inventory-requery §7.1)."""
+    from src.application.agent_builder.search_pipeline import format_search_result
+    from src.domain.conversation.analysis_snapshot_policy import (
+        AnalysisSnapshotPolicy,
+    )
+
+    policy = AnalysisSnapshotPolicy()
+    snap = {
+        "version": 1,
+        "question": question,
+        "items": [
+            {
+                "origin": worker,
+                "kind": "search",
+                "content": "남은 휴가: 15일",
+                "truncated": False,
+            }
+        ],
+    }
+    body = policy.render_reinjection_body(snap, snap["items"][0])
+    return AIMessage(name=worker, content=format_search_result(worker, body))
+
+
+class TestInventoryRendering:
+    """data-inventory-requery D3 (TC-B1~B3): 인벤토리 렌더."""
+
+    def test_tcb1_재주입_항목은_이전턴_라벨과_원질문_노출(self):
+        block = _render_data_context_block(
+            [HumanMessage(content="q"), _reinjected_msg()]
+        )
+        assert "[이전 턴 보유]" in block
+        assert "원 질문:" in block
+        assert "나의 남은 휴가 개수" in block
+
+    def test_tcb2_현재턴_항목은_이번턴_라벨과_데이터_head(self):
+        block = _render_data_context_block(
+            [HumanMessage(content="q"), _search_msg(body="남은 휴가: 15일")]
+        )
+        assert "[이번 턴 수집]" in block
+        assert "남은 휴가: 15일" in block
+        assert "이전 턴 수집 데이터" not in block
+
+    def test_tcb2b_재주입_항목_head는_마커가_아닌_실데이터(self):
+        block = _render_data_context_block(
+            [HumanMessage(content="q"), _reinjected_msg()]
+        )
+        assert "남은 휴가: 15일" in block
+
+    def test_tcb3_순회_판단_지시_포함(self):
+        block = _render_data_context_block(
+            [HumanMessage(content="q"), _search_msg()]
+        )
+        assert "순회" in block
+        assert "범위를 벗어나면" in block
+        assert "검색 워커" in block

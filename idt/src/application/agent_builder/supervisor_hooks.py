@@ -6,7 +6,19 @@ from src.application.agent_builder.search_pipeline import (
     latest_user_question,
 )
 from src.application.agent_builder.supervisor_state import SupervisorState
+from src.domain.conversation.analysis_snapshot_policy import AnalysisSnapshotPolicy
+from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.domain.visualization.policies import VisualizationRoutingPolicy
+
+
+def _is_current_turn_search_result(msg) -> bool:
+    """현재 턴에서 수집한 검색결과 식별 — 재주입분(이전 턴 스냅샷) 제외.
+
+    data-inventory-requery D2: 재주입분은 강제 라우팅의 근거가 아니다.
+    """
+    return is_search_result(msg) and not AnalysisSnapshotPolicy.is_reinjected(
+        getattr(msg, "content", "")
+    )
 
 
 class SupervisorHooks(Protocol):
@@ -42,10 +54,13 @@ class AttachmentRoutingHooks:
         self,
         analysis_worker_ids: list[str],
         viz_policy: VisualizationRoutingPolicy | None = None,
+        logger: LoggerInterface | None = None,
     ) -> None:
         # viz_policy=None이면 시각화 의도 강제 비활성 (하위호환).
+        # logger=None이면 무로그 (data-inventory-requery D5 — additive opt-in).
         self._analysis_worker_ids = analysis_worker_ids
         self._viz_policy = viz_policy
+        self._logger = logger
 
     def force_worker(self, state: SupervisorState) -> str | None:
         if not self._analysis_worker_ids:
@@ -67,17 +82,28 @@ class AttachmentRoutingHooks:
         return any(a.get("type") in self._ROUTABLE_TYPES for a in attachments)
 
     def _viz_intent_with_search_results(self, state: SupervisorState) -> bool:
-        """시각화 의도 + 검색 결과 수집 완료 → 분석 강제 대상.
+        """시각화 의도 + '현재 턴에서 수집한' 검색 결과 → 분석 강제 대상.
 
         검색 결과가 없으면 침묵(D3) — 데이터 없는 강제 분석은 대화 문맥
         fallback이 환각 차트를 만들 수 있어 prompt 유도에만 맡긴다.
+
+        data-inventory-requery D2: 재주입분(이전 턴 스냅샷)만 있으면 침묵 —
+        첫 라우팅은 supervisor LLM이 보유 데이터 인벤토리를 근거로
+        재사용/재수집을 판단한다 (검색 실행 후에는 기존대로 강제).
         """
         if self._viz_policy is None:
             return False
         messages = state.get("messages", []) or []
         if not self._viz_policy.explicit_request(latest_user_question(messages)):
             return False
-        return any(is_search_result(m) for m in messages)
+        has_current = any(_is_current_turn_search_result(m) for m in messages)
+        if not has_current and self._logger is not None and any(
+            is_search_result(m) for m in messages
+        ):
+            self._logger.info(
+                "viz force-routing skipped: only reinjected data present",
+            )
+        return has_current
 
     def skip_workers(self, state: SupervisorState) -> list[str]:
         # supervisor-chart-builder-node: 시각화 처리가 끝나면 분석 워커를 skip 처리해

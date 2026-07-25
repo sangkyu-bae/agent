@@ -26,6 +26,7 @@ class MultiQueryRewriteWorkflow:
         collection_name: str | None = None,
         es_index: str | None = None,
         metadata_filter: dict[str, str] | None = None,
+        lenient_filter: dict[str, str] | None = None,
     ) -> None:
         self._query_generator = query_generator
         self._hybrid_search = hybrid_search
@@ -34,6 +35,7 @@ class MultiQueryRewriteWorkflow:
         self._collection_name = collection_name
         self._es_index = es_index
         self._metadata_filter = metadata_filter or {}
+        self._lenient_filter = lenient_filter or {}
         self._graph = self._build_graph()
 
     def _build_graph(self) -> Any:
@@ -142,6 +144,7 @@ class MultiQueryRewriteWorkflow:
                     bm25_top_k=per_query_top_k * 2,
                     vector_top_k=per_query_top_k * 2,
                     metadata_filter=self._metadata_filter,
+                    lenient_filter=self._lenient_filter,
                     collection_name=self._collection_name,
                     es_index=self._es_index,
                 )

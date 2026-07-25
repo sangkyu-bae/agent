@@ -170,6 +170,15 @@ class TestRunAgentUseCase:
         assert isinstance(kwargs["supervisor_config"], SupervisorConfig)
 
     @pytest.mark.asyncio
+    async def test_execute_passes_agent_id_to_compiler(self):
+        """wiki-agentic-navigation D2: 최상위 compile에 agent_id 전달 (목차 활성 조건)."""
+        use_case, _, compiler, agent, *_ = _make_use_case()
+        request = RunAgentRequest(query="쿼리", user_id="user-1")
+        await use_case.execute(agent.id, request, "req-1")
+        _, kwargs = compiler.compile.call_args
+        assert kwargs["agent_id"] == agent.id
+
+    @pytest.mark.asyncio
     async def test_execute_passes_initial_state_with_supervisor_fields(self):
         """graph.ainvoke에 SupervisorState 형태의 initial_state가 전달된다."""
         use_case, _, _, agent, _, _, _, mock_graph = _make_use_case()

@@ -179,3 +179,31 @@ class TestEntityAnalysisData:
     def test_items_비어있으면_거부(self):
         with pytest.raises(ValueError):
             _msg(1, MessageRole.ASSISTANT, {"version": 1, "items": []})
+
+
+class TestExtractReinjectedQuestion:
+    """data-inventory-requery D1 (TC-C1): 재주입 헤더에서 원 질문 추출."""
+
+    def test_render_reinjection_body와_왕복(self):
+        policy = AnalysisSnapshotPolicy()
+        snap = _snapshot("나의 남은 휴가 개수")
+        body = policy.render_reinjection_body(snap, snap["items"][0])
+        assert AnalysisSnapshotPolicy.extract_reinjected_question(body) == (
+            "나의 남은 휴가 개수"
+        )
+
+    def test_질문에_괄호가_있어도_보존(self):
+        policy = AnalysisSnapshotPolicy()
+        snap = _snapshot("휴가(연차) 현황")
+        body = policy.render_reinjection_body(snap, snap["items"][0])
+        assert AnalysisSnapshotPolicy.extract_reinjected_question(body) == (
+            "휴가(연차) 현황"
+        )
+
+    def test_비재주입_본문은_빈_문자열(self):
+        assert AnalysisSnapshotPolicy.extract_reinjected_question("휴가 15일") == ""
+        assert AnalysisSnapshotPolicy.extract_reinjected_question("") == ""
+
+    def test_마커는_있지만_질문_형식_불일치면_빈_문자열(self):
+        content = f"{REINJECTED_MARKER}\n데이터"
+        assert AnalysisSnapshotPolicy.extract_reinjected_question(content) == ""

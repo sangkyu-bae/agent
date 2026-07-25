@@ -49,3 +49,13 @@ class WikiArticleRepository(ABC):
         self, agent_id: str, request_id: str
     ) -> list[WikiTreeItem]:
         """지식 트리용 경량 목록(본문 제외) — path·updated_at 정렬 (wiki-user-facing)."""
+
+    async def list_searchable_tree_items(
+        self, agent_id: str, now: datetime, request_id: str
+    ) -> list[WikiTreeItem]:
+        """프롬프트 목차용 승인+미만료 경량 목록 — updated_at 내림차순.
+
+        wiki-agentic-navigation D7. 기존 구현체/페이크 무회귀를 위해
+        abstractmethod가 아닌 기본 메서드로 추가한다(additive).
+        """
+        raise NotImplementedError

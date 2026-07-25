@@ -303,3 +303,59 @@ class TestRewriteInput:
         assert "진짜 질문" in user_content
         # 워커 산출물은 rewrite 맥락에서 제외
         assert "빈약" not in user_content
+
+
+class TestUserContextInjection:
+    """rag-auth-filter-fix D5/D6: 사용자 컨텍스트 블록 주입."""
+
+    _BLOCK = (
+        "[현재 사용자 정보]\n- 이름: 배상규\n- 부서: 테스트1\n- 역할: 관리자\n\n"
+        "사용자가 '나', '내', '본인'이라고 말하면 위 사용자를 의미합니다.\n\n---\n\n"
+    )
+
+    def _node(self, llm, tool, block):
+        return create_search_pipeline_node(
+            worker_id="w1",
+            tool=tool,
+            pipeline_llm=llm,
+            policy=SearchPipelinePolicy(compress_threshold=10),
+            logger=MagicMock(),
+            user_context_block=block,
+        )
+
+    @pytest.mark.asyncio
+    async def test_block_prepended_to_all_llm_stages(self):
+        """rewrite/validate/compress 3단계 system 프롬프트 모두에 블록 포함."""
+        llm = FakeLLM(structured=[_RQ, _OK], invokes=["압축 결과"])
+        tool = FakeTool(["긴 검색 결과 본문입니다. 압축 임계 초과."])
+        await self._node(llm, tool, self._BLOCK)(
+            _make_state("나의 휴가 남은 개수 그래프로 보여줘")
+        )
+
+        for _, messages in llm.structured_calls:  # rewrite + validate
+            assert messages[0]["content"].startswith(self._BLOCK)
+        assert llm.invoke_calls[0][0]["content"].startswith(self._BLOCK)  # compress
+
+    @pytest.mark.asyncio
+    async def test_empty_block_keeps_prompts_identical(self):
+        """빈 블록(기본값)이면 기존 프롬프트와 동일 — 하위호환."""
+        from src.application.agent_builder.search_pipeline import (
+            REWRITE_SYSTEM_PROMPT,
+        )
+
+        llm = FakeLLM(structured=[_RQ, _OK])
+        tool = FakeTool(["결과"])
+        await _make_node(llm, tool)(_make_state())
+
+        _, rewrite_messages = llm.structured_calls[0]
+        assert rewrite_messages[0]["content"] == REWRITE_SYSTEM_PROMPT
+
+    def test_rewrite_prompt_has_first_person_rule(self):
+        """D6: 1인칭 치환 규칙과 개인 데이터 한정 문구가 프롬프트에 존재."""
+        from src.application.agent_builder.search_pipeline import (
+            REWRITE_SYSTEM_PROMPT,
+        )
+
+        assert "'나', '내', '본인'" in REWRITE_SYSTEM_PROMPT
+        assert "사용자 이름" in REWRITE_SYSTEM_PROMPT
+        assert "배상규" in REWRITE_SYSTEM_PROMPT  # 휴가 질문 치환 예시

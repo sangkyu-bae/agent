@@ -14,6 +14,9 @@ class Settings(BaseSettings):
 
     # LLM Wiki (LLM-WIKI-001)
     wiki_collection_name: str = "wiki_knowledge"
+    # wiki-agentic-navigation D8: 프롬프트 목차 상한 (초과 시 최신순 절단)
+    wiki_toc_max_items: int = 50
+    wiki_toc_max_bytes: int = 4000
 
     # OpenAI
     openai_api_key: str = ""

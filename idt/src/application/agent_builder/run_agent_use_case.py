@@ -569,6 +569,8 @@ class RunAgentUseCase:
             run_id=run_id,
             auth_ctx=auth_ctx,
             include_user_context=agent.include_user_context,
+            # wiki-agentic-navigation D2: wiki_read 목차 활성 조건 (최상위만)
+            agent_id=agent.id,
         )
 
         initial_state = build_initial_state(

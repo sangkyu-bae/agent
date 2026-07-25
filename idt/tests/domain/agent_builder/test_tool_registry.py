@@ -15,6 +15,7 @@ EXPECTED_TOOL_IDS = {
     "python_code_executor",
     "data_analysis",
     "document_extractor",
+    "wiki_read",
 }
 
 
@@ -86,4 +87,14 @@ class TestToolRegistryCategory:
         """document-template-extractor GA1: action 카테고리 + env 불필요."""
         meta = get_tool_meta("document_extractor")
         assert meta.category == "action"
+        assert meta.requires_env == []
+
+    def test_wiki_read_is_not_search_or_analysis(self):
+        """wiki-agentic-navigation D6: search/analysis 미지정 → react agent 워커 경로.
+
+        category='search'면 search 파이프라인 노드로, 'analysis'면 분석 노드로
+        분기되므로 wiki_read는 어느 쪽도 아니어야 한다.
+        """
+        meta = get_tool_meta("wiki_read")
+        assert meta.category not in ("search", "analysis")
         assert meta.requires_env == []

@@ -1,6 +1,6 @@
 {
   "version": "2.0",
-  "lastUpdated": "2026-07-21T06:32:43.233Z",
+  "lastUpdated": "2026-07-23T11:49:04.708Z",
   "activeFeatures": [
     "websocket-common-module",
     "agent-chat-multiturn",
@@ -148,7 +148,10 @@
     "AgentWorkspacePage",
     "agent-store",
     "department",
-    "eval"
+    "eval",
+    "WikiPage",
+    "rag-auth-filter-fix",
+    "supervisor-overblock-fix"
   ],
   "primaryFeature": "websocket-common-module",
   "archivedFeatures": {
@@ -659,7 +662,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-04T10:53:02.380Z",
-        "lastUpdated": "2026-07-21T06:25:44.010Z"
+        "lastUpdated": "2026-07-23T11:37:42.309Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\api\\main.py"
     },
@@ -750,9 +753,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-16T13:11:01.522Z",
-        "lastUpdated": "2026-06-04T04:23:26.062Z"
+        "lastUpdated": "2026-07-21T10:34:59.695Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\application\\hybrid_search\\test_hybrid_search_use_case.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\application\\hybrid_search\\use_case.py"
     },
     "idt": {
       "phase": "do",
@@ -763,7 +766,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-16T13:14:48.990Z",
-        "lastUpdated": "2026-07-21T06:25:34.750Z"
+        "lastUpdated": "2026-07-23T11:37:25.455Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\config.py"
     },
@@ -828,9 +831,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-17T02:00:33.482Z",
-        "lastUpdated": "2026-07-10T05:31:32.435Z"
+        "lastUpdated": "2026-07-21T10:41:39.755Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\application\\rag_agent\\tools.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\application\\rag_agent\\test_internal_document_search_auth.py"
     },
     "mysql": {
       "phase": "do",
@@ -867,7 +870,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-17T06:05:51.300Z",
-        "lastUpdated": "2026-07-07T03:17:17.524Z"
+        "lastUpdated": "2026-07-23T09:01:16.871Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\domain\\conversation\\analysis_snapshot_policy.py"
     },
@@ -1026,9 +1029,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-04-01T11:13:23.704Z",
-        "lastUpdated": "2026-07-20T11:44:08.588Z"
+        "lastUpdated": "2026-07-21T10:02:27.260Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\constants\\api.ts"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\constants\\adminNav.test.ts"
     },
     "idt_front": {
       "phase": "do",
@@ -1052,7 +1055,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-04-01T11:14:28.392Z",
-        "lastUpdated": "2026-07-20T11:57:02.647Z"
+        "lastUpdated": "2026-07-21T09:34:59.845Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\ChatPage\\index.tsx"
     },
@@ -1105,7 +1108,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-04-17T06:40:30.209Z",
-        "lastUpdated": "2026-07-18T09:53:41.139Z"
+        "lastUpdated": "2026-07-23T11:31:17.337Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\application\\repositories\\wiki_repository.py"
     },
@@ -1335,7 +1338,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-04-29T06:53:51.442Z",
-        "lastUpdated": "2026-07-09T06:52:29.132Z"
+        "lastUpdated": "2026-07-21T10:35:08.113Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\infrastructure\\vector\\qdrant_vectorstore.py"
     },
@@ -1523,9 +1526,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-05-14T03:00:44.615Z",
-        "lastUpdated": "2026-07-20T00:37:32.982Z"
+        "lastUpdated": "2026-07-21T09:34:57.897Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\components\\layout\\TopNav.tsx"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\components\\layout\\ChatHeader.tsx"
     },
     "strategies": {
       "phase": "do",
@@ -1588,9 +1591,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-05-14T13:32:34.572Z",
-        "lastUpdated": "2026-07-10T05:30:34.525Z"
+        "lastUpdated": "2026-07-21T10:33:33.059Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\application\\multi_query\\use_case.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\application\\multi_query\\workflow.py"
     },
     "websocket": {
       "phase": "do",
@@ -1958,9 +1961,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-06-24T06:53:34.932Z",
-        "lastUpdated": "2026-07-11T07:19:16.137Z"
+        "lastUpdated": "2026-07-21T09:51:20.466Z"
       },
-      "lastFile": "C:\\Users\\tkdrb\\AppData\\Local\\Temp\\claude\\C--sangplus-sangplusbot-idt\\88df6965-3cfd-4ec1-93c8-2e9e1b8924f7\\scratchpad\\make_test_docs.py"
+      "lastFile": "C:\\Users\\tkdrb\\AppData\\Local\\Temp\\claude\\C--sangplus-sangplusbot-idt\\f1c95fe6-5075-420e-84e6-b2cf76dd0c36\\scratchpad\\dbq2.py"
     },
     "AdminSkillsPage": {
       "phase": "do",
@@ -2099,9 +2102,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-07-02T08:04:03.861Z",
-        "lastUpdated": "2026-07-02T08:07:13.953Z"
+        "lastUpdated": "2026-07-23T11:49:04.707Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\application\\tool_catalog\\sync_internal_tools_use_case.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\application\\tool_catalog\\test_sync_internal_tools_use_case.py"
     },
     "agent-schedule": {
       "phase": "archived",
@@ -2273,9 +2276,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-07-10T05:24:02.290Z",
-        "lastUpdated": "2026-07-10T05:52:11.471Z"
+        "lastUpdated": "2026-07-23T11:33:00.575Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\application\\agent_run\\exceptions.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\application\\agent_run\\test_prompt_rendering.py"
     },
     "schemas": {
       "phase": "do",
@@ -2467,9 +2470,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-07-18T09:51:27.503Z",
-        "lastUpdated": "2026-07-21T06:32:10.291Z"
+        "lastUpdated": "2026-07-23T11:37:03.388Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\application\\wiki\\feedback_service.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\application\\wiki\\wiki_first_search_use_case.py"
     },
     "KnowledgeArticlePage": {
       "phase": "do",
@@ -2686,6 +2689,19 @@
       },
       "previousPhase": "check",
       "autoAdvanced": true
+    },
+    "WikiPage": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-07-21T09:29:58.781Z",
+        "lastUpdated": "2026-07-21T09:35:40.797Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\WikiPage\\index.tsx"
     }
   },
   "pipeline": {
@@ -2696,7 +2712,7 @@
   "session": {
     "startedAt": "2026-03-04T10:49:14.367Z",
     "onboardingCompleted": false,
-    "lastActivity": "2026-07-21T06:32:43.233Z"
+    "lastActivity": "2026-07-23T11:49:04.708Z"
   },
   "history": [
     {
@@ -19984,6 +20000,354 @@
       "feature": "recurring-feedback-promotion",
       "phase": "act",
       "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-21T09:29:36.495Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-21T09:29:41.568Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-21T09:29:58.781Z",
+      "feature": "WikiPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-21T09:34:47.906Z",
+      "feature": "constants",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-21T09:34:50.794Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-21T09:34:57.897Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-21T09:34:59.845Z",
+      "feature": "ChatPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-21T09:35:14.817Z",
+      "feature": "WikiPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-21T09:35:27.878Z",
+      "feature": "WikiPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-21T09:35:35.750Z",
+      "feature": "WikiPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-21T09:35:40.073Z",
+      "feature": "WikiPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-21T09:35:40.797Z",
+      "feature": "WikiPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-21T09:50:33.285Z",
+      "feature": "scratchpad",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-21T09:51:20.466Z",
+      "feature": "scratchpad",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-21T09:53:52.414Z",
+      "feature": "constants",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-21T10:02:27.260Z",
+      "feature": "constants",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-21T10:32:10.721Z",
+      "feature": "rag_agent",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-21T10:32:35.296Z",
+      "feature": "hybrid_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-21T10:32:38.158Z",
+      "feature": "vector",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-21T10:32:42.862Z",
+      "feature": "vector",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-21T10:32:51.267Z",
+      "feature": "rag_agent",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-21T10:32:59.357Z",
+      "feature": "rag_agent",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-21T10:33:06.728Z",
+      "feature": "rag_agent",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-21T10:33:15.595Z",
+      "feature": "rag_agent",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-21T10:33:24.015Z",
+      "feature": "multi_query",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-21T10:33:27.245Z",
+      "feature": "multi_query",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-21T10:33:33.059Z",
+      "feature": "multi_query",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-21T10:34:17.917Z",
+      "feature": "hybrid_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-21T10:34:28.714Z",
+      "feature": "vector",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-21T10:34:57.140Z",
+      "feature": "hybrid_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-21T10:34:59.695Z",
+      "feature": "hybrid_search",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-21T10:35:08.113Z",
+      "feature": "vector",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-21T10:38:33.876Z",
+      "feature": "rag_agent",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-21T10:41:39.755Z",
+      "feature": "rag_agent",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-22T12:14:28.095Z",
+      "feature": "agent_run",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-22T12:14:32.317Z",
+      "feature": "agent_run",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-22T12:14:39.974Z",
+      "feature": "agent_run",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-22T12:15:14.977Z",
+      "feature": "agent_run",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-23T09:01:16.871Z",
+      "feature": "conversation",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-23T11:26:52.817Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-23T11:27:23.818Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-23T11:27:55.929Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-23T11:28:27.887Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-23T11:30:45.427Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-23T11:31:12.904Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-23T11:31:17.337Z",
+      "feature": "repositories",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-23T11:32:17.170Z",
+      "feature": "agent_run",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-23T11:32:32.098Z",
+      "feature": "agent_run",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-23T11:33:00.575Z",
+      "feature": "agent_run",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-23T11:33:23.159Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-23T11:33:33.253Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-23T11:36:57.322Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-23T11:37:03.388Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-23T11:37:25.455Z",
+      "feature": "idt",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-23T11:37:40.514Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-23T11:37:42.309Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-23T11:48:45.275Z",
+      "feature": "tool_catalog",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-23T11:49:04.707Z",
+      "feature": "tool_catalog",
+      "phase": "do",
+      "action": "updated"
     }
   ],
   "featurePhases": {
@@ -20008,9 +20372,19 @@
       "matchRate": 98,
       "analysisDoc": "docs/03-analysis/recurring-feedback-promotion.analysis.md",
       "reportDoc": "docs/04-report/recurring-feedback-promotion.report.md"
+    },
+    "rag-auth-filter-fix": "do",
+    "supervisor-overblock-fix": "completed",
+    "wiki-agentic-navigation": {
+      "phase": "archived",
+      "updatedAt": "2026-07-23",
+      "matchRate": 100,
+      "archivedAt": "2026-07-23",
+      "archivedTo": "docs/archive/2026-07/wiki-agentic-navigation/"
     }
   },
   "matchRates": {
+    "supervisor-overblock-fix": 100,
     "self-hosted-qwen-endpoint": 100,
     "document-template-extractor": 99,
     "agent-recursion-limit": 98,
@@ -20021,7 +20395,8 @@
     "self-hosted-qwen-endpoint": "docs/archive/2026-06/self-hosted-qwen-endpoint/",
     "document-template-extractor": "docs/archive/2026-07/document-template-extractor/",
     "doc-extractor-preview-highlight": "docs/archive/2026-07/doc-extractor-preview-highlight/",
-    "wiki-user-facing": "docs/archive/2026-07/wiki-user-facing/"
+    "wiki-user-facing": "docs/archive/2026-07/wiki-user-facing/",
+    "wiki-agentic-navigation": "docs/archive/2026-07/wiki-agentic-navigation/"
   },
-  "currentFeature": "agent-memory"
+  "currentFeature": "wiki-agentic-navigation"
 }

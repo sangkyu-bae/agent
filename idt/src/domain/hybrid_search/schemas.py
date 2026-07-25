@@ -16,6 +16,10 @@ class HybridSearchRequest:
     vector_top_k: int = 20
     rrf_k: int = 60
     metadata_filter: dict[str, str] = field(default_factory=dict)
+    # rag-auth-filter-fix D1: "key == value OR key 필드 부재" 완화 매칭.
+    # 색인 페이로드에 아직 없는 권한 필드(visibility)를 fail-open으로 다루되,
+    # 필드가 색인된 문서에는 값 일치를 강제한다.
+    lenient_filter: dict[str, str] = field(default_factory=dict)
     bm25_weight: float = 0.5
     vector_weight: float = 0.5
     collection_name: str | None = None

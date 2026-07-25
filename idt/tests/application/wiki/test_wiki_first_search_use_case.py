@@ -81,6 +81,21 @@ class TestWikiFirst:
         assert resp.results[0].metadata["title"] == "제목-w1"
 
     @pytest.mark.asyncio
+    async def test_metadata_source_identifies_wiki_with_title(self):
+        """wiki-agentic-navigation FR-07/D3: LLM 렌더링용 출처 표기.
+
+        _format_results가 metadata['source']를 '[출처: ...]'로 렌더하므로
+        위키 hit은 'wiki:{title}'로 위키임을 식별할 수 있어야 한다
+        (기존엔 키 부재 → '[출처: unknown]').
+        """
+        uc, _, _ = _uc([_wiki("w1")], [])
+        resp = await uc.execute(_req(), agent_id="agent_1", now=NOW, request_id="r")
+        assert resp.results[0].metadata["source"] == "wiki:제목-w1"
+        # 기존 키 보존 (관측성 metadata 회귀 방지)
+        assert resp.results[0].metadata["wiki"] == "true"
+        assert resp.results[0].metadata["title"] == "제목-w1"
+
+    @pytest.mark.asyncio
     async def test_score_from_confidence(self):
         uc, _, _ = _uc([_wiki("w1", confidence=0.9)], [])
         resp = await uc.execute(_req(), "agent_1", NOW, "r")

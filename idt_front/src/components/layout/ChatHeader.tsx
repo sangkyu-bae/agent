@@ -1,9 +1,13 @@
+import { Link } from 'react-router-dom';
+
 interface ChatHeaderProps {
   title?: string;
   messageCount?: number;
+  /** wiki-navigation S3: 사용자 에이전트 선택 시에만 전달. 없으면 워크스페이스 링크 미노출 */
+  agentId?: string | null;
 }
 
-const ChatHeader = ({ title = '새 대화', messageCount = 0 }: ChatHeaderProps) => {
+const ChatHeader = ({ title = '새 대화', messageCount = 0, agentId }: ChatHeaderProps) => {
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-zinc-100 bg-white px-5">
       <div className="flex items-center gap-3 min-w-0">
@@ -16,6 +20,22 @@ const ChatHeader = ({ title = '새 대화', messageCount = 0 }: ChatHeaderProps)
       </div>
 
       <div className="flex items-center gap-1.5">
+        {agentId && (
+          <Link
+            to={`/agents/${agentId}/workspace`}
+            title="에이전트 워크스페이스"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition-all hover:bg-zinc-100 hover:text-zinc-600"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M3.75 9.776c.112-.017.227-.026.344-.026h15.812c.117 0 .232.009.344.026m-16.5 0a2.25 2.25 0 0 0-1.883 2.542l.893 6.25a2.25 2.25 0 0 0 2.227 1.932H19.05a2.25 2.25 0 0 0 2.227-1.932l.893-6.25a2.25 2.25 0 0 0-1.883-2.542m-16.5 0V6A2.25 2.25 0 0 1 6 3.75h3.879a1.5 1.5 0 0 1 1.06.44l2.122 2.12a1.5 1.5 0 0 0 1.06.44H18A2.25 2.25 0 0 1 20.25 9v.776"
+              />
+            </svg>
+          </Link>
+        )}
+
         {/* 상태 뱃지 */}
         <div className="flex items-center gap-2 rounded-full border border-zinc-200 bg-zinc-50 px-3.5 py-1.5 text-[12px] font-medium text-zinc-600">
           <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-sm shadow-emerald-200 animate-pulse" />
