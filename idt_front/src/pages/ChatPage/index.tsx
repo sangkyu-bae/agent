@@ -314,6 +314,7 @@ const ChatPage = () => {
       <ChatHeader
         title={selectedAgent?.name ?? 'SUPER AI Agent'}
         messageCount={messages.length}
+        agentId={selectedAgent && selectedAgent.id !== 'super' ? selectedAgent.id : undefined}
       />
 
       <div style={{ flex: 1, overflowY: 'auto' }}>

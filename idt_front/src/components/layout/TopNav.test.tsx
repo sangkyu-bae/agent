@@ -45,7 +45,7 @@ describe('TopNav — 관리 메뉴', () => {
     expect(screen.getByRole('button', { name: /관리/ })).toBeInTheDocument();
   });
 
-  it('T2: "관리" 드롭다운에 4개 관리자 페이지가 모두 노출된다', async () => {
+  it('T2: "관리" 드롭다운에 관리자 페이지가 모두 노출된다', async () => {
     useAuthStore.setState({ user: adminUser, isAuthenticated: true });
     const user = userEvent.setup();
     renderTopNav();
@@ -56,6 +56,7 @@ describe('TopNav — 관리 메뉴', () => {
     expect(screen.getByText('부서 관리')).toBeInTheDocument();
     expect(screen.getByText('RAGAS 평가')).toBeInTheDocument();
     expect(screen.getByText('Agent Run 관측')).toBeInTheDocument();
+    expect(screen.getByText('위키 관리')).toBeInTheDocument();
   });
 
   it('T3: 일반 사용자일 때 "관리" 메뉴를 노출하지 않는다', () => {
