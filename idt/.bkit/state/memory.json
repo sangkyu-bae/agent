@@ -1,14 +1,15 @@
 {
-  "sessionCount": 388,
+  "sessionCount": 413,
   "lastSession": {
-    "startedAt": "2026-07-19T23:56:54.452Z",
+    "startedAt": "2026-07-25T07:10:48.273Z",
     "platform": "claude",
     "level": "Starter"
   },
-  "currentFeature": "expose-user-department",
-  "currentPhase": "design",
+  "currentFeature": "wiki-navigation",
+  "currentPhase": "archived",
   "milestones": {},
   "phase": "archived",
-  "lastUpdated": "2026-07-20T02:19:54.000Z",
-  "matchRate": 100
+  "matchRate": 97,
+  "archivedTo": "docs/archive/2026-07/wiki-navigation/",
+  "lastUpdated": "2026-07-21T00:00:00.000Z"
 }
