@@ -9,13 +9,18 @@ _VALID_SEARCH_MODES = {"hybrid", "vector_only", "bm25_only"}
 _TOOL_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
 
 
-def sanitize_tool_name(name: str) -> str:
-    """OpenAI tool name 패턴(^[a-zA-Z0-9_-]+$)에 맞도록 변환."""
+def sanitize_tool_name(name: str, fallback: str = "unnamed_tool") -> str:
+    """OpenAI tool name 패턴(^[a-zA-Z0-9_-]+$)에 맞도록 변환.
+
+    rag-auth-filter-fix D3: 한글 등으로 전치환되어 빈 문자열이 되면
+    fallback을 반환한다 — 호출부가 도구 기본명을 지정해 LLM 노출 이름과
+    관측 기록(ai_tool_call.tool_name)을 의미 있게 유지할 수 있다.
+    """
     if _TOOL_NAME_PATTERN.match(name):
         return name
     sanitized = re.sub(r"[^a-zA-Z0-9_-]", "_", name)
     sanitized = re.sub(r"_+", "_", sanitized)
-    return sanitized.strip("_") or "unnamed_tool"
+    return sanitized.strip("_") or fallback
 
 
 @dataclass(frozen=True)

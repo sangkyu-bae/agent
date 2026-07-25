@@ -168,8 +168,10 @@ async def test_degrade_on_visibility_forced():
     routed_uc.execute.assert_not_awaited()
     assert len(hybrid.calls) == 1
     assert "filter_incompatible" in _degrade_reasons(logger)
-    # 기존 경로에는 visibility 필터가 그대로 적용(권한 필터 보존)
-    assert hybrid.calls[0].metadata_filter.get("visibility") == "public"
+    # rag-auth-filter-fix D1: visibility는 lenient 완화 필터로 이동
+    # ("값 일치 OR 필드 부재") — 보안 의미는 lenient_filter가 계승.
+    assert hybrid.calls[0].lenient_filter.get("visibility") == "public"
+    assert "visibility" not in hybrid.calls[0].metadata_filter
 
 
 @pytest.mark.asyncio

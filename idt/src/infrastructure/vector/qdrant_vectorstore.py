@@ -216,6 +216,20 @@ class QdrantVectorStore(VectorStoreInterface):
                     )
                 )
 
+        # rag-auth-filter-fix D2: 완화 매칭 — "값 일치 OR 필드 부재".
+        # 키별 중첩 Filter로 표현해 키 간 AND / 키 내 OR 의미를 보존한다.
+        for key, value in search_filter.metadata_lenient.items():
+            conditions.append(
+                models.Filter(should=[
+                    models.FieldCondition(
+                        key=key, match=models.MatchValue(value=value)
+                    ),
+                    models.IsEmptyCondition(
+                        is_empty=models.PayloadField(key=key)
+                    ),
+                ])
+            )
+
         return models.Filter(must=conditions) if conditions else None
 
     def _point_to_document(self, point, include_score: bool = True) -> Document:

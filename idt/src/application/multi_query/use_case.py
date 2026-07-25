@@ -29,6 +29,7 @@ class MultiQuerySearchUseCase:
         collection_name: str | None = None,
         es_index: str | None = None,
         metadata_filter: dict[str, str] | None = None,
+        lenient_filter: dict[str, str] | None = None,
     ) -> MultiQueryResult:
         """Multi-Query 워크플로우 실행 후 결과 반환."""
         workflow = MultiQueryRewriteWorkflow(
@@ -39,6 +40,7 @@ class MultiQuerySearchUseCase:
             collection_name=collection_name,
             es_index=es_index,
             metadata_filter=metadata_filter,
+            lenient_filter=lenient_filter,
         )
 
         state = await workflow.run(

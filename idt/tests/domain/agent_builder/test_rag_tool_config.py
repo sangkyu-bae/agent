@@ -223,3 +223,19 @@ class TestSanitizeToolName:
         result = sanitize_tool_name("금융_search_tool")
         assert all(c.isalnum() or c in "_-" for c in result)
         assert "search_tool" in result
+
+    # rag-auth-filter-fix D3: 전치환(한글 등) 시 의미 있는 폴백 지정 가능
+    def test_korean_only_name_uses_fallback(self):
+        assert (
+            sanitize_tool_name("내부 문서 검색", fallback="internal_document_search")
+            == "internal_document_search"
+        )
+
+    def test_fallback_ignored_when_name_survives(self):
+        assert (
+            sanitize_tool_name("my tool", fallback="internal_document_search")
+            == "my_tool"
+        )
+
+    def test_default_fallback_stays_unnamed(self):
+        assert sanitize_tool_name("내부 문서 검색") == "unnamed_tool"

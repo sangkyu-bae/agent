@@ -36,6 +36,14 @@ _RAG_DENIED_MSG = "RAG 검색 권한이 없습니다."
 # 그 외 키(visibility 포함)는 요약 payload에 존재 보장이 없어 강등한다.
 _ROUTED_SCOPE_KEYS = frozenset({"kb_id"})
 _ROUTED_IGNORED_KEYS = frozenset({"viewer_department_ids"})
+
+# rag-auth-filter-fix D1: hybrid 경로 필터 키 3분류.
+# ignored — 색인 페이로드에 없어 must 적용 시 전멸하는 키. 검색에 미적용
+#   (기존 "Repository 미지원 시 무시" 가정을 코드로 실현).
+# lenient — 보안 의미는 유지하되 "값 일치 OR 필드 부재" 완화 매칭.
+#   후속 rag-auth-payload-indexing에서 색인되면 자연 엄격화.
+_HYBRID_IGNORED_KEYS = frozenset({"viewer_department_ids"})
+_HYBRID_LENIENT_KEYS = frozenset({"visibility"})
 # rag-routed-integration D6: 근거 헤더의 섹션 요약 1줄 절단 상한 (NFR-04)
 _ROUTED_EVIDENCE_SUMMARY_MAX = 150
 
@@ -109,6 +117,37 @@ class InternalDocumentSearchTool(BaseTool):
         if eff is None:
             return self.metadata_filter
         return eff
+
+    def _hybrid_filters(self) -> tuple[dict[str, str], dict[str, str]]:
+        """effective filter → (hard, lenient) 분리. ignored 키는 버린다 (D1)."""
+        hard: dict[str, str] = {}
+        lenient: dict[str, str] = {}
+        for key, value in self._get_effective_filter().items():
+            if key in _HYBRID_IGNORED_KEYS:
+                continue
+            if key in _HYBRID_LENIENT_KEYS:
+                lenient[key] = value
+            else:
+                hard[key] = value
+        return hard, lenient
+
+    def _log_empty_with_auth_filter(self, query: str, mode: str) -> None:
+        """권한 주입 필터 상태에서 0건이면 원인 추적용 warning (D2)."""
+        injected = sorted(
+            set(self._get_effective_filter()) - set(self.metadata_filter)
+        )
+        if self.logger is None or not injected:
+            return
+        hard, lenient = self._hybrid_filters()
+        self.logger.warning(
+            "Internal search empty with auth-injected filter",
+            request_id=self.request_id,
+            mode=mode,
+            query=query[:100],
+            injected_keys=injected,
+            hard_filter=hard,
+            lenient_filter=lenient,
+        )
 
     def _apply_auth_filter(
         self, ctx: AuthContext, base_filter: dict[str, str]
@@ -215,16 +254,19 @@ class InternalDocumentSearchTool(BaseTool):
 
     async def _multi_query_search(self, query: str) -> str:
         """Multi-Query 워크플로우를 통한 검색."""
+        hard, lenient = self._hybrid_filters()
         result = await self.multi_query_use_case.execute(
             query=query,
             request_id=self.request_id,
             top_k=self.top_k,
             collection_name=self.collection_name,
             es_index=self.es_index,
-            metadata_filter=self._get_effective_filter() if self._get_effective_filter() else None,
+            metadata_filter=hard or None,
+            lenient_filter=lenient or None,
         )
 
         if not result.results:
+            self._log_empty_with_auth_filter(query, mode="multi_query")
             return "관련 내부 문서를 찾지 못했습니다."
 
         # retrieval-observability D6: chunk_id → 기여 쿼리 역맵.
@@ -255,13 +297,15 @@ class InternalDocumentSearchTool(BaseTool):
             bm25_top_k = self.top_k * 2
             vector_top_k = self.top_k * 2
 
+        hard, lenient = self._hybrid_filters()
         request = HybridSearchRequest(
             query=query,
             top_k=self.top_k,
             bm25_top_k=bm25_top_k,
             vector_top_k=vector_top_k,
             rrf_k=self.rrf_k,
-            metadata_filter=self._get_effective_filter(),
+            metadata_filter=hard,
+            lenient_filter=lenient,
             collection_name=self.collection_name,
             es_index=self.es_index,
             vector_score_threshold=self.score_threshold,
@@ -269,6 +313,7 @@ class InternalDocumentSearchTool(BaseTool):
         result = await self.hybrid_search_use_case.execute(request, self.request_id)
 
         if not result.results:
+            self._log_empty_with_auth_filter(query, mode="single")
             return "관련 내부 문서를 찾지 못했습니다."
 
         return await self._format_results(
