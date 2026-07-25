@@ -177,6 +177,26 @@ class AnalysisSnapshotPolicy:
         """재주입 메시지 판정 — 수집(재캡처)에서 제외하기 위한 식별."""
         return REINJECTED_MARKER in (content or "")
 
+    @staticmethod
+    def extract_reinjected_question(content: str) -> str:
+        """재주입 본문 헤더의 원 질문 추출 — render_reinjection_body와 쌍.
+
+        형식: "{REINJECTED_MARKER} (질문: {q})" 라인 → q.
+        비재주입·형식 불일치 시 "" (data-inventory-requery D1).
+        """
+        if not AnalysisSnapshotPolicy.is_reinjected(content):
+            return ""
+        prefix = "(질문: "
+        for line in content.splitlines():
+            if REINJECTED_MARKER not in line:
+                continue
+            idx = line.find(prefix)
+            if idx == -1:
+                return ""
+            tail = line[idx + len(prefix):].rstrip()
+            return tail[:-1] if tail.endswith(")") else tail
+        return ""
+
     @classmethod
     def _snapshot_sizes(cls, snapshot: dict) -> tuple[int, int]:
         """스냅샷의 (비-raw 문자수, raw_source 문자수) — kind별 독립 누적용."""

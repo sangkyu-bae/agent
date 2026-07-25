@@ -287,3 +287,116 @@ class TestVizGuidanceBlock:
             m["content"] for m in sent_messages if m.get("role") == "system"
         )
         assert "[시각화 안내]" not in joined
+
+
+# ── TC-A1~A4: data-inventory-requery — 재주입분은 강제 라우팅 트리거 제외 ──
+
+
+def _reinjected_msg(
+    worker_id: str = "search_w", question: str = "나의 남은 휴가 개수"
+) -> AIMessage:
+    """실제 재주입 경로와 동형 픽스처 (render_reinjection_body 경유 — 하드코딩 금지)."""
+    from src.domain.conversation.analysis_snapshot_policy import (
+        AnalysisSnapshotPolicy,
+    )
+
+    policy = AnalysisSnapshotPolicy()
+    snap = {
+        "version": 1,
+        "question": question,
+        "items": [
+            {
+                "origin": worker_id,
+                "kind": "search",
+                "content": "남은 휴가: 15일",
+                "truncated": False,
+            }
+        ],
+    }
+    body = policy.render_reinjection_body(snap, snap["items"][0])
+    return AIMessage(name=worker_id, content=format_search_result(worker_id, body))
+
+
+class TestVizForceExcludesReinjected:
+    def test_tca1_no_force_with_reinjected_only(self):
+        """FR-01: 재주입분만 있으면 강제 없음 — 첫 라우팅은 LLM 판단."""
+        state = _make_state(
+            messages=[
+                {"role": "user", "content": "전체 사용자 남은 휴가 그래프 그려줘"},
+                _reinjected_msg(),
+            ],
+        )
+        assert _hooks().force_worker(state) is None
+
+    def test_tca2_force_with_reinjected_plus_current(self):
+        """FR-02: 현재 턴 수집분이 함께 있으면 기존대로 강제."""
+        state = _make_state(
+            messages=[
+                {"role": "user", "content": VIZ_QUESTION},
+                _reinjected_msg(),
+                _search_msg(),
+            ],
+        )
+        assert _hooks().force_worker(state) == "data_analysis"
+
+    def test_tca3_logger_records_skip_reason(self):
+        """NFR 로깅: 재주입분만으로 skip 시 info 1회, logger 미주입은 무로그·무예외."""
+        logger = MagicMock()
+        hooks = AttachmentRoutingHooks(
+            ["data_analysis"],
+            viz_policy=VisualizationRoutingPolicy(),
+            logger=logger,
+        )
+        state = _make_state(
+            messages=[
+                {"role": "user", "content": VIZ_QUESTION},
+                _reinjected_msg(),
+            ],
+        )
+        assert hooks.force_worker(state) is None
+        logger.info.assert_called_once()
+
+        # logger 미주입 (기본 None) — 예외 없이 동작
+        assert _hooks().force_worker(state) is None
+
+    def test_tca3b_no_skip_log_without_any_search_result(self):
+        """검색결과가 아예 없으면 skip 로그도 없음 (기존 D3 침묵 시나리오)."""
+        logger = MagicMock()
+        hooks = AttachmentRoutingHooks(
+            ["data_analysis"],
+            viz_policy=VisualizationRoutingPolicy(),
+            logger=logger,
+        )
+        state = _make_state(
+            messages=[{"role": "user", "content": VIZ_QUESTION}],
+        )
+        assert hooks.force_worker(state) is None
+        logger.info.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_tca4_reinjected_only_reaches_llm(self):
+        """FR-01 통합: 재주입분만 → 강제 우회 없이 LLM이 결정 (TC-8의 역방향).
+
+        _workers() 정의상 검색 워커의 worker_id는 "web_search"
+        (WorkerDefinition 첫 필드는 tool_id).
+        """
+        mock_llm = _llm_returning("web_search")
+        fn = create_supervisor_node(
+            llm=mock_llm,
+            workers=_workers(),
+            supervisor_prompt="P",
+            hooks=_hooks(),
+            logger=MagicMock(),
+            analysis_worker_ids=["data_analysis"],
+            viz_policy=VisualizationRoutingPolicy(),
+        )
+        state = _make_state(
+            messages=[
+                {"role": "user", "content": "전체 사용자 남은 휴가 그래프 그려줘"},
+                _reinjected_msg(),
+            ],
+        )
+        result = await fn(state)
+        mock_llm.with_structured_output.assert_called_once()
+        assert result["next_worker"] == "web_search"
+        assert result.get("forced_worker", "") == ""

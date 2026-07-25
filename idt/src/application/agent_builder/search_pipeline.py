@@ -118,11 +118,18 @@ REWRITE_SYSTEM_PROMPT = """당신은 검색 쿼리 작성 전문가입니다.
 - 그래프/차트/표 등 출력 형식 요구는 제거한다 (검색 대상이 아님)
 - 핵심 주제·기간·지역·지표를 보존한다
 - 대화 맥락의 지시어(그거, 아까 그 자료)는 실제 대상으로 치환한다
+- 질문이 사용자 본인에 대한 것('나', '내', '본인')이고 [현재 사용자 정보]가
+  주어졌다면, 1인칭 표현을 해당 사용자 이름으로 치환해 쿼리에 포함한다
+- 일반 지식·정책·업무 절차 질문에는 사용자 이름을 넣지 않는다
 - 한 문장, 명사구 중심으로 작성한다
 
 예시:
 질문: "대한민국 2025년 실업률 정보를 가지고 월별 %별 그래프를 그려줄 수 있니?"
 쿼리: "대한민국 2025년 월별 실업률 통계"
+
+예시 ([현재 사용자 정보] 이름: 배상규 가 주어진 경우):
+질문: "나의 남은 휴가 개수와 월별 사용 현황 그래프로 보여줄 수 있겠니?"
+쿼리: "배상규 남은 휴가 개수 월별 사용 현황"
 """
 
 VALIDATE_SYSTEM_PROMPT = """검색 결과가 질문에 답하는 데 쓸 수 있는지 판정하세요.
@@ -157,12 +164,17 @@ def _collect_context(messages: list) -> str:
 
 async def _rewrite_query(
     llm, question: str, context: str, logger: LoggerInterface,
+    user_context: str = "",
 ) -> tuple[str, int]:
-    """검색 최적화 쿼리 생성. 실패/빈 결과 시 원본 질문 fallback."""
+    """검색 최적화 쿼리 생성. 실패/빈 결과 시 원본 질문 fallback.
+
+    rag-auth-filter-fix D5: user_context(사용자 컨텍스트 블록)가 주어지면
+    system prompt 앞에 prepend — 1인칭 질의를 사용자 이름으로 치환 가능하게.
+    """
     user_content = f"[대화 맥락]\n{context}\n\n[질문]\n{question}"
     try:
         out = await llm.with_structured_output(RewrittenQuery).ainvoke([
-            {"role": "system", "content": REWRITE_SYSTEM_PROMPT},
+            {"role": "system", "content": user_context + REWRITE_SYSTEM_PROMPT},
             {"role": "user", "content": user_content},
         ])
         rewritten = (out.query or "").strip()
@@ -178,15 +190,20 @@ async def _rewrite_query(
 
 async def _validate_result(
     llm, question: str, query: str, result: str, logger: LoggerInterface,
+    user_context: str = "",
 ) -> tuple[SearchResultVerdict, int]:
-    """검색 결과 관련성 판정. 실패 시 통과 처리(relevant=True)."""
+    """검색 결과 관련성 판정. 실패 시 통과 처리(relevant=True).
+
+    rag-auth-filter-fix D5: '나의 질문 ↔ 사용자 이름이 담긴 결과'의 동일성을
+    판정할 수 있도록 사용자 블록을 함께 주입 (오판 재검색 루프 방지).
+    """
     user_content = (
         f"[질문]\n{question}\n\n[사용한 검색 쿼리]\n{query}\n\n"
         f"[검색 결과]\n{result[:_VALIDATE_RESULT_HEAD]}"
     )
     try:
         verdict = await llm.with_structured_output(SearchResultVerdict).ainvoke([
-            {"role": "system", "content": VALIDATE_SYSTEM_PROMPT},
+            {"role": "system", "content": user_context + VALIDATE_SYSTEM_PROMPT},
             {"role": "user", "content": user_content},
         ])
         return verdict, len(verdict.reason) + len(verdict.improved_query)
@@ -199,12 +216,13 @@ async def _validate_result(
 
 async def _compress_result(
     llm, question: str, result: str, logger: LoggerInterface,
+    user_context: str = "",
 ) -> tuple[str, int]:
     """검색 결과 압축. 실패/빈 응답 시 원문 유지."""
     user_content = f"[질문]\n{question}\n\n[검색 결과]\n{result}"
     try:
         out = await llm.ainvoke([
-            {"role": "system", "content": COMPRESS_SYSTEM_PROMPT},
+            {"role": "system", "content": user_context + COMPRESS_SYSTEM_PROMPT},
             {"role": "user", "content": user_content},
         ])
         compressed = str(getattr(out, "content", "")).strip()
@@ -241,6 +259,7 @@ class _SearchLoopResult:
 async def _search_with_validation(
     tool, llm, policy: SearchPipelinePolicy,
     question: str, query: str, logger: LoggerInterface,
+    user_context: str = "",
 ) -> _SearchLoopResult:
     """검색 + 검증 루프 (D1/D4). 시도 한도 소진 시 마지막 결과 채택."""
     attempt, llm_chars, validated = 0, 0, False
@@ -256,7 +275,9 @@ async def _search_with_validation(
             break
         if not ok:
             continue  # D4: 도구 예외 — validate 생략 즉시 재시도
-        verdict, chars = await _validate_result(llm, question, query, text, logger)
+        verdict, chars = await _validate_result(
+            llm, question, query, text, logger, user_context=user_context,
+        )
         llm_chars += chars
         if verdict.relevant:
             validated = True
@@ -278,17 +299,26 @@ def create_search_pipeline_node(
     pipeline_llm,
     policy: SearchPipelinePolicy,
     logger: LoggerInterface,
+    user_context_block: str = "",
 ):
-    """rewrite → search → validate(루프) → compress 파이프라인 search 노드 생성."""
+    """rewrite → search → validate(루프) → compress 파이프라인 search 노드 생성.
+
+    rag-auth-filter-fix D5: user_context_block(include_user_context 게이팅된
+    사용자 컨텍스트)이 주어지면 3단계 LLM system prompt 모두에 prepend된다.
+    """
 
     async def search_node(state: SupervisorState) -> dict:
         messages = state["messages"]
         question = latest_user_question(messages) or _message_text(messages[-1])
         context = _collect_context(messages)
 
-        query, llm_chars = await _rewrite_query(pipeline_llm, question, context, logger)
+        query, llm_chars = await _rewrite_query(
+            pipeline_llm, question, context, logger,
+            user_context=user_context_block,
+        )
         loop = await _search_with_validation(
             tool, pipeline_llm, policy, question, query, logger,
+            user_context=user_context_block,
         )
         llm_chars += loop.llm_chars
 
@@ -296,6 +326,7 @@ def create_search_pipeline_node(
         if loop.ok and policy.needs_compression(result_str):
             result_str, chars = await _compress_result(
                 pipeline_llm, question, result_str, logger,
+                user_context=user_context_block,
             )
             llm_chars += chars
             compressed = True
