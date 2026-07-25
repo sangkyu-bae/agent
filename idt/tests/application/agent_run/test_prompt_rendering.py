@@ -2,8 +2,10 @@
 
 agent-user-context Design §4.3 + 테스트 전략 §10.1:
 - 민감정보(employee_no, email, user_id 숫자)가 절대 노출되지 않아야 함
-- 모든 권한이 한국어 라벨로 변환되어야 함
 - anonymous면 빈 문자열
+
+supervisor-overblock-fix D1/D2: 권한 목록('허용된 정보 영역') 미노출 +
+권한 심사 위임 가드 문구 — LLM 자체 권한 심사로 인한 과차단 방지.
 """
 from src.application.agent_run.prompt_rendering import render_user_context_block
 from src.domain.agent_run.auth_context import AuthContext
@@ -41,13 +43,6 @@ class TestRenderUserContextBlockHappy:
         block = render_user_context_block(_ctx(role="admin"))
         assert "관리자" in block
 
-    def test_includes_korean_permission_labels(self):
-        block = render_user_context_block(_ctx(
-            permissions=frozenset({"USE_RAG_SEARCH", "MANAGE_USERS"}),
-        ))
-        assert "RAG 문서 검색" in block
-        assert "사용자 관리" in block
-
     def test_includes_natural_language_pronoun_hint(self):
         block = render_user_context_block(_ctx())
         # "나", "내", "본인" 가이드 포함
@@ -56,7 +51,23 @@ class TestRenderUserContextBlockHappy:
     def test_includes_no_block_self_decision_warning(self):
         """LLM이 권한 여부를 스스로 판단해서 차단하지 못하게 강제 문구."""
         block = render_user_context_block(_ctx())
-        assert "도구가 자동으로 제외" in block
+        assert "도구가 자동으로 검증" in block
+
+    def test_includes_delegation_guard(self):
+        """supervisor-overblock-fix D2: 권한 심사 위임 가드 문구."""
+        block = render_user_context_block(_ctx())
+        assert "거부하거나 차단하지 마세요" in block
+        assert "확인되지 않습니다" in block
+
+    def test_permission_list_not_exposed(self):
+        """supervisor-overblock-fix D1 (FR-01): 권한 목록이 '허용된 정보 영역'
+        프레이밍으로 노출되지 않는다 — 목록이 있으면 LLM이 자체 권한 심사를 수행."""
+        block = render_user_context_block(_ctx(
+            permissions=frozenset({"USE_RAG_SEARCH", "MANAGE_USERS"}),
+        ))
+        assert "허용된 정보 영역" not in block
+        assert "RAG 문서 검색" not in block
+        assert "사용자 관리" not in block
 
 
 class TestRenderUserContextBlockEdge:
@@ -74,17 +85,12 @@ class TestRenderUserContextBlockEdge:
         ))
         assert "(미배정)" in block
 
-    def test_no_permissions(self):
+    def test_no_permissions_renders_without_permission_section(self):
+        """supervisor-overblock-fix D1: 권한 목록 소멸 — '(권한 없음)'도 미노출.
+        빈 permissions에서도 기본 필드(이름·부서)는 정상 렌더링."""
         block = render_user_context_block(_ctx(permissions=frozenset()))
-        assert "(권한 없음)" in block
-
-    def test_unknown_permission_code_skipped(self):
-        """DB seed와 enum 불일치 시 graceful skip — 다른 권한은 정상 표시."""
-        block = render_user_context_block(_ctx(
-            permissions=frozenset({"USE_RAG_SEARCH", "UNKNOWN_CODE"}),
-        ))
-        assert "RAG 문서 검색" in block
-        assert "UNKNOWN_CODE" not in block
+        assert "(권한 없음)" not in block
+        assert "배상규" in block
 
 
 class TestRenderUserContextBlockSecurity:
@@ -129,3 +135,76 @@ class TestRenderUserContextBlockDeterministic:
         ctx_b = _ctx(permissions=frozenset({"READ_PUBLIC_DOCS", "USE_RAG_SEARCH"}))
         # 동일 입력 → 동일 출력
         assert render_user_context_block(ctx_a) == render_user_context_block(ctx_b)
+
+
+# ── wiki-agentic-navigation FR-03/FR-04: 위키 목차 블록 ──────────────
+
+from datetime import datetime, timezone
+
+from src.application.agent_run.prompt_rendering import render_wiki_toc_block
+from src.application.wiki.schemas import WikiTreeItem
+
+_NOW = datetime(2026, 7, 23, tzinfo=timezone.utc)
+
+
+def _toc_item(id="w1", title="한도 산정 기준", path="여신/한도") -> WikiTreeItem:
+    return WikiTreeItem(
+        id=id, title=title, status="approved", source_type="human",
+        path=path, updated_at=_NOW,
+    )
+
+
+class TestRenderWikiTocBlockEmpty:
+    def test_empty_items_returns_empty_string(self):
+        """FR-04: 위키 0건이면 블록 자체 미주입(빈 블록 노이즈 금지)."""
+        assert render_wiki_toc_block([], max_items=50, max_bytes=4000) == ""
+
+
+class TestRenderWikiTocBlockContent:
+    def test_includes_id_title_path_and_date(self):
+        block = render_wiki_toc_block([_toc_item()], max_items=50, max_bytes=4000)
+        assert "(id: w1)" in block
+        assert "한도 산정 기준" in block
+        assert "여신/한도" in block
+        assert "2026-07-21" not in block and "2026-07-23" in block
+
+    def test_header_and_usage_instruction_present(self):
+        block = render_wiki_toc_block([_toc_item()], max_items=50, max_bytes=4000)
+        assert "[에이전트 지식 위키 목차]" in block
+        assert "wiki_read" in block
+
+    def test_none_path_renders_title_only(self):
+        block = render_wiki_toc_block(
+            [_toc_item(path=None)], max_items=50, max_bytes=4000
+        )
+        assert "한도 산정 기준" in block
+        assert "None" not in block
+
+    def test_ends_with_separator(self):
+        """user_context_block 관례: 말미 '---' 구분자."""
+        block = render_wiki_toc_block([_toc_item()], max_items=50, max_bytes=4000)
+        assert block.endswith("---\n\n")
+
+
+class TestRenderWikiTocBlockLimits:
+    def test_max_items_truncates_with_notice(self):
+        items = [_toc_item(id=f"w{i}", title=f"문서{i}") for i in range(5)]
+        block = render_wiki_toc_block(items, max_items=3, max_bytes=4000)
+        assert "(id: w0)" in block and "(id: w2)" in block
+        assert "(id: w3)" not in block and "(id: w4)" not in block
+        assert "전체 5건 중 3건" in block
+
+    def test_max_bytes_truncates_lines_from_tail(self):
+        items = [_toc_item(id=f"w{i}", title=f"문서{i}" * 20) for i in range(20)]
+        small = render_wiki_toc_block(items, max_items=50, max_bytes=500)
+        # max_bytes는 목록부 상한 — 고정 헤더/생략 표시/구분자 오버헤드는 별도
+        assert len(small.encode("utf-8")) <= 500 + 400
+        assert "(id: w0)" in small
+        assert "(id: w19)" not in small
+        assert "생략" in small or "중" in small
+
+    def test_no_truncation_no_notice(self):
+        block = render_wiki_toc_block(
+            [_toc_item()], max_items=50, max_bytes=4000
+        )
+        assert "생략" not in block

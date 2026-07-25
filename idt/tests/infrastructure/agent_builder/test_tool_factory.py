@@ -82,6 +82,27 @@ class TestToolFactory:
             factory.create("unknown_tool")
 
 
+class TestToolFactoryWikiRead:
+    """wiki-agentic-navigation FR-01: wiki_read 생성 분기."""
+
+    def test_create_wiki_read_with_deps(self):
+        factory = ToolFactory(
+            logger=MagicMock(),
+            wiki_session_factory=MagicMock(),
+            wiki_repo_builder=MagicMock(),
+        )
+        tool = factory.create("wiki_read", request_id="r1")
+        assert isinstance(tool, BaseTool)
+        assert tool.name == "wiki_read"
+        assert tool.request_id == "r1"
+
+    def test_create_wiki_read_without_deps_raises(self):
+        """의존 미주입 시 조용한 오동작 대신 설정 오류를 조기 표면화."""
+        factory = _make_factory()
+        with pytest.raises(ValueError, match="wiki_read"):
+            factory.create("wiki_read")
+
+
 class TestToolFactoryRagConfig:
     def test_create_with_rag_config_applies_settings(self):
         factory = _make_factory()

@@ -45,6 +45,17 @@ class TestSyncInternalTools:
         assert "internal:data_analysis" in ids
 
     @pytest.mark.asyncio
+    async def test_wiki_read_included_and_policy_valid(self):
+        """wiki-agentic-navigation FR-01: internal:wiki_read 카탈로그 동기화 고정."""
+        from src.domain.tool_catalog.policies import ToolIdFormatPolicy
+
+        uc, repo = _use_case()
+        await uc.execute("req")
+        ids = {c.args[0].tool_id for c in repo.upsert_by_tool_id.call_args_list}
+        assert "internal:wiki_read" in ids
+        ToolIdFormatPolicy.validate("internal:wiki_read", "internal")  # 위반 시 raise
+
+    @pytest.mark.asyncio
     async def test_requires_env_carried_over(self):
         uc, repo = _use_case()
         await uc.execute("req")

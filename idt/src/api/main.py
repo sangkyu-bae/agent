@@ -2389,6 +2389,17 @@ def create_agent_builder_factories():
         logger=app_logger,
     )
 
+    # wiki-agentic-navigation: wiki_read 도구·목차 블록 배선 (기존 repo_builder 재사용)
+    from src.application.wiki.toc_provider import WikiTocProvider
+
+    _wiki_toc_provider = WikiTocProvider(
+        session_factory=get_session_factory(),
+        repo_builder=_wiki_repo_builder,
+        max_items=settings.wiki_toc_max_items,
+        max_bytes=settings.wiki_toc_max_bytes,
+        logger=app_logger,
+    )
+
     tool_factory = ToolFactory(
         logger=app_logger,
         hybrid_search_use_case_getter=get_configured_hybrid_search_use_case,
@@ -2398,6 +2409,9 @@ def create_agent_builder_factories():
         wiki_search=_wiki_search,           # ★ LLM-WIKI-001 Step6
         # ★ rag-routed-integration D2: use_routed_search 에이전트용 라우팅 검색
         routed_retrieval_getter=get_configured_routed_retrieval_use_case,
+        # ★ wiki-agentic-navigation: wiki_read 도구 per-call 세션 의존
+        wiki_session_factory=get_session_factory(),
+        wiki_repo_builder=_wiki_repo_builder,
     )
     # document-template-extractor Design §6: 합성 노드 의존(싱글톤).
     # 컴파일러/컴포저는 앱 싱글톤이라 per-request 세션 대신 session-scoped 어댑터 사용.
@@ -2433,6 +2447,8 @@ def create_agent_builder_factories():
         search_compress_threshold=settings.search_compress_threshold,
         document_template_repository=_dt_runtime_template_repo,
         document_composer=_dt_composer,
+        # ★ wiki-agentic-navigation D1: wiki_read 에이전트 목차 블록 주입
+        wiki_toc_provider=_wiki_toc_provider,
     )
 
     # DB-001 §10.2: session 은 Depends(get_session) 으로 주입.

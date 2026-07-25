@@ -51,6 +51,17 @@ TOOL_REGISTRY: dict[str, ToolMeta] = {
         ),
         requires_env=[],
     ),
+    "wiki_read": ToolMeta(
+        tool_id="wiki_read",
+        name="에이전트 위키 열람",
+        description=(
+            "이 에이전트가 보유한 승인 지식 위키 문서의 본문을 열람합니다. "
+            "시스템 프롬프트의 [에이전트 지식 위키 목차]에서 문서 id를 골라 전달하세요. "
+            "최근 결정사항, 정리된 지식, 축적된 판단 기준 확인에 사용하세요."
+        ),
+        requires_env=[],
+        # wiki-agentic-navigation D6: search/analysis 미지정 → react agent 워커 경로
+    ),
     "tavily_search": ToolMeta(
         tool_id="tavily_search",
         name="Tavily 웹 검색",

@@ -79,6 +79,13 @@ if TYPE_CHECKING:
 # search-node-query-pipeline D2: _is_search_result / _is_worker_output 정의는
 # search_pipeline 모듈로 이동(메시지 규약 단일 출처). 본 모듈은 alias import로 사용.
 
+# wiki-agentic-navigation D1: wiki_read 워커 react agent에 목차와 함께 주입되는 지시.
+_WIKI_WORKER_INSTRUCTION = (
+    "위 목차에서 질문과 관련된 문서 id를 골라 wiki_read 도구로 본문을 열람하고, "
+    "열람한 본문에 근거해 답하세요. "
+    "관련 문서가 없으면 '위키에서 확인되지 않습니다'라고 답하세요.\n"
+)
+
 
 def _summarize_charts(charts: list[dict]) -> str:
     """state["charts"] → 프롬프트용 메타 요약(개수·type·title만, DQ5). 키 부재 시 graceful."""
@@ -109,6 +116,7 @@ class WorkflowCompiler:
         search_compress_threshold: int | None = None,
         document_template_repository=None,
         document_composer=None,
+        wiki_toc_provider=None,
     ) -> None:
         self._tool_factory = tool_factory
         self._llm_factory = llm_factory
@@ -130,6 +138,8 @@ class WorkflowCompiler:
         # document-template-extractor Design §4-1: 합성 노드 의존 (미주입 시 안내 노옵).
         self._document_template_repository = document_template_repository
         self._document_composer = document_composer
+        # wiki-agentic-navigation D1: 위키 목차 블록 공급자 (미주입 시 완전 비활성).
+        self._wiki_toc_provider = wiki_toc_provider
 
     async def compile(
         self,
@@ -146,6 +156,7 @@ class WorkflowCompiler:
         run_id: Optional[RunId] = None,
         auth_ctx: AuthContext | None = None,
         include_user_context: bool = True,
+        agent_id: str | None = None,
     ):
         NestingDepthPolicy.validate_depth(depth)
 
@@ -166,11 +177,22 @@ class WorkflowCompiler:
             # supervisor_prompt 앞에 사용자 컨텍스트 블록 prepend.
             # include_user_context=False면 prepend 생략 (system bot 등).
             # auth_ctx=None이면 render_user_context_block이 빈 문자열 반환 — graceful.
-            effective_supervisor_prompt = workflow.supervisor_prompt
-            if include_user_context:
-                block = render_user_context_block(auth_ctx)
-                if block:
-                    effective_supervisor_prompt = block + workflow.supervisor_prompt
+            # rag-auth-filter-fix D5: search 파이프라인에도 동일 게이팅으로 전달.
+            user_context_block = (
+                render_user_context_block(auth_ctx) if include_user_context else ""
+            )
+            # wiki-agentic-navigation D1/D2: wiki_read 워커 선택 + provider 주입 +
+            # agent_id 전달(최상위 컴파일만 — sub_agent 재귀 미전달)일 때만 목차 조회.
+            # 목차는 supervisor prepend + wiki_read 워커 prompt 이중 주입.
+            wiki_toc_block = ""
+            has_wiki_read = any(w.tool_id == "wiki_read" for w in workflow.workers)
+            if has_wiki_read and self._wiki_toc_provider is not None and agent_id:
+                wiki_toc_block = await self._wiki_toc_provider.render_block(
+                    agent_id, request_id
+                )
+            effective_supervisor_prompt = (
+                user_context_block + wiki_toc_block + workflow.supervisor_prompt
+            )
 
             # ToolFactory가 bind_auth_ctx를 지원하면 현재 auth_ctx 주입.
             # (Phase 5에서 ToolFactory에 메서드 추가됨)
@@ -245,12 +267,20 @@ class WorkflowCompiler:
                         pipeline_llm=self._resolve_pipeline_llm(llm),
                         policy=SearchPipelinePolicy(self._search_compress_threshold),
                         logger=self._logger,
+                        user_context_block=user_context_block,
                     )
                     function_node_ids.add(worker_def.worker_id)
                 else:
-                    worker_agent = create_react_agent(
-                        llm, tools=[tool], name=worker_def.worker_id,
-                    )
+                    if worker_def.tool_id == "wiki_read" and wiki_toc_block:
+                        # D1: 워커 LLM도 목차를 봐야 열람할 문서 id를 고를 수 있다.
+                        worker_agent = create_react_agent(
+                            llm, tools=[tool], name=worker_def.worker_id,
+                            prompt=wiki_toc_block + _WIKI_WORKER_INSTRUCTION,
+                        )
+                    else:
+                        worker_agent = create_react_agent(
+                            llm, tools=[tool], name=worker_def.worker_id,
+                        )
                     worker_map[worker_def.worker_id] = worker_agent
 
             # final-answer-node D2: answer_agent 가상 워커 방식 제거 —
@@ -267,6 +297,7 @@ class WorkflowCompiler:
                 if isinstance(self._hooks, DefaultHooks):
                     effective_hooks = AttachmentRoutingHooks(
                         sorted(analysis_worker_ids), viz_policy=viz_policy,
+                        logger=self._logger,
                     )
 
             supervisor_fn = create_supervisor_node(

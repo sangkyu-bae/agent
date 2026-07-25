@@ -162,6 +162,43 @@ class WikiArticleRepository(MySQLBaseRepository[WikiArticleModel], _Interface):
             return []
         return await self._hydrate_searchable(ids, now, request_id)
 
+    async def list_searchable_tree_items(
+        self, agent_id: str, now: datetime, request_id: str
+    ) -> list[WikiTreeItem]:
+        """프롬프트 목차용: 승인+미만료만, 갱신 내림차순, 본문 미조회.
+
+        wiki-agentic-navigation D7 — WHERE 절은 entity.is_searchable(now)의
+        SQL 미러. 의미 변경 시 양쪽 동기 수정
+        (test_wiki_repository_toc가 쿼리 문자열로 고정).
+        """
+        stmt = (
+            select(
+                WikiArticleModel.id,
+                WikiArticleModel.title,
+                WikiArticleModel.status,
+                WikiArticleModel.source_type,
+                WikiArticleModel.path,
+                WikiArticleModel.updated_at,
+            )
+            .where(
+                WikiArticleModel.agent_id == agent_id,
+                WikiArticleModel.status == WikiStatus.APPROVED.value,
+                (
+                    WikiArticleModel.valid_until.is_(None)
+                    | (WikiArticleModel.valid_until > now)
+                ),
+            )
+            .order_by(WikiArticleModel.updated_at.desc())
+        )
+        rows = (await self._session.execute(stmt)).all()
+        return [
+            WikiTreeItem(
+                id=r.id, title=r.title, status=r.status,
+                source_type=r.source_type, path=r.path, updated_at=r.updated_at,
+            )
+            for r in rows
+        ]
+
     async def list_tree_items(
         self, agent_id: str, request_id: str
     ) -> list[WikiTreeItem]:

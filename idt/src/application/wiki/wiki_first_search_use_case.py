@@ -73,6 +73,9 @@ class WikiFirstSearchUseCase:
             vector_score=None,
             source="wiki",
             metadata={
+                # wiki-agentic-navigation FR-07/D3: _format_results의 '[출처: ...]'
+                # 렌더링용 — 키 부재 시 '[출처: unknown]'으로 위키임이 누락된다.
+                "source": f"wiki:{article.title}",
                 "title": article.title,
                 "source_type": article.source_type.value,
                 "status": article.status.value,
