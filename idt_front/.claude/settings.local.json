@@ -42,7 +42,9 @@
       "PowerShell(npx eslint src/pages/AdminLlmModelsPage src/hooks/useLlmModels.ts src/hooks/useLlmModels.test.ts src/services/llmModelService.ts src/types/llmModel.ts src/constants/adminNav.ts src/constants/adminNav.test.ts src/constants/api.ts src/lib/queryKeys.ts src/App.tsx src/__tests__/mocks/handlers.ts)",
       "PowerShell(Get-Content *)",
       "PowerShell(npx eslint src/hooks/useLlmModels.ts src/pages/AdminLlmModelsPage)",
-      "PowerShell(New-Item *)"
+      "PowerShell(New-Item *)",
+      "PowerShell(npx vitest run src/components/common/LoadingButton.test.tsx --pool=threads 2>$null)",
+      "PowerShell(npx vitest run src/pages/AgentKnowledgePage/index.test.tsx --pool=threads 2>$null)"
     ]
   }
 }

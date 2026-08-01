@@ -40,6 +40,8 @@ interface LeftConfigPanelProps {
   onToolToggle: (toolId: string) => void;
   onSkillToggle: (skillId: string) => void;
   onRagConfigChange: (config: RagToolConfig) => void;
+  /** builtin-tools D8: 빌트인 수동 해제/복원 토글 (create 모드 전용) */
+  onBuiltinToggle: (toolId: string) => void;
   isEditMode: boolean;
   agentId?: string | null;
   /** agent-instruction-required: 지침 미입력 시 인라인 에러 메시지 */
@@ -64,6 +66,7 @@ const LeftConfigPanel = ({
   onToolToggle,
   onSkillToggle,
   onRagConfigChange,
+  onBuiltinToggle,
   isEditMode,
   agentId,
   systemPromptError,
@@ -149,6 +152,13 @@ const LeftConfigPanel = ({
 
   const ragConfig = form.toolConfigs[RAG_TOOL_ID];
   const selectedTools = (catalogTools ?? []).filter((t) => form.tools.includes(t.tool_id));
+  // builtin-tools D8: 빌트인 표시는 카탈로그 is_builtin − excluded 파생값 (create 전용).
+  // edit 모드에선 저장된 워커가 form.tools로 매핑되어 일반 칩으로 표시된다.
+  const builtinTools = isEditMode
+    ? []
+    : (catalogTools ?? []).filter(
+        (t) => t.is_builtin && !form.excludedBuiltinTools.includes(t.tool_id),
+      );
   const currentModel = models?.find((m) => m.model_name === form.model);
   // agent-builder-edit-mapping: 역매핑 실패로 raw id가 남은 경우 미등록 안내
   const modelLabel = currentModel
@@ -325,6 +335,32 @@ const LeftConfigPanel = ({
               도구 구성 변경은 아직 저장되지 않습니다 (모델·지침·서브에이전트·스킬은 저장됨)
             </p>
           )}
+          {builtinTools.length > 0 && (
+            <ul className="mb-2 space-y-2">
+              {builtinTools.map((tool) => (
+                <li
+                  key={tool.tool_id}
+                  className="rounded-xl border border-violet-200 bg-violet-50/50 px-4 py-2.5"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-[13px] font-medium text-zinc-700">{tool.name}</span>
+                    <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-600">기본</span>
+                    {tool.source === 'mcp' && (
+                      <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-600">MCP</span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => onBuiltinToggle(tool.tool_id)}
+                      aria-label={`${tool.name} 제거`}
+                      className="ml-auto rounded-lg px-2 py-1 text-[12px] font-medium text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-500"
+                    >
+                      제거
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
           {selectedTools.length > 0 ? (
             <ul className="space-y-2">
               {selectedTools.map((tool) => {
@@ -372,11 +408,11 @@ const LeftConfigPanel = ({
                 );
               })}
             </ul>
-          ) : (
+          ) : builtinTools.length === 0 ? (
             <p className="rounded-xl border border-dashed border-zinc-200 bg-zinc-50 py-4 text-center text-[12.5px] text-zinc-400">
               추가된 도구가 없습니다
             </p>
-          )}
+          ) : null}
         </CollapsibleSection>
 
         {/* 스킬 */}
@@ -451,6 +487,9 @@ const LeftConfigPanel = ({
         onRetry={onRetryTools}
         onToggle={handleToolToggle}
         onClose={() => setToolModalOpen(false)}
+        // builtin-tools D8: edit 모드는 미전달 → 빌트인도 일반 도구로 취급
+        excludedBuiltinIds={isEditMode ? undefined : form.excludedBuiltinTools}
+        onToggleBuiltin={isEditMode ? undefined : onBuiltinToggle}
       />
       <RagConfigModal
         isOpen={isRagConfigOpen && !!ragConfig}

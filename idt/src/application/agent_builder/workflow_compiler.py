@@ -1,6 +1,7 @@
 """WorkflowCompiler: WorkflowDefinition → Custom StateGraph CompiledGraph 동적 컴파일."""
 from typing import Any, Awaitable, Callable, Optional, TYPE_CHECKING
 
+from langchain_core.messages import AIMessage
 from langgraph.graph import END, StateGraph
 from langgraph.prebuilt import create_react_agent
 
@@ -26,7 +27,10 @@ from src.application.agent_builder.supervisor_nodes import (
 )
 from src.application.agent_builder.supervisor_state import SupervisorState
 from src.application.agent_run.auth_context import get_current_auth_context
-from src.application.agent_run.prompt_rendering import render_user_context_block
+from src.application.agent_run.prompt_rendering import (
+    WIKI_FOLDER_HEADER_TAG,
+    render_user_context_block,
+)
 from src.application.visualization.analysis_prompt import (
     ANALYSIS_OUTPUT_GUIDE,
     DATA_GAP_GUIDE,
@@ -85,6 +89,21 @@ _WIKI_WORKER_INSTRUCTION = (
     "열람한 본문에 근거해 답하세요. "
     "관련 문서가 없으면 '위키에서 확인되지 않습니다'라고 답하세요.\n"
 )
+
+# wiki-folder-summaries D6: 폴더 모드 워커 지시 — 지도→wiki_list→wiki_read 체인.
+_WIKI_FOLDER_WORKER_INSTRUCTION = (
+    "위 지도에서 질문과 관련된 폴더를 wiki_list 도구로 열어 문서 id를 찾고, "
+    "wiki_read 도구로 본문을 열람한 뒤 답하세요. "
+    "목록에 없는 내용은 추측하지 말고, 관련 문서가 없으면 "
+    "'위키에서 확인되지 않습니다'라고 답하세요.\n"
+)
+
+
+def _is_tool_message(msg) -> bool:
+    """tool 역할 메시지 판정 — final_answer LLM 입력에서 제외 (고아 tool 400 방어)."""
+    if isinstance(msg, dict):
+        return msg.get("role") == "tool"
+    return getattr(msg, "type", "") == "tool"
 
 
 def _summarize_charts(charts: list[dict]) -> str:
@@ -273,9 +292,30 @@ class WorkflowCompiler:
                 else:
                     if worker_def.tool_id == "wiki_read" and wiki_toc_block:
                         # D1: 워커 LLM도 목차를 봐야 열람할 문서 id를 고를 수 있다.
+                        # wiki-folder-summaries D6: 폴더 지도 모드면 wiki_list를
+                        # 동봉해 지도→진입→열람 체인이 한 react 루프에서 완결.
+                        is_folder_mode = wiki_toc_block.startswith(
+                            WIKI_FOLDER_HEADER_TAG
+                        )
+                        wiki_tools = [tool]
+                        instruction = _WIKI_WORKER_INSTRUCTION
+                        if is_folder_mode:
+                            instruction = _WIKI_FOLDER_WORKER_INSTRUCTION
+                            try:
+                                wiki_tools.append(
+                                    self._tool_factory.create(
+                                        "wiki_list", request_id
+                                    )
+                                )
+                            except ValueError as e:
+                                # 미배선 시 동봉 생략 — wiki_read 단독 폴백
+                                self._logger.warning(
+                                    "wiki_list bundling skipped",
+                                    request_id=request_id, exception=e,
+                                )
                         worker_agent = create_react_agent(
-                            llm, tools=[tool], name=worker_def.worker_id,
-                            prompt=wiki_toc_block + _WIKI_WORKER_INSTRUCTION,
+                            llm, tools=wiki_tools, name=worker_def.worker_id,
+                            prompt=wiki_toc_block + instruction,
                         )
                     else:
                         worker_agent = create_react_agent(
@@ -567,8 +607,11 @@ class WorkflowCompiler:
                 f"[{getattr(m, 'name', '')}]\n{getattr(m, 'content', '')}"
                 for m in worker_outputs if not _is_search_result(m)
             ]
+            # worker-toolmessage-leak-fix D2: tool 역할 메시지는 선행 tool_calls
+            # 짝이 필터로 깨질 수 있어 제외 — OpenAI는 고아 tool에 400을 반환.
             conversation_messages = [
-                m for m in messages if not _is_worker_output(m)
+                m for m in messages
+                if not _is_worker_output(m) and not _is_tool_message(m)
             ]
             charts = state.get("charts", [])
 
@@ -951,16 +994,25 @@ class WorkflowCompiler:
                     )
                 }
             )
-            new_messages = result.get("messages", [])
+            result_messages = result.get("messages", [])
 
-            token_delta = sum(
-                len(getattr(m, "content", "")) // 4
-                for m in new_messages
-                if hasattr(m, "content")
+            # worker-toolmessage-leak-fix D1: 워커 규약은 최종 AIMessage(name) 1건.
+            # react agent 내부 트레이스(tool_calls·ToolMessage)를 state로 유출하면
+            # final_answer_node 필터가 짝을 깨 고아 tool 메시지가 됨 (OpenAI 400).
+            answer_content = ""
+            if result_messages:
+                last = result_messages[-1]
+                answer_content = (
+                    last.content if hasattr(last, "content") else str(last)
+                )
+
+            answer_msg = AIMessage(content=answer_content, name=worker_id)
+            token_delta = (
+                len(answer_content) // 4 if isinstance(answer_content, str) else 0
             )
 
             return {
-                "messages": new_messages,
+                "messages": [answer_msg],
                 "last_worker_id": worker_id,
                 "token_usage": state["token_usage"] + token_delta,
             }

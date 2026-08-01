@@ -28,6 +28,9 @@ class ToolMeta:
     description: str
     requires_env: list[str] = field(default_factory=list)
     category: ToolCategory = "action"
+    # builtin-tools D1: tool_catalog 신규 INSERT 시드 전용 초기값.
+    # 런타임 SoT는 tool_catalog.is_builtin(관리자 토글) — 기존 행에는 영향 없음.
+    builtin_default: bool = False
 
 
 @dataclass

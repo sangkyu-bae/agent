@@ -25,3 +25,11 @@ class ToolCatalogRepositoryInterface(ABC):
     async def deactivate_by_mcp_server(
         self, mcp_server_id: str, request_id: str
     ) -> int: ...
+
+    @abstractmethod
+    async def set_builtin(
+        self, tool_id: str, is_builtin: bool, request_id: str
+    ) -> ToolCatalogEntry | None: ...
+
+    @abstractmethod
+    async def list_builtin(self, request_id: str) -> list[ToolCatalogEntry]: ...

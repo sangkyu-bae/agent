@@ -50,6 +50,8 @@ export interface CreateBuilderAgentRequest {
   tool_ids?: string[];
   tool_configs?: Record<string, RagToolConfig>;
   sub_agent_configs?: SubAgentConfigRequest[];
+  // builtin-tools D5: 빌트인 수동 opt-out (생성 폼 전용 — 카탈로그/저장 형식 모두 수용)
+  exclude_builtin_tool_ids?: string[];
   // agent-skill-toggle: 등록 시점 부착 스킬(목표 상태)
   skill_ids?: string[];
   // document-template-extractor GA4: 확정 템플릿 (document_extractor 도구 필요)
@@ -120,6 +122,9 @@ export interface AgentBuilderFormData {
   documentExtractorDraft?: DocumentExtractorDraft | null;
   // agent-schedule: 생성 모드 전용 staged 스케줄 (생성 성공 후 순차 POST, edit에선 미사용)
   schedules: StagedSchedule[];
+  // builtin-tools D8: 수동 해제된 빌트인 도구(카탈로그 형식) — ToolPickerModal에서만
+  // 토글되며 Fix 초안 적용이 건드리지 않는다 (채팅 경로 빌트인 제거 차단의 프론트 절반)
+  excludedBuiltinTools: string[];
 }
 
 // ── Studio UI (프론트엔드 전용) ────────────────

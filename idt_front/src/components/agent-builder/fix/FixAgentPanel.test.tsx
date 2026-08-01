@@ -23,6 +23,7 @@ const form: AgentBuilderFormData = {
   subAgents: [],
   skills: [],
   schedules: [],
+  excludedBuiltinTools: [],
 };
 
 const models: LlmModel[] = [

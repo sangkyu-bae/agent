@@ -176,6 +176,7 @@ from src.api.routes.department_router import (
 from src.api.routes.tool_catalog_router import (
     router as tool_catalog_router,
     get_list_tool_catalog_use_case,
+    get_set_builtin_use_case,
     get_sync_mcp_tools_use_case,
 )
 from src.api.routes.auto_agent_builder_router import (
@@ -2391,6 +2392,13 @@ def create_agent_builder_factories():
 
     # wiki-agentic-navigation: wiki_read 도구·목차 블록 배선 (기존 repo_builder 재사용)
     from src.application.wiki.toc_provider import WikiTocProvider
+    from src.infrastructure.wiki.folder_summary_repository import (
+        MySQLWikiFolderSummaryRepository,
+    )
+
+    # wiki-folder-summaries: 폴더 요약 저장소 빌더 (wiki_list 도구·폴더 지도 공용)
+    def _wiki_folder_repo_builder(session: AsyncSession):
+        return MySQLWikiFolderSummaryRepository(session=session, logger=app_logger)
 
     _wiki_toc_provider = WikiTocProvider(
         session_factory=get_session_factory(),
@@ -2398,6 +2406,9 @@ def create_agent_builder_factories():
         max_items=settings.wiki_toc_max_items,
         max_bytes=settings.wiki_toc_max_bytes,
         logger=app_logger,
+        folder_repo_builder=_wiki_folder_repo_builder,
+        folder_enabled=settings.wiki_folder_summaries_enabled,
+        folder_threshold=settings.wiki_folder_mode_threshold,
     )
 
     tool_factory = ToolFactory(
@@ -2412,6 +2423,8 @@ def create_agent_builder_factories():
         # ★ wiki-agentic-navigation: wiki_read 도구 per-call 세션 의존
         wiki_session_factory=get_session_factory(),
         wiki_repo_builder=_wiki_repo_builder,
+        # ★ wiki-folder-summaries: wiki_list 도구용 폴더 요약 저장소
+        wiki_folder_repo_builder=_wiki_folder_repo_builder,
     )
     # document-template-extractor Design §6: 합성 노드 의존(싱글톤).
     # 컴파일러/컴포저는 앱 싱글톤이라 per-request 세션 대신 session-scoped 어댑터 사용.
@@ -2503,6 +2516,10 @@ def create_agent_builder_factories():
             ),
             # kb-rag-filter D7: kb_id 검증·scope clamp·컬렉션 고정
             kb_repo=_make_kb_repo(session),
+            # builtin-tools D5: 빌트인 주입 (동일 세션 — 세션 분리 금지 규칙)
+            tool_catalog_repo=ToolCatalogRepository(
+                session=session, logger=app_logger
+            ),
         )
 
     def update_uc_factory(session: AsyncSession = Depends(get_session)):
@@ -3356,7 +3373,16 @@ def create_tool_catalog_factories():
             logger=app_logger,
         )
 
-    return list_factory, sync_factory
+    def set_builtin_factory(session: AsyncSession = Depends(get_session)):
+        # builtin-tools D3: 관리자 빌트인 토글
+        from src.application.tool_catalog.set_builtin_use_case import (
+            SetBuiltinToolUseCase,
+        )
+
+        repo = ToolCatalogRepository(session=session, logger=app_logger)
+        return SetBuiltinToolUseCase(repository=repo, logger=app_logger)
+
+    return list_factory, sync_factory, set_builtin_factory
 
 
 def create_agent_composer_factories():
@@ -3438,21 +3464,86 @@ def create_mcp_registry_factories():
     return register_factory, list_factory, update_factory, delete_factory, test_factory
 
 
-def create_wiki_factories():
-    """Return per-request DI factories for Wiki use cases (LLM-WIKI-001)."""
-    app_logger = get_app_logger()
-    wiki_collection = getattr(settings, "wiki_collection_name", "wiki_knowledge")
+_wiki_vector_stack: tuple | None = None
 
-    def _make_repo(session: AsyncSession):
+
+def get_wiki_vector_stack():
+    """wiki-tree-performance D1: wiki API용 임베딩·Qdrant·벡터스토어 앱 전역 lazy 싱글턴.
+
+    per-request 생성 시 요청마다 수 초의 클라이언트 초기화 비용 + 미해제 누수 발생
+    (plan §1.2 실측). 클라이언트는 무상태(설정+커넥션 풀)이므로 동시 요청 공유 안전
+    — create_agent_builder_factories가 동일 방식으로 이미 공유 운용 중.
+    """
+    global _wiki_vector_stack
+    if _wiki_vector_stack is None:
+        collection = getattr(settings, "wiki_collection_name", "wiki_knowledge")
         embedding = OpenAIEmbedding(model_name=settings.openai_embedding_model)
         qdrant_client = AsyncQdrantClient(
             host=settings.qdrant_host, port=settings.qdrant_port
         )
         vector_store = QdrantVectorStore(
-            client=qdrant_client,
-            embedding=embedding,
-            collection_name=wiki_collection,
+            client=qdrant_client, embedding=embedding, collection_name=collection
         )
+        _wiki_vector_stack = (embedding, vector_store, collection)
+    return _wiki_vector_stack
+
+
+_wiki_folder_summary_service = None
+
+
+def get_wiki_folder_summary_service():
+    """wiki-folder-summaries D2: 폴더 요약 팬아웃 서비스 (앱 전역 lazy 싱글톤).
+
+    fire-and-forget 태스크가 자체 세션을 열므로 요청 세션과 분리된다.
+    enabled=False(기본)면 kickoff가 no-op — 배선은 항상 하고 플래그로 제어.
+    """
+    global _wiki_folder_summary_service
+    if _wiki_folder_summary_service is None:
+        from src.application.wiki.folder_summary_service import (
+            WikiFolderSummaryService,
+        )
+        from src.infrastructure.wiki.folder_summary_distiller import (
+            FolderSummaryDistiller,
+        )
+        from src.infrastructure.wiki.folder_summary_repository import (
+            MySQLWikiFolderSummaryRepository,
+        )
+
+        app_logger = get_app_logger()
+
+        def _article_repo_builder(session: AsyncSession):
+            # wiki-tree-performance D1: 무거운 클라이언트는 앱 전역 싱글턴 공유
+            embedding, vector_store, wiki_collection = get_wiki_vector_stack()
+            return WikiArticleRepository(
+                session=session, logger=app_logger, embedding=embedding,
+                vector_store=vector_store, collection_name=wiki_collection,
+            )
+
+        _wiki_folder_summary_service = WikiFolderSummaryService(
+            session_factory=get_session_factory(),
+            article_repo_builder=_article_repo_builder,
+            folder_repo_builder=lambda s: MySQLWikiFolderSummaryRepository(
+                session=s, logger=app_logger
+            ),
+            distiller=FolderSummaryDistiller.from_openai(
+                model_name=settings.openai_llm_model,
+                api_key=settings.openai_api_key,
+                logger=app_logger,
+            ),
+            logger=app_logger,
+            enabled=settings.wiki_folder_summaries_enabled,
+        )
+    return _wiki_folder_summary_service
+
+
+def create_wiki_factories():
+    """Return per-request DI factories for Wiki use cases (LLM-WIKI-001)."""
+    app_logger = get_app_logger()
+    # wiki-tree-performance D1: 무거운 클라이언트는 기동 시 1회 생성해 전 요청이 공유.
+    # per-request 생성 시 wiki 전 엔드포인트가 요청마다 수 초를 지불했다 (plan §1.2).
+    embedding, vector_store, wiki_collection = get_wiki_vector_stack()
+
+    def _make_repo(session: AsyncSession):
         return WikiArticleRepository(
             session=session,
             logger=app_logger,
@@ -3490,7 +3581,11 @@ def create_wiki_factories():
         return WikiQueryUseCase(repository=_make_repo(session))
 
     def review_factory(session: AsyncSession = Depends(get_session)):
-        return WikiReviewUseCase(repository=_make_repo(session), logger=app_logger)
+        # wiki-folder-summaries D2: 승인 이벤트 → 폴더 요약 재증류 팬아웃
+        return WikiReviewUseCase(
+            repository=_make_repo(session), logger=app_logger,
+            folder_summary_service=get_wiki_folder_summary_service(),
+        )
 
     def human_write_factory(session: AsyncSession = Depends(get_session)):
         # wiki-user-facing: wiki·agent 두 repo는 동일 세션 (한 UseCase 한 세션)
@@ -3498,6 +3593,7 @@ def create_wiki_factories():
             wiki_repo=_make_repo(session),
             agent_repo=AgentDefinitionRepository(session=session, logger=app_logger),
             logger=app_logger,
+            folder_summary_service=get_wiki_folder_summary_service(),
         )
 
     return distill_factory, query_factory, review_factory, human_write_factory
@@ -3933,9 +4029,10 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_remove_user_department_use_case] = _dept_remove_f
 
     # Tool Catalog DI
-    _tc_list_f, _tc_sync_f = create_tool_catalog_factories()
+    _tc_list_f, _tc_sync_f, _tc_builtin_f = create_tool_catalog_factories()
     app.dependency_overrides[get_list_tool_catalog_use_case] = _tc_list_f
     app.dependency_overrides[get_sync_mcp_tools_use_case] = _tc_sync_f
+    app.dependency_overrides[get_set_builtin_use_case] = _tc_builtin_f
 
     # Agent Composer DI (nl-agent-composer)
     _compose_f = create_agent_composer_factories()

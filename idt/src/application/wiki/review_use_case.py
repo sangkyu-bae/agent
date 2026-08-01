@@ -16,10 +16,22 @@ class WikiReviewUseCase:
     """위키 항목 라이프사이클 관리(거버넌스 게이트)."""
 
     def __init__(
-        self, repository: WikiArticleRepository, logger: LoggerInterface
+        self,
+        repository: WikiArticleRepository,
+        logger: LoggerInterface,
+        folder_summary_service=None,
     ) -> None:
         self._repo = repository
         self._logger = logger
+        # wiki-folder-summaries D2: 승인 상태 변화 시 폴더 요약 재증류 팬아웃.
+        # optional — None이면 no-op (기존 호출·테스트 무회귀).
+        self._folder_summary_service = folder_summary_service
+
+    def _kickoff_folder_refresh(self, article: WikiArticle, request_id: str) -> None:
+        if self._folder_summary_service is not None:
+            self._folder_summary_service.kickoff_refresh(
+                article.agent_id, [article.path], request_id
+            )
 
     async def approve(
         self, article_id: str, reviewer_id: str, request_id: str
@@ -63,7 +75,9 @@ class WikiReviewUseCase:
             "WikiReviewUseCase edit", request_id=request_id, id=article_id,
             version=article.version,
         )
-        return await self._repo.update(article, request_id)
+        updated = await self._repo.update(article, request_id)
+        self._kickoff_folder_refresh(updated, request_id)
+        return updated
 
     async def _to_approved(
         self,
@@ -82,7 +96,9 @@ class WikiReviewUseCase:
         self._logger.info(
             "WikiReviewUseCase approved", request_id=request_id, id=article_id
         )
-        return await self._repo.update(article, request_id)
+        updated = await self._repo.update(article, request_id)
+        self._kickoff_folder_refresh(updated, request_id)
+        return updated
 
     async def _to_deprecated(self, article_id: str, request_id: str) -> WikiArticle:
         article = await self._get(article_id, request_id)
@@ -91,7 +107,9 @@ class WikiReviewUseCase:
         self._logger.info(
             "WikiReviewUseCase deprecated", request_id=request_id, id=article_id
         )
-        return await self._repo.update(article, request_id)
+        updated = await self._repo.update(article, request_id)
+        self._kickoff_folder_refresh(updated, request_id)
+        return updated
 
     async def _get(self, article_id: str, request_id: str) -> WikiArticle:
         article = await self._repo.find_by_id(article_id, request_id)

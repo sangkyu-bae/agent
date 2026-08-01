@@ -79,6 +79,9 @@ class CreateAgentRequest(BaseModel):
     # agent-instruction-required: 지침 필수. None/빈 값이면 생성 시 에러(자동생성 제거).
     # 자동 구성은 Fix 에이전트(agent_composer)가 초안을 프리필하는 방식으로만 제공.
     system_prompt: str | None = Field(None, max_length=4000)
+    # builtin-tools D5: 빌트인 도구 수동 opt-out (생성 폼 전용 — Fix 채팅 경로는
+    # 이 필드를 만들 수 없어 빌트인이 항상 포함된다). 카탈로그/저장 형식 모두 수용.
+    exclude_builtin_tool_ids: list[str] | None = None
 
 
 class CreateAgentResponse(BaseModel):

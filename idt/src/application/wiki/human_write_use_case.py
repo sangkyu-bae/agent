@@ -27,10 +27,20 @@ class HumanWikiWriteUseCase:
         wiki_repo: WikiArticleRepository,
         agent_repo: AgentDefinitionRepositoryInterface,
         logger: LoggerInterface,
+        folder_summary_service=None,
     ) -> None:
         self._wiki_repo = wiki_repo
         self._agent_repo = agent_repo
         self._logger = logger
+        # wiki-folder-summaries D2: human 문서는 approved 직행이라 이 경로도 훅 필수.
+        # optional — None이면 no-op (기존 호출·테스트 무회귀).
+        self._folder_summary_service = folder_summary_service
+
+    def _kickoff_folder_refresh(
+        self, agent_id: str, paths: list[str | None], request_id: str
+    ) -> None:
+        if self._folder_summary_service is not None:
+            self._folder_summary_service.kickoff_refresh(agent_id, paths, request_id)
 
     async def create(
         self,
@@ -69,7 +79,9 @@ class HumanWikiWriteUseCase:
             "HumanWikiWriteUseCase create",
             request_id=request_id, agent_id=agent_id, actor_id=actor_id,
         )
-        return await self._wiki_repo.save(article, request_id)
+        saved = await self._wiki_repo.save(article, request_id)
+        self._kickoff_folder_refresh(agent_id, [saved.path], request_id)
+        return saved
 
     async def edit(
         self,
@@ -88,6 +100,7 @@ class HumanWikiWriteUseCase:
         WikiPolicy.validate_path(path)
         candidate = dataclasses.replace(article, title=title, content=content)
         WikiPolicy.validate_for_creation(candidate)  # 제목/본문 불변식 재사용
+        old_path = article.path
         article.apply_edit(title, content, datetime.utcnow())
         article.editor_id = actor_id
         article.path = path
@@ -95,7 +108,11 @@ class HumanWikiWriteUseCase:
             "HumanWikiWriteUseCase edit",
             request_id=request_id, id=article_id, version=article.version,
         )
-        return await self._wiki_repo.update(article, request_id)
+        updated = await self._wiki_repo.update(article, request_id)
+        # path 이동 시 이전/새 폴더 모두 재증류 대상
+        paths = [old_path, path] if old_path != path else [path]
+        self._kickoff_folder_refresh(updated.agent_id, paths, request_id)
+        return updated
 
     async def deprecate(
         self,
@@ -113,7 +130,9 @@ class HumanWikiWriteUseCase:
         self._logger.info(
             "HumanWikiWriteUseCase deprecate", request_id=request_id, id=article_id,
         )
-        return await self._wiki_repo.update(article, request_id)
+        updated = await self._wiki_repo.update(article, request_id)
+        self._kickoff_folder_refresh(updated.agent_id, [updated.path], request_id)
+        return updated
 
     async def _get_managed(
         self, article_id: str, actor_id: str, actor_is_admin: bool, request_id: str

@@ -12,6 +12,7 @@ const catalog: CatalogTool[] = [
     mcp_server_id: null,
     mcp_server_name: null,
     requires_env: [],
+    is_builtin: false,
   },
   {
     tool_id: 'internal:internal_document_search',
@@ -21,6 +22,7 @@ const catalog: CatalogTool[] = [
     mcp_server_id: null,
     mcp_server_name: null,
     requires_env: [],
+    is_builtin: false,
   },
   {
     tool_id: 'mcp:srv-1:fetch_page',
@@ -30,6 +32,7 @@ const catalog: CatalogTool[] = [
     mcp_server_id: 'srv-1',
     mcp_server_name: '수집 서버',
     requires_env: [],
+    is_builtin: false,
   },
   {
     tool_id: 'mcp:srv-1:parse_html',
@@ -39,6 +42,7 @@ const catalog: CatalogTool[] = [
     mcp_server_id: 'srv-1',
     mcp_server_name: '수집 서버',
     requires_env: [],
+    is_builtin: false,
   },
 ];
 

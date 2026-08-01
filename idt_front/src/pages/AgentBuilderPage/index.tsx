@@ -50,6 +50,7 @@ const DEFAULT_FORM: AgentBuilderFormData = {
   subAgents: [],
   skills: [],
   schedules: [],
+  excludedBuiltinTools: [],
 };
 
 const AgentBuilderPage = () => {
@@ -196,6 +197,11 @@ const AgentBuilderPage = () => {
           tool_ids: toolIds,
           tool_configs: toolConfigs,
           sub_agent_configs: subAgentConfigs,
+          // builtin-tools D8: 폼에서 수동 해제된 빌트인만 전송 (없으면 생략)
+          exclude_builtin_tool_ids:
+            form.excludedBuiltinTools.length > 0
+              ? form.excludedBuiltinTools
+              : undefined,
           skill_ids: form.skills.length > 0 ? form.skills : undefined,
           document_template: buildDocumentTemplateRequest(
             form.documentExtractorDraft,
@@ -266,6 +272,17 @@ const AgentBuilderPage = () => {
     });
   };
 
+  // builtin-tools D8: 빌트인 수동 해제/복원 — ToolPickerModal·빌트인 칩에서만 호출.
+  // Fix 초안 적용(handleApplyDraft)은 이 상태를 건드리지 않는다(채팅 우회 차단).
+  const handleBuiltinToggle = (toolId: string) => {
+    setForm((prev) => ({
+      ...prev,
+      excludedBuiltinTools: prev.excludedBuiltinTools.includes(toolId)
+        ? prev.excludedBuiltinTools.filter((t) => t !== toolId)
+        : [...prev.excludedBuiltinTools, toolId],
+    }));
+  };
+
   const handleSkillToggle = (skillId: string) => {
     setForm((prev) => {
       const isOn = prev.skills.includes(skillId);
@@ -296,7 +313,14 @@ const AgentBuilderPage = () => {
   const handleApplyDraft = (draft: ComposeAgentDraftResponse) => {
     if (draft.system_prompt?.trim()) setPromptError(null);
     setForm((prev) => {
-      const newTools = mapDraftToolIdsToCatalog(draft.tool_ids, catalogTools);
+      // builtin-tools D8: 초안이 빌트인을 포함해도 form.tools에 혼입하지 않는다
+      // (표시·전송은 파생값 — 서버 주입과의 중복 칩 방지, excluded는 불변)
+      const builtinIds = new Set(
+        (catalogTools ?? []).filter((t) => t.is_builtin).map((t) => t.tool_id),
+      );
+      const newTools = mapDraftToolIdsToCatalog(draft.tool_ids, catalogTools).filter(
+        (id) => !builtinIds.has(id),
+      );
 
       // handleToolToggle과 동일한 부수효과 동기화 (RAG 설정 / 문서추출기 드래프트)
       const newConfigs = { ...prev.toolConfigs };
@@ -403,6 +427,7 @@ const AgentBuilderPage = () => {
           onToolToggle={handleToolToggle}
           onSkillToggle={handleSkillToggle}
           onRagConfigChange={handleRagConfigChange}
+          onBuiltinToggle={handleBuiltinToggle}
           onStagedScheduleAdd={handleStagedScheduleAdd}
           onStagedScheduleRemove={handleStagedScheduleRemove}
           onApplyDraft={handleApplyDraft}

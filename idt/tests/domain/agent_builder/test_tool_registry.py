@@ -16,6 +16,7 @@ EXPECTED_TOOL_IDS = {
     "data_analysis",
     "document_extractor",
     "wiki_read",
+    "wiki_list",
 }
 
 
@@ -96,5 +97,11 @@ class TestToolRegistryCategory:
         분기되므로 wiki_read는 어느 쪽도 아니어야 한다.
         """
         meta = get_tool_meta("wiki_read")
+        assert meta.category not in ("search", "analysis")
+        assert meta.requires_env == []
+
+    def test_wiki_list_is_not_search_or_analysis(self):
+        """wiki-folder-summaries D4: wiki_read와 동일하게 react agent 워커 경로."""
+        meta = get_tool_meta("wiki_list")
         assert meta.category not in ("search", "analysis")
         assert meta.requires_env == []

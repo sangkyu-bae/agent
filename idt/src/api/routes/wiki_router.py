@@ -65,8 +65,8 @@ def _actor(user: User) -> tuple[str, bool]:
 @router.post("/distill", response_model=DistillResponse)
 async def distill_wiki(
     body: DistillRequest,
-    use_case=Depends(get_distill_use_case),
     _admin: User = Depends(require_role("admin")),
+    use_case=Depends(get_distill_use_case),
 ):
     """특정 에이전트 컬렉션을 정제해 draft 위키 항목을 생성한다."""
     request_id = str(uuid.uuid4())
@@ -87,8 +87,8 @@ async def distill_wiki(
 @router.post("", response_model=WikiArticleResponse, status_code=201)
 async def create_wiki(
     body: CreateWikiRequest,
-    use_case=Depends(get_human_write_use_case),
     user: User = Depends(get_current_user),
+    use_case=Depends(get_human_write_use_case),
 ):
     """소유자 직접 작성 — source_type=human, 즉시 approved (wiki-user-facing)."""
     request_id = str(uuid.uuid4())
@@ -112,11 +112,13 @@ async def create_wiki(
 
 
 # ※ /tree는 반드시 /{id}보다 먼저 선언 — 아니면 "tree"가 id로 매칭된다
+# ※ 인증을 use_case보다 앞에 선언 — FastAPI는 선언 순서대로 의존성을 해석하므로
+#   미인증 요청이 use_case DI(세션 개설 등) 비용 없이 즉시 거부된다 (wiki-tree-performance D2)
 @router.get("/tree", response_model=WikiTreeResponse)
 async def wiki_tree(
     agent_id: str,
-    use_case=Depends(get_query_use_case),
     _user: User = Depends(get_current_user),
+    use_case=Depends(get_query_use_case),
 ):
     """지식 트리 — path 단위 그룹 목록(본문 제외). 계층 조립은 프론트 담당."""
     request_id = str(uuid.uuid4())
@@ -144,8 +146,8 @@ async def wiki_tree(
 async def list_wiki(
     agent_id: str,
     status: str | None = None,
-    use_case=Depends(get_query_use_case),
     _user: User = Depends(get_current_user),
+    use_case=Depends(get_query_use_case),
 ):
     """에이전트 스코프 위키 목록 (status 필터 선택)."""
     request_id = str(uuid.uuid4())
@@ -159,8 +161,8 @@ async def list_wiki(
 @router.get("/{id}", response_model=WikiArticleResponse)
 async def get_wiki(
     id: str,
-    use_case=Depends(get_query_use_case),
     _user: User = Depends(get_current_user),
+    use_case=Depends(get_query_use_case),
 ):
     """위키 단건 조회."""
     request_id = str(uuid.uuid4())
@@ -174,8 +176,8 @@ async def get_wiki(
 async def approve_wiki(
     id: str,
     body: ReviewActionRequest,
-    use_case=Depends(get_review_use_case),
     _admin: User = Depends(require_role("admin")),
+    use_case=Depends(get_review_use_case),
 ):
     """초안 승인(draft→approved)."""
     request_id = str(uuid.uuid4())
@@ -188,8 +190,8 @@ async def approve_wiki(
 @router.patch("/{id}/reject", response_model=WikiArticleResponse)
 async def reject_wiki(
     id: str,
-    use_case=Depends(get_review_use_case),
     _admin: User = Depends(require_role("admin")),
+    use_case=Depends(get_review_use_case),
 ):
     """초안 반려(draft→deprecated)."""
     request_id = str(uuid.uuid4())
@@ -202,8 +204,8 @@ async def reject_wiki(
 @router.patch("/{id}/deprecate", response_model=WikiArticleResponse)
 async def deprecate_wiki(
     id: str,
-    use_case=Depends(get_human_write_use_case),
     user: User = Depends(get_current_user),
+    use_case=Depends(get_human_write_use_case),
 ):
     """승인 항목 폐기(approved→deprecated) — admin 전부, 소유자는 human 문서만."""
     request_id = str(uuid.uuid4())
@@ -224,8 +226,8 @@ async def deprecate_wiki(
 async def restore_wiki(
     id: str,
     body: ReviewActionRequest,
-    use_case=Depends(get_review_use_case),
     _admin: User = Depends(require_role("admin")),
+    use_case=Depends(get_review_use_case),
 ):
     """폐기 항목 복구(deprecated→approved)."""
     request_id = str(uuid.uuid4())
@@ -239,8 +241,8 @@ async def restore_wiki(
 async def edit_wiki(
     id: str,
     body: EditWikiRequest,
-    use_case=Depends(get_human_write_use_case),
     user: User = Depends(get_current_user),
+    use_case=Depends(get_human_write_use_case),
 ):
     """위키 편집(version++) — admin 전부, 소유자는 human 문서만.
 

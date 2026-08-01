@@ -56,6 +56,17 @@ class TestSyncInternalTools:
         ToolIdFormatPolicy.validate("internal:wiki_read", "internal")  # 위반 시 raise
 
     @pytest.mark.asyncio
+    async def test_wiki_list_included_and_policy_valid(self):
+        """wiki-folder-summaries FR-03: internal:wiki_list 카탈로그 동기화 고정."""
+        from src.domain.tool_catalog.policies import ToolIdFormatPolicy
+
+        uc, repo = _use_case()
+        await uc.execute("req")
+        ids = {c.args[0].tool_id for c in repo.upsert_by_tool_id.call_args_list}
+        assert "internal:wiki_list" in ids
+        ToolIdFormatPolicy.validate("internal:wiki_list", "internal")  # 위반 시 raise
+
+    @pytest.mark.asyncio
     async def test_requires_env_carried_over(self):
         uc, repo = _use_case()
         await uc.execute("req")
@@ -77,6 +88,76 @@ class TestSyncInternalTools:
         ]
         assert len(deactivated) == 1
         assert deactivated[0].is_active is False
+
+    @pytest.mark.asyncio
+    async def test_wiki_tools_seeded_with_builtin_default(self):
+        """builtin-tools D1: INSERT 시드 — wiki 2종만 builtin_default=True 전달."""
+        uc, repo = _use_case()
+        await uc.execute("req")
+        by_id = {
+            c.args[0].tool_id: c.args[0]
+            for c in repo.upsert_by_tool_id.call_args_list
+        }
+        assert by_id["internal:wiki_read"].is_builtin is True
+        assert by_id["internal:wiki_list"].is_builtin is True
+        assert by_id["internal:tavily_search"].is_builtin is False
+
+    @pytest.mark.asyncio
+    async def test_stale_deactivation_preserves_builtin(self):
+        """builtin-tools D2: 레지스트리 이탈 도구 비활성화 시 is_builtin 보존."""
+        stale = ToolCatalogEntry(
+            id="x", tool_id="internal:removed_tool", source="internal",
+            name="삭제된 도구", description="", is_active=True, is_builtin=True,
+        )
+        uc, repo = _use_case(existing_active=[stale])
+        await uc.execute("req")
+        deactivated = [
+            c.args[0] for c in repo.upsert_by_tool_id.call_args_list
+            if c.args[0].tool_id == "internal:removed_tool"
+        ]
+        assert deactivated[0].is_active is False
+        assert deactivated[0].is_builtin is True
+
+    @pytest.mark.asyncio
+    async def test_resync_roundtrip_preserves_admin_builtin_flag(self):
+        """builtin-tools T2②③: 관리자 토글 후 재sync 왕복에도 플래그 유지.
+
+        fake repo가 실제 upsert의 보존 성질(UPDATE 분기는 is_builtin 미변경,
+        repository 계약 테스트로 고정됨)을 흉내내어 UseCase 계층에서 왕복을 검증.
+        """
+        store: dict[str, ToolCatalogEntry] = {}
+
+        async def _upsert(entry: ToolCatalogEntry, rid: str) -> ToolCatalogEntry:
+            existing = store.get(entry.tool_id)
+            if existing is not None:
+                # 실제 repo UPDATE 분기와 동일: is_builtin은 건드리지 않는다
+                existing.name = entry.name
+                existing.description = entry.description
+                existing.is_active = entry.is_active
+                return existing
+            store[entry.tool_id] = entry
+            return entry
+
+        repo = MagicMock()
+        repo.upsert_by_tool_id = AsyncMock(side_effect=_upsert)
+        repo.list_active = AsyncMock(
+            side_effect=lambda rid: [e for e in store.values() if e.is_active]
+        )
+        uc = SyncInternalToolsUseCase(repository=repo, logger=MagicMock())
+
+        # 1차 sync: 프레시 DB 시드 — wiki 2종 True
+        await uc.execute("req-1")
+        assert store["internal:wiki_read"].is_builtin is True
+        assert store["internal:tavily_search"].is_builtin is False
+
+        # 관리자 토글 시뮬레이션: wiki_read 해제 + tavily 등록
+        store["internal:wiki_read"].is_builtin = False
+        store["internal:tavily_search"].is_builtin = True
+
+        # 재sync(재부팅) 후에도 관리자 설정 유지
+        await uc.execute("req-2")
+        assert store["internal:wiki_read"].is_builtin is False
+        assert store["internal:tavily_search"].is_builtin is True
 
     @pytest.mark.asyncio
     async def test_mcp_entries_not_touched(self):

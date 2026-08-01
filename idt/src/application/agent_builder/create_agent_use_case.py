@@ -35,6 +35,7 @@ from src.domain.knowledge_base.interfaces import KnowledgeBaseRepositoryInterfac
 from src.domain.knowledge_base.policy import KnowledgeBasePolicy
 from src.domain.llm_model.interfaces import LlmModelRepositoryInterface
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
+from src.domain.tool_catalog.interfaces import ToolCatalogRepositoryInterface
 
 
 class CreateAgentUseCase:
@@ -52,6 +53,7 @@ class CreateAgentUseCase:
         max_template_slots: int = DEFAULT_MAX_SLOTS,
         mcp_server_repo=None,
         kb_repo: KnowledgeBaseRepositoryInterface | None = None,
+        tool_catalog_repo: "ToolCatalogRepositoryInterface | None" = None,
     ) -> None:
         self._repository = repository
         self._llm_model_repository = llm_model_repository
@@ -68,6 +70,8 @@ class CreateAgentUseCase:
         self._mcp_server_repo = mcp_server_repo
         # kb-rag-filter D7: kb_id 검증·scope clamp용 (kb_id 지정 요청은 주입 필수)
         self._kb_repo = kb_repo
+        # builtin-tools D5: 빌트인 주입용 (미주입 시 주입 생략 — 무회귀)
+        self._tool_catalog_repo = tool_catalog_repo
         self._sub_agent_builder = SubAgentWorkerBuilder(repository, logger)
 
     async def execute(
@@ -145,6 +149,15 @@ class CreateAgentUseCase:
                 request, skeleton.workers, request_id, kbs
             )
             self._canonicalize_kb_collections(skeleton.workers, kbs)
+
+            # Step 2.7 (builtin-tools D5): 빌트인 도구 주입 — 정책 검증(사용자
+            # 선택분) 이후이므로 상한(MAX_TOOLS)에서 제외된다(D6). 빌트인은
+            # tool_config가 없어 visibility/KB 해석 대상이 아니며, flow_hint에도
+            # 포함하지 않는다(보조 도구 — supervisor 워커 목록으로만 인지).
+            builtin_workers = await self._build_builtin_workers(
+                all_workers, request.exclude_builtin_tool_ids, request_id
+            )
+            all_workers = all_workers + builtin_workers
 
             # Step 3: 시스템 프롬프트 필수 (agent-instruction-required)
             # LLM 자동생성 제거 — 지침은 사용자 입력 또는 Fix 에이전트 초안 전담.
@@ -295,6 +308,66 @@ class CreateAgentUseCase:
             tool_ids=[w.tool_id for w in workers],
         )
         return WorkflowSkeleton(workers=workers, flow_hint=flow_hint)
+
+    async def _build_builtin_workers(
+        self,
+        existing_workers: list[WorkerDefinition],
+        exclude_tool_ids: list[str] | None,
+        request_id: str,
+    ) -> list[WorkerDefinition]:
+        """builtin-tools D5: 빌트인 도구(is_builtin AND is_active)를 워커로 주입.
+
+        수동 opt-out(exclude_builtin_tool_ids)만 제외하며, 사용자 선택 도구와
+        정규화 ID 기준으로 중복 주입하지 않는다.
+        """
+        if self._tool_catalog_repo is None:
+            return []
+        entries = await self._tool_catalog_repo.list_builtin(request_id)
+        exclude = {self._normalize_tool_id(x) for x in (exclude_tool_ids or [])}
+        seen = {w.tool_id for w in existing_workers if w.worker_type == "tool"}
+        workers: list[WorkerDefinition] = []
+        for entry in entries:
+            storage_id = self._normalize_tool_id(entry.tool_id)
+            if storage_id in exclude or storage_id in seen:
+                continue
+            description = await self._resolve_builtin_description(
+                storage_id, request_id
+            )
+            if description is None:
+                continue
+            seen.add(storage_id)
+            workers.append(WorkerDefinition(
+                tool_id=storage_id,
+                worker_id=f"{storage_id}_worker",
+                description=description,
+                sort_order=len(existing_workers) + len(workers),
+            ))
+        if workers:
+            self._logger.info(
+                "Builtin tools injected",
+                request_id=request_id,
+                tool_ids=[w.tool_id for w in workers],
+            )
+        return workers
+
+    async def _resolve_builtin_description(
+        self, storage_id: str, request_id: str
+    ) -> str | None:
+        """빌트인 도구 설명 해석 — 실패 시 None 반환으로 해당 도구만 제외.
+
+        FR-07: MCP 서버 비활성/미등록·레지스트리 이탈 잔재가 에이전트 생성을
+        실패시키면 안 된다 (경고 로그 후 격하).
+        """
+        try:
+            if storage_id.startswith("mcp_"):
+                return await self._resolve_mcp_description(storage_id, request_id)
+            return get_tool_meta(storage_id).description
+        except ValueError as e:
+            self._logger.warning(
+                "Builtin tool skipped",
+                request_id=request_id, tool_id=storage_id, exception=e,
+            )
+            return None
 
     async def _resolve_mcp_description(
         self, tool_id: str, request_id: str
