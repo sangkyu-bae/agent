@@ -35,6 +35,7 @@
 - if 중첩 2단계 초과 금지
 - 명시적 타입 사용 (pydantic / typing)
 - config 값 하드코딩 금지
+- DDL 작성 시 **테이블 + 전 컬럼 COMMENT 필수** (ALTER ADD/MODIFY/CHANGE 포함, SQLAlchemy 모델에도 `comment=` 동일 반영) — `tests/db/test_migration_ddl_comments.py`가 V054 이후 파일을 검사
 
 ---
 

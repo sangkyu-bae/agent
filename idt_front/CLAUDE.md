@@ -554,6 +554,7 @@ npm run coverage     # 커버리지 리포트 생성
 | **컴포넌트** | `src/components/common/ProtectedRoute.tsx` | 비인증 시 /login 리다이렉트 |
 | **컴포넌트** | `src/components/common/AdminRoute.tsx` | 비admin 시 / 리다이렉트 |
 | **컴포넌트** | `src/components/common/ConfirmDialog.tsx` | 공통 확인 다이얼로그 (variant: danger/warning/info) |
+| **컴포넌트** | `src/components/common/LoadingButton.tsx` | 공통 대기 버튼 — isPending 필수 prop, 대기 중 disable+스피너+대체 문구 (뮤테이션 버튼은 이 컴포넌트 사용 권장) |
 | **타입** | `src/types/agentStore.ts` | StoreAgentSummary, AgentDetail, SubscribeResponse, ForkAgentResponse 등 |
 | **서비스** | `src/services/agentStoreService.ts` | 에이전트 스토어 API (목록, 상세, 구독, 포크, 등록) |
 | **훅** | `src/hooks/useAgentStore.ts` | useAgentList, useAgentDetail, useMyAgents, useSubscribeAgent, useForkAgent 등 |
