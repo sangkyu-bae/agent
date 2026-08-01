@@ -64,5 +64,7 @@ export function mapDetailToForm(
     skills: detail.skill_ids ?? [],
     // edit 모드 스케줄은 SchedulePanel이 서버 직결 — staged 미사용
     schedules: [],
+    // builtin-tools: edit 모드에선 저장된 워커가 그대로 tools에 매핑되므로 미사용
+    excludedBuiltinTools: [],
   };
 }

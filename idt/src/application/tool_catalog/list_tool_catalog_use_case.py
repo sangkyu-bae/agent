@@ -30,6 +30,7 @@ class ListToolCatalogUseCase:
                         description=e.description,
                         mcp_server_id=e.mcp_server_id,
                         requires_env=e.requires_env,
+                        is_builtin=e.is_builtin,
                     )
                     for e in entries
                 ]

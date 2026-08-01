@@ -58,6 +58,7 @@ export const API_ENDPOINTS = {
 
   // Tools
   TOOL_CATALOG: '/api/v1/tool-catalog',
+  TOOL_CATALOG_BUILTIN: '/api/v1/tool-catalog/builtin',
   TOOLS: '/api/tools',
   TOOL_TOGGLE: (toolId: string) => `/api/tools/${toolId}/toggle`,
 

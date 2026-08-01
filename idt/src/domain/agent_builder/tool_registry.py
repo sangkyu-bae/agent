@@ -61,6 +61,20 @@ TOOL_REGISTRY: dict[str, ToolMeta] = {
         ),
         requires_env=[],
         # wiki-agentic-navigation D6: search/analysis 미지정 → react agent 워커 경로
+        builtin_default=True,
+    ),
+    "wiki_list": ToolMeta(
+        tool_id="wiki_list",
+        name="에이전트 위키 폴더 탐색",
+        description=(
+            "이 에이전트 지식 위키의 폴더를 열어 하위 폴더 요약과 문서 목록(id 포함)을 "
+            "조회합니다. 시스템 프롬프트의 [에이전트 지식 위키 지도]에서 관련 폴더 경로를 "
+            "골라 전달하세요. 빈 경로는 최상위 목록을 반환합니다."
+        ),
+        requires_env=[],
+        # wiki-folder-summaries D4: category 미지정 → react agent 워커 경로.
+        # 폴더 모드에서는 wiki_read 워커에 자동 동봉된다 (D6).
+        builtin_default=True,
     ),
     "tavily_search": ToolMeta(
         tool_id="tavily_search",

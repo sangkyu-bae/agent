@@ -25,6 +25,7 @@ import AdminSkillsPage from '@/pages/AdminSkillsPage';
 import AdminRagasPage from '@/pages/AdminRagasPage';
 import AdminAgentRunsPage from '@/pages/AdminAgentRunsPage';
 import AdminDashboardPage from '@/pages/AdminDashboardPage';
+import AdminToolsPage from '@/pages/AdminToolsPage';
 import WikiPage from '@/pages/WikiPage';
 import AgentKnowledgePage from '@/pages/AgentKnowledgePage';
 import AgentWorkspacePage from '@/pages/AgentWorkspacePage';
@@ -83,6 +84,8 @@ const App = () => (
           <Route path="/admin/users" element={<AdminUsersPage />} />
           <Route path="/admin/departments" element={<AdminDepartmentsPage />} />
           <Route path="/admin/mcp-servers" element={<AdminMcpServersPage />} />
+          {/* builtin-tools D9: 도구 카탈로그 + 빌트인 토글 */}
+          <Route path="/admin/tools" element={<AdminToolsPage />} />
           <Route path="/admin/llm-models" element={<AdminLlmModelsPage />} />
           <Route path="/admin/chunking-profiles" element={<AdminChunkingProfilesPage />} />
           <Route path="/admin/skills" element={<AdminSkillsPage />} />

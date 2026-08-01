@@ -28,5 +28,13 @@ class ToolCatalogModel(Base):
     description: Mapped[str] = mapped_column(Text, nullable=False)
     requires_env: Mapped[dict | None] = mapped_column(JSON)
     is_active: Mapped[bool] = mapped_column(default=True)
+    is_builtin: Mapped[bool] = mapped_column(
+        default=False,
+        nullable=False,
+        comment=(
+            "빌트인 여부 — 에이전트 생성 시 자동 주입. 관리자 토글, sync 보존, "
+            "INSERT 시 ToolMeta.builtin_default 시드"
+        ),
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

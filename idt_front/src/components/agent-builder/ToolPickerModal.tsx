@@ -10,6 +10,13 @@ interface ToolPickerModalProps {
   onRetry?: () => void;
   onToggle: (toolId: string) => void;
   onClose: () => void;
+  /** builtin-tools D8: 수동 해제된 빌트인(카탈로그 형식). onToggleBuiltin과 세트 */
+  excludedBuiltinIds?: string[];
+  /**
+   * 빌트인 도구 토글 콜백 — 미전달(edit 모드) 시 빌트인도 일반 도구로 취급.
+   * 전달 시 빌트인 카드는 기본 선택 + "기본" 배지로 표시되며 이 콜백으로만 해제된다.
+   */
+  onToggleBuiltin?: (toolId: string) => void;
 }
 
 /**
@@ -26,6 +33,8 @@ const ToolPickerModal = ({
   onRetry,
   onToggle,
   onClose,
+  excludedBuiltinIds = [],
+  onToggleBuiltin,
 }: ToolPickerModalProps) => {
   if (!isOpen) return null;
 
@@ -68,12 +77,17 @@ const ToolPickerModal = ({
           ) : catalogTools && catalogTools.length > 0 ? (
             <div className="grid grid-cols-1 gap-2">
               {catalogTools.map((tool) => {
-                const isSelected = selectedIds.includes(tool.tool_id);
+                const isBuiltin = !!tool.is_builtin && !!onToggleBuiltin;
+                const isSelected = isBuiltin
+                  ? !excludedBuiltinIds.includes(tool.tool_id)
+                  : selectedIds.includes(tool.tool_id);
                 return (
                   <button
                     key={tool.tool_id}
                     type="button"
-                    onClick={() => onToggle(tool.tool_id)}
+                    onClick={() =>
+                      isBuiltin ? onToggleBuiltin(tool.tool_id) : onToggle(tool.tool_id)
+                    }
                     className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition-all ${
                       isSelected
                         ? 'border-violet-300 bg-violet-50'
@@ -87,6 +101,9 @@ const ToolPickerModal = ({
                         </span>
                         {tool.source === 'mcp' && (
                           <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-600">MCP</span>
+                        )}
+                        {isBuiltin && (
+                          <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-600">기본</span>
                         )}
                       </div>
                       {tool.description && (

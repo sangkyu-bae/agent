@@ -43,6 +43,9 @@ class SyncInternalToolsUseCase:
                         description=meta.description,
                         requires_env=list(meta.requires_env),
                         is_active=True,
+                        # builtin-tools D1: INSERT 시드 전용 — UPDATE 분기는
+                        # is_builtin을 건드리지 않으므로(D2) 기존 행에는 무영향.
+                        is_builtin=meta.builtin_default,
                     ),
                     request_id,
                 )
@@ -82,6 +85,7 @@ class SyncInternalToolsUseCase:
                     description=entry.description,
                     requires_env=list(entry.requires_env),
                     is_active=False,
+                    is_builtin=entry.is_builtin,
                 ),
                 request_id,
             )

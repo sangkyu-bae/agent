@@ -25,6 +25,7 @@ const CATALOG: CatalogTool[] = [
     mcp_server_id: null,
     mcp_server_name: null,
     requires_env: [],
+    is_builtin: false,
   },
 ];
 

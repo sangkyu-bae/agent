@@ -30,6 +30,7 @@ const catalogTool = (overrides: Partial<CatalogTool>): CatalogTool => ({
   mcp_server_id: null,
   mcp_server_name: null,
   requires_env: [],
+  is_builtin: false,
   ...overrides,
 });
 
@@ -50,6 +51,7 @@ const BASE_FORM: AgentBuilderFormData = {
   subAgents: [],
   skills: [],
   schedules: [],
+  excludedBuiltinTools: [],
 };
 
 const DRAFT: DocumentExtractorDraft = {
@@ -83,6 +85,7 @@ const renderPanel = (formOverrides: Partial<AgentBuilderFormData> = {}, onChange
         onToolToggle={vi.fn()}
         onSkillToggle={vi.fn()}
         onRagConfigChange={vi.fn()}
+        onBuiltinToggle={vi.fn()}
         isEditMode={false}
         catalogTools={CATALOG_TOOLS}
         isToolsLoading={false}

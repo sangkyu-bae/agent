@@ -21,6 +21,17 @@ def _make_fake_admin():
     )
 
 
+def _make_fake_user():
+    from src.domain.auth.entities import User, UserRole, UserStatus
+    return User(
+        email="user@test.com",
+        password_hash="hashed",
+        role=UserRole.USER,
+        status=UserStatus.APPROVED,
+        id=2,
+    )
+
+
 def _make_client(overrides: dict) -> TestClient:
     from src.api.routes.tool_catalog_router import router
     from src.interfaces.dependencies.auth import get_current_user
@@ -64,6 +75,79 @@ class TestListToolCatalog:
         resp = client.get("/api/v1/tool-catalog")
         assert resp.status_code == 200
         assert resp.json()["tools"] == []
+
+
+class TestListToolCatalogBuiltin:
+    def test_list_exposes_is_builtin(self):
+        """builtin-tools D4: 목록 응답에 is_builtin 노출."""
+        from src.api.routes.tool_catalog_router import get_list_tool_catalog_use_case
+        mock_uc = MagicMock()
+        mock_uc.execute = AsyncMock(
+            return_value=ToolCatalogListResponse(
+                tools=[
+                    ToolCatalogItemResponse(
+                        tool_id="internal:wiki_read",
+                        source="internal",
+                        name="에이전트 위키 열람",
+                        description="위키 열람",
+                        is_builtin=True,
+                    )
+                ]
+            )
+        )
+        client = _make_client({get_list_tool_catalog_use_case: lambda: mock_uc})
+        resp = client.get("/api/v1/tool-catalog")
+        assert resp.status_code == 200
+        assert resp.json()["tools"][0]["is_builtin"] is True
+
+
+class TestSetBuiltin:
+    def test_patch_builtin_admin_200(self):
+        """builtin-tools D3: 관리자 토글 정상 경로."""
+        from src.api.routes.tool_catalog_router import get_set_builtin_use_case
+        from src.domain.tool_catalog.entity import ToolCatalogEntry
+        mock_uc = MagicMock()
+        mock_uc.execute = AsyncMock(
+            return_value=ToolCatalogEntry(
+                id="tc-1", tool_id="internal:wiki_read", source="internal",
+                name="에이전트 위키 열람", description="d", is_builtin=True,
+            )
+        )
+        client = _make_client({get_set_builtin_use_case: lambda: mock_uc})
+        resp = client.patch(
+            "/api/v1/tool-catalog/builtin",
+            json={"tool_id": "internal:wiki_read", "is_builtin": True},
+        )
+        assert resp.status_code == 200
+        assert resp.json() == {"tool_id": "internal:wiki_read", "is_builtin": True}
+
+    def test_patch_builtin_unknown_tool_404(self):
+        from src.api.routes.tool_catalog_router import get_set_builtin_use_case
+        mock_uc = MagicMock()
+        mock_uc.execute = AsyncMock(
+            side_effect=ValueError("Unknown catalog tool_id: 'internal:nope'")
+        )
+        client = _make_client({get_set_builtin_use_case: lambda: mock_uc})
+        resp = client.patch(
+            "/api/v1/tool-catalog/builtin",
+            json={"tool_id": "internal:nope", "is_builtin": True},
+        )
+        assert resp.status_code == 404
+
+    def test_patch_builtin_non_admin_403(self):
+        from src.api.routes.tool_catalog_router import get_set_builtin_use_case
+        from src.interfaces.dependencies.auth import get_current_user
+        mock_uc = MagicMock()
+        client = _make_client({
+            get_set_builtin_use_case: lambda: mock_uc,
+            get_current_user: _make_fake_user,
+        })
+        resp = client.patch(
+            "/api/v1/tool-catalog/builtin",
+            json={"tool_id": "internal:wiki_read", "is_builtin": True},
+        )
+        assert resp.status_code == 403
+        mock_uc.execute.assert_not_called()
 
 
 class TestSyncMcpTools:

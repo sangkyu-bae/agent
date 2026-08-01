@@ -28,6 +28,7 @@ class ToolCatalogRepository(ToolCatalogRepositoryInterface):
                 description=entry.description,
                 requires_env=entry.requires_env or None,
                 is_active=entry.is_active,
+                is_builtin=entry.is_builtin,
                 created_at=entry.created_at or now,
                 updated_at=entry.updated_at or now,
             )
@@ -46,6 +47,8 @@ class ToolCatalogRepository(ToolCatalogRepositoryInterface):
             existing = await self.find_by_tool_id(entry.tool_id, request_id)
             if existing is not None:
                 now = datetime.now(timezone.utc)
+                # builtin-tools D2: is_builtin은 SET 절에 절대 포함하지 않는다 —
+                # 관리자 토글값이 부팅 sync에 덮어써지지 않는 보존 계약.
                 stmt = (
                     update(ToolCatalogModel)
                     .where(ToolCatalogModel.tool_id == entry.tool_id)
@@ -95,6 +98,51 @@ class ToolCatalogRepository(ToolCatalogRepositoryInterface):
             self._logger.error("ToolCatalog list_active failed", exception=e, request_id=request_id)
             raise
 
+    async def set_builtin(
+        self, tool_id: str, is_builtin: bool, request_id: str
+    ) -> ToolCatalogEntry | None:
+        """builtin-tools D3: 빌트인 플래그 토글. 대상 미존재 시 None."""
+        self._logger.info(
+            "ToolCatalog set_builtin",
+            request_id=request_id, tool_id=tool_id, is_builtin=is_builtin,
+        )
+        try:
+            stmt = (
+                update(ToolCatalogModel)
+                .where(ToolCatalogModel.tool_id == tool_id)
+                .values(is_builtin=is_builtin, updated_at=datetime.now(timezone.utc))
+            )
+            result = await self._session.execute(stmt)
+            if result.rowcount == 0:
+                return None
+            await self._session.flush()
+            return await self.find_by_tool_id(tool_id, request_id)
+        except Exception as e:
+            self._logger.error(
+                "ToolCatalog set_builtin failed", exception=e, request_id=request_id
+            )
+            raise
+
+    async def list_builtin(self, request_id: str) -> list[ToolCatalogEntry]:
+        """builtin-tools D5: 주입 대상 = is_builtin AND is_active."""
+        self._logger.info("ToolCatalog list_builtin", request_id=request_id)
+        try:
+            stmt = (
+                select(ToolCatalogModel)
+                .where(
+                    ToolCatalogModel.is_builtin == True,  # noqa: E712
+                    ToolCatalogModel.is_active == True,  # noqa: E712
+                )
+                .order_by(ToolCatalogModel.source, ToolCatalogModel.name)
+            )
+            result = await self._session.execute(stmt)
+            return [self._to_domain(m) for m in result.scalars().all()]
+        except Exception as e:
+            self._logger.error(
+                "ToolCatalog list_builtin failed", exception=e, request_id=request_id
+            )
+            raise
+
     async def deactivate_by_mcp_server(
         self, mcp_server_id: str, request_id: str
     ) -> int:
@@ -132,6 +180,7 @@ class ToolCatalogRepository(ToolCatalogRepositoryInterface):
             mcp_server_id=model.mcp_server_id,
             requires_env=model.requires_env or [],
             is_active=model.is_active,
+            is_builtin=model.is_builtin,
             created_at=model.created_at,
             updated_at=model.updated_at,
         )
