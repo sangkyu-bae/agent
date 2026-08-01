@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
+import LoadingButton from '@/components/common/LoadingButton';
 import { useAgentDetail } from '@/hooks/useAgentStore';
 import {
   useCreateWiki,
@@ -63,6 +64,8 @@ const AgentKnowledgePage = () => {
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<ArticleFormState>(emptyForm);
+  // mutation-pending-guard: 저장 실패 인라인 에러
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const { data: article } = useWikiArticle(selectedId ?? '');
   const createMutation = useCreateWiki();
@@ -88,9 +91,13 @@ const AgentKnowledgePage = () => {
     [tree],
   );
 
+  // mutation-pending-guard: 생성/수정 어느 쪽이든 대기 중이면 저장 차단
+  const isSaving = createMutation.isPending || updateMutation.isPending;
+
   const openCreate = () => {
     setEditingId(null);
     setForm(emptyForm);
+    setSubmitError(null);
     setFormOpen(true);
   };
 
@@ -102,25 +109,38 @@ const AgentKnowledgePage = () => {
       content: article.content,
       path: article.path ?? '',
     });
+    setSubmitError(null);
     setFormOpen(true);
   };
 
-  const submitForm = async () => {
-    const path = form.path.trim() === '' ? null : form.path.trim();
-    if (editingId) {
-      await updateMutation.mutateAsync({
-        id: editingId,
-        data: { title: form.title, content: form.content, path },
-      });
-    } else {
-      await createMutation.mutateAsync({
-        agent_id: agentId ?? '',
-        title: form.title,
-        content: form.content,
-        path,
-      });
-    }
+  const closeForm = () => {
     setFormOpen(false);
+    setSubmitError(null);
+  };
+
+  const submitForm = async () => {
+    if (isSaving) return; // disabled 우회 경로 방어
+    setSubmitError(null);
+    const path = form.path.trim() === '' ? null : form.path.trim();
+    try {
+      if (editingId) {
+        await updateMutation.mutateAsync({
+          id: editingId,
+          data: { title: form.title, content: form.content, path },
+        });
+      } else {
+        await createMutation.mutateAsync({
+          agent_id: agentId ?? '',
+          title: form.title,
+          content: form.content,
+          path,
+        });
+      }
+      setFormOpen(false);
+    } catch {
+      // 폼·입력 보존 — 상세 사유는 서버에 노출하지 않고 고정 문구만 표시
+      setSubmitError('저장에 실패했습니다. 다시 시도해주세요.');
+    }
   };
 
   return (
@@ -210,20 +230,27 @@ const AgentKnowledgePage = () => {
               className="mb-3 w-full rounded border border-zinc-300 px-3 py-2 text-sm"
             />
             <div className="flex gap-2">
-              <button
+              <LoadingButton
+                isPending={isSaving}
+                pendingText="저장 중…"
                 onClick={submitForm}
                 disabled={!form.title.trim() || !form.content.trim()}
-                className="rounded bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
+                className="rounded bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-700 disabled:opacity-40"
               >
                 저장
-              </button>
+              </LoadingButton>
               <button
-                onClick={() => setFormOpen(false)}
+                onClick={closeForm}
                 className="rounded border border-zinc-300 px-3 py-1.5 text-xs text-zinc-600"
               >
                 취소
               </button>
             </div>
+            {submitError && (
+              <p role="alert" className="mt-2 text-xs text-red-600">
+                {submitError}
+              </p>
+            )}
           </div>
         ) : article ? (
           <div className="mx-auto max-w-2xl">
@@ -254,12 +281,14 @@ const AgentKnowledgePage = () => {
                 >
                   수정
                 </button>
-                <button
+                <LoadingButton
+                  isPending={deprecateMutation.isPending}
+                  pendingText="폐기 중…"
                   onClick={() => deprecateMutation.mutate(article.id)}
                   className="rounded border border-red-200 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50"
                 >
                   폐기
-                </button>
+                </LoadingButton>
               </div>
             )}
           </div>
