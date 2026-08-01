@@ -383,10 +383,16 @@ class TestSupervisorWorkerExposure:
         workflow = WorkflowDefinition(
             supervisor_prompt="프롬프트", workers=workers, flow_hint="test",
         )
+
+        # langgraph add_node가 노드 함수를 inspect하므로 Mock 대신 실제 async 함수
+        # 반환(Mock의 가짜 __code__가 TypeError 유발 — wiki_toc 테스트 동일 조치).
+        async def _noop_supervisor(state):
+            return {}
+
         with patch("src.application.agent_builder.workflow_compiler.create_react_agent",
                    return_value=MagicMock()), \
              patch("src.application.agent_builder.workflow_compiler.create_supervisor_node",
-                   return_value=AsyncMock()) as mock_sup:
+                   MagicMock(return_value=_noop_supervisor)) as mock_sup:
             await compiler.compile(workflow, _make_llm_model(), "req-1")
 
         call_kwargs = mock_sup.call_args
@@ -591,7 +597,11 @@ class TestWrapWorker:
         result = await wrapped(state)
         assert result["last_worker_id"] == "worker_0"
         assert result["token_usage"] > 0
-        assert result["messages"] == [mock_ai_msg]
+        # worker-toolmessage-leak-fix D1: 최종 답변 content로 재생성된 1건 반환
+        assert len(result["messages"]) == 1
+        out = result["messages"][0]
+        assert out.name == "worker_0"
+        assert out.content == mock_ai_msg.content
 
 
 def _make_analysis_workflow() -> WorkflowDefinition:
