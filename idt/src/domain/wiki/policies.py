@@ -113,6 +113,19 @@ class WikiPolicy:
                 )
 
     @staticmethod
+    def expand_ancestors(path: str | None) -> list[str]:
+        """path 자신+조상 경로를 깊은 순서로 반환 — 폴더 요약 재증류 대상 (wiki-folder-summaries).
+
+        None(미분류)은 요약 대상이 아니므로 빈 목록. 깊이<=3이라 최대 3개.
+        """
+        if path is None:
+            return []
+        segments = path.split("/")
+        return [
+            "/".join(segments[: i + 1]) for i in range(len(segments) - 1, -1, -1)
+        ]
+
+    @staticmethod
     def human_source_ref(user_id: str) -> str:
         """사람 작성물의 출처 표기 — 출처 불변식을 완화 없이 충족한다."""
         return f"{WikiPolicy.HUMAN_SOURCE_PREFIX}{user_id}"

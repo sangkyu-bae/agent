@@ -109,3 +109,64 @@ def render_wiki_toc_block(
         else "\n"
     )
     return _TOC_HEADER + "".join(lines) + notice + _TOC_FOOTER
+
+
+# wiki-folder-summaries D5: 폴더 모드 지도 블록.
+# 헤더 태그는 compiler가 모드 판별에 사용한다(문자열 계약 — 변경 시 compiler 동기 수정).
+WIKI_FOLDER_HEADER_TAG = "[에이전트 지식 위키 지도]"
+
+_FOLDER_HEADER = (
+    f"{WIKI_FOLDER_HEADER_TAG}\n"
+    "이 에이전트의 승인 지식은 아래 폴더로 정리되어 있습니다.\n"
+    "관련 폴더를 wiki_list 도구로 열어 문서 목록을 확인하고, "
+    "문서는 wiki_read 도구로 본문을 열람하세요.\n"
+    "지도만으로 답하지 말고, 인용이 필요하면 반드시 본문을 열람한 뒤 답하세요.\n\n"
+)
+
+
+def _folder_line(folder) -> str:
+    return f"- {folder.path} — {folder.summary} ({folder.article_count}건)\n"
+
+
+def render_wiki_folder_block(
+    top_folders: list, uncategorized_count: int, max_bytes: int
+) -> str:
+    """폴더 지도 블록 렌더링 (wiki-folder-summaries FR-04).
+
+    Args:
+        top_folders: 최상위(1세그먼트) 폴더 요약 목록 (path 오름차순 전제).
+        uncategorized_count: path=None 승인 문서 수 — 0이면 안내줄 생략.
+        max_bytes: 목록부 UTF-8 바이트 상한. 초과 시 뒤에서부터 줄 단위 절단.
+
+    Returns:
+        prepend용 텍스트 (말미 '---' 구분자). 표시할 것이 없으면 ''.
+    """
+    if not top_folders and uncategorized_count <= 0:
+        return ""
+
+    total = len(top_folders)
+    lines: list[str] = []
+    used = 0
+    for folder in top_folders:
+        line = _folder_line(folder)
+        line_bytes = len(line.encode("utf-8"))
+        if used + line_bytes > max_bytes:
+            break
+        lines.append(line)
+        used += line_bytes
+
+    if not lines and uncategorized_count <= 0:
+        return ""
+
+    if uncategorized_count > 0:
+        lines.append(
+            f"- (미분류) — 폴더 미지정 문서 {uncategorized_count}건 "
+            '(wiki_list 경로 "" 로 조회)\n'
+        )
+
+    notice = (
+        f"\n(전체 폴더 {total}개 중 {min(len(lines), total)}개 표시 — 이후 생략)\n"
+        if len([l for l in lines if not l.startswith("- (미분류)")]) < total
+        else "\n"
+    )
+    return _FOLDER_HEADER + "".join(lines) + notice + _TOC_FOOTER

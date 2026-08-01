@@ -30,6 +30,7 @@ class ToolFactory:
         routed_retrieval_getter: Callable[[], Any] | None = None,  # ★ rag-routed-integration D2
         wiki_session_factory: Any = None,          # ★ wiki-agentic-navigation: wiki_read용
         wiki_repo_builder: Any = None,             # ★ (session) -> WikiArticleRepository
+        wiki_folder_repo_builder: Any = None,      # ★ wiki-folder-summaries: (session) -> WikiFolderSummaryRepository
     ) -> None:
         self._logger = logger
         self._hybrid_search = hybrid_search_use_case
@@ -46,6 +47,8 @@ class ToolFactory:
         # wiki-agentic-navigation: wiki_read 도구용 per-call 세션 의존.
         self._wiki_session_factory = wiki_session_factory
         self._wiki_repo_builder = wiki_repo_builder
+        # wiki-folder-summaries D4: wiki_list 도구용 폴더 요약 저장소 빌더.
+        self._wiki_folder_repo_builder = wiki_folder_repo_builder
         # agent-user-context Design §7.1:
         # WorkflowCompiler.compile() 시점에 갱신되는 현재 요청의 AuthContext.
         # None이면 Tool은 ContextVar fallback 또는 public_anonymous 동작.
@@ -131,6 +134,25 @@ class ToolFactory:
                 return WikiReadTool(
                     session_factory=self._wiki_session_factory,
                     repo_builder=self._wiki_repo_builder,
+                    request_id=request_id,
+                    logger=self._logger,
+                )
+            case "wiki_list":
+                from src.infrastructure.wiki.wiki_list_tool import WikiListTool
+
+                if (
+                    self._wiki_session_factory is None
+                    or self._wiki_repo_builder is None
+                    or self._wiki_folder_repo_builder is None
+                ):
+                    raise ValueError(
+                        "wiki_list 도구는 wiki_session_factory/wiki_repo_builder/"
+                        "wiki_folder_repo_builder 주입이 필요합니다 (ToolFactory 설정 오류)"
+                    )
+                return WikiListTool(
+                    session_factory=self._wiki_session_factory,
+                    repo_builder=self._wiki_repo_builder,
+                    folder_repo_builder=self._wiki_folder_repo_builder,
                     request_id=request_id,
                     logger=self._logger,
                 )

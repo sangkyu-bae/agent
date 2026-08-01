@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     # wiki-agentic-navigation D8: 프롬프트 목차 상한 (초과 시 최신순 절단)
     wiki_toc_max_items: int = 50
     wiki_toc_max_bytes: int = 4000
+    # wiki-folder-summaries D5: 폴더 요약 계층 (기본 off — V053 배포 선행 필요)
+    wiki_folder_summaries_enabled: bool = False
+    wiki_folder_mode_threshold: int = 30
 
     # OpenAI
     openai_api_key: str = ""

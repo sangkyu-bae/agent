@@ -31,6 +31,20 @@ class WikiDistillerInterface(ABC):
         """청크 그룹 → 정제된 제목/본문."""
 
 
+class FolderSummaryDistillerInterface(ABC):
+    """폴더의 직속 문서+하위 폴더 요약에서 안내 설명을 증류한다 (wiki-folder-summaries)."""
+
+    @abstractmethod
+    async def summarize_folder(
+        self,
+        path: str,
+        doc_snippets: list[str],
+        child_summaries: list[str],
+        request_id: str,
+    ) -> str:
+        """계층 증류: leaf는 문서 스니펫, 상위 폴더는 하위 요약이 주 입력."""
+
+
 class FeedbackWikiDistillerInterface(ABC):
     """부정 평가(Q/A+이유)에서 팀 지식 초안을 판정·정제한다 (wiki-feedback-loop)."""
 

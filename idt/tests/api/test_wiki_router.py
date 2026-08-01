@@ -296,3 +296,35 @@ class TestTree:
         r = client.get("/api/v1/wiki/tree?agent_id=agent_1")
         assert r.status_code == 200
         query_uc.get_by_id.assert_not_called()
+
+
+class TestAuthBeforeUseCase:
+    """wiki-tree-performance D2: 미인증 요청은 use_case DI를 실행하지 않는다 (FR-03).
+
+    FastAPI는 파라미터 선언 순서대로 의존성을 해석하므로, 인증 의존성이
+    use_case보다 앞이어야 미인증 401/403이 무거운 DI 비용 없이 반환된다.
+    """
+
+    def _spy_app(self):
+        a = FastAPI()
+        a.include_router(router)
+        calls = {"n": 0}
+
+        def spy_factory():
+            calls["n"] += 1
+            return MagicMock()
+
+        a.dependency_overrides[get_query_use_case] = spy_factory
+        return TestClient(a, raise_server_exceptions=False), calls
+
+    def test_tc04_tree_unauthed_skips_use_case_di(self):
+        client, calls = self._spy_app()
+        r = client.get("/api/v1/wiki/tree?agent_id=agent_1")
+        assert r.status_code in (401, 403)
+        assert calls["n"] == 0
+
+    def test_tc05_list_and_get_unauthed_skip_use_case_di(self):
+        client, calls = self._spy_app()
+        assert client.get("/api/v1/wiki?agent_id=agent_1").status_code in (401, 403)
+        assert client.get("/api/v1/wiki/w1").status_code in (401, 403)
+        assert calls["n"] == 0

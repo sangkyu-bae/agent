@@ -103,6 +103,32 @@ class TestToolFactoryWikiRead:
             factory.create("wiki_read")
 
 
+class TestToolFactoryWikiList:
+    """wiki-folder-summaries FR-03: wiki_list 생성 분기."""
+
+    def test_create_wiki_list_with_deps(self):
+        factory = ToolFactory(
+            logger=MagicMock(),
+            wiki_session_factory=MagicMock(),
+            wiki_repo_builder=MagicMock(),
+            wiki_folder_repo_builder=MagicMock(),
+        )
+        tool = factory.create("wiki_list", request_id="r1")
+        assert isinstance(tool, BaseTool)
+        assert tool.name == "wiki_list"
+        assert tool.request_id == "r1"
+
+    def test_create_wiki_list_without_folder_repo_raises(self):
+        """wiki_read 의존만으로는 부족 — 폴더 repo 미주입 시 조기 표면화."""
+        factory = ToolFactory(
+            logger=MagicMock(),
+            wiki_session_factory=MagicMock(),
+            wiki_repo_builder=MagicMock(),
+        )
+        with pytest.raises(ValueError, match="wiki_list"):
+            factory.create("wiki_list")
+
+
 class TestToolFactoryRagConfig:
     def test_create_with_rag_config_applies_settings(self):
         factory = _make_factory()

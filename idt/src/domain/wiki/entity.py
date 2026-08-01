@@ -104,3 +104,27 @@ class WikiArticle:
     def is_searchable(self, now: datetime) -> bool:
         """검색에 노출 가능한지 여부(승인 + 미만료)."""
         return self.status == WikiStatus.APPROVED and not self.is_expired(now)
+
+
+@dataclass
+class WikiFolderSummary:
+    """가상 폴더의 증류 요약 — wiki_article path의 파생 캐시 (wiki-folder-summaries).
+
+    승인 게이트·출처 불변식이 없는 파생 데이터라 상태 전이 메서드가 없다.
+    탐색 힌트일 뿐 진실은 wiki_list의 실시간 문서 목록이다.
+
+    Attributes:
+        id: PK(UUID)
+        agent_id: 소속 에이전트
+        path: 가상 폴더 경로("여신/한도") — WikiPolicy.validate_path 제약 동일
+        summary: LLM 증류 폴더 안내 설명
+        article_count: 하위 전체(재귀) 승인+미만료 문서 수
+        updated_at: 마지막 재증류 시각
+    """
+
+    id: str
+    agent_id: str
+    path: str
+    summary: str
+    article_count: int = 0
+    updated_at: datetime | None = None
