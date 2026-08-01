@@ -2,12 +2,12 @@
   "version": "1.0",
   "enabled": false,
   "teamName": "",
-  "feature": "llm-register",
+  "feature": "mutation-pending-guard",
   "pdcaPhase": "do",
   "orchestrationPattern": "leader",
   "ctoAgent": "opus",
-  "startedAt": "2026-07-11T08:31:24.963Z",
-  "lastUpdated": "2026-07-11T09:16:28.661Z",
+  "startedAt": "2026-08-01T08:51:59.125Z",
+  "lastUpdated": "2026-08-01T09:02:58.658Z",
   "teammates": [],
   "progress": {
     "totalTasks": 0,
@@ -16,13 +16,6 @@
     "failedTasks": 0,
     "pendingTasks": 0
   },
-  "recentMessages": [
-    {
-      "from": "system",
-      "to": "all",
-      "content": "Phase check → report (auto-advanced)",
-      "timestamp": "2026-07-11T08:35:59.878Z"
-    }
-  ],
-  "sessionId": "d4820251-ee7b-444f-99c4-42091e7b6d10"
+  "recentMessages": [],
+  "sessionId": "c69abdd6-8435-467a-a962-b678253a30f2"
 }

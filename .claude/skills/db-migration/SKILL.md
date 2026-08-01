@@ -73,6 +73,33 @@ ls db/migration/
 
 ## Step 4 — DDL 생성 (SQLAlchemy 자동 추출)
 
+### COMMENT 필수 규칙 (V054 이후 테스트로 강제)
+
+생성하는 모든 DDL은 다음을 만족해야 한다.
+`idt/tests/db/test_migration_ddl_comments.py`가 V054 이후 파일을 자동 검사한다.
+
+1. `CREATE TABLE`: **전 컬럼 + 테이블 COMMENT 필수**
+2. `ALTER TABLE ... ADD / MODIFY / CHANGE`: 대상 컬럼 COMMENT 필수
+   (MODIFY/CHANGE에서 COMMENT를 생략하면 MySQL이 기존 코멘트를 **소실**시킨다)
+3. SQLAlchemy 모델에 `comment=`가 없으면 추출된 DDL에도 빠진다 →
+   **모델의 Column/Table에 comment를 먼저 추가**한 뒤 DDL을 추출한다
+
+```python
+# 모델 쪽 (comment= 필수)
+id = Column(CHAR(36), primary_key=True, comment="UUID PK")
+__table_args__ = {"comment": "에이전트 위키 폴더 요약"}
+```
+
+```sql
+-- DDL 쪽 (V053 참조 — 표준 형식)
+CREATE TABLE wiki_folder_summary (
+    id       CHAR(36)     NOT NULL COMMENT 'UUID PK',
+    agent_id CHAR(36)     NOT NULL COMMENT '소속 에이전트 (agent_definition.id)',
+    PRIMARY KEY (id)
+) ENGINE=InnoDB
+  COMMENT='에이전트 위키 폴더 요약';
+```
+
 신규 테이블마다 아래 Python 명령으로 MySQL DDL을 생성한다.
 명령은 **반드시 `idt/` 디렉토리에서** 실행한다.
 
@@ -144,6 +171,14 @@ V{NNN}__{action}_{tablename}.sql
 ```bash
 mkdir -p db/migration
 ```
+
+### 작성 후 COMMENT 규칙 검증 (필수)
+
+```bash
+cd idt && python -m pytest tests/db/test_migration_ddl_comments.py -q
+```
+
+실패 시 누락된 컬럼/테이블 COMMENT를 채운 뒤 재실행한다.
 
 ---
 

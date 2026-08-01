@@ -357,7 +357,9 @@
       "Bash(.venv/Scripts/python.exe -X utf8 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('WITH filter total:', d['hits']['total']['value']\\)\")",
       "Bash(.venv/Scripts/python.exe -X utf8 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('WITHOUT filter total:', d['hits']['total']['value']\\); [print\\(h['_source']\\) for h in d['hits']['hits']]\")",
       "Bash(.venv/Scripts/python.exe *)",
-      "PowerShell(Get-Content *)"
+      "PowerShell(Get-Content *)",
+      "PowerShell(Get-CimInstance *)",
+      "PowerShell(Get-NetTCPConnection *)"
     ]
   }
 }

@@ -1,6 +1,6 @@
 {
   "version": "2.0",
-  "lastUpdated": "2026-07-23T11:49:04.708Z",
+  "lastUpdated": "2026-08-01T10:12:38.705Z",
   "activeFeatures": [
     "websocket-common-module",
     "agent-chat-multiturn",
@@ -151,9 +151,12 @@
     "eval",
     "WikiPage",
     "rag-auth-filter-fix",
-    "supervisor-overblock-fix"
+    "supervisor-overblock-fix",
+    "worker-toolmessage-leak-fix",
+    "db",
+    "AdminToolsPage"
   ],
-  "primaryFeature": "websocket-common-module",
+  "primaryFeature": "scratchpad",
   "archivedFeatures": {
     "kb-excel-upload": {
       "phase": "archived",
@@ -474,6 +477,22 @@
       "iterationCount": 0,
       "archivedAt": "2026-07-21",
       "archivedTo": "docs/archive/2026-07/recurring-feedback-promotion/"
+    },
+    "wiki-folder-summaries": {
+      "phase": "archived",
+      "matchRate": 100,
+      "iterationCount": 0,
+      "startedAt": "2026-07-25T00:00:00.000Z",
+      "archivedAt": "2026-07-28T00:00:00.000Z",
+      "archivedTo": "docs/archive/2026-07/wiki-folder-summaries/"
+    },
+    "builtin-tools": {
+      "phase": "archived",
+      "matchRate": 100,
+      "iterationCount": 0,
+      "startedAt": "2026-08-01T10:09:04.114Z",
+      "archivedAt": "2026-08-01T00:00:00.000Z",
+      "archivedTo": "docs/archive/2026-08/builtin-tools/"
     }
   },
   "features": {
@@ -662,7 +681,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-04T10:53:02.380Z",
-        "lastUpdated": "2026-07-23T11:37:42.309Z"
+        "lastUpdated": "2026-08-01T09:35:43.349Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\api\\main.py"
     },
@@ -675,9 +694,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-04T10:57:06.857Z",
-        "lastUpdated": "2026-07-20T11:36:08.975Z"
+        "lastUpdated": "2026-08-01T09:32:50.251Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\api\\routes\\eval_router.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\api\\routes\\tool_catalog_router.py"
     },
     "retrieval": {
       "phase": "do",
@@ -766,7 +785,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-16T13:14:48.990Z",
-        "lastUpdated": "2026-07-23T11:37:25.455Z"
+        "lastUpdated": "2026-07-25T08:23:49.662Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\config.py"
     },
@@ -1029,9 +1048,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-04-01T11:13:23.704Z",
-        "lastUpdated": "2026-07-21T10:02:27.260Z"
+        "lastUpdated": "2026-08-01T09:41:01.819Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\constants\\adminNav.test.ts"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\constants\\adminNav.ts"
     },
     "idt_front": {
       "phase": "do",
@@ -1042,9 +1061,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-04-01T11:13:30.494Z",
-        "lastUpdated": "2026-07-20T11:57:36.081Z"
+        "lastUpdated": "2026-08-01T10:12:20.397Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\hooks\\useChatStream.ts"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\utils\\agentDetailMapping.test.ts"
     },
     "ChatPage": {
       "phase": "do",
@@ -1108,9 +1127,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-04-17T06:40:30.209Z",
-        "lastUpdated": "2026-07-23T11:31:17.337Z"
+        "lastUpdated": "2026-07-25T08:17:47.071Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\application\\repositories\\wiki_repository.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\application\\repositories\\wiki_folder_repository.py"
     },
     "auth": {
       "phase": "do",
@@ -1961,9 +1980,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-06-24T06:53:34.932Z",
-        "lastUpdated": "2026-07-21T09:51:20.466Z"
+        "lastUpdated": "2026-07-29T10:46:52.941Z"
       },
-      "lastFile": "C:\\Users\\tkdrb\\AppData\\Local\\Temp\\claude\\C--sangplus-sangplusbot-idt\\f1c95fe6-5075-420e-84e6-b2cf76dd0c36\\scratchpad\\dbq2.py"
+      "lastFile": "C:\\Users\\tkdrb\\AppData\\Local\\Temp\\claude\\C--sangplus-sangplusbot-idt\\25b2863b-2f87-4597-9be3-31de14671080\\scratchpad\\repro_tree_di.py"
     },
     "AdminSkillsPage": {
       "phase": "do",
@@ -2008,9 +2027,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-06-27T05:55:37.925Z",
-        "lastUpdated": "2026-07-13T11:22:35.216Z"
+        "lastUpdated": "2026-08-01T10:11:35.466Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\AgentBuilderPage\\index.tsx"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\AgentBuilderPage\\index.test.tsx"
     },
     "agent-builder-studio-ui": {
       "phase": "act",
@@ -2102,7 +2121,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-07-02T08:04:03.861Z",
-        "lastUpdated": "2026-07-23T11:49:04.707Z"
+        "lastUpdated": "2026-08-01T10:12:38.704Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\application\\tool_catalog\\test_sync_internal_tools_use_case.py"
     },
@@ -2276,9 +2295,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-07-10T05:24:02.290Z",
-        "lastUpdated": "2026-07-23T11:33:00.575Z"
+        "lastUpdated": "2026-07-25T08:23:31.890Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\application\\agent_run\\test_prompt_rendering.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\application\\agent_run\\prompt_rendering.py"
     },
     "schemas": {
       "phase": "do",
@@ -2470,9 +2489,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-07-18T09:51:27.503Z",
-        "lastUpdated": "2026-07-23T11:37:03.388Z"
+        "lastUpdated": "2026-07-25T08:43:05.820Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\application\\wiki\\wiki_first_search_use_case.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\application\\wiki\\test_folder_summary_service.py"
     },
     "KnowledgeArticlePage": {
       "phase": "do",
@@ -2702,6 +2721,46 @@
         "lastUpdated": "2026-07-21T09:35:40.797Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\WikiPage\\index.tsx"
+    },
+    "worker-toolmessage-leak-fix": {
+      "phase": "act",
+      "phaseNumber": 5,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-07-29T11:28:49.241Z",
+        "lastUpdated": "2026-07-29T11:28:49.243Z"
+      },
+      "previousPhase": "check",
+      "autoAdvanced": true
+    },
+    "db": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-08-01T09:12:25.516Z",
+        "lastUpdated": "2026-08-01T09:13:00.547Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\db\\test_migration_ddl_comments.py"
+    },
+    "AdminToolsPage": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-08-01T09:40:51.137Z",
+        "lastUpdated": "2026-08-01T09:41:48.290Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\AdminToolsPage\\index.test.tsx"
     }
   },
   "pipeline": {
@@ -2712,7 +2771,7 @@
   "session": {
     "startedAt": "2026-03-04T10:49:14.367Z",
     "onboardingCompleted": false,
-    "lastActivity": "2026-07-23T11:49:04.708Z"
+    "lastActivity": "2026-08-01T10:12:38.705Z"
   },
   "history": [
     {
@@ -20348,6 +20407,630 @@
       "feature": "tool_catalog",
       "phase": "do",
       "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-25T08:16:36.701Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-25T08:16:50.653Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-25T08:17:22.554Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-25T08:17:25.973Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-25T08:17:35.666Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-25T08:17:37.488Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-25T08:17:47.072Z",
+      "feature": "repositories",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-25T08:17:58.782Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-25T08:18:05.246Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-25T08:18:54.011Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-25T08:19:21.755Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-25T08:19:52.044Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-25T08:19:59.461Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-25T08:20:01.570Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-25T08:20:06.401Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-25T08:20:08.144Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-25T08:20:16.358Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-25T08:20:18.744Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-25T08:20:26.903Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-25T08:20:29.035Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-25T08:20:58.989Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-25T08:21:10.097Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-25T08:21:28.327Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-25T08:22:30.156Z",
+      "feature": "tool_catalog",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-25T08:22:58.577Z",
+      "feature": "agent_run",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-25T08:23:14.714Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-25T08:23:31.890Z",
+      "feature": "agent_run",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-25T08:23:46.530Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-25T08:23:49.662Z",
+      "feature": "idt",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-25T08:27:28.956Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-25T08:27:33.705Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-25T08:27:45.125Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-25T08:27:45.991Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-25T08:42:38.693Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-25T08:42:50.394Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-25T08:43:01.700Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-25T08:43:05.820Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-29T10:46:52.942Z",
+      "feature": "scratchpad",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-07-29T11:28:49.243Z",
+      "feature": "worker-toolmessage-leak-fix",
+      "phase": "act",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T08:53:31.200Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T08:53:54.538Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:01:38.039Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:01:45.607Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:01:55.296Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:02:09.897Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:02:10.905Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:02:14.407Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:02:16.387Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:02:18.301Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:02:20.638Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:02:22.396Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:02:25.393Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:02:26.178Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:02:27.952Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:12:25.517Z",
+      "feature": "db",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:13:00.547Z",
+      "feature": "db",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:29:51.946Z",
+      "feature": "tool_catalog",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:30:06.633Z",
+      "feature": "tool_catalog",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:30:38.013Z",
+      "feature": "tool_catalog",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:30:39.625Z",
+      "feature": "tool_catalog",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:30:45.606Z",
+      "feature": "tool_catalog",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:30:50.333Z",
+      "feature": "tool_catalog",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:30:56.366Z",
+      "feature": "tool_catalog",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:30:58.266Z",
+      "feature": "tool_catalog",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:31:00.524Z",
+      "feature": "tool_catalog",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:31:07.250Z",
+      "feature": "tool_catalog",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:31:09.118Z",
+      "feature": "tool_catalog",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:32:00.199Z",
+      "feature": "tool_catalog",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:32:05.397Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:32:14.327Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:32:30.549Z",
+      "feature": "tool_catalog",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:32:32.407Z",
+      "feature": "tool_catalog",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:32:39.012Z",
+      "feature": "tool_catalog",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:32:42.893Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:32:44.963Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:32:50.251Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:33:03.969Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:33:15.845Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:33:17.611Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:35:43.349Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:38:22.476Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:38:24.447Z",
+      "feature": "constants",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:38:27.723Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:38:31.544Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:38:43.671Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:38:46.317Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:38:48.645Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:39:55.174Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:39:57.863Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:40:01.307Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:40:05.984Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:40:07.775Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:40:51.137Z",
+      "feature": "AdminToolsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:40:52.340Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:40:53.942Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:41:01.819Z",
+      "feature": "constants",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:41:48.290Z",
+      "feature": "AdminToolsPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T09:43:16.852Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T10:09:04.117Z",
+      "feature": "builtin-tools",
+      "phase": "act",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T10:11:35.466Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T10:11:45.678Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T10:12:14.282Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T10:12:20.397Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T10:12:38.704Z",
+      "feature": "tool_catalog",
+      "phase": "do",
+      "action": "updated"
     }
   ],
   "featurePhases": {
@@ -20389,14 +21072,17 @@
     "document-template-extractor": 99,
     "agent-recursion-limit": 98,
     "wiki-user-facing": 100,
-    "agent-eval-gate": 97
+    "agent-eval-gate": 97,
+    "builtin-tools": 100
   },
   "archivedTo": {
     "self-hosted-qwen-endpoint": "docs/archive/2026-06/self-hosted-qwen-endpoint/",
     "document-template-extractor": "docs/archive/2026-07/document-template-extractor/",
     "doc-extractor-preview-highlight": "docs/archive/2026-07/doc-extractor-preview-highlight/",
     "wiki-user-facing": "docs/archive/2026-07/wiki-user-facing/",
-    "wiki-agentic-navigation": "docs/archive/2026-07/wiki-agentic-navigation/"
+    "wiki-agentic-navigation": "docs/archive/2026-07/wiki-agentic-navigation/",
+    "wiki-folder-summaries": "docs/archive/2026-07/wiki-folder-summaries/",
+    "builtin-tools": "docs/archive/2026-08/builtin-tools/"
   },
-  "currentFeature": "wiki-agentic-navigation"
+  "currentFeature": null
 }
