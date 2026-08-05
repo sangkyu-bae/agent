@@ -78,6 +78,12 @@ export const queryKeys = {
     list: () => [...queryKeys.toolCatalog.all, 'list'] as const,
   },
 
+  // ── Middleware Catalog (builtin-middleware) ────────────
+  middlewareCatalog: {
+    all: ['middlewareCatalog'] as const,
+    list: () => [...queryKeys.middlewareCatalog.all, 'list'] as const,
+  },
+
   // ── LLM Models ─────────────────────────────────────────
   llmModels: {
     all: ['llmModels'] as const,
@@ -163,13 +169,28 @@ export const queryKeys = {
     org: () => [...queryKeys.memories.all, 'org'] as const,
   },
 
-  // ── Eval Gate (agent-eval-gate) ─────────────────────────
+  // ── Eval (agent-eval-gate 피드백 + eval-hub 평가 허브) ──
   eval: {
     all: ['eval'] as const,
+    // agent-eval-gate: 답변 피드백
     feedback: (messageId: number) =>
       [...queryKeys.eval.all, 'feedback', messageId] as const,
     agents: () => [...queryKeys.eval.all, 'agents'] as const,
     recentNegative: () => [...queryKeys.eval.all, 'recentNegative'] as const,
+    // eval-hub: 평가 허브 (테스트셋·실행·메트릭·대시보드)
+    testsets: (params?: { limit?: number; offset?: number }) =>
+      [...queryKeys.eval.all, 'testsets', params] as const,
+    testsetDetail: (testsetId: string) =>
+      [...queryKeys.eval.all, 'testsetDetail', testsetId] as const,
+    metrics: () => [...queryKeys.eval.all, 'metrics'] as const,
+    runs: (params?: { limit?: number; offset?: number }) =>
+      [...queryKeys.eval.all, 'runs', params] as const,
+    runDetail: (runId: string) =>
+      [...queryKeys.eval.all, 'runDetail', runId] as const,
+    runResults: (runId: string, params?: { limit?: number; offset?: number }) =>
+      [...queryKeys.eval.all, 'runResults', runId, params] as const,
+    adminDashboard: () =>
+      [...queryKeys.eval.all, 'adminDashboard'] as const,
   },
 
   // ── Agent Builder ──────────────────────────────────────
