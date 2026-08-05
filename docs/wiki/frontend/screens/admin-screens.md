@@ -6,14 +6,18 @@ source_refs:
   - idt_front/src/App.tsx (AdminRoute + AdminLayout 라우트 블록)
   - idt_front/src/constants/api.ts (ADMIN_* 블록)
   - idt/docs/archive/2026-07/admin-dashboard/admin-dashboard.report.md
+  - idt_front/docs/archive/2026-08/admin-nav-restructure/admin-nav-restructure.report.md
+  - idt/docs/archive/2026-08/builtin-tools/builtin-tools.report.md (/admin/tools)
 confidence: 0.85
-version: 1
+version: 2
 created: 2026-07-21
-updated: 2026-07-21
-verified_at: 6cc25656
+updated: 2026-08-03
+verified_at: 4f650d3c
 ---
 
 모든 `/admin/*` 라우트는 `AdminRoute`(비admin이면 `/`로 리다이렉트) + `AdminLayout` 하위에 선언된다.
+
+**네비 구조 (2026-08 개편)**: 사이드바는 `adminNav.ts`의 `ADMIN_NAV_GROUPS` 4그룹(관측 / 조직 관리 / 문서·품질 / 에이전트 리소스)만 렌더링하고, 그룹 내 페이지 전환은 `AdminLayout`이 경로에서 역산해 상단에 고정하는 `AdminSectionTabs` 2차 탭이 담당한다. URL·페이지 컴포넌트는 전부 기존 그대로. `ADMIN_ENTRY_PATH`는 `/admin/dashboard` (기존 `/admin/users`에서 변경). 상세 패턴·테스트 함정은 [[layout-owned-nav-tabs]].
 
 | 라우트 | 화면 한 줄 | 훅 | 주 엔드포인트 → 백엔드 라우터 |
 |---|---|---|---|
@@ -27,6 +31,7 @@ verified_at: 6cc25656
 | `/admin/ragas` | RAGAS 평가 대시보드/런/테스트셋 | (서비스 직접: `adminRagasService`) | `ADMIN_RAGAS_*` → `admin_ragas_router` |
 | `/admin/agent-runs`, `/admin/agent-runs/:runId` | 에이전트 런 관측(비용/토큰/스텝 드릴다운) | `useAgentRunAdmin` | `ADMIN_AGENT_RUNS`, `ADMIN_AGENT_RUN_DETAIL` → `agent_run_router` |
 | `/admin/wiki` | 제품 위키 큐레이션(승인/반려/폐기/distill) | `useWiki`, `useAgentStore`, `useRagToolConfig` | `WIKI_*` → `wiki_router` ([[wiki-screens]]) |
+| `/admin/tools` | 도구 카탈로그 목록 + 빌트인 지정/해제 토글(`role="switch"`, 행 단위 pending 가드) | `useToolCatalog`, `useSetToolBuiltin` | `TOOL_CATALOG`, `TOOL_CATALOG_BUILTIN`(PATCH) → `tool_catalog_router` ([[builtin-tools-optout-channel]]) |
 
 ## 계약 주의 (코드만 봐서는 놓치기 쉬운 것)
 

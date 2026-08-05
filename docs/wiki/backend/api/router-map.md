@@ -6,11 +6,14 @@ source_refs:
   - idt/src/api/routes/ (라우터 prefix/tags 전수 확인, 2026-07-21)
   - idt/docs/archive/2026-07/wiki-user-facing/wiki-user-facing.report.md (tree 선언 순서)
   - idt/docs/archive/2026-07/kb-content-browser/kb-content-browser.report.md (source 토글)
+  - idt/docs/archive/2026-08/builtin-tools/builtin-tools.report.md (PATCH /builtin)
+  - idt/docs/archive/2026-07/wiki-tree-performance/wiki-tree-performance.report.md (인증 선행·싱글턴)
+  - idt_front/docs/archive/2026-08/utility-page/utility-page.report.md (skills/list POST)
 confidence: 0.85
-version: 1
+version: 2
 created: 2026-07-21
-updated: 2026-07-21
-verified_at: 6cc25656
+updated: 2026-08-03
+verified_at: 4f650d3c
 ---
 
 라우터 파일 단위의 책임 지도. 엔드포인트 상세는 코드/OpenAPI(`/docs`)가 기록한다.
@@ -38,8 +41,8 @@ verified_at: 6cc25656
 | `agent_attachment_router` | `/api/v1/agent` | 엑셀 첨부 업로드 → file_id 발급 |
 | `middleware_agent_router` | `/api/v2/agents` | Middleware Agent Builder (v2) |
 | `auto_agent_builder_router` | `/api/v3/agents/auto` | 자연어 자동 빌더 (v3) |
-| `tool_catalog_router` | `/api/v1/tool-catalog` | 도구 카탈로그 조회 |
-| `skill_builder_router` | `/api/v1/skills` | 스킬 정의 CRUD/포크 + 에이전트-스킬 attach |
+| `tool_catalog_router` | `/api/v1/tool-catalog` | 도구 카탈로그 조회 + 빌트인 지정/해제(`PATCH /builtin`, admin) — is_builtin은 upsert 보존 계약 ([[builtin-tools-optout-channel]]) |
+| `skill_builder_router` | `/api/v1/skills` | 스킬 정의 CRUD/포크 + 에이전트-스킬 attach — **목록 조회 `/skills/list`는 GET이 아니라 POST** (프론트 MSW 핸들러 작성 시 함정) |
 | `mcp_registry_router` | `/api/v1/mcp-registry` | MCP 서버 레지스트리 CRUD + 연결 테스트 |
 | `analysis_router` | `/api/v1/analysis` | 엑셀 분석 |
 
@@ -96,3 +99,5 @@ verified_at: 6cc25656
 | `wiki_router` | `/api/v1/wiki` | 제품 위키 distill/승인 라이프사이클 + 트리 + 소유자 작성 |
 
 **계약 주의**: `/tree`는 `/{id}`보다 먼저 선언해야 한다(선언 순서 의존). `agent_id` 예약석: `HUMAN`, `CONVERSATION`. 상세는 [[wiki-screens]]·[[erd-wiki]].
+
+**계약 주의 (성능)**: wiki 전 엔드포인트는 (1) 인증 의존성을 use_case보다 **앞에** 선언하고, (2) 임베딩·Qdrant는 `get_wiki_vector_stack()` 앱 수명 싱글턴을 쓴다. per-request 생성으로 되돌리면 요청당 ~6.5초 회귀 ([[app-lifetime-client-singleton]]).

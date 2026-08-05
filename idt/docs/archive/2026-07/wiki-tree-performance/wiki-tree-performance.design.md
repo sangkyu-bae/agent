@@ -127,7 +127,8 @@ def _article_repo_builder(session: AsyncSession):
 
 ### 3.1 결정
 
-FastAPI는 파라미터 선언 순서대로 의존성을 해석하므로, **9개 전 엔드포인트**에서
+FastAPI는 파라미터 선언 순서대로 의존성을 해석하므로, **10개 전 엔드포인트**
+(distill·create·tree·list·get·approve·reject·deprecate·restore·edit)에서
 인증 의존성(`_user`/`user`/`_admin`)을 use_case 앞으로 이동한다
 (agents 라우터 `agent_builder_router.py:154-155`와 동일 관례).
 
@@ -217,7 +218,7 @@ curl -s -o /dev/null -w "%{time_total}s\n" "http://localhost:8000/api/v1/wiki/tr
 1. TC-01~03 작성 → Red 확인 (현행: 요청마다 생성 → 횟수 3회로 실패)
    → get_wiki_vector_stack() 신설 + _make_repo/_article_repo_builder 교체 (D1) → Green
 2. TC-04~06 작성 → Red 확인 (현행: 스텁이 인증 전에 호출됨)
-   → wiki_router 9개 엔드포인트 파라미터 순서 교정 (D2) → Green
+   → wiki_router 10개 엔드포인트 파라미터 순서 교정 (D2) → Green
 3. wiki 관련 기존 테스트 격리 실행 무회귀 (5.3)
 4. .venv 기동 → FR-02 실측 비교표 작성 (plan §8.2 수치 대비)
 ```
@@ -244,4 +245,5 @@ curl -s -o /dev/null -w "%{time_total}s\n" "http://localhost:8000/api/v1/wiki/tr
 
 | Version | Date | Changes | Author |
 |---------|------|---------|--------|
-| 0.1 | 2026-07-29 | Initial draft — 생성 시점(lazy 전역+조립 시 즉시 호출)·인스턴스 출처(별도 싱글턴)·순서 교정 범위(9개 전 엔드포인트) 확정 | 배상규 |
+| 0.1 | 2026-07-29 | Initial draft — 생성 시점(lazy 전역+조립 시 즉시 호출)·인스턴스 출처(별도 싱글턴)·순서 교정 범위(전 엔드포인트) 확정 | 배상규 |
+| 0.2 | 2026-07-29 | Gap 분석 G1 정정 — 엔드포인트 수 9개 → 10개 (distill 포함, 구현은 처음부터 10개 전부 교정) | 배상규 |

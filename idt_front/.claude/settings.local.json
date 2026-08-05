@@ -44,7 +44,11 @@
       "PowerShell(npx eslint src/hooks/useLlmModels.ts src/pages/AdminLlmModelsPage)",
       "PowerShell(New-Item *)",
       "PowerShell(npx vitest run src/components/common/LoadingButton.test.tsx --pool=threads 2>$null)",
-      "PowerShell(npx vitest run src/pages/AgentKnowledgePage/index.test.tsx --pool=threads 2>$null)"
+      "PowerShell(npx vitest run src/pages/AgentKnowledgePage/index.test.tsx --pool=threads 2>$null)",
+      "PowerShell(npx vitest run src/constants/adminNav.test.ts --pool=threads)",
+      "PowerShell(npx vitest run src/components/layout/AdminSectionTabs.test.tsx src/components/layout/AdminLayout.test.tsx --pool=threads)",
+      "PowerShell(npx vitest run src/components/layout src/constants/adminNav.test.ts --pool=threads)",
+      "PowerShell(npx eslint src/constants/adminNav.ts src/constants/adminNav.test.ts src/components/layout/AdminLayout.tsx src/components/layout/AdminSectionTabs.tsx src/components/layout/AdminSectionTabs.test.tsx src/components/layout/AdminLayout.test.tsx src/components/layout/TopNav.tsx src/components/layout/TopNav.test.tsx src/components/layout/AppSidebar.test.tsx)"
     ]
   }
 }

@@ -6,11 +6,13 @@ source_refs:
   - idt_front/src/App.tsx (라우트 선언)
   - idt_front/src/pages/AgentBuilderPage/index.tsx
   - idt_front/src/constants/api.ts
+  - idt_front/docs/archive/2026-08/utility-page/utility-page.report.md
+  - idt/docs/archive/2026-08/builtin-tools/builtin-tools.report.md
 confidence: 0.85
-version: 1
+version: 2
 created: 2026-07-21
-updated: 2026-07-21
-verified_at: 6cc25656
+updated: 2026-08-03
+verified_at: 4f650d3c
 ---
 
 ## AgentStorePage — `/agent-store`
@@ -32,6 +34,17 @@ verified_at: 6cc25656
 - 백엔드: `agent_builder_router` / `agent_composer_router` / `agent_schedule_router` / `tool_catalog_router`
 - 계약 주의: 도구 ID는 카탈로그/폼 표기(`internal:{id}`, `mcp:{srv}:{tool}`)와 저장 표기(`{id}`, `mcp_{srv}`)가 다르다 — 경계를 넘길 때 반드시 변환 (agent-tool-id-dual-namespace, MEMORY 선례)
 - 계약 주의: 수정 가능 필드 추가는 스키마+apply_update+repo update()+DI 4곳 세트 — repo 누락 시 조용히 미저장 (agent-repo-update-column-whitelist 선례)
+- 계약 주의: 빌트인 도구는 폼에서 "기본" 배지+기본 선택으로 표시되고, 해제는 전용 상태 `excludedBuiltinTools`(→ 요청 필드 `exclude_builtin_tool_ids`)로만 가능하다. Fix 초안 적용은 이 상태에 접근하지 않는다(불변) — [[builtin-tools-optout-channel]]
+
+## UtilityPage — `/tool-connection`
+
+플랫폼 카탈로그 읽기 전용 열람 (탭 4종: 도구/모델/미들웨어/스킬 + 검색·유형 필터·새로고침).
+
+- 진입: `idt_front/src/pages/UtilityPage/index.tsx` (+`UtilityCard.tsx`)
+- 훅: 기존 3종 재사용 — `useToolCatalog()`, `useLlmModels(true)`, `useSkills({scope:'all', size:100})`. **전용 백엔드 API 없음** (백엔드 변경 0으로 완결된 화면)
+- 미들웨어 탭은 "준비 중" 빈 상태 — 전용 API 자체가 없다 (후속: middleware-catalog)
+- 함정: `skills/list`는 **POST**다 — MSW 핸들러를 `http.get`으로 쓰면 조용히 실패 ([[router-map]])
+- 이력: 구 `ToolConnectionPage`(100% 목데이터)·`toolService.ts`·`types/tool.ts`는 **삭제됨** — 참조 금지. 목데이터 화면을 만나면 백엔드 `src/api/routes/` 스캔부터 (실 API가 이미 있는 경우가 많다)
 
 ## AgentWorkspacePage — `/agents/:agentId/workspace`
 

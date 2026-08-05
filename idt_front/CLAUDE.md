@@ -488,7 +488,7 @@ npm run coverage     # 커버리지 리포트 생성
 | ZUSTAND-001 | src/claude/task/task-zustand.md | Zustand 공통 슬라이스 팩토리 (완료) |
 | TQ-001 | src/claude/task/task-tanstack-query.md | TanStack Query 공통 구성 (완료) |
 | EVAL-001 | src/claude/task/task-eval-dataset.md | 평가 데이터셋 추출 페이지 (Mock 완료 / API 연동 예정) |
-| TOOL-001 | src/claude/task/task-tool-connection.md | 도구 연결 페이지 (Mock 완료 / API 연동 예정) |
+| TOOL-001 | docs/archive/2026-08/utility-page/utility-page.plan.md | 유틸리티 카탈로그 페이지 — /tool-connection, 도구·모델·스킬 실연동 (구현 완료, Match 94.4%) |
 | WORKFLOW-001 | src/claude/task/task-workflow-designer.md | 워크플로우 설계 페이지 (Mock 완료 / API 연동 예정) |
 | AGENT-001 | src/claude/task/task-agent-builder.md | 에이전트 만들기 페이지 (Mock 완료 / API 연동 예정) |
 | TOOL-ADMIN-001 | src/claude/task/task-tool-admin.md | 도구 관리 어드민 페이지 (Mock 완료 / API 연동 예정) |
@@ -538,11 +538,9 @@ npm run coverage     # 커버리지 리포트 생성
 | **타입** | `src/types/eval.ts` | EvalDatasetItem, EvalDatasetResponse |
 | **서비스** | `src/services/evalService.ts` | 평가 데이터셋 추출 API (multipart/form-data) |
 | **UI** | `src/pages/EvalDatasetPage/index.tsx` | 평가 데이터셋 추출 페이지 (드래그앤드롭, 스피너, 테이블) |
-| **타입** | `src/types/tool.ts` | Tool, ToolCategory, TOOL_CATEGORY 상수 |
-| **서비스** | `src/services/toolService.ts` | 도구 목록 조회 및 토글 API |
 | **UI** | `src/components/layout/TopNav.tsx` | 상단 메뉴바 (드롭다운 네비게이션) |
 | **UI** | `src/pages/AgentBuilderPage/index.tsx` | 에이전트 만들기 페이지 (예정 기능 안내) |
-| **UI** | `src/pages/ToolConnectionPage/index.tsx` | 도구 연결 페이지 (카드 그리드 + 토글 + 필터) |
+| **UI** | `src/pages/UtilityPage/index.tsx` | 유틸리티 카탈로그 페이지 (탭 4종 + 검색 + 유형 필터, 도구·모델·스킬 실데이터) |
 | **타입** | `src/types/workflow.ts` | Workflow, WorkflowStep, WorkflowStepType, WORKFLOW_STEP_TYPE |
 | **UI** | `src/pages/WorkflowDesignerPage/index.tsx` | 워크플로우 설계 페이지 (카드 그리드 + 플로우 시각화 + 상세 패널) |
 | **타입** | `src/types/toolAdmin.ts` | AdminTool, ToolSchemaParam, ToolEndpoint, ToolParamType, HttpMethod, CRUD Request/Response |
