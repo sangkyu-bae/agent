@@ -71,3 +71,6 @@ idt/work/
 # 테스트용 문서
 idt/test-docs/
 
+# 문서 이미지 (로컬 전용)
+**/docs/img/
+
