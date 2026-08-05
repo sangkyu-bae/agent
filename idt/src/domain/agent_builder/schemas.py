@@ -105,6 +105,10 @@ class AgentDefinition:
     llm_model: LlmModel | None = None
     forked_from: str | None = None
     forked_at: datetime | None = None
+    # builtin-middleware D5: 적용 미들웨어 타입 스냅샷 (agent_middleware 영속).
+    # None = 미지정/미로드 — repository.update는 None이면 동기화를 건너뛴다
+    # (find_by_id 로드 후 미들웨어 무변경 수정 시 스냅샷 소실 방지).
+    middleware_types: list[str] | None = None
 
     def __post_init__(self) -> None:
         if not (0.0 <= self.temperature <= 2.0):
@@ -130,8 +134,12 @@ class AgentDefinition:
         temperature: float | None = None,
         max_iterations: int | None = None,
         llm_model_id: str | None = None,
+        middleware_types: list[str] | None = None,
     ) -> None:
         """업데이트 적용."""
+        if middleware_types is not None:
+            # builtin-middleware D5: 전체 교체 (None = 미변경)
+            self.middleware_types = middleware_types
         if system_prompt is not None:
             self.system_prompt = system_prompt
         if name is not None:

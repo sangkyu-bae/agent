@@ -1,10 +1,10 @@
-"""배치 평가 UseCase."""
+"""배치 평가 UseCase — testset_id 실행·소유권·실행기 킥오프 (eval-hub Design A8)."""
 import random
 import uuid
 from datetime import datetime, timezone
 
 from src.application.ragas.schemas import BatchEvalRequest, BatchEvalResponse
-from src.domain.ragas.entities import EvaluationResult, EvaluationRun
+from src.domain.ragas.entities import EvaluationRun
 from src.domain.ragas.interfaces import EvaluationRepositoryInterface, EvaluatorInterface
 from src.domain.ragas.policies import EvaluationPolicy
 from src.domain.ragas.value_objects import EvalConfig, MetricType, TestCase
@@ -17,15 +17,19 @@ class BatchEvaluationUseCase:
         repository: EvaluationRepositoryInterface,
         evaluator: EvaluatorInterface,
         logger: LoggerInterface,
+        executor=None,  # BatchEvalExecutor 싱글턴 — None이면 등록만 수행(pending 유지)
     ) -> None:
         self._repository = repository
         self._evaluator = evaluator
         self._logger = logger
+        self._executor = executor
 
     async def execute(
         self,
         request: BatchEvalRequest,
         request_id: str,
+        user_id: str | None = None,
+        scope_user_id: str | None = None,
     ) -> BatchEvalResponse:
         config = EvalConfig(
             metrics=[MetricType(m) for m in request.metrics],
@@ -36,10 +40,14 @@ class BatchEvaluationUseCase:
             collection_name=request.collection_name,
         )
 
-        config_errors = EvaluationPolicy.validate_config(config)
-        if config_errors:
-            raise ValueError("; ".join(config_errors))
+        errors = EvaluationPolicy.validate_config(config)
+        errors += EvaluationPolicy.validate_metrics_for_target(
+            request.target_type, config.metrics
+        )
+        if errors:
+            raise ValueError("; ".join(errors))
 
+        raw_cases = await self._resolve_cases(request, request_id, scope_user_id)
         testcases = [
             TestCase(
                 question=tc["question"],
@@ -47,7 +55,7 @@ class BatchEvaluationUseCase:
                 expected_contexts=tc.get("expected_contexts", []),
                 metadata=tc.get("metadata", {}),
             )
-            for tc in request.testcases
+            for tc in raw_cases
         ]
 
         case_errors = EvaluationPolicy.validate_testcases(testcases, config)
@@ -63,16 +71,31 @@ class BatchEvaluationUseCase:
             eval_type="batch",
             target_type=request.target_type,
             target_id=request.agent_id,
+            user_id=user_id,
             status="pending",
             total_cases=len(testcases),
             config={
                 "metrics": request.metrics,
                 "top_k": request.top_k,
                 "llm_model": request.llm_model,
+                "testset_id": request.testset_id,
+                "agent_id": request.agent_id,
+                "collection_name": request.collection_name,
+                "sample_ratio": request.sample_ratio,
             },
             created_at=datetime.now(timezone.utc),
         )
         await self._repository.save_run(run, request_id)
+
+        if self._executor is not None:
+            self._executor.kickoff(
+                run_id=run.id,
+                target_type=request.target_type,
+                testcases=testcases,
+                config=config,
+                user_id=user_id,
+                request_id=request_id,
+            )
 
         return BatchEvalResponse(
             run_id=run.id,
@@ -81,53 +104,25 @@ class BatchEvaluationUseCase:
             message="배치 평가가 등록되었습니다.",
         )
 
-    async def run_evaluation(
+    async def _resolve_cases(
         self,
-        run_id: str,
-        testcases: list[TestCase],
-        metrics: list[str],
+        request: BatchEvalRequest,
         request_id: str,
-    ) -> None:
-        run = await self._repository.get_run(run_id, request_id)
-        if run is None:
-            self._logger.error("Run not found", request_id=request_id, run_id=run_id)
-            return
-
-        run.status = "running"
-        await self._repository.update_run(run, request_id)
-
-        try:
-            results: list[EvaluationResult] = []
-            for tc in testcases:
-                scores = await self._evaluator.evaluate(
-                    question=tc.question,
-                    answer="",
-                    contexts=[],
-                    ground_truth=tc.ground_truth,
-                    metrics=metrics,
-                    request_id=request_id,
-                )
-                result = EvaluationResult(
-                    id=str(uuid.uuid4()),
-                    run_id=run_id,
-                    question=tc.question,
-                    answer="",
-                    contexts=[],
-                    ground_truth=tc.ground_truth,
-                    metrics=scores,
-                    created_at=datetime.now(timezone.utc),
-                )
-                results.append(result)
-
-            if results:
-                await self._repository.save_results_bulk(results, request_id)
-
-            run.mark_completed(datetime.now(timezone.utc))
-            await self._repository.update_run(run, request_id)
-
-        except Exception as e:
-            self._logger.exception(
-                "Batch evaluation failed", request_id=request_id, run_id=run_id
+        scope_user_id: str | None,
+    ) -> list[dict]:
+        """testset_id와 인라인 testcases는 배타 — 정확히 하나만 허용."""
+        has_testset = bool(request.testset_id)
+        has_inline = bool(request.testcases)
+        if has_testset == has_inline:
+            raise ValueError(
+                "testset_id와 testcases 중 정확히 하나만 제공해야 합니다"
             )
-            run.mark_failed(str(e), datetime.now(timezone.utc))
-            await self._repository.update_run(run, request_id)
+        if has_inline:
+            return request.testcases
+
+        testset = await self._repository.get_testset(request.testset_id, request_id)
+        if testset is None or (
+            scope_user_id is not None and testset.get("user_id") != scope_user_id
+        ):
+            raise ValueError("테스트셋을 찾을 수 없습니다")  # 타인 자원 존재 은닉
+        return testset.get("cases") or []

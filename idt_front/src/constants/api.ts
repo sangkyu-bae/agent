@@ -53,12 +53,25 @@ export const API_ENDPOINTS = {
   // Unified Document Upload
   DOCUMENT_UPLOAD_ALL: '/api/v1/documents/upload-all',
 
-  // Eval Dataset
-  EVAL_DATASET_EXTRACT: '/api/eval/extract',
+  // 평가 허브 (eval-hub) — /api/ragas
+  RAGAS_TESTSETS: '/api/ragas/testsets',
+  RAGAS_TESTSET_DETAIL: (testsetId: string) => `/api/ragas/testsets/${testsetId}`,
+  RAGAS_TESTSET_UPLOAD: '/api/ragas/testsets/upload',
+  RAGAS_TESTSET_GENERATE: '/api/ragas/testsets/generate',
+  RAGAS_METRICS: '/api/ragas/metrics',
+  RAGAS_BATCH: '/api/ragas/batch',
+  RAGAS_RUNS: '/api/ragas/runs',
+  RAGAS_RUN_DETAIL: (runId: string) => `/api/ragas/runs/${runId}`,
+  RAGAS_RUN_RESULTS: (runId: string) => `/api/ragas/runs/${runId}/results`,
 
   // Tools
   TOOL_CATALOG: '/api/v1/tool-catalog',
   TOOL_CATALOG_BUILTIN: '/api/v1/tool-catalog/builtin',
+
+  // Middleware Catalog (builtin-middleware)
+  MIDDLEWARE_CATALOG: '/api/v1/middleware-catalog',
+  MIDDLEWARE_CATALOG_DETAIL: (middlewareType: string) =>
+    `/api/v1/middleware-catalog/${middlewareType}`,
   TOOLS: '/api/tools',
   TOOL_TOGGLE: (toolId: string) => `/api/tools/${toolId}/toggle`,
 

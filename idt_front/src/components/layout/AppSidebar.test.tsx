@@ -65,14 +65,14 @@ describe('AppSidebar — 관리자 진입 메뉴', () => {
     expect(screen.queryByRole('button', { name: '관리자' })).not.toBeInTheDocument();
   });
 
-  it('A4: "관리자" 클릭 시 /admin/users로 이동한다', async () => {
+  it('A4: "관리자" 클릭 시 /admin/dashboard로 이동한다', async () => {
     useAuthStore.setState({ user: adminUser, isAuthenticated: true });
     const user = userEvent.setup();
     renderSidebar();
 
     await user.click(screen.getByRole('button', { name: '관리자' }));
 
-    expect(screen.getByTestId('location')).toHaveTextContent('/admin/users');
+    expect(screen.getByTestId('location')).toHaveTextContent('/admin/dashboard');
   });
 });
 

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { useLogout } from '@/hooks/useAuth';
-import { ADMIN_NAV_ITEMS } from '@/constants/adminNav';
+import { ADMIN_NAV_GROUPS, isAdminItemActive, type AdminNavGroup } from '@/constants/adminNav';
 
 interface DropdownItem {
   label: string;
@@ -13,7 +13,10 @@ interface DropdownItem {
 
 interface NavMenu {
   label: string;
-  items: DropdownItem[];
+  /** 플랫 드롭다운 (데이터/에이전트 메뉴) */
+  items?: DropdownItem[];
+  /** 그룹 헤더로 구분된 드롭다운 (관리 메뉴) */
+  groups?: AdminNavGroup[];
 }
 
 const NAV_MENUS: NavMenu[] = [
@@ -44,10 +47,10 @@ const NAV_MENUS: NavMenu[] = [
         description: '새로운 AI 에이전트를 설계하고 구성합니다',
       },
       {
-        label: '도구 연결',
+        label: '유틸리티',
         path: '/tool-connection',
         icon: 'M11.42 15.17 17.25 21A2.652 2.652 0 0 0 21 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 1 1-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 0 0 4.486-6.336l-3.276 3.277a3.004 3.004 0 0 1-2.25-2.25l3.276-3.276a4.5 4.5 0 0 0-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437 1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008Z',
-        description: '검색, 코드 실행, API 등 도구를 에이전트에 연결합니다',
+        description: '사용 가능한 도구, 모델, 미들웨어, 스킬을 찾아봅니다',
       },
       {
         label: '워크플로우 설계',
@@ -73,7 +76,7 @@ const NAV_MENUS: NavMenu[] = [
 
 const ADMIN_MENU: NavMenu = {
   label: '관리',
-  items: ADMIN_NAV_ITEMS,
+  groups: ADMIN_NAV_GROUPS,
 };
 
 const TopNav = () => {
@@ -104,7 +107,50 @@ const TopNav = () => {
   };
 
   const isMenuActive = (menu: NavMenu) =>
-    menu.items.some((item) => location.pathname === item.path);
+    (menu.items ?? []).some((item) => location.pathname === item.path) ||
+    (menu.groups ?? []).some((group) =>
+      group.items.some((item) => isAdminItemActive(item, location.pathname)),
+    );
+
+  const renderDropdownItem = (item: DropdownItem) => {
+    const isItemActive = location.pathname === item.path;
+    return (
+      <button
+        key={item.path}
+        onClick={() => handleNavigate(item.path)}
+        className={`flex w-full items-start gap-3 rounded-xl px-3.5 py-3 text-left transition-all ${
+          isItemActive ? 'bg-violet-50' : 'hover:bg-zinc-50'
+        }`}
+      >
+        <div
+          className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+          style={
+            isItemActive
+              ? { background: 'linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)' }
+              : { background: '#f4f4f5' }
+          }
+        >
+          <svg
+            className={`h-4 w-4 ${isItemActive ? 'text-white' : 'text-zinc-500'}`}
+            fill="none"
+            viewBox="0 0 24 24"
+            strokeWidth={1.5}
+            stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
+          </svg>
+        </div>
+        <div>
+          <p className={`text-[13.5px] font-medium ${isItemActive ? 'text-violet-700' : 'text-zinc-800'}`}>
+            {item.label}
+          </p>
+          <p className="mt-0.5 text-[11.5px] leading-tight text-zinc-400">
+            {item.description}
+          </p>
+        </div>
+      </button>
+    );
+  };
 
   return (
     <nav
@@ -158,48 +204,16 @@ const TopNav = () => {
               {/* 드롭다운 */}
               {isOpen && (
                 <div className="absolute right-0 top-full mt-1.5 w-64 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-xl shadow-zinc-200/60">
-                  <div className="p-1.5">
-                    {menu.items.map((item) => {
-                      const isItemActive = location.pathname === item.path;
-                      return (
-                        <button
-                          key={item.path}
-                          onClick={() => handleNavigate(item.path)}
-                          className={`flex w-full items-start gap-3 rounded-xl px-3.5 py-3 text-left transition-all ${
-                            isItemActive
-                              ? 'bg-violet-50'
-                              : 'hover:bg-zinc-50'
-                          }`}
-                        >
-                          <div
-                            className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
-                            style={
-                              isItemActive
-                                ? { background: 'linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)' }
-                                : { background: '#f4f4f5' }
-                            }
-                          >
-                            <svg
-                              className={`h-4 w-4 ${isItemActive ? 'text-white' : 'text-zinc-500'}`}
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              strokeWidth={1.5}
-                              stroke="currentColor"
-                            >
-                              <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
-                            </svg>
-                          </div>
-                          <div>
-                            <p className={`text-[13.5px] font-medium ${isItemActive ? 'text-violet-700' : 'text-zinc-800'}`}>
-                              {item.label}
-                            </p>
-                            <p className="mt-0.5 text-[11.5px] leading-tight text-zinc-400">
-                              {item.description}
-                            </p>
-                          </div>
-                        </button>
-                      );
-                    })}
+                  <div className="max-h-[70vh] overflow-y-auto p-1.5">
+                    {menu.items?.map(renderDropdownItem)}
+                    {menu.groups?.map((group) => (
+                      <div key={group.key}>
+                        <p className="px-3.5 pb-1 pt-2.5 text-[10.5px] font-semibold uppercase tracking-widest text-zinc-400">
+                          {group.label}
+                        </p>
+                        {group.items.map(renderDropdownItem)}
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}

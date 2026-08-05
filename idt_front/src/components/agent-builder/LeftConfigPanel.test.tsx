@@ -52,6 +52,8 @@ const BASE_FORM: AgentBuilderFormData = {
   skills: [],
   schedules: [],
   excludedBuiltinTools: [],
+  excludedBuiltinMiddlewares: [],
+  middlewares: [],
 };
 
 const DRAFT: DocumentExtractorDraft = {
@@ -86,6 +88,7 @@ const renderPanel = (formOverrides: Partial<AgentBuilderFormData> = {}, onChange
         onSkillToggle={vi.fn()}
         onRagConfigChange={vi.fn()}
         onBuiltinToggle={vi.fn()}
+        onMiddlewareToggle={vi.fn()}
         isEditMode={false}
         catalogTools={CATALOG_TOOLS}
         isToolsLoading={false}

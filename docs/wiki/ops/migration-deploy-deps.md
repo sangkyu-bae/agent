@@ -4,15 +4,17 @@ status: approved
 reviewer: 배상규
 source_type: conversation
 source_refs:
-  - idt/db/migration/ (V046~V052 파일 헤더 주석 확인, 2026-07-21)
+  - idt/db/migration/ (V046~V054 파일 확인, 2026-08-03)
   - idt/docs/archive/2026-07/agent-eval-gate/agent-eval-gate.report.md
   - idt/docs/archive/2026-07/wiki-user-facing/wiki-user-facing.report.md
   - idt/docs/archive/2026-07/kb-retrieval-test/kb-retrieval-test.report.md
+  - idt/docs/archive/2026-07/wiki-folder-summaries/wiki-folder-summaries.report.md
+  - idt/docs/archive/2026-08/builtin-tools/builtin-tools.report.md
 confidence: 0.9
-version: 1
+version: 2
 created: 2026-07-21
-updated: 2026-07-21
-verified_at: 6cc25656
+updated: 2026-08-03
+verified_at: 4f650d3c
 ---
 
 ## 문제
@@ -20,7 +22,7 @@ verified_at: 6cc25656
 기능 코드는 머지됐지만 마이그레이션이 배포 환경에 적용되지 않으면 런타임에서 깨진다.
 어떤 기능이 어느 V버전을 요구하는지가 PDCA 아카이브에 흩어져 있어 배포 시 확인이 어렵다.
 
-## 검증된 사실 — 미적용 시 깨지는 최근 마이그레이션 (V046~V052)
+## 검증된 사실 — 미적용 시 깨지는 최근 마이그레이션 (V046~V054)
 
 | V | 내용 | 요구하는 기능 | 미적용 시 |
 |---|---|---|---|
@@ -31,12 +33,14 @@ verified_at: 6cc25656
 | V050 | `agent_memory` 신규 테이블 (Phase 2/3 컬럼 선반영) | agent-memory Phase 1~3 전부 (extraction·org-scope는 추가 마이그레이션 0) | 메모리 기능 전체 불가 — **배포 전 필수** |
 | V051 | `wiki_article.path` + idx | wiki-user-facing (지식 트리) | tree API·문서 분류 실패 |
 | V052 | `message_feedback` 신규 테이블 | agent-eval-gate + 환류 3부작(eval-feedback-loop·wiki-feedback-loop·recurring-feedback-promotion — 이들 자체는 마이그레이션 0) | 평가/환류 전체 불가 — **배포 전 필수** |
+| V053 | `wiki_folder_summary` 신규 테이블 (agent_id+path UQ) | wiki-folder-summaries (기능 플래그 **기본 off** — 적용해도 폴더 모드는 opt-in) | 승인/편집/폐기 시 요약 팬아웃·wiki_list 폴더 모드 실패 |
+| V054 | `tool_catalog.is_builtin` + wiki 도구 2종 시드 UPDATE | builtin-tools ([[builtin-tools-optout-channel]]) | **tool_catalog 조회 자체가 SQL 에러** (모델에 컬럼 존재) — **배포 전 필수** |
 
-공통: V046~V052는 전부 additive(컬럼 추가 또는 신규 테이블)라 **역방향 호환** — 먼저 적용해도 구버전 코드가 깨지지 않는다. 신규 테이블/FK는 CHARSET/COLLATE 미명시 원칙을 따른다 ([[mysql-fk-collation]]).
+공통: V046~V054는 전부 additive(컬럼 추가 또는 신규 테이블)라 **역방향 호환** — 먼저 적용해도 구버전 코드가 깨지지 않는다. 신규 테이블/FK는 CHARSET/COLLATE 미명시 원칙을 따른다 ([[mysql-fk-collation]]).
 
 ## 다음에 적용하는 법
 
-1. 배포 전 대상 환경에서 flyway 이력(또는 `SHOW TABLES`/`SHOW COLUMNS`)으로 V052까지 적용됐는지 확인한다.
+1. 배포 전 대상 환경에서 flyway 이력(또는 `SHOW TABLES`/`SHOW COLUMNS`)으로 V054까지 적용됐는지 확인한다.
 2. 새 기능 사이클이 마이그레이션을 추가하면 이 표에 한 줄 추가한다 (기능명 + 미적용 시 증상).
 3. "마이그레이션 0" 기능도 선행 V에 의존할 수 있다(예: 환류 3부작 → V052, extraction/org-scope → V050) — 의존 열에 명시한다.
 4. 적용 후 E2E 일괄 체크리스트([[e2e-carryover-checklist]])를 소화한다 — 특히 V047은 KB E2E의 선행 조건.

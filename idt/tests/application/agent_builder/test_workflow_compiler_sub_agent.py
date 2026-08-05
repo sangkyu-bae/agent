@@ -109,7 +109,7 @@ class TestCompileSubAgent:
         sub_agent = _make_agent("sub-1")
         compiler, _ = _make_compiler_with_repo(sub_agent)
         workflow = _workflow_with_sub_agent("sub-1")
-        with patch("src.application.agent_builder.workflow_compiler.create_react_agent",
+        with patch("src.application.agent_builder.workflow_compiler.create_agent",
                    return_value=MagicMock()):
             graph = await compiler.compile(
                 workflow, _make_llm_model(), "req-1",
@@ -122,7 +122,7 @@ class TestCompileSubAgent:
         sub_agent = _make_agent("sub-1")
         compiler, _ = _make_compiler_with_repo(sub_agent)
         workflow = _workflow_mixed()
-        with patch("src.application.agent_builder.workflow_compiler.create_react_agent",
+        with patch("src.application.agent_builder.workflow_compiler.create_agent",
                    return_value=MagicMock()):
             graph = await compiler.compile(
                 workflow, _make_llm_model(), "req-1",

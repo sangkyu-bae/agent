@@ -81,7 +81,7 @@ class TestCompile:
             supervisor_prompt="p", workers=[_worker()], flow_hint="f",
         )
         with patch(
-            "src.application.agent_builder.workflow_compiler.create_react_agent"
+            "src.application.agent_builder.workflow_compiler.create_agent"
         ) as mock_react:
             graph = await compiler.compile(workflow, _llm_model(), "req")
         mock_react.assert_not_called()

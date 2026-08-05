@@ -19,7 +19,7 @@ if TYPE_CHECKING:  # 순환 import 방지: tracker는 런타임에 duck-typed
     from src.application.agent_run.tracker import RunTracker
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
-from langgraph.prebuilt import create_react_agent
+from langchain.agents import create_agent
 
 from src.application.agent_run.auth_context import (
     reset_current_auth_context,
@@ -143,6 +143,7 @@ class GeneralChatUseCase:
         tracker: "RunTracker | None" = None,
         memory_assembler=None,
         memory_extractor=None,
+        middleware_provider=None,
     ) -> None:
         self._tool_builder = chat_tool_builder
         self._msg_repo = message_repo
@@ -175,6 +176,9 @@ class GeneralChatUseCase:
         # agent-memory-extraction: 미주입(None) 시 추출 비활성 (하위호환).
         # kickoff는 fire-and-forget — 실패 격리는 서비스 내부 책임.
         self._memory_extractor = memory_extractor
+        # builtin-middleware D7: 미주입(None) 시 미들웨어 0 (하위호환).
+        # General Chat은 에이전트 정의가 없어 카탈로그 빌트인 ∪ enforced 전부 적용.
+        self._middleware_provider = middleware_provider
 
     async def _begin_observability(
         self, request: GeneralChatRequest, session_id_str: str,
@@ -247,6 +251,7 @@ class GeneralChatUseCase:
         tools: list,
         auth_ctx: AuthContext | None = None,
         memory_block: str = "",
+        middlewares: list | None = None,
     ):
         """ReAct 에이전트 생성 (테스트에서 패치 가능).
 
@@ -257,7 +262,10 @@ class GeneralChatUseCase:
         """
         llm = self._llm_factory.create(self._llm_model, temperature=0)
         prompt = render_user_context_block(auth_ctx) + memory_block + _SYSTEM_PROMPT
-        return create_react_agent(llm, tools=tools, prompt=prompt)
+        return create_agent(
+            model=llm, tools=tools, system_prompt=prompt,
+            middleware=middlewares or [],
+        )
 
     # ── Public API ──────────────────────────────────────────────────────────
 
@@ -357,8 +365,23 @@ class GeneralChatUseCase:
                 memory_block = await self._memory_assembler.build_block(
                     request.user_id, request_id, dept_ids=dept_ids
                 )
+            # builtin-middleware D7: 카탈로그 빌트인 ∪ enforced 적용 (실패 격리 —
+            # 조회/조립 실패 시 미들웨어 없이 채팅 계속).
+            middlewares: list = []
+            if self._middleware_provider is not None:
+                try:
+                    plan = await self._middleware_provider.prepare(
+                        None, request_id
+                    )
+                    middlewares = plan.instantiate()
+                except Exception as e:
+                    self._logger.warning(
+                        "Middleware prepare failed — continuing without",
+                        request_id=request_id, exception=e,
+                    )
             agent = self._create_agent(
-                tools, auth_ctx=auth_ctx, memory_block=memory_block
+                tools, auth_ctx=auth_ctx, memory_block=memory_block,
+                middlewares=middlewares,
             )
 
             state = _ChatStreamState()

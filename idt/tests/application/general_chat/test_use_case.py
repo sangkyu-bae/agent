@@ -601,13 +601,13 @@ class TestChartsPersistence:
 
 
 def test_create_agent_passes_system_prompt():
-    """TC-13: _create_agent()가 create_react_agent에 prompt=_SYSTEM_PROMPT를 전달한다."""
+    """TC-13: _create_agent()가 create_agent에 system_prompt=_SYSTEM_PROMPT를 전달한다."""
     from src.application.general_chat.use_case import _SYSTEM_PROMPT
 
     mock_factory = MagicMock(spec=LLMFactoryInterface)
     mock_factory.create.return_value = MagicMock()
 
-    with patch("src.application.general_chat.use_case.create_react_agent") as mock_create:
+    with patch("src.application.general_chat.use_case.create_agent") as mock_create:
         mock_create.return_value = MagicMock()
         uc = GeneralChatUseCase(
             chat_tool_builder=MagicMock(),
@@ -622,4 +622,4 @@ def test_create_agent_passes_system_prompt():
         uc._create_agent(tools=[])
         mock_create.assert_called_once()
         _, kwargs = mock_create.call_args
-        assert kwargs.get("prompt") == _SYSTEM_PROMPT
+        assert kwargs.get("system_prompt") == _SYSTEM_PROMPT

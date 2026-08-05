@@ -202,7 +202,12 @@ class WikiArticleRepository(MySQLBaseRepository[WikiArticleModel], _Interface):
     async def list_tree_items(
         self, agent_id: str, request_id: str
     ) -> list[WikiTreeItem]:
-        """지식 트리용 경량 목록 — 본문(content) 미조회, path·최신순 정렬."""
+        """지식 트리용 경량 목록 — 본문(content) 미조회, path·최신순 정렬.
+
+        knowledge-deprecate-visibility — 폐기(deprecated) 문서는 트리에서
+        제외한다(복원은 관리자 WikiPage의 list API 소관). draft는 노출 유지.
+        의미 변경 시 test_wiki_repository_tree가 쿼리 문자열로 고정.
+        """
         stmt = (
             select(
                 WikiArticleModel.id,
@@ -212,7 +217,10 @@ class WikiArticleRepository(MySQLBaseRepository[WikiArticleModel], _Interface):
                 WikiArticleModel.path,
                 WikiArticleModel.updated_at,
             )
-            .where(WikiArticleModel.agent_id == agent_id)
+            .where(
+                WikiArticleModel.agent_id == agent_id,
+                WikiArticleModel.status != WikiStatus.DEPRECATED.value,
+            )
             .order_by(
                 WikiArticleModel.path.is_(None),
                 WikiArticleModel.path,

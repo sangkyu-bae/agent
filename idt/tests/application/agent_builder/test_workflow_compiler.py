@@ -69,7 +69,7 @@ class TestWorkflowCompiler:
         """compile()이 CompiledGraph를 반환."""
         compiler, _ = _make_compiler()
         workflow = _make_workflow()
-        with patch("src.application.agent_builder.workflow_compiler.create_react_agent",
+        with patch("src.application.agent_builder.workflow_compiler.create_agent",
                    return_value=MagicMock()):
             result = await compiler.compile(workflow, _make_llm_model(), "req-1")
         assert result is not None
@@ -79,7 +79,7 @@ class TestWorkflowCompiler:
         """TC-16: 워커 1개 → 노드: supervisor, worker_0, quality_gate."""
         compiler, _ = _make_compiler()
         workflow = _make_workflow(worker_count=1)
-        with patch("src.application.agent_builder.workflow_compiler.create_react_agent",
+        with patch("src.application.agent_builder.workflow_compiler.create_agent",
                    return_value=MagicMock()):
             graph = await compiler.compile(workflow, _make_llm_model(), "req-1")
 
@@ -145,7 +145,7 @@ class TestWorkflowCompiler:
         """TC-17: 워커 3개 → 노드 5개 + 올바른 구조."""
         compiler, _ = _make_compiler()
         workflow = _make_workflow(worker_count=3)
-        with patch("src.application.agent_builder.workflow_compiler.create_react_agent",
+        with patch("src.application.agent_builder.workflow_compiler.create_agent",
                    return_value=MagicMock()):
             graph = await compiler.compile(workflow, _make_llm_model(), "req-1")
 
@@ -160,7 +160,7 @@ class TestWorkflowCompiler:
     async def test_compile_calls_tool_factory_for_each_worker(self):
         compiler, tool_factory = _make_compiler()
         workflow = _make_workflow(worker_count=2)
-        with patch("src.application.agent_builder.workflow_compiler.create_react_agent",
+        with patch("src.application.agent_builder.workflow_compiler.create_agent",
                    return_value=MagicMock()):
             await compiler.compile(workflow, _make_llm_model(), "req-1")
         assert tool_factory.create.call_count == 2
@@ -170,7 +170,7 @@ class TestWorkflowCompiler:
         compiler, _ = _make_compiler()
         workflow = _make_workflow()
         llm_model = _make_llm_model()
-        with patch("src.application.agent_builder.workflow_compiler.create_react_agent",
+        with patch("src.application.agent_builder.workflow_compiler.create_agent",
                    return_value=MagicMock()):
             await compiler.compile(workflow, llm_model, "req-1", temperature=0.5)
         compiler._llm_factory.create.assert_called_once_with(llm_model, 0.5)
@@ -189,7 +189,7 @@ class TestWorkflowCompiler:
         compiler, _ = _make_compiler()
         workflow = _make_workflow()
         config = SupervisorConfig(max_iterations=5, quality_gate_enabled=True)
-        with patch("src.application.agent_builder.workflow_compiler.create_react_agent",
+        with patch("src.application.agent_builder.workflow_compiler.create_agent",
                    return_value=MagicMock()):
             graph = await compiler.compile(
                 workflow, _make_llm_model(), "req-1", supervisor_config=config,
@@ -201,7 +201,7 @@ class TestWorkflowCompiler:
         """supervisor_config=None이면 기본값 사용."""
         compiler, _ = _make_compiler()
         workflow = _make_workflow()
-        with patch("src.application.agent_builder.workflow_compiler.create_react_agent",
+        with patch("src.application.agent_builder.workflow_compiler.create_agent",
                    return_value=MagicMock()):
             graph = await compiler.compile(
                 workflow, _make_llm_model(), "req-1", supervisor_config=None,
@@ -265,7 +265,7 @@ class TestCompileWithCategory:
         workflow = WorkflowDefinition(
             supervisor_prompt="프롬프트", workers=workers, flow_hint="test",
         )
-        with patch("src.application.agent_builder.workflow_compiler.create_react_agent",
+        with patch("src.application.agent_builder.workflow_compiler.create_agent",
                    return_value=MagicMock()):
             graph = await compiler.compile(workflow, _make_llm_model(), "req-1")
 
@@ -287,7 +287,7 @@ class TestCompileWithCategory:
         workflow = WorkflowDefinition(
             supervisor_prompt="프롬프트", workers=workers, flow_hint="test",
         )
-        with patch("src.application.agent_builder.workflow_compiler.create_react_agent",
+        with patch("src.application.agent_builder.workflow_compiler.create_agent",
                    return_value=MagicMock()):
             graph = await compiler.compile(workflow, _make_llm_model(), "req-1")
 
@@ -313,7 +313,7 @@ class TestCompileWithCategory:
         workflow = WorkflowDefinition(
             supervisor_prompt="프롬프트", workers=workers, flow_hint="test",
         )
-        with patch("src.application.agent_builder.workflow_compiler.create_react_agent",
+        with patch("src.application.agent_builder.workflow_compiler.create_agent",
                    return_value=MagicMock()) as mock_react:
             graph = await compiler.compile(workflow, _make_llm_model(), "req-1")
 
@@ -345,7 +345,7 @@ class TestCompileWithCategory:
         workflow = WorkflowDefinition(
             supervisor_prompt="프롬프트", workers=workers, flow_hint="test",
         )
-        with patch("src.application.agent_builder.workflow_compiler.create_react_agent",
+        with patch("src.application.agent_builder.workflow_compiler.create_agent",
                    return_value=MagicMock()) as mock_react:
             await compiler.compile(workflow, _make_llm_model(), "req-1")
 
@@ -365,7 +365,7 @@ class TestCompileWithCategory:
         workflow = WorkflowDefinition(
             supervisor_prompt="프롬프트", workers=workers, flow_hint="test",
         )
-        with patch("src.application.agent_builder.workflow_compiler.create_react_agent",
+        with patch("src.application.agent_builder.workflow_compiler.create_agent",
                    return_value=MagicMock()) as mock_react:
             graph = await compiler.compile(workflow, _make_llm_model(), "req-1")
 
@@ -389,7 +389,7 @@ class TestSupervisorWorkerExposure:
         async def _noop_supervisor(state):
             return {}
 
-        with patch("src.application.agent_builder.workflow_compiler.create_react_agent",
+        with patch("src.application.agent_builder.workflow_compiler.create_agent",
                    return_value=MagicMock()), \
              patch("src.application.agent_builder.workflow_compiler.create_supervisor_node",
                    MagicMock(return_value=_noop_supervisor)) as mock_sup:
@@ -446,7 +446,7 @@ class TestCompileWithAnalysisCategory:
         """GAP-1: analysis 워커는 함수 노드로 등록되고 create_react_agent를 타지 않는다."""
         compiler, tool_factory = _make_compiler()
         with patch(
-            "src.application.agent_builder.workflow_compiler.create_react_agent",
+            "src.application.agent_builder.workflow_compiler.create_agent",
             return_value=MagicMock(),
         ) as mock_react:
             graph = await compiler.compile(
@@ -468,7 +468,7 @@ class TestCompileWithAnalysisCategory:
         """
         compiler, _ = _make_compiler()
         with patch(
-            "src.application.agent_builder.workflow_compiler.create_react_agent",
+            "src.application.agent_builder.workflow_compiler.create_agent",
             return_value=MagicMock(),
         ):
             graph = await compiler.compile(
@@ -499,7 +499,7 @@ class TestCompileWithAnalysisCategory:
         )
         compiler, _ = _make_compiler()
         with patch(
-            "src.application.agent_builder.workflow_compiler.create_react_agent",
+            "src.application.agent_builder.workflow_compiler.create_agent",
             return_value=MagicMock(),
         ):
             graph = await compiler.compile(workflow, _make_llm_model(), "req-1")
@@ -513,7 +513,7 @@ class TestCompileWithAnalysisCategory:
         """analysis 전용 → answer_agent 없음, final_answer는 depth=0이라 존재."""
         compiler, _ = _make_compiler()
         with patch(
-            "src.application.agent_builder.workflow_compiler.create_react_agent",
+            "src.application.agent_builder.workflow_compiler.create_agent",
             return_value=MagicMock(),
         ):
             graph = await compiler.compile(
@@ -551,7 +551,7 @@ class TestMcpToolAsync:
         workflow = WorkflowDefinition(
             supervisor_prompt="프롬프트", workers=workers, flow_hint="test",
         )
-        with patch("src.application.agent_builder.workflow_compiler.create_react_agent",
+        with patch("src.application.agent_builder.workflow_compiler.create_agent",
                    return_value=MagicMock()):
             await compiler.compile(workflow, _make_llm_model(), "req-1")
 
@@ -571,7 +571,7 @@ class TestMcpToolAsync:
         workflow = WorkflowDefinition(
             supervisor_prompt="프롬프트", workers=workers, flow_hint="test",
         )
-        with patch("src.application.agent_builder.workflow_compiler.create_react_agent",
+        with patch("src.application.agent_builder.workflow_compiler.create_agent",
                    return_value=MagicMock()):
             await compiler.compile(workflow, _make_llm_model(), "req-1")
 
@@ -673,7 +673,7 @@ class TestFinalAnswerWiring:
     async def test_sub_graph_depth_has_no_final_answer(self):
         """TC-C02: depth>0 컴파일 → final_answer 미등록 (D4)."""
         compiler, _ = _make_compiler()
-        with patch("src.application.agent_builder.workflow_compiler.create_react_agent",
+        with patch("src.application.agent_builder.workflow_compiler.create_agent",
                    return_value=MagicMock()):
             graph = await compiler.compile(
                 _search_workflow(), _make_llm_model(), "req-1", depth=1,
@@ -686,7 +686,7 @@ class TestFinalAnswerWiring:
     async def test_final_answer_edge_goes_to_end(self):
         """TC-D3 배선: final_answer → END 직행 (quality_gate 미경유)."""
         compiler, _ = _make_compiler()
-        with patch("src.application.agent_builder.workflow_compiler.create_react_agent",
+        with patch("src.application.agent_builder.workflow_compiler.create_agent",
                    return_value=MagicMock()):
             graph = await compiler.compile(
                 _search_workflow(), _make_llm_model(), "req-1",

@@ -1,6 +1,6 @@
 {
   "version": "2.0",
-  "lastUpdated": "2026-08-01T10:12:38.705Z",
+  "lastUpdated": "2026-08-05T06:35:33.208Z",
   "activeFeatures": [
     "websocket-common-module",
     "agent-chat-multiturn",
@@ -154,7 +154,14 @@
     "supervisor-overblock-fix",
     "worker-toolmessage-leak-fix",
     "db",
-    "AdminToolsPage"
+    "AdminToolsPage",
+    "wiki-tree-performance",
+    "UtilityPage",
+    "eval_testset",
+    "EvalDatasetPage",
+    "eval-hub",
+    "AdminMiddlewarePage",
+    "builtin-middleware"
   ],
   "primaryFeature": "scratchpad",
   "archivedFeatures": {
@@ -681,9 +688,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-04T10:53:02.380Z",
-        "lastUpdated": "2026-08-01T09:35:43.349Z"
+        "lastUpdated": "2026-08-04T11:21:05.291Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\api\\main.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\api\\test_middleware_catalog_router.py"
     },
     "routes": {
       "phase": "do",
@@ -694,9 +701,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-04T10:57:06.857Z",
-        "lastUpdated": "2026-08-01T09:32:50.251Z"
+        "lastUpdated": "2026-08-04T11:04:57.761Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\api\\routes\\tool_catalog_router.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\api\\routes\\middleware_catalog_router.py"
     },
     "retrieval": {
       "phase": "do",
@@ -785,7 +792,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-16T13:14:48.990Z",
-        "lastUpdated": "2026-07-25T08:23:49.662Z"
+        "lastUpdated": "2026-08-03T11:50:27.218Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\config.py"
     },
@@ -1021,10 +1028,10 @@
       },
       "timestamps": {
         "started": "2026-03-24T05:08:19.770Z",
-        "lastUpdated": "2026-04-21T10:45:51.104Z",
+        "lastUpdated": "2026-08-05T06:35:33.208Z",
         "archivedAt": "2026-03-24T09:30:00.000Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\application\\middleware_agent\\schemas.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\infrastructure\\middleware_agent\\__init__.py"
     },
     "planner": {
       "phase": "do",
@@ -1048,9 +1055,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-04-01T11:13:23.704Z",
-        "lastUpdated": "2026-08-01T09:41:01.819Z"
+        "lastUpdated": "2026-08-04T11:31:06.588Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\constants\\adminNav.ts"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\constants\\adminNav.test.ts"
     },
     "idt_front": {
       "phase": "do",
@@ -1061,9 +1068,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-04-01T11:13:30.494Z",
-        "lastUpdated": "2026-08-01T10:12:20.397Z"
+        "lastUpdated": "2026-08-04T11:32:07.956Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\utils\\agentDetailMapping.test.ts"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\hooks\\useMiddlewareCatalog.test.ts"
     },
     "ChatPage": {
       "phase": "do",
@@ -1087,9 +1094,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-04-12T06:31:25.528Z",
-        "lastUpdated": "2026-07-20T12:05:43.105Z"
+        "lastUpdated": "2026-08-04T11:45:32.946Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\application\\general_chat\\test_chart_integration.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\application\\general_chat\\test_middleware_wiring.py"
     },
     "general-chat-api": {
       "phase": "archived",
@@ -1430,9 +1437,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-05-09T06:55:49.057Z",
-        "lastUpdated": "2026-05-09T06:55:49.057Z"
+        "lastUpdated": "2026-08-05T06:33:58.314Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\infrastructure\\logging\\middleware\\exception_handler_middleware.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\application\\middleware\\test_call_limit_scenario.py"
     },
     "pymupdf4llm-parser": {
       "phase": "act",
@@ -1532,9 +1539,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-05-13T07:02:34.660Z",
-        "lastUpdated": "2026-05-13T12:37:34.177Z"
+        "lastUpdated": "2026-08-03T11:50:56.999Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\application\\ragas\\test_testset_use_case.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\application\\ragas\\test_testset_generate_use_case.py"
     },
     "layout": {
       "phase": "do",
@@ -1545,9 +1552,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-05-14T03:00:44.615Z",
-        "lastUpdated": "2026-07-21T09:34:57.897Z"
+        "lastUpdated": "2026-08-02T10:20:49.478Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\components\\layout\\ChatHeader.tsx"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\components\\layout\\TopNav.test.tsx"
     },
     "strategies": {
       "phase": "do",
@@ -2027,9 +2034,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-06-27T05:55:37.925Z",
-        "lastUpdated": "2026-08-01T10:11:35.466Z"
+        "lastUpdated": "2026-08-04T11:28:30.166Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\AgentBuilderPage\\index.test.tsx"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\AgentBuilderPage\\index.tsx"
     },
     "agent-builder-studio-ui": {
       "phase": "act",
@@ -2489,9 +2496,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-07-18T09:51:27.503Z",
-        "lastUpdated": "2026-07-25T08:43:05.820Z"
+        "lastUpdated": "2026-08-02T09:00:03.557Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\application\\wiki\\test_folder_summary_service.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\infrastructure\\wiki\\wiki_repository.py"
     },
     "KnowledgeArticlePage": {
       "phase": "do",
@@ -2515,7 +2522,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-07-18T10:03:01.138Z",
-        "lastUpdated": "2026-07-20T07:37:44.872Z"
+        "lastUpdated": "2026-08-02T09:17:11.332Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\AgentKnowledgePage\\index.test.tsx"
     },
@@ -2761,6 +2768,100 @@
         "lastUpdated": "2026-08-01T09:41:48.290Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\AdminToolsPage\\index.test.tsx"
+    },
+    "wiki-tree-performance": {
+      "phase": "report",
+      "matchRate": 100,
+      "iterationCount": 0,
+      "startedAt": "2026-07-29T00:00:00.000Z",
+      "archivedAt": "2026-07-29T00:00:00.000Z",
+      "archivedTo": "docs/archive/2026-07/wiki-tree-performance/",
+      "phaseNumber": 6,
+      "previousPhase": "check",
+      "autoAdvanced": true,
+      "timestamps": {
+        "lastUpdated": "2026-08-01T11:14:04.505Z"
+      }
+    },
+    "UtilityPage": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-08-02T10:16:51.954Z",
+        "lastUpdated": "2026-08-02T10:19:27.635Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\UtilityPage\\index.tsx"
+    },
+    "eval_testset": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-08-03T11:16:17.907Z",
+        "lastUpdated": "2026-08-03T11:25:18.550Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\infrastructure\\eval_testset\\__init__.py"
+    },
+    "EvalDatasetPage": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-08-03T11:30:33.167Z",
+        "lastUpdated": "2026-08-03T11:52:07.323Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\EvalDatasetPage\\DatasetsTab.test.tsx"
+    },
+    "eval-hub": {
+      "phase": "act",
+      "phaseNumber": 5,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-08-03T11:56:27.748Z",
+        "lastUpdated": "2026-08-03T11:56:27.750Z"
+      },
+      "previousPhase": "check",
+      "autoAdvanced": true
+    },
+    "AdminMiddlewarePage": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-08-04T11:30:30.710Z",
+        "lastUpdated": "2026-08-04T11:32:49.968Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\AdminMiddlewarePage\\index.test.tsx"
+    },
+    "builtin-middleware": {
+      "phase": "act",
+      "phaseNumber": 5,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-08-05T05:44:26.243Z",
+        "lastUpdated": "2026-08-05T05:44:26.244Z"
+      },
+      "previousPhase": "check",
+      "autoAdvanced": true
     }
   },
   "pipeline": {
@@ -2771,7 +2872,7 @@
   "session": {
     "startedAt": "2026-03-04T10:49:14.367Z",
     "onboardingCompleted": false,
-    "lastActivity": "2026-08-01T10:12:38.705Z"
+    "lastActivity": "2026-08-05T06:35:33.208Z"
   },
   "history": [
     {
@@ -21029,6 +21130,1116 @@
     {
       "timestamp": "2026-08-01T10:12:38.704Z",
       "feature": "tool_catalog",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-01T11:14:04.508Z",
+      "feature": "wiki-tree-performance",
+      "phase": "report",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-02T08:59:36.048Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-02T09:00:03.557Z",
+      "feature": "wiki",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-02T09:02:09.151Z",
+      "feature": "AgentKnowledgePage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-02T09:02:32.345Z",
+      "feature": "AgentKnowledgePage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-02T09:08:20.851Z",
+      "feature": "AgentKnowledgePage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-02T09:15:21.822Z",
+      "feature": "AgentKnowledgePage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-02T09:15:26.313Z",
+      "feature": "AgentKnowledgePage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-02T09:17:11.332Z",
+      "feature": "AgentKnowledgePage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-02T10:16:51.954Z",
+      "feature": "UtilityPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-02T10:18:39.980Z",
+      "feature": "UtilityPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-02T10:19:27.635Z",
+      "feature": "UtilityPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-02T10:20:30.178Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-02T10:20:34.238Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-02T10:20:34.643Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-02T10:20:35.456Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-02T10:20:36.332Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-02T10:20:49.478Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:15:12.649Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:15:23.390Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:15:45.154Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:16:04.229Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:16:17.907Z",
+      "feature": "eval_testset",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:16:29.736Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:16:53.592Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:17:10.793Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:17:16.323Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:17:17.323Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:17:30.681Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:17:33.696Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:17:40.739Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:17:45.126Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:17:48.082Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:17:50.402Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:17:52.344Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:18:06.021Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:18:13.809Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:18:15.528Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:18:21.408Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:18:26.020Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:18:29.530Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:18:40.957Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:18:41.383Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:18:59.032Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:19:17.202Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:19:39.125Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:19:53.744Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:20:00.537Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:20:12.721Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:20:14.850Z",
+      "feature": "eval_testset",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:20:30.815Z",
+      "feature": "eval_testset",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:20:45.022Z",
+      "feature": "eval_testset",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:20:55.629Z",
+      "feature": "eval_testset",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:21:08.384Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:22:22.143Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:22:24.445Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:22:26.693Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:23:27.418Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:23:40.262Z",
+      "feature": "idt",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:24:43.335Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:24:51.973Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:25:01.377Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:25:18.550Z",
+      "feature": "eval_testset",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:28:56.423Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:29:03.238Z",
+      "feature": "constants",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:29:10.406Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:29:26.698Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:29:47.443Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:30:33.167Z",
+      "feature": "EvalDatasetPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:30:49.632Z",
+      "feature": "EvalDatasetPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:31:19.790Z",
+      "feature": "EvalDatasetPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:31:33.942Z",
+      "feature": "EvalDatasetPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:32:04.583Z",
+      "feature": "EvalDatasetPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:32:39.816Z",
+      "feature": "EvalDatasetPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:32:57.978Z",
+      "feature": "EvalDatasetPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:33:11.856Z",
+      "feature": "EvalDatasetPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:33:34.416Z",
+      "feature": "EvalDatasetPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:33:48.103Z",
+      "feature": "EvalDatasetPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:33:58.372Z",
+      "feature": "EvalDatasetPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:35:18.643Z",
+      "feature": "EvalDatasetPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:35:51.336Z",
+      "feature": "EvalDatasetPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:36:14.012Z",
+      "feature": "EvalDatasetPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:36:46.053Z",
+      "feature": "EvalDatasetPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:40:22.902Z",
+      "feature": "EvalDatasetPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:49:51.090Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:50:03.888Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:50:27.218Z",
+      "feature": "idt",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:50:32.365Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:50:35.780Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:50:42.440Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:50:50.258Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:50:52.978Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:50:56.999Z",
+      "feature": "ragas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:51:08.705Z",
+      "feature": "EvalDatasetPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:51:13.021Z",
+      "feature": "EvalDatasetPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:51:19.063Z",
+      "feature": "EvalDatasetPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:51:27.394Z",
+      "feature": "EvalDatasetPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:51:31.137Z",
+      "feature": "EvalDatasetPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:51:37.313Z",
+      "feature": "EvalDatasetPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:51:42.233Z",
+      "feature": "EvalDatasetPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:51:44.699Z",
+      "feature": "EvalDatasetPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:51:54.995Z",
+      "feature": "EvalDatasetPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:52:07.324Z",
+      "feature": "EvalDatasetPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-03T11:56:27.750Z",
+      "feature": "eval-hub",
+      "phase": "act",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T10:48:24.924Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T10:48:26.955Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T10:51:46.418Z",
+      "feature": "middleware",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T10:51:50.907Z",
+      "feature": "middleware",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T10:51:59.524Z",
+      "feature": "middleware",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T10:52:05.686Z",
+      "feature": "middleware",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T10:52:11.184Z",
+      "feature": "middleware",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T10:54:10.968Z",
+      "feature": "middleware",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T10:54:23.521Z",
+      "feature": "middleware",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T10:54:39.798Z",
+      "feature": "middleware",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T10:55:47.238Z",
+      "feature": "middleware",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T10:56:03.662Z",
+      "feature": "middleware",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T10:56:20.358Z",
+      "feature": "middleware",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T10:56:21.880Z",
+      "feature": "middleware",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T10:56:23.941Z",
+      "feature": "middleware",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T10:56:28.103Z",
+      "feature": "middleware",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T10:56:37.622Z",
+      "feature": "middleware",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T10:57:07.382Z",
+      "feature": "middleware",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T10:57:54.562Z",
+      "feature": "middleware",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:01:46.503Z",
+      "feature": "middleware",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:02:21.174Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:02:25.322Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:02:28.728Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:02:30.113Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:02:33.625Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:02:44.438Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:04:57.761Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:05:37.919Z",
+      "feature": "middleware",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:06:04.102Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:06:10.704Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:06:13.063Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:06:16.099Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:06:22.477Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:06:24.867Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:06:28.607Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:06:31.223Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:06:41.182Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:06:45.870Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:06:47.127Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:21:05.291Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:21:43.934Z",
+      "feature": "middleware",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:22:55.761Z",
+      "feature": "middleware",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:22:57.474Z",
+      "feature": "middleware",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:25:54.017Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:25:57.267Z",
+      "feature": "constants",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:26:00.263Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:26:06.429Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:26:11.388Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:27:28.136Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:27:31.126Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:27:34.200Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:27:40.173Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:27:42.118Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:27:47.754Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:27:54.384Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:27:56.724Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:27:59.170Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:28:30.166Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:30:30.710Z",
+      "feature": "AdminMiddlewarePage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:30:43.263Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:30:45.089Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:30:47.811Z",
+      "feature": "constants",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:31:06.588Z",
+      "feature": "constants",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:32:07.956Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:32:49.968Z",
+      "feature": "AdminMiddlewarePage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:40:02.207Z",
+      "feature": "middleware",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:40:13.503Z",
+      "feature": "middleware",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:41:56.710Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-04T11:45:32.946Z",
+      "feature": "general_chat",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-05T05:44:26.245Z",
+      "feature": "builtin-middleware",
+      "phase": "act",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-05T06:09:08.279Z",
+      "feature": "middleware",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-05T06:28:30.210Z",
+      "feature": "middleware",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-05T06:28:32.005Z",
+      "feature": "middleware",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-05T06:28:39.696Z",
+      "feature": "middleware",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-05T06:28:41.497Z",
+      "feature": "middleware",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-05T06:28:47.715Z",
+      "feature": "middleware",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-05T06:33:47.418Z",
+      "feature": "middleware",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-05T06:33:58.314Z",
+      "feature": "middleware",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-05T06:35:31.274Z",
+      "feature": "middleware_agent",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-05T06:35:32.218Z",
+      "feature": "middleware_agent",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-05T06:35:33.208Z",
+      "feature": "middleware_agent",
       "phase": "do",
       "action": "updated"
     }

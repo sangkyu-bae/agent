@@ -63,12 +63,13 @@ class TestExecute:
 
     @pytest.mark.asyncio
     async def test_empty_testcases_raises(self, use_case) -> None:
+        # testset_id도 testcases도 없음 → 배타 검증 위반 (eval-hub A8)
         request = BatchEvalRequest(
             target_type="rag",
             metrics=["faithfulness"],
             testcases=[],
         )
-        with pytest.raises(ValueError, match="비어있습니다"):
+        with pytest.raises(ValueError, match="정확히 하나"):
             await use_case.execute(request, "req-1")
 
     @pytest.mark.asyncio
@@ -93,53 +94,4 @@ class TestExecute:
         assert response.total_cases == 3
 
 
-class TestRunEvaluation:
-    @pytest.mark.asyncio
-    async def test_run_evaluation_completes(
-        self, use_case, mock_repo, mock_evaluator
-    ) -> None:
-        from datetime import datetime, timezone
-        from src.domain.ragas.entities import EvaluationRun
-        from src.domain.ragas.value_objects import TestCase
-
-        run = EvaluationRun(
-            id="run-1",
-            eval_type="batch",
-            target_type="rag",
-            status="pending",
-            total_cases=1,
-            created_at=datetime.now(timezone.utc),
-        )
-        mock_repo.get_run = AsyncMock(return_value=run)
-
-        testcases = [TestCase(question="대출 한도?")]
-        await use_case.run_evaluation("run-1", testcases, ["faithfulness"], "req-1")
-
-        assert mock_evaluator.evaluate.call_count == 1
-        mock_repo.save_results_bulk.assert_called_once()
-        assert mock_repo.update_run.call_count == 2
-
-    @pytest.mark.asyncio
-    async def test_run_evaluation_handles_error(
-        self, use_case, mock_repo, mock_evaluator
-    ) -> None:
-        from datetime import datetime, timezone
-        from src.domain.ragas.entities import EvaluationRun
-        from src.domain.ragas.value_objects import TestCase
-
-        run = EvaluationRun(
-            id="run-1",
-            eval_type="batch",
-            target_type="rag",
-            status="pending",
-            total_cases=1,
-            created_at=datetime.now(timezone.utc),
-        )
-        mock_repo.get_run = AsyncMock(return_value=run)
-        mock_evaluator.evaluate = AsyncMock(side_effect=RuntimeError("LLM error"))
-
-        testcases = [TestCase(question="q")]
-        await use_case.run_evaluation("run-1", testcases, ["faithfulness"], "req-1")
-
-        assert run.status == "failed"
-        assert "LLM error" in run.error_message
+# 실행(run) 단계는 BatchEvalExecutor로 이관 — tests/application/ragas/test_batch_executor.py 참조

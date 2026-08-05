@@ -20,7 +20,10 @@ class RealtimeEvaluationUseCase:
         self._logger = logger
 
     async def execute(
-        self, request: RealtimeEvalRequest, request_id: str
+        self,
+        request: RealtimeEvalRequest,
+        request_id: str,
+        user_id: str | None = None,
     ) -> RealtimeEvalResponse:
         self._logger.info(
             "Realtime evaluation start",
@@ -34,6 +37,7 @@ class RealtimeEvaluationUseCase:
             target_type=request.target_type,
             status="running",
             total_cases=1,
+            user_id=user_id,
             created_at=datetime.now(timezone.utc),
         )
         await self._repository.save_run(run, request_id)

@@ -1,6 +1,6 @@
 {
   "version": "2.0",
-  "lastUpdated": "2026-07-31T00:59:05.290Z",
+  "lastUpdated": "2026-08-02T09:35:31.950Z",
   "activeFeatures": [
     "mutation-pending-guard",
     "llm-register",
@@ -47,10 +47,21 @@
     "agent-schedule",
     "agent_composer",
     "AdminLlmModelsPage",
-    "AgentKnowledgePage"
+    "AgentKnowledgePage",
+    "admin-nav-restructure",
+    "utility-page"
   ],
-  "primaryFeature": "mutation-pending-guard",
+  "primaryFeature": "utility-page",
   "features": {
+    "utility-page": {
+      "phase": "archived",
+      "matchRate": 94.4,
+      "iterationCount": 0,
+      "startedAt": "2026-08-02T00:00:00.000Z",
+      "completedAt": "2026-08-02T04:00:00.000Z",
+      "archivedAt": "2026-08-02T05:00:00.000Z",
+      "archivedTo": "docs/archive/2026-08/utility-page/"
+    },
     "mutation-pending-guard": {
       "phase": "archived",
       "matchRate": 98,
@@ -326,9 +337,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-16T14:42:54.427Z",
-        "lastUpdated": "2026-05-09T07:55:50.620Z"
+        "lastUpdated": "2026-08-02T09:23:08.179Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\components\\layout\\AgentChatLayout.tsx"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\components\\layout\\AppSidebar.test.tsx"
     },
     "ChatPage": {
       "phase": "do",
@@ -378,7 +389,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-17T14:39:41.105Z",
-        "lastUpdated": "2026-07-11T07:55:24.275Z"
+        "lastUpdated": "2026-08-02T09:15:39.927Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\constants\\adminNav.ts"
     },
@@ -804,6 +815,20 @@
         "lastUpdated": "2026-07-31T00:59:05.289Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\AgentKnowledgePage\\index.tsx"
+    },
+    "admin-nav-restructure": {
+      "phase": "act",
+      "phaseNumber": 5,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-08-02T09:35:31.946Z",
+        "lastUpdated": "2026-08-02T09:35:31.948Z"
+      },
+      "previousPhase": "check",
+      "autoAdvanced": true
     }
   },
   "pipeline": {
@@ -814,7 +839,7 @@
   "session": {
     "startedAt": "2026-03-16T14:41:16.262Z",
     "onboardingCompleted": false,
-    "lastActivity": "2026-07-31T00:59:05.290Z"
+    "lastActivity": "2026-08-02T09:35:31.950Z"
   },
   "history": [
     {
@@ -5267,6 +5292,84 @@
       "timestamp": "2026-07-31T00:59:05.289Z",
       "feature": "AgentKnowledgePage",
       "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-02T09:07:50.610Z",
+      "feature": "constants",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-02T09:15:39.927Z",
+      "feature": "constants",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-02T09:17:35.427Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-02T09:17:39.376Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-02T09:17:55.861Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-02T09:18:06.672Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-02T09:22:32.438Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-02T09:22:34.401Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-02T09:22:40.062Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-02T09:22:54.439Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-02T09:23:03.810Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-02T09:23:08.179Z",
+      "feature": "layout",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-02T09:35:31.948Z",
+      "feature": "admin-nav-restructure",
+      "phase": "act",
       "action": "updated"
     }
   ]

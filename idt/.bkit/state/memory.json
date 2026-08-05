@@ -1,15 +1,15 @@
 {
-  "sessionCount": 426,
+  "sessionCount": 436,
   "lastSession": {
-    "startedAt": "2026-08-01T09:07:22.161Z",
+    "startedAt": "2026-08-05T05:34:28.605Z",
     "platform": "claude",
     "level": "Starter"
   },
-  "currentFeature": "wiki-navigation",
+  "currentFeature": "builtin-middleware",
   "currentPhase": "archived",
   "milestones": {},
   "phase": "archived",
-  "matchRate": 97,
-  "archivedTo": "docs/archive/2026-07/wiki-navigation/",
-  "lastUpdated": "2026-07-21T00:00:00.000Z"
+  "matchRate": 95.2,
+  "archivedTo": "docs/archive/2026-08/builtin-middleware/",
+  "lastUpdated": "2026-08-05T00:00:00.000Z"
 }

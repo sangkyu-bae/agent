@@ -19,6 +19,7 @@ class EvaluationRun:
     total_cases: int
     created_at: datetime
     target_id: str | None = None
+    user_id: str | None = None  # NULL=소유권 도입(V055) 이전 레거시 — admin만 열람
     config: dict = field(default_factory=dict)
     completed_at: datetime | None = None
     error_message: str | None = None

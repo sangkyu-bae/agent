@@ -179,6 +179,11 @@ from src.api.routes.tool_catalog_router import (
     get_set_builtin_use_case,
     get_sync_mcp_tools_use_case,
 )
+from src.api.routes.middleware_catalog_router import (
+    router as middleware_catalog_router,
+    get_list_middleware_catalog_use_case,
+    get_set_middleware_flags_use_case,
+)
 from src.api.routes.auto_agent_builder_router import (
     router as auto_agent_builder_router,
     get_auto_build_use_case,
@@ -429,6 +434,7 @@ from src.api.routes.ragas_router import (
     get_realtime_eval_use_case,
     get_eval_result_use_case,
     get_testset_use_case,
+    get_testset_generate_use_case,
 )
 from src.application.ragas.batch_eval_use_case import BatchEvaluationUseCase
 from src.application.ragas.realtime_eval_use_case import RealtimeEvaluationUseCase
@@ -2221,6 +2227,43 @@ def get_feedback_wiki_service() -> FeedbackWikiService:
     return _feedback_wiki_singleton
 
 
+# builtin-middleware D6/D7: MiddlewareProvider lazy singleton.
+# 컴파일러/General Chat(앱 싱글톤)이 공유 — 세션은 session-scoped 어댑터가
+# 매 호출 새로 연다 (SessionScopedDocumentTemplateRepository 패턴).
+_middleware_provider_singleton = None
+
+
+def get_middleware_provider():
+    global _middleware_provider_singleton
+    if _middleware_provider_singleton is None:
+        from src.application.middleware.middleware_provider import (
+            MiddlewareProvider,
+        )
+        from src.infrastructure.llm_model.session_scoped_llm_model_repository import (
+            SessionScopedLlmModelRepository,
+        )
+        from src.infrastructure.middleware.session_scoped import (
+            SessionScopedAgentMiddlewareRepository,
+            SessionScopedMiddlewareCatalogRepository,
+        )
+
+        app_logger = get_app_logger()
+        _middleware_provider_singleton = MiddlewareProvider(
+            catalog_repo=SessionScopedMiddlewareCatalogRepository(
+                session_factory=get_session_factory(), logger=app_logger
+            ),
+            agent_middleware_repo=SessionScopedAgentMiddlewareRepository(
+                session_factory=get_session_factory(), logger=app_logger
+            ),
+            llm_model_repo=SessionScopedLlmModelRepository(
+                session_factory=get_session_factory(), logger=app_logger
+            ),
+            llm_factory=_llm_factory,
+            logger=app_logger,
+        )
+    return _middleware_provider_singleton
+
+
 def create_general_chat_use_case_factory():
     """Return a per-request factory for GeneralChatUseCase.
 
@@ -2309,6 +2352,8 @@ def create_general_chat_use_case_factory():
             tracker=get_run_tracker(),
             memory_assembler=get_memory_assembler(),
             memory_extractor=get_memory_extraction_service(),
+            # builtin-middleware D7: 카탈로그 빌트인 ∪ enforced 적용
+            middleware_provider=get_middleware_provider(),
         )
 
     return _factory
@@ -2462,6 +2507,8 @@ def create_agent_builder_factories():
         document_composer=_dt_composer,
         # ★ wiki-agentic-navigation D1: wiki_read 에이전트 목차 블록 주입
         wiki_toc_provider=_wiki_toc_provider,
+        # ★ builtin-middleware D6: 스냅샷 ∪ enforced 미들웨어 조립
+        middleware_provider=get_middleware_provider(),
     )
 
     # DB-001 §10.2: session 은 Depends(get_session) 으로 주입.
@@ -2499,6 +2546,18 @@ def create_agent_builder_factories():
         )
         return KnowledgeBaseRepository(session, app_logger)
 
+    def _make_middleware_catalog_repo(session: AsyncSession):
+        from src.infrastructure.middleware.repository import (
+            MiddlewareCatalogRepository,
+        )
+        return MiddlewareCatalogRepository(session=session, logger=app_logger)
+
+    def _make_agent_middleware_repo(session: AsyncSession):
+        from src.infrastructure.middleware.repository import (
+            AgentMiddlewareRepository,
+        )
+        return AgentMiddlewareRepository(session=session, logger=app_logger)
+
     def create_uc_factory(session: AsyncSession = Depends(get_session)):
         return CreateAgentUseCase(
             repository=_make_repo(session),
@@ -2520,6 +2579,8 @@ def create_agent_builder_factories():
             tool_catalog_repo=ToolCatalogRepository(
                 session=session, logger=app_logger
             ),
+            # builtin-middleware D5: 빌트인 미들웨어 스냅샷 (동일 세션)
+            middleware_catalog_repo=_make_middleware_catalog_repo(session),
         )
 
     def update_uc_factory(session: AsyncSession = Depends(get_session)):
@@ -2536,6 +2597,8 @@ def create_agent_builder_factories():
             kb_repo=_make_kb_repo(session),
             # agent-builder-edit-mapping FR-5: 모델 변경 검증
             llm_model_repo=_make_llm_model_repo(session),
+            # builtin-middleware D5: middleware_types 수정 검증
+            middleware_catalog_repo=_make_middleware_catalog_repo(session),
         )
 
     # agent-schedule Design §6.2: RunAgentUseCase 조립 본문을 함수로 추출해
@@ -2578,6 +2641,8 @@ def create_agent_builder_factories():
             dept_repository=dept_repo,
             logger=app_logger,
             agent_skill_repo=_make_agent_skill_repo(session),
+            # builtin-middleware D5: edit 폼 프라임용 스냅샷 노출
+            agent_middleware_repo=_make_agent_middleware_repo(session),
         )
 
     def list_uc_factory(session: AsyncSession = Depends(get_session)):
@@ -2763,10 +2828,74 @@ def create_department_factories():
     return list_factory, create_factory, update_factory, delete_factory, assign_factory, remove_factory
 
 
-def create_ragas_factories():
-    """Return per-request DI factories for RAGAS evaluation use cases."""
+def create_ragas_factories(build_run_agent_uc=None):
+    """RAGAS 평가 DI (eval-hub Design §2.4).
+
+    배치 실행기·생성 UC는 애플리케이션 싱글턴 — DB 접근은 session_factory 기반
+    독립 짧은 세션(SessionScopedEvalRunStore, D11 패턴). CRUD UC만 per-request 세션.
+    build_run_agent_uc: agent 대상 헤드리스 실행용 (agent-schedule §6.2와 공유).
+    """
+    from src.application.agent_builder.schemas import RunAgentRequest
+    from src.application.ragas.batch_executor import BatchEvalExecutor
+    from src.application.ragas.testset_generate_use_case import (
+        TestsetGenerateUseCase,
+    )
+    from src.infrastructure.eval_testset.document_text_extractor import (
+        extract_document_text,
+    )
+    from src.infrastructure.eval_testset.qa_generator import OpenAIQAGenerator
+    from src.infrastructure.eval_testset.testset_file_parser import (
+        parse_testset_file,
+    )
+    from src.infrastructure.ragas.run_store import SessionScopedEvalRunStore
+    from src.infrastructure.ragas.target_executor import DefaultTargetExecutor
+
     app_logger = get_app_logger()
     evaluator = RagasEvaluatorAdapter()
+    session_factory = get_session_factory()
+
+    eval_qdrant_client = AsyncQdrantClient(
+        host=settings.qdrant_host,
+        port=settings.qdrant_port,
+    )
+    eval_embedding = OpenAIEmbedding(model_name=settings.openai_embedding_model)
+
+    async def _run_agent_headless(
+        agent_id: str, question: str, user_id: str, request_id: str
+    ) -> str:
+        if build_run_agent_uc is None:
+            raise ValueError("agent 대상 평가 실행기가 구성되지 않았습니다")
+        async with session_factory() as session:
+            async with session.begin():
+                run_uc = build_run_agent_uc(session)
+                resp = await run_uc.execute(
+                    agent_id,
+                    RunAgentRequest(query=question, user_id=user_id),
+                    request_id,
+                    viewer_user_id=user_id,
+                )
+                return resp.answer
+
+    batch_executor = BatchEvalExecutor(
+        store=SessionScopedEvalRunStore(session_factory, app_logger),
+        evaluator=evaluator,
+        target_executor=DefaultTargetExecutor(
+            qdrant_client=eval_qdrant_client,
+            embedding=eval_embedding,
+            agent_runner=_run_agent_headless,
+            logger=app_logger,
+        ),
+        logger=app_logger,
+    )
+
+    generate_uc = TestsetGenerateUseCase(
+        text_extractor=extract_document_text,
+        qa_generator=OpenAIQAGenerator(model_name=settings.eval_qa_gen_model),
+        logger=app_logger,
+        max_input_chars=settings.eval_qa_gen_max_input_chars,
+        max_pairs=settings.eval_qa_gen_max_pairs,
+        max_file_bytes=settings.eval_qa_gen_max_file_mb * 1024 * 1024,
+    )
 
     def _make_repo(session: AsyncSession):
         return EvaluationRepository(session=session, logger=app_logger)
@@ -2776,6 +2905,7 @@ def create_ragas_factories():
             repository=_make_repo(session),
             evaluator=evaluator,
             logger=app_logger,
+            executor=batch_executor,
         )
 
     def realtime_factory(session: AsyncSession = Depends(get_session)):
@@ -2789,12 +2919,22 @@ def create_ragas_factories():
         return EvalResultUseCase(repository=_make_repo(session), logger=app_logger)
 
     def testset_factory(session: AsyncSession = Depends(get_session)):
-        return TestsetUseCase(repository=_make_repo(session), logger=app_logger)
+        return TestsetUseCase(
+            repository=_make_repo(session),
+            logger=app_logger,
+            file_parser=parse_testset_file,
+        )
 
     def admin_eval_factory(session: AsyncSession = Depends(get_session)):
         return AdminEvalUseCase(repository=_make_repo(session), logger=app_logger)
 
-    return batch_factory, realtime_factory, result_factory, testset_factory, admin_eval_factory
+    def generate_factory():
+        return generate_uc
+
+    return (
+        batch_factory, realtime_factory, result_factory,
+        testset_factory, admin_eval_factory, generate_factory,
+    )
 
 
 def create_collection_factories():
@@ -3383,6 +3523,39 @@ def create_tool_catalog_factories():
         return SetBuiltinToolUseCase(repository=repo, logger=app_logger)
 
     return list_factory, sync_factory, set_builtin_factory
+
+
+def create_middleware_catalog_factories():
+    """Return per-request DI factories for Middleware Catalog (builtin-middleware D4)."""
+    app_logger = get_app_logger()
+
+    def _make_repo(session: AsyncSession):
+        from src.infrastructure.middleware.repository import (
+            MiddlewareCatalogRepository,
+        )
+        return MiddlewareCatalogRepository(session=session, logger=app_logger)
+
+    def list_factory(session: AsyncSession = Depends(get_session)):
+        from src.application.middleware.list_middleware_catalog_use_case import (
+            ListMiddlewareCatalogUseCase,
+        )
+        return ListMiddlewareCatalogUseCase(
+            repository=_make_repo(session), logger=app_logger
+        )
+
+    def set_flags_factory(session: AsyncSession = Depends(get_session)):
+        from src.application.middleware.set_middleware_flags_use_case import (
+            SetMiddlewareFlagsUseCase,
+        )
+        return SetMiddlewareFlagsUseCase(
+            repository=_make_repo(session),
+            llm_model_repository=LlmModelRepository(
+                session=session, logger=app_logger
+            ),
+            logger=app_logger,
+        )
+
+    return list_factory, set_flags_factory
 
 
 def create_agent_composer_factories():
@@ -4034,6 +4207,11 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_sync_mcp_tools_use_case] = _tc_sync_f
     app.dependency_overrides[get_set_builtin_use_case] = _tc_builtin_f
 
+    # Middleware Catalog DI (builtin-middleware D4)
+    _mw_list_f, _mw_flags_f = create_middleware_catalog_factories()
+    app.dependency_overrides[get_list_middleware_catalog_use_case] = _mw_list_f
+    app.dependency_overrides[get_set_middleware_flags_use_case] = _mw_flags_f
+
     # Agent Composer DI (nl-agent-composer)
     _compose_f = create_agent_composer_factories()
     app.dependency_overrides[get_compose_agent_use_case] = _compose_f
@@ -4427,15 +4605,17 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_chunks_use_case] = _get_chunks_uc_factory
     app.dependency_overrides[get_delete_document_use_case] = _delete_document_uc_factory
 
-    # RAGAS Evaluation DI
+    # RAGAS Evaluation DI (eval-hub: agent 헤드리스 실행기 공유)
     (
         _ragas_batch_f, _ragas_realtime_f,
         _ragas_result_f, _ragas_testset_f, _ragas_admin_f,
-    ) = create_ragas_factories()
+        _ragas_generate_f,
+    ) = create_ragas_factories(_build_run_agent_uc)
     app.dependency_overrides[get_batch_eval_use_case] = _ragas_batch_f
     app.dependency_overrides[get_realtime_eval_use_case] = _ragas_realtime_f
     app.dependency_overrides[get_eval_result_use_case] = _ragas_result_f
     app.dependency_overrides[get_testset_use_case] = _ragas_testset_f
+    app.dependency_overrides[get_testset_generate_use_case] = _ragas_generate_f
     app.dependency_overrides[get_admin_eval_use_case] = _ragas_admin_f
 
     # Include routers
@@ -4460,6 +4640,7 @@ def create_app() -> FastAPI:
     app.include_router(rag_tool_router)
     app.include_router(department_router)
     app.include_router(tool_catalog_router)
+    app.include_router(middleware_catalog_router)
     app.include_router(agent_composer_router)
     app.include_router(auto_agent_builder_router)
     app.include_router(general_chat_router)

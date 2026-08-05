@@ -1,16 +1,18 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import TopNav from '@/components/layout/TopNav';
-import { ADMIN_NAV_ITEMS } from '@/constants/adminNav';
+import AdminSectionTabs from '@/components/layout/AdminSectionTabs';
+import { ADMIN_NAV_GROUPS, findAdminGroupByPath } from '@/constants/adminNav';
 
 const AdminLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const activeGroup = findAdminGroupByPath(location.pathname);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <TopNav />
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        {/* Sidebar */}
+        {/* Sidebar — 그룹 단위 네비게이션 */}
         <nav
           aria-label="관리 메뉴"
           className="flex w-56 shrink-0 flex-col border-r border-zinc-200 bg-zinc-50"
@@ -20,15 +22,12 @@ const AdminLayout = () => {
               Admin
             </p>
             <ul className="space-y-1">
-              {ADMIN_NAV_ITEMS.map((item) => {
-                // 정확 매칭 또는 하위 경로 매칭 (예: /admin/agent-runs/:runId)
-                const isActive =
-                  location.pathname === item.path ||
-                  location.pathname.startsWith(`${item.path}/`);
+              {ADMIN_NAV_GROUPS.map((group) => {
+                const isActive = group.key === activeGroup?.key;
                 return (
-                  <li key={item.path}>
+                  <li key={group.key}>
                     <button
-                      onClick={() => navigate(item.path)}
+                      onClick={() => navigate(group.items[0].path)}
                       className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-[13.5px] font-medium transition-all ${
                         isActive
                           ? 'bg-violet-50 font-semibold text-violet-700'
@@ -42,9 +41,9 @@ const AdminLayout = () => {
                         strokeWidth={1.5}
                         stroke="currentColor"
                       >
-                        <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
+                        <path strokeLinecap="round" strokeLinejoin="round" d={group.icon} />
                       </svg>
-                      {item.label}
+                      {group.label}
                     </button>
                   </li>
                 );
@@ -72,10 +71,13 @@ const AdminLayout = () => {
           </div>
         </nav>
 
-        {/* 본문 */}
-        <main style={{ flex: 1, overflowY: 'auto', background: '#fff' }}>
-          <Outlet />
-        </main>
+        {/* 본문 — 2차 탭 바(고정) + 스크롤 영역 */}
+        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+          {activeGroup && <AdminSectionTabs group={activeGroup} />}
+          <main style={{ flex: 1, overflowY: 'auto', background: '#fff' }}>
+            <Outlet />
+          </main>
+        </div>
       </div>
     </div>
   );

@@ -2,8 +2,8 @@
 from typing import Any, Awaitable, Callable, Optional, TYPE_CHECKING
 
 from langchain_core.messages import AIMessage
+from langchain.agents import create_agent
 from langgraph.graph import END, StateGraph
-from langgraph.prebuilt import create_react_agent
 
 from src.application.agent_builder.message_normalization import ensure_user_tail
 from src.application.agent_builder.search_pipeline import (
@@ -99,6 +99,13 @@ _WIKI_FOLDER_WORKER_INSTRUCTION = (
 )
 
 
+def _instantiate(middleware_plan) -> list:
+    """builtin-middleware D6: 워커마다 새 미들웨어 인스턴스 (상태 공유 금지)."""
+    if middleware_plan is None:
+        return []
+    return middleware_plan.instantiate()
+
+
 def _is_tool_message(msg) -> bool:
     """tool 역할 메시지 판정 — final_answer LLM 입력에서 제외 (고아 tool 400 방어)."""
     if isinstance(msg, dict):
@@ -136,6 +143,7 @@ class WorkflowCompiler:
         document_template_repository=None,
         document_composer=None,
         wiki_toc_provider=None,
+        middleware_provider=None,
     ) -> None:
         self._tool_factory = tool_factory
         self._llm_factory = llm_factory
@@ -159,6 +167,8 @@ class WorkflowCompiler:
         self._document_composer = document_composer
         # wiki-agentic-navigation D1: 위키 목차 블록 공급자 (미주입 시 완전 비활성).
         self._wiki_toc_provider = wiki_toc_provider
+        # builtin-middleware D6: 미들웨어 공급자 (미주입 시 미들웨어 0 — 무회귀).
+        self._middleware_provider = middleware_provider
 
     async def compile(
         self,
@@ -217,6 +227,15 @@ class WorkflowCompiler:
             # (Phase 5에서 ToolFactory에 메서드 추가됨)
             if hasattr(self._tool_factory, "bind_auth_ctx"):
                 self._tool_factory.bind_auth_ctx(auth_ctx)
+
+            # builtin-middleware D6: 적용 플랜 준비 — 최상위(depth=0) 1회.
+            # sub_agent 재귀에는 미전달. agent_id 미상이면 enforced만
+            # (default_builtin=False — 사용자 opt-out 무시 방지).
+            middleware_plan = None
+            if depth == 0 and self._middleware_provider is not None:
+                middleware_plan = await self._middleware_provider.prepare(
+                    agent_id, request_id, default_builtin=False
+                )
 
             worker_map: dict[str, object] = {}
             # search/analysis 처럼 LLM 래핑 없이 직접 실행되는 "함수형 노드" id 집합.
@@ -313,13 +332,16 @@ class WorkflowCompiler:
                                     "wiki_list bundling skipped",
                                     request_id=request_id, exception=e,
                                 )
-                        worker_agent = create_react_agent(
-                            llm, tools=wiki_tools, name=worker_def.worker_id,
-                            prompt=wiki_toc_block + instruction,
+                        worker_agent = create_agent(
+                            model=llm, tools=wiki_tools,
+                            name=worker_def.worker_id,
+                            system_prompt=wiki_toc_block + instruction,
+                            middleware=_instantiate(middleware_plan),
                         )
                     else:
-                        worker_agent = create_react_agent(
-                            llm, tools=[tool], name=worker_def.worker_id,
+                        worker_agent = create_agent(
+                            model=llm, tools=[tool], name=worker_def.worker_id,
+                            middleware=_instantiate(middleware_plan),
                         )
                     worker_map[worker_def.worker_id] = worker_agent
 
