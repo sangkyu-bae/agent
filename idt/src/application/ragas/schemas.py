@@ -7,7 +7,8 @@ from datetime import datetime
 class BatchEvalRequest:
     target_type: str
     metrics: list[str]
-    testcases: list[dict]
+    testcases: list[dict] = field(default_factory=list)
+    testset_id: str | None = None  # testcases와 배타 — 정확히 하나만 제공
     top_k: int = 5
     sample_ratio: float = 1.0
     llm_model: str = "gpt-4o-mini"
@@ -51,6 +52,8 @@ class EvalRunDetailResponse:
     created_at: datetime
     completed_at: datetime | None
     summary: dict[str, float]
+    error_message: str | None = None  # 실패 원인 표면화 (에러 은닉 금지)
+    config: dict = field(default_factory=dict)  # 재실행 프리필용
 
 
 @dataclass(frozen=True)
@@ -78,3 +81,23 @@ class TestsetResponse:
     description: str
     case_count: int
     created_at: datetime
+    user_id: str | None = None
+
+
+@dataclass(frozen=True)
+class TestsetDetailResponse:
+    id: str
+    name: str
+    description: str
+    case_count: int
+    created_at: datetime
+    user_id: str | None = None
+    cases: list[dict] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class GeneratedTestsetDraft:
+    """문서→QA 생성 초안 — 사용자 검토 전까지 저장하지 않는다."""
+
+    source_filename: str
+    items: list[dict] = field(default_factory=list)

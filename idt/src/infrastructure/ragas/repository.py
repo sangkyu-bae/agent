@@ -26,6 +26,7 @@ class EvaluationRepository(EvaluationRepositoryInterface):
             eval_type=run.eval_type,
             target_type=run.target_type,
             target_id=run.target_id,
+            user_id=run.user_id,
             status=run.status,
             total_cases=run.total_cases,
             config=run.config,
@@ -68,9 +69,15 @@ class EvaluationRepository(EvaluationRepositoryInterface):
         limit: int,
         offset: int,
         request_id: str,
+        user_id: str | None = None,
     ) -> tuple[list[EvaluationRun], int]:
         stmt = select(EvaluationRunModel)
         count_stmt = select(func.count(EvaluationRunModel.id))
+
+        # 소유권 스코프 — NULL(레거시) 행은 일반 사용자에게 절대 미노출 (Design §2.2)
+        if user_id is not None:
+            stmt = stmt.where(EvaluationRunModel.user_id == user_id)
+            count_stmt = count_stmt.where(EvaluationRunModel.user_id == user_id)
 
         if target_type:
             stmt = stmt.where(EvaluationRunModel.target_type == target_type)
@@ -174,6 +181,7 @@ class EvaluationRepository(EvaluationRepositoryInterface):
             id=testset["id"],
             name=testset["name"],
             description=testset.get("description"),
+            user_id=testset.get("user_id"),
             cases=testset["cases"],
             case_count=testset["case_count"],
             created_at=testset["created_at"],
@@ -182,31 +190,31 @@ class EvaluationRepository(EvaluationRepositoryInterface):
         await self._session.flush()
 
     async def list_testsets(
-        self, limit: int, offset: int, request_id: str
+        self,
+        limit: int,
+        offset: int,
+        request_id: str,
+        user_id: str | None = None,
     ) -> tuple[list[dict], int]:
+        stmt = select(TestsetModel)
+        count_stmt = select(func.count(TestsetModel.id))
+
+        # 소유권 스코프 — NULL(레거시) 행은 일반 사용자에게 절대 미노출 (Design §2.2)
+        if user_id is not None:
+            stmt = stmt.where(TestsetModel.user_id == user_id)
+            count_stmt = count_stmt.where(TestsetModel.user_id == user_id)
+
         stmt = (
-            select(TestsetModel)
-            .order_by(TestsetModel.created_at.desc())
+            stmt.order_by(TestsetModel.created_at.desc())
             .offset(offset)
             .limit(limit)
         )
-        count_stmt = select(func.count(TestsetModel.id))
 
         result = await self._session.execute(stmt)
         count_result = await self._session.execute(count_stmt)
         total = count_result.scalar() or 0
 
-        items = [
-            {
-                "id": m.id,
-                "name": m.name,
-                "description": m.description,
-                "cases": m.cases,
-                "case_count": m.case_count,
-                "created_at": m.created_at,
-            }
-            for m in result.scalars()
-        ]
+        items = [self._to_testset_dict(m) for m in result.scalars()]
         return items, total
 
     async def get_testset(self, testset_id: str, request_id: str) -> dict | None:
@@ -215,10 +223,15 @@ class EvaluationRepository(EvaluationRepositoryInterface):
         m = result.scalar_one_or_none()
         if m is None:
             return None
+        return self._to_testset_dict(m)
+
+    @staticmethod
+    def _to_testset_dict(m: TestsetModel) -> dict:
         return {
             "id": m.id,
             "name": m.name,
             "description": m.description,
+            "user_id": m.user_id,
             "cases": m.cases,
             "case_count": m.case_count,
             "created_at": m.created_at,
@@ -358,6 +371,7 @@ class EvaluationRepository(EvaluationRepositoryInterface):
             eval_type=model.eval_type,
             target_type=model.target_type,
             target_id=model.target_id,
+            user_id=model.user_id,
             status=model.status,
             total_cases=model.total_cases,
             config=model.config or {},

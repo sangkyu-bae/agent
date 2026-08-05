@@ -14,6 +14,10 @@ class EvaluationRunModel(Base):
     eval_type: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     target_type: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     target_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    user_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, index=True,
+        comment="실행자 사용자 ID (NULL=소유권 도입 이전 레거시, admin만 열람)",
+    )
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
     total_cases: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     config: Mapped[dict | None] = mapped_column(JSON, nullable=True)
@@ -54,6 +58,10 @@ class TestsetModel(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    user_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, index=True,
+        comment="소유자 사용자 ID (NULL=소유권 도입 이전 레거시, admin만 열람)",
+    )
     cases: Mapped[list] = mapped_column(JSON, nullable=False)
     case_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

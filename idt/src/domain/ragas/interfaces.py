@@ -2,6 +2,7 @@
 from abc import ABC, abstractmethod
 
 from src.domain.ragas.entities import EvaluationResult, EvaluationRun
+from src.domain.ragas.value_objects import EvalConfig, TestCase
 
 
 class EvaluationRepositoryInterface(ABC):
@@ -24,6 +25,7 @@ class EvaluationRepositoryInterface(ABC):
         limit: int,
         offset: int,
         request_id: str,
+        user_id: str | None = None,
     ) -> tuple[list[EvaluationRun], int]: ...
 
     @abstractmethod
@@ -52,7 +54,11 @@ class EvaluationRepositoryInterface(ABC):
 
     @abstractmethod
     async def list_testsets(
-        self, limit: int, offset: int, request_id: str
+        self,
+        limit: int,
+        offset: int,
+        request_id: str,
+        user_id: str | None = None,
     ) -> tuple[list[dict], int]: ...
 
     @abstractmethod
@@ -95,3 +101,34 @@ class EvaluatorInterface(ABC):
         metrics: list[str],
         request_id: str,
     ) -> dict[str, float]: ...
+
+
+class EvalRunStoreInterface(ABC):
+    """백그라운드 배치 실행용 스토어 — 연산마다 독립 짧은 세션 (D11 패턴)."""
+
+    @abstractmethod
+    async def get_run(self, run_id: str, request_id: str) -> EvaluationRun | None: ...
+
+    @abstractmethod
+    async def update_run(self, run: EvaluationRun, request_id: str) -> None: ...
+
+    @abstractmethod
+    async def save_results_bulk(
+        self, results: list[EvaluationResult], request_id: str
+    ) -> None: ...
+
+
+class TargetExecutorInterface(ABC):
+    """평가 대상(rag/agent/retrieval) 실행기 — 케이스별 답변·컨텍스트 생성."""
+
+    @abstractmethod
+    async def execute(
+        self,
+        target_type: str,
+        config: EvalConfig,
+        case: TestCase,
+        user_id: str | None,
+        request_id: str,
+    ) -> tuple[str, list[str], dict[str, float]]:
+        """(answer, contexts, extra_scores) 반환 — extra_scores는 순위 메트릭 등."""
+        ...

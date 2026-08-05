@@ -163,6 +163,13 @@ class Settings(BaseSettings):
     document_summary_input_char_cap: int = 24000
     document_summary_max_batches: int = 10
 
+    # Eval Hub — 문서→QA 초안 생성 (eval-hub Design A6)
+    # LLM 입력 절단 상한(문자, 429 방지) / 1회 생성 QA 쌍 상한 / 생성 모델 / 업로드 파일 크기 상한(MB)
+    eval_qa_gen_max_input_chars: int = 20000
+    eval_qa_gen_max_pairs: int = 15
+    eval_qa_gen_model: str = "gpt-4o-mini"
+    eval_qa_gen_max_file_mb: int = 15
+
     # PII Masking (pii-masking)
     # 외부 LLM 경계의 가역 PII 마스킹 전역 on/off. false면 mask/unmask는 no-op.
     pii_masking_enabled: bool = True
