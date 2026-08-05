@@ -66,5 +66,9 @@ export function mapDetailToForm(
     schedules: [],
     // builtin-tools: edit 모드에선 저장된 워커가 그대로 tools에 매핑되므로 미사용
     excludedBuiltinTools: [],
+    // builtin-middleware: create 전용 opt-out — edit 모드 미사용
+    excludedBuiltinMiddlewares: [],
+    // builtin-middleware: edit 폼 프리필 (전체 교체 전송의 기준선)
+    middlewares: detail.middleware_types ?? [],
   };
 }

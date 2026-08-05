@@ -18,6 +18,8 @@ interface StudioLayoutProps {
   onRagConfigChange: (config: RagToolConfig) => void;
   /** builtin-tools D8: 빌트인 수동 해제/복원 (create 모드 전용) */
   onBuiltinToggle: (toolId: string) => void;
+  /** builtin-middleware D10: 미들웨어 토글 (create=opt-out, edit=전체 교체) */
+  onMiddlewareToggle: (middlewareType: string) => void;
   onStagedScheduleAdd: (item: StagedSchedule) => void;
   onStagedScheduleRemove: (localId: string) => void;
   onApplyDraft: (draft: ComposeAgentDraftResponse) => void;
@@ -50,6 +52,7 @@ const StudioLayout = ({
   onSkillToggle,
   onRagConfigChange,
   onBuiltinToggle,
+  onMiddlewareToggle,
   onStagedScheduleAdd,
   onStagedScheduleRemove,
   onApplyDraft,
@@ -87,6 +90,7 @@ const StudioLayout = ({
             onSkillToggle={onSkillToggle}
             onRagConfigChange={onRagConfigChange}
             onBuiltinToggle={onBuiltinToggle}
+            onMiddlewareToggle={onMiddlewareToggle}
             isEditMode={mode === 'edit'}
             agentId={agentId}
             systemPromptError={systemPromptError}

@@ -5,7 +5,6 @@ import type { CollectionInfo, KnowledgeBaseInfo, RagToolConfig } from '@/types/r
 import { DEFAULT_RAG_CONFIG, SEARCH_MODES } from '@/types/ragToolConfig';
 import type { AgentBuilderFormData, LeftTabId, SubAgentCandidate } from '@/types/agentBuilder';
 import CollapsibleSection from './CollapsibleSection';
-import PlaceholderSection from './PlaceholderSection';
 import ModelSettingsModal from './ModelSettingsModal';
 import ToolPickerModal from './ToolPickerModal';
 import SkillPickerModal from './SkillPickerModal';
@@ -13,6 +12,8 @@ import RagConfigModal from './RagConfigModal';
 import DocumentExtractorConfigModal from './DocumentExtractorConfigModal';
 import SubAgentManagerModal from './SubAgentManagerModal';
 import { useSkills } from '@/hooks/useSkills';
+import { useMiddlewareCatalog } from '@/hooks/useMiddlewareCatalog';
+import type { MiddlewareCatalogItem } from '@/types/middleware';
 import { useCollections } from '@/hooks/useRagToolConfig';
 import { useKnowledgeBases } from '@/hooks/useKnowledgeBases';
 import { MAX_ATTACHED_SKILLS } from '@/constants/agentSkill';
@@ -42,6 +43,8 @@ interface LeftConfigPanelProps {
   onRagConfigChange: (config: RagToolConfig) => void;
   /** builtin-tools D8: 빌트인 수동 해제/복원 토글 (create 모드 전용) */
   onBuiltinToggle: (toolId: string) => void;
+  /** builtin-middleware D10: 미들웨어 토글 (create=빌트인 opt-out, edit=전체 교체) */
+  onMiddlewareToggle: (middlewareType: string) => void;
   isEditMode: boolean;
   agentId?: string | null;
   /** agent-instruction-required: 지침 미입력 시 인라인 에러 메시지 */
@@ -67,6 +70,7 @@ const LeftConfigPanel = ({
   onSkillToggle,
   onRagConfigChange,
   onBuiltinToggle,
+  onMiddlewareToggle,
   isEditMode,
   agentId,
   systemPromptError,
@@ -89,6 +93,8 @@ const LeftConfigPanel = ({
 
   const subAgents = form.subAgents ?? [];
   const { data: skillList } = useSkills({ scope: 'all', size: 100 });
+  // builtin-middleware D10: 카탈로그 조회 — create는 빌트인·강제만, edit은 전 항목 노출
+  const { data: middlewareCatalog } = useMiddlewareCatalog();
   const { data: collections } = useCollections();
   const { data: knowledgeBases } = useKnowledgeBases();
   const selectedSkills = (skillList?.skills ?? []).filter((s) =>
@@ -460,9 +466,15 @@ const LeftConfigPanel = ({
           )}
         </CollapsibleSection>
 
-        {/* 미들웨어 (준비중) */}
+        {/* 미들웨어 (builtin-middleware D10) */}
         <CollapsibleSection title="미들웨어">
-          <PlaceholderSection emptyText="추가된 미들웨어가 없습니다" actionLabel="+ 미들웨어" />
+          <MiddlewareSection
+            catalog={middlewareCatalog}
+            isEditMode={isEditMode}
+            middlewares={form.middlewares}
+            excludedBuiltinMiddlewares={form.excludedBuiltinMiddlewares}
+            onToggle={onMiddlewareToggle}
+          />
         </CollapsibleSection>
       </div>
       )}
@@ -519,6 +531,108 @@ const LeftConfigPanel = ({
         onClose={() => setSubAgentModalOpen(false)}
       />
     </div>
+  );
+};
+
+// ── 미들웨어 섹션 (builtin-middleware D10) ─────────────────
+
+interface MiddlewareSectionProps {
+  catalog?: MiddlewareCatalogItem[];
+  isEditMode: boolean;
+  /** edit 전용: 적용 중 타입 (detail 프리필, 전체 교체 전송 기준선) */
+  middlewares: string[];
+  /** create 전용: 수동 해제된 빌트인 타입 */
+  excludedBuiltinMiddlewares: string[];
+  onToggle: (middlewareType: string) => void;
+}
+
+/** default_config를 "key value" 요약으로 표기 (읽기 전용 — 관리자만 편집). */
+const formatMiddlewareConfig = (config: Record<string, unknown>): string =>
+  Object.entries(config)
+    .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') || '(없음)' : String(v)}`)
+    .join(' · ');
+
+// 테스트용 named export
+export const MiddlewareSection = ({
+  catalog,
+  isEditMode,
+  middlewares,
+  excludedBuiltinMiddlewares,
+  onToggle,
+}: MiddlewareSectionProps) => {
+  const active = (catalog ?? []).filter((m) => m.is_active);
+  // create: 빌트인·강제만 노출 (비빌트인 선택은 수정 폼에서 — Design §12.2)
+  const visible = isEditMode
+    ? active
+    : active.filter((m) => m.is_builtin || m.is_enforced);
+
+  if (visible.length === 0) {
+    return (
+      <p className="rounded-xl border border-dashed border-zinc-200 bg-zinc-50 py-4 text-center text-[12.5px] text-zinc-400">
+        적용 가능한 미들웨어가 없습니다
+      </p>
+    );
+  }
+
+  const isChecked = (m: MiddlewareCatalogItem): boolean => {
+    if (m.is_enforced) return true; // 강제 — 항상 적용 (해제 불가)
+    if (isEditMode) return middlewares.includes(m.middleware_type);
+    return m.is_builtin && !excludedBuiltinMiddlewares.includes(m.middleware_type);
+  };
+
+  return (
+    <ul className="space-y-2">
+      {visible.map((m) => {
+        const checked = isChecked(m);
+        return (
+          <li
+            key={m.middleware_type}
+            className={`rounded-xl border px-4 py-2.5 ${
+              checked ? 'border-violet-200 bg-violet-50/50' : 'border-zinc-200 bg-white'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={checked}
+                disabled={m.is_enforced}
+                // enforced 가드 이중화 — jsdom은 disabled에도 이벤트를 전달한다
+                onChange={() => {
+                  if (!m.is_enforced) onToggle(m.middleware_type);
+                }}
+                aria-label={`${m.name} ${checked ? '해제' : '적용'}`}
+                title={
+                  m.is_enforced
+                    ? '관리자가 항상 적용으로 설정한 항목입니다'
+                    : undefined
+                }
+                className="h-4 w-4 accent-violet-600 disabled:cursor-not-allowed"
+              />
+              <span className="text-[13px] font-medium text-zinc-700">{m.name}</span>
+              {m.is_builtin && !m.is_enforced && (
+                <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-600">
+                  기본
+                </span>
+              )}
+              {m.is_enforced && (
+                <span
+                  title="관리자가 항상 적용으로 설정한 항목입니다"
+                  className="rounded bg-zinc-200 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-600"
+                >
+                  🔒 항상 적용
+                </span>
+              )}
+            </div>
+            <p className="mt-1 text-[11.5px] text-zinc-400">{m.description}</p>
+            {Object.keys(m.default_config).length > 0 && (
+              <p className="mt-0.5 text-[11px] text-zinc-400">
+                설정: {formatMiddlewareConfig(m.default_config)}
+              </p>
+            )}
+          </li>
+        );
+      })}
+    </ul>
   );
 };
 

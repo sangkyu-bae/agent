@@ -51,6 +51,8 @@ const DEFAULT_FORM: AgentBuilderFormData = {
   skills: [],
   schedules: [],
   excludedBuiltinTools: [],
+  excludedBuiltinMiddlewares: [],
+  middlewares: [],
 };
 
 const AgentBuilderPage = () => {
@@ -156,6 +158,8 @@ const AgentBuilderPage = () => {
             })),
             // 빈 배열도 명시 전송 → 전체 해제 의미 (undefined=무변경과 구분)
             skill_ids: form.skills,
+            // builtin-middleware D10: 프리필 기준 전체 교체 (빈 배열=전부 해제)
+            middleware_types: form.middlewares,
             // undefined = 템플릿 변경 안 함, 값 = 교체 (기존 soft-delete)
             document_template: buildDocumentTemplateRequest(
               form.documentExtractorDraft,
@@ -201,6 +205,11 @@ const AgentBuilderPage = () => {
           exclude_builtin_tool_ids:
             form.excludedBuiltinTools.length > 0
               ? form.excludedBuiltinTools
+              : undefined,
+          // builtin-middleware D10: 폼에서 수동 해제된 빌트인 미들웨어만 전송
+          exclude_builtin_middleware_types:
+            form.excludedBuiltinMiddlewares.length > 0
+              ? form.excludedBuiltinMiddlewares
               : undefined,
           skill_ids: form.skills.length > 0 ? form.skills : undefined,
           document_template: buildDocumentTemplateRequest(
@@ -281,6 +290,28 @@ const AgentBuilderPage = () => {
         ? prev.excludedBuiltinTools.filter((t) => t !== toolId)
         : [...prev.excludedBuiltinTools, toolId],
     }));
+  };
+
+  // builtin-middleware D10: create=빌트인 opt-out 토글, edit=적용 목록 전체 교체 토글.
+  // Fix 초안 적용은 이 상태를 건드리지 않는다 (excludedBuiltinTools 패턴 대칭).
+  const handleMiddlewareToggle = (middlewareType: string) => {
+    setForm((prev) =>
+      view === 'edit'
+        ? {
+            ...prev,
+            middlewares: prev.middlewares.includes(middlewareType)
+              ? prev.middlewares.filter((t) => t !== middlewareType)
+              : [...prev.middlewares, middlewareType],
+          }
+        : {
+            ...prev,
+            excludedBuiltinMiddlewares: prev.excludedBuiltinMiddlewares.includes(
+              middlewareType,
+            )
+              ? prev.excludedBuiltinMiddlewares.filter((t) => t !== middlewareType)
+              : [...prev.excludedBuiltinMiddlewares, middlewareType],
+          },
+    );
   };
 
   const handleSkillToggle = (skillId: string) => {
@@ -428,6 +459,7 @@ const AgentBuilderPage = () => {
           onSkillToggle={handleSkillToggle}
           onRagConfigChange={handleRagConfigChange}
           onBuiltinToggle={handleBuiltinToggle}
+          onMiddlewareToggle={handleMiddlewareToggle}
           onStagedScheduleAdd={handleStagedScheduleAdd}
           onStagedScheduleRemove={handleStagedScheduleRemove}
           onApplyDraft={handleApplyDraft}

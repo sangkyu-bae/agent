@@ -24,6 +24,8 @@ const form: AgentBuilderFormData = {
   skills: [],
   schedules: [],
   excludedBuiltinTools: [],
+  excludedBuiltinMiddlewares: [],
+  middlewares: [],
 };
 
 const models: LlmModel[] = [

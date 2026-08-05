@@ -47,6 +47,8 @@ export interface AgentDetail {
   tool_ids: string[];
   // agent-skill-toggle: 부착된 스킬 id 목록(edit 폼 프라임용)
   skill_ids?: string[];
+  // builtin-middleware D5: 적용 미들웨어 스냅샷(edit 폼 프라임용)
+  middleware_types?: string[];
   workers: WorkerInfo[];
   flow_hint: string;
   llm_model_id: string;
