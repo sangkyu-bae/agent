@@ -1,5 +1,6 @@
 // wiki-user-facing: 에이전트 지식 브라우저 — 트리·문서 뷰·소유자 전용 UI.
-import { render, screen } from '@testing-library/react';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
@@ -7,6 +8,8 @@ import { delay, http, HttpResponse } from 'msw';
 
 import { server } from '@/__tests__/mocks/server';
 import { createWrapper } from '@/__tests__/mocks/wrapper';
+import { API_ENDPOINTS } from '@/constants/api';
+import { queryClient } from '@/lib/queryClient';
 import { useAuthStore } from '@/store/authStore';
 import AgentKnowledgePage from './index';
 
@@ -220,5 +223,143 @@ describe('AgentKnowledgePage — mutation pending guard', () => {
 
     await user.click(screen.getByText('문서 작성'));
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});
+
+// knowledge-deprecate-visibility: 폐기 성공 시 선택 해제 + 트리 제거
+describe('AgentKnowledgePage — deprecate visibility', () => {
+  // invalidateWiki는 전역 queryClient(@/lib/queryClient)를 무효화하므로,
+  // 재조회 검증은 프로덕션 배선(main.tsx)과 동일하게 전역 클라이언트를 주입한다
+  const renderWithGlobalClient = (agentId = 'agent-1') =>
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={[`/agents/${agentId}/knowledge`]}>
+          <Routes>
+            <Route
+              path="/agents/:agentId/knowledge"
+              element={<AgentKnowledgePage />}
+            />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+  afterEach(() => {
+    // 전역 클라이언트 공유 오염 방지 — 관측자 리패치가 일어나지 않도록
+    // 반드시 언마운트(cleanup) 후에 캐시를 비운다
+    cleanup();
+    queryClient.clear();
+  });
+
+  // 폐기 버튼은 소유자 + source_type='human'에서만 렌더 — 기본 mock(distilled) 오버라이드
+  const humanArticle = (id: string, status = 'approved') => ({
+    id,
+    agent_id: 'agent-1',
+    title: `위키-${id}`,
+    content: '정제된 본문',
+    source_type: 'human',
+    source_refs: ['doc:1'],
+    status,
+    confidence: 0.8,
+    valid_until: null,
+    version: 1,
+    editor_id: null,
+    reviewer_id: null,
+    created_at: '2026-06-30T00:00:00Z',
+    updated_at: '2026-06-30T00:00:00Z',
+    path: '여신/한도',
+  });
+
+  const treeWith = (items: Array<{ id: string; title: string }>) => ({
+    agent_id: 'agent-1',
+    groups: items.length
+      ? [
+          {
+            path: '여신/한도',
+            items: items.map(({ id, title }) => ({
+              id,
+              title,
+              status: 'approved',
+              source_type: 'human',
+              updated_at: '2026-07-18T00:00:00Z',
+            })),
+          },
+        ]
+      : [],
+    total: items.length,
+  });
+
+  /** 폐기 PATCH 성공 시 이후 tree 재조회에서 해당 문서가 빠지는 서버 상태를 모사.
+   *  MSW 런타임 핸들러는 등록 순으로 우선 매칭 — tree를 ':id'보다 먼저 선언한다. */
+  const setupDeprecableServer = () => {
+    loginAsOwner();
+    let deprecated = false;
+    server.use(
+      http.get(`*${API_ENDPOINTS.WIKI_TREE}`, () =>
+        HttpResponse.json(
+          deprecated
+            ? treeWith([])
+            : treeWith([{ id: 'w1', title: '위키-w1' }]),
+        ),
+      ),
+      http.get('*/api/v1/wiki/:id', ({ params }) =>
+        HttpResponse.json(humanArticle(String(params.id))),
+      ),
+      http.patch('*/api/v1/wiki/:id/deprecate', ({ params }) => {
+        deprecated = true;
+        return HttpResponse.json(humanArticle(String(params.id), 'deprecated'));
+      }),
+    );
+  };
+
+  const selectAndDeprecate = async (
+    user: ReturnType<typeof userEvent.setup>,
+  ) => {
+    await user.click(await screen.findByText('위키-w1'));
+    await user.click(await screen.findByRole('button', { name: '폐기' }));
+  };
+
+  it('F1: 폐기 성공 시 본문 패널이 초기 문구로 복귀한다', async () => {
+    setupDeprecableServer();
+    const user = userEvent.setup();
+    renderWithGlobalClient();
+
+    await selectAndDeprecate(user);
+    expect(
+      await screen.findByText('왼쪽 트리에서 문서를 선택하세요.'),
+    ).toBeInTheDocument();
+  });
+
+  it('F2: 폐기 성공 시 트리 재조회에서 항목이 사라진다', async () => {
+    setupDeprecableServer();
+    const user = userEvent.setup();
+    renderWithGlobalClient();
+
+    await selectAndDeprecate(user);
+    await waitFor(() =>
+      expect(screen.queryByText('위키-w1')).not.toBeInTheDocument(),
+    );
+  });
+
+  it('F3: 폐기 실패 시 문서와 선택이 유지된다', async () => {
+    setupDeprecableServer();
+    server.use(
+      http.patch('*/api/v1/wiki/:id/deprecate', () =>
+        HttpResponse.json({ detail: 'boom' }, { status: 500 }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderWithGlobalClient();
+
+    await selectAndDeprecate(user);
+    // 대기 상태 해제 후에도 본문·트리 항목 유지 (onSuccess 미실행)
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '폐기' })).toBeEnabled(),
+    );
+    expect(screen.getByText('정제된 본문')).toBeInTheDocument();
+    // 트리 항목(button)과 본문 제목(h3) 모두 유지 — 트리는 role로 특정
+    expect(
+      screen.getByRole('button', { name: '위키-w1' }),
+    ).toBeInTheDocument();
   });
 });

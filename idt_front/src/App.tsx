@@ -5,7 +5,7 @@ import AdminRoute from '@/components/common/AdminRoute';
 import ChatPage from '@/pages/ChatPage';
 import EvalDatasetPage from '@/pages/EvalDatasetPage';
 import AgentBuilderPage from '@/pages/AgentBuilderPage';
-import ToolConnectionPage from '@/pages/ToolConnectionPage';
+import UtilityPage from '@/pages/UtilityPage';
 import ToolAdminPage from '@/pages/ToolAdminPage';
 import WorkflowDesignerPage from '@/pages/WorkflowDesignerPage';
 import WorkflowBuilderPage from '@/pages/WorkflowBuilderPage';
@@ -26,6 +26,7 @@ import AdminRagasPage from '@/pages/AdminRagasPage';
 import AdminAgentRunsPage from '@/pages/AdminAgentRunsPage';
 import AdminDashboardPage from '@/pages/AdminDashboardPage';
 import AdminToolsPage from '@/pages/AdminToolsPage';
+import AdminMiddlewarePage from '@/pages/AdminMiddlewarePage';
 import WikiPage from '@/pages/WikiPage';
 import AgentKnowledgePage from '@/pages/AgentKnowledgePage';
 import AgentWorkspacePage from '@/pages/AgentWorkspacePage';
@@ -57,7 +58,7 @@ const App = () => (
           <Route path="/documents" element={<Navigate to="/collections" replace />} />
           <Route path="/eval-dataset" element={<EvalDatasetPage />} />
           <Route path="/agent-builder" element={<AgentBuilderPage />} />
-          <Route path="/tool-connection" element={<ToolConnectionPage />} />
+          <Route path="/tool-connection" element={<UtilityPage />} />
           <Route path="/tool-admin" element={<ToolAdminPage />} />
           <Route path="/workflow-designer" element={<WorkflowDesignerPage />} />
           <Route path="/workflow-builder" element={<WorkflowBuilderPage />} />
@@ -86,6 +87,8 @@ const App = () => (
           <Route path="/admin/mcp-servers" element={<AdminMcpServersPage />} />
           {/* builtin-tools D9: 도구 카탈로그 + 빌트인 토글 */}
           <Route path="/admin/tools" element={<AdminToolsPage />} />
+          {/* builtin-middleware D10: 미들웨어 카탈로그 + 빌트인/강제 토글 */}
+          <Route path="/admin/middleware" element={<AdminMiddlewarePage />} />
           <Route path="/admin/llm-models" element={<AdminLlmModelsPage />} />
           <Route path="/admin/chunking-profiles" element={<AdminChunkingProfilesPage />} />
           <Route path="/admin/skills" element={<AdminSkillsPage />} />

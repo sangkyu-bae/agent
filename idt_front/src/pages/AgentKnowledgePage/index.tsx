@@ -284,7 +284,13 @@ const AgentKnowledgePage = () => {
                 <LoadingButton
                   isPending={deprecateMutation.isPending}
                   pendingText="폐기 중…"
-                  onClick={() => deprecateMutation.mutate(article.id)}
+                  // knowledge-deprecate-visibility: 폐기 성공 시 선택 해제 —
+                  // 트리 재조회(전역 invalidate)와 함께 본문 패널을 초기화한다
+                  onClick={() =>
+                    deprecateMutation.mutate(article.id, {
+                      onSuccess: () => setSelectedId(null),
+                    })
+                  }
                   className="rounded border border-red-200 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50"
                 >
                   폐기
