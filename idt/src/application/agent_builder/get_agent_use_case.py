@@ -14,11 +14,14 @@ class GetAgentUseCase:
         dept_repository: DepartmentRepositoryInterface,
         logger: LoggerInterface,
         agent_skill_repo: AgentSkillRepositoryInterface | None = None,
+        agent_middleware_repo=None,
     ) -> None:
         self._repository = repository
         self._dept_repository = dept_repository
         self._logger = logger
         self._agent_skill_repo = agent_skill_repo
+        # builtin-middleware D5: edit 폼 프라임용 스냅샷 조회 (미주입 시 빈 목록)
+        self._agent_middleware_repo = agent_middleware_repo
 
     async def execute(
         self,
@@ -83,6 +86,13 @@ class GetAgentUseCase:
                 )
                 skill_ids = [l.skill_id for l in links]
 
+            middleware_types: list[str] = []
+            if self._agent_middleware_repo is not None:
+                records = await self._agent_middleware_repo.list_by_agent(
+                    agent_id, request_id
+                )
+                middleware_types = [r.middleware_type for r in records]
+
             return GetAgentResponse(
                 agent_id=agent.id,
                 name=agent.name,
@@ -99,6 +109,7 @@ class GetAgentUseCase:
                 department_name=department_name,
                 temperature=agent.temperature,
                 max_iterations=agent.max_iterations,
+                middleware_types=middleware_types,
                 owner_user_id=agent.user_id,
                 can_edit=can_edit,
                 can_delete=can_delete,

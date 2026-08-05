@@ -72,7 +72,7 @@ async def _compile_capturing(compiler, workflow, agent_id):
         return {}
 
     with patch(
-        "src.application.agent_builder.workflow_compiler.create_react_agent",
+        "src.application.agent_builder.workflow_compiler.create_agent",
         MagicMock(side_effect=lambda *a, **k: _noop_node),
     ) as mock_react, patch(
         "src.application.agent_builder.workflow_compiler.create_supervisor_node",
@@ -103,7 +103,7 @@ class TestTocInjected:
         _, mock_react = await _compile_capturing(
             compiler, _workflow(["wiki_read"]), agent_id="agent_1",
         )
-        prompt = mock_react.call_args.kwargs.get("prompt")
+        prompt = mock_react.call_args.kwargs.get("system_prompt")
         assert prompt is not None and TOC_BLOCK in prompt
         assert "wiki_read" in prompt  # 워커 사용 지시 포함
 
@@ -114,7 +114,7 @@ class TestTocInjected:
         _, mock_react = await _compile_capturing(
             compiler, _workflow(["wiki_read", "excel_export"]), agent_id="agent_1",
         )
-        prompts = [c.kwargs.get("prompt") for c in mock_react.call_args_list]
+        prompts = [c.kwargs.get("system_prompt") for c in mock_react.call_args_list]
         assert sum(p is not None for p in prompts) == 1  # wiki_read 워커만
 
 
@@ -143,7 +143,7 @@ class TestFolderMode:
         _, mock_react = await _compile_capturing(
             compiler, _workflow(["wiki_read"]), agent_id="agent_1",
         )
-        prompt = mock_react.call_args.kwargs.get("prompt")
+        prompt = mock_react.call_args.kwargs.get("system_prompt")
         assert prompt is not None and FOLDER_BLOCK in prompt
         assert "wiki_list" in prompt  # 폴더 모드 지시
 
@@ -218,7 +218,7 @@ class TestTocInactive:
             compiler, _workflow(["wiki_read"]), agent_id="agent_1",
         )
         assert sup_prompt == "당신은 AI 에이전트입니다."
-        assert mock_react.call_args.kwargs.get("prompt") is None
+        assert mock_react.call_args.kwargs.get("system_prompt") is None
 
     @pytest.mark.asyncio
     async def test_empty_toc_block_no_injection(self):
@@ -229,4 +229,4 @@ class TestTocInactive:
         )
         provider.render_block.assert_awaited_once()
         assert sup_prompt == "당신은 AI 에이전트입니다."
-        assert mock_react.call_args.kwargs.get("prompt") is None
+        assert mock_react.call_args.kwargs.get("system_prompt") is None

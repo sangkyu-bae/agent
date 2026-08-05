@@ -54,6 +54,7 @@ class CreateAgentUseCase:
         mcp_server_repo=None,
         kb_repo: KnowledgeBaseRepositoryInterface | None = None,
         tool_catalog_repo: "ToolCatalogRepositoryInterface | None" = None,
+        middleware_catalog_repo=None,
     ) -> None:
         self._repository = repository
         self._llm_model_repository = llm_model_repository
@@ -72,6 +73,8 @@ class CreateAgentUseCase:
         self._kb_repo = kb_repo
         # builtin-tools D5: 빌트인 주입용 (미주입 시 주입 생략 — 무회귀)
         self._tool_catalog_repo = tool_catalog_repo
+        # builtin-middleware D5: 빌트인 미들웨어 스냅샷용 (미주입 시 생략 — 무회귀)
+        self._middleware_catalog_repo = middleware_catalog_repo
         self._sub_agent_builder = SubAgentWorkerBuilder(repository, logger)
 
     async def execute(
@@ -159,6 +162,12 @@ class CreateAgentUseCase:
             )
             all_workers = all_workers + builtin_workers
 
+            # Step 2.8 (builtin-middleware D5): 빌트인 미들웨어 스냅샷 —
+            # exclude는 폼 전용 필드(채팅 초안 경로는 미사용 = LLM 우회 불가).
+            middleware_types = await self._build_builtin_middleware(
+                request.exclude_builtin_middleware_types, request_id
+            )
+
             # Step 3: 시스템 프롬프트 필수 (agent-instruction-required)
             # LLM 자동생성 제거 — 지침은 사용자 입력 또는 Fix 에이전트 초안 전담.
             AgentBuilderPolicy.validate_system_prompt(request.system_prompt or "")
@@ -182,6 +191,7 @@ class CreateAgentUseCase:
                 max_iterations=request.max_iterations,
                 created_at=now,
                 updated_at=now,
+                middleware_types=middleware_types,
             )
             saved = await self._repository.save(agent, request_id)
 
@@ -349,6 +359,33 @@ class CreateAgentUseCase:
                 tool_ids=[w.tool_id for w in workers],
             )
         return workers
+
+    async def _build_builtin_middleware(
+        self,
+        exclude_types: list[str] | None,
+        request_id: str,
+    ) -> list[str]:
+        """builtin-middleware D5: 빌트인(is_builtin AND is_active) 타입 스냅샷.
+
+        카탈로그 sort_order 순서를 유지하고, 수동 opt-out(exclude)만 제외한다.
+        config는 저장하지 않는다 — 설정값은 카탈로그 default_config 단일 소스.
+        """
+        if self._middleware_catalog_repo is None:
+            return []
+        entries = await self._middleware_catalog_repo.list_builtin(request_id)
+        exclude = set(exclude_types or [])
+        types = [
+            e.middleware_type.value
+            for e in sorted(entries, key=lambda e: e.sort_order)
+            if e.middleware_type.value not in exclude
+        ]
+        if types:
+            self._logger.info(
+                "Builtin middleware snapshot",
+                request_id=request_id,
+                middleware_types=types,
+            )
+        return types
 
     async def _resolve_builtin_description(
         self, storage_id: str, request_id: str

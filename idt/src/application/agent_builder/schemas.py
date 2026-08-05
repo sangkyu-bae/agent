@@ -82,6 +82,9 @@ class CreateAgentRequest(BaseModel):
     # builtin-tools D5: 빌트인 도구 수동 opt-out (생성 폼 전용 — Fix 채팅 경로는
     # 이 필드를 만들 수 없어 빌트인이 항상 포함된다). 카탈로그/저장 형식 모두 수용.
     exclude_builtin_tool_ids: list[str] | None = None
+    # builtin-middleware D5: 빌트인 미들웨어 수동 opt-out (생성 폼 전용 —
+    # 채팅 초안 경로는 이 필드를 만들 수 없어 빌트인이 항상 스냅샷된다).
+    exclude_builtin_middleware_types: list[str] | None = None
 
 
 class CreateAgentResponse(BaseModel):
@@ -118,6 +121,9 @@ class UpdateAgentRequest(BaseModel):
     document_template: DocumentTemplateRequest | None = None
     # agent-builder-edit-mapping FR-5: None = 모델 변경 안 함
     llm_model_id: str | None = None
+    # builtin-middleware D5: None = 미들웨어 변경 안 함, 값 = 전체 교체
+    # (enforced는 스냅샷과 무관하게 실행 시 병합되므로 여기서 빼도 적용됨)
+    middleware_types: list[str] | None = None
 
 
 class UpdateAgentResponse(BaseModel):
@@ -145,6 +151,8 @@ class GetAgentResponse(BaseModel):
     temperature: float
     # agent-recursion-limit D10: edit 폼 프라임용
     max_iterations: int = 25
+    # builtin-middleware D5: 적용 미들웨어 스냅샷 — edit 폼 프라임용
+    middleware_types: list[str] = []
     owner_user_id: str
     can_edit: bool
     can_delete: bool

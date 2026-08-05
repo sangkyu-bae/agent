@@ -100,7 +100,7 @@ class TestNoWrappingWhenTrackerNone:
         tracker, callback = _make_tracker_and_callback()
 
         with patch(
-            "src.application.agent_builder.workflow_compiler.create_react_agent",
+            "src.application.agent_builder.workflow_compiler.create_agent",
             return_value=AsyncMock(return_value={"messages": []}),
         ):
             # tracker=None이면 callback/run_id 있어도 wrapping 안 함
@@ -132,7 +132,7 @@ class TestSupervisorWrapping:
         compiler._llm_factory.create.return_value = sup_llm  # type: ignore
 
         with patch(
-            "src.application.agent_builder.workflow_compiler.create_react_agent",
+            "src.application.agent_builder.workflow_compiler.create_agent",
             return_value=AsyncMock(return_value={"messages": []}),
         ):
             graph = await compiler.compile(
@@ -185,7 +185,7 @@ class TestWorkerAndQualityGateWrapping:
         worker_agent_mock = MagicMock()
         worker_agent_mock.ainvoke = AsyncMock(return_value={"messages": []})
         with patch(
-            "src.application.agent_builder.workflow_compiler.create_react_agent",
+            "src.application.agent_builder.workflow_compiler.create_agent",
             return_value=worker_agent_mock,
         ):
             graph = await compiler.compile(
@@ -236,7 +236,7 @@ class TestWorkerAndQualityGateWrapping:
         worker_agent_mock = MagicMock()
         worker_agent_mock.ainvoke = AsyncMock(return_value={"messages": []})
         with patch(
-            "src.application.agent_builder.workflow_compiler.create_react_agent",
+            "src.application.agent_builder.workflow_compiler.create_agent",
             return_value=worker_agent_mock,
         ):
             graph = await compiler.compile(
@@ -286,7 +286,7 @@ class TestStepIndexMonotonic:
         worker_agent_mock = MagicMock()
         worker_agent_mock.ainvoke = AsyncMock(return_value={"messages": []})
         with patch(
-            "src.application.agent_builder.workflow_compiler.create_react_agent",
+            "src.application.agent_builder.workflow_compiler.create_agent",
             return_value=worker_agent_mock,
         ):
             graph = await compiler.compile(
@@ -328,7 +328,7 @@ class TestStepIndexMonotonic:
         compiler._llm_factory.create.return_value = sup_llm  # type: ignore
 
         with patch(
-            "src.application.agent_builder.workflow_compiler.create_react_agent",
+            "src.application.agent_builder.workflow_compiler.create_agent",
             return_value=AsyncMock(return_value={"messages": []}),
         ):
             graph = await compiler.compile(

@@ -40,6 +40,7 @@ class UpdateAgentUseCase:
         max_template_slots: int = DEFAULT_MAX_SLOTS,
         kb_repo: KnowledgeBaseRepositoryInterface | None = None,
         llm_model_repo: LlmModelRepositoryInterface | None = None,
+        middleware_catalog_repo=None,
     ) -> None:
         self._repository = repository
         self._perm_repo = perm_repo
@@ -54,6 +55,8 @@ class UpdateAgentUseCase:
         self._max_template_slots = max_template_slots
         # agent-builder-edit-mapping FR-5: llm_model_id 수정 시 존재 검증용
         self._llm_model_repo = llm_model_repo
+        # builtin-middleware D5: middleware_types 수정 시 카탈로그 존재 검증용
+        self._middleware_catalog_repo = middleware_catalog_repo
         self._sub_agent_builder = SubAgentWorkerBuilder(repository, logger)
 
     async def execute(
@@ -98,6 +101,13 @@ class UpdateAgentUseCase:
             if request.llm_model_id is not None:
                 await self._validate_llm_model(request.llm_model_id, request_id)
 
+            # builtin-middleware D5: None = 미변경, 값 = 전체 교체(검증+dedupe)
+            middleware_types = None
+            if request.middleware_types is not None:
+                middleware_types = await self._validate_middleware_types(
+                    request.middleware_types, request_id
+                )
+
             agent.apply_update(
                 system_prompt=request.system_prompt,
                 name=request.name,
@@ -106,6 +116,7 @@ class UpdateAgentUseCase:
                 temperature=request.temperature,
                 max_iterations=request.max_iterations,
                 llm_model_id=request.llm_model_id,
+                middleware_types=middleware_types,
             )
 
             if request.sub_agent_configs is not None:
@@ -146,6 +157,27 @@ class UpdateAgentUseCase:
                 "UpdateAgentUseCase failed", exception=e, request_id=request_id
             )
             raise
+
+    async def _validate_middleware_types(
+        self, middleware_types: list[str], request_id: str
+    ) -> list[str]:
+        """카탈로그 존재 검증 + 순서 보존 dedupe (비활성은 허용 — 실행 병합이 방어).
+
+        builtin-middleware D5: 미지 타입은 ValueError(400).
+        """
+        if self._middleware_catalog_repo is None:
+            raise ValueError(
+                "middleware_types 수정에는 middleware_catalog_repo 주입이 필요합니다"
+            )
+        catalog = await self._middleware_catalog_repo.list_all(request_id)
+        known = {e.middleware_type.value for e in catalog}
+        deduped: list[str] = []
+        for t in middleware_types:
+            if t not in known:
+                raise ValueError(f"알 수 없는 미들웨어 타입입니다: {t}")
+            if t not in deduped:
+                deduped.append(t)
+        return deduped
 
     async def _validate_llm_model(
         self, llm_model_id: str, request_id: str

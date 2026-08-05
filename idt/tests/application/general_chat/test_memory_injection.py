@@ -59,30 +59,30 @@ class TestCreateAgentPrompt:
         uc = _make_uc()
         ctx = _auth_ctx()
         with patch(
-            "src.application.general_chat.use_case.create_react_agent"
+            "src.application.general_chat.use_case.create_agent"
         ) as mock_create:
             uc._create_agent(tools=[], auth_ctx=ctx, memory_block=_MEMORY_BLOCK)
 
-        prompt = mock_create.call_args.kwargs["prompt"]
+        prompt = mock_create.call_args.kwargs["system_prompt"]
         assert prompt == render_user_context_block(ctx) + _MEMORY_BLOCK + _SYSTEM_PROMPT
 
     def test_블록_미전달이면_기존_프롬프트_불변(self):
         uc = _make_uc()
         with patch(
-            "src.application.general_chat.use_case.create_react_agent"
+            "src.application.general_chat.use_case.create_agent"
         ) as mock_create:
             uc._create_agent(tools=[])
 
-        assert mock_create.call_args.kwargs["prompt"] == _SYSTEM_PROMPT
+        assert mock_create.call_args.kwargs["system_prompt"] == _SYSTEM_PROMPT
 
     def test_auth_ctx_없이_블록만_전달(self):
         uc = _make_uc()
         with patch(
-            "src.application.general_chat.use_case.create_react_agent"
+            "src.application.general_chat.use_case.create_agent"
         ) as mock_create:
             uc._create_agent(tools=[], memory_block=_MEMORY_BLOCK)
 
-        assert mock_create.call_args.kwargs["prompt"] == _MEMORY_BLOCK + _SYSTEM_PROMPT
+        assert mock_create.call_args.kwargs["system_prompt"] == _MEMORY_BLOCK + _SYSTEM_PROMPT
 
 
 def _wire_stream_agent(uc: GeneralChatUseCase):
@@ -98,7 +98,7 @@ def _wire_stream_agent(uc: GeneralChatUseCase):
 
     mock_agent.astream_events = _fake_astream_events
 
-    def _fake_create_agent(tools, auth_ctx=None, memory_block=""):
+    def _fake_create_agent(tools, auth_ctx=None, memory_block="", middlewares=None):
         captured["memory_block"] = memory_block
         return mock_agent
 

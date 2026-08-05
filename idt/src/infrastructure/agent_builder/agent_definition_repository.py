@@ -2,7 +2,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -10,6 +10,7 @@ from src.domain.agent_builder.interfaces import AgentDefinitionRepositoryInterfa
 from src.domain.agent_builder.schemas import AgentDefinition, WorkerDefinition
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.infrastructure.agent_builder.models import AgentDefinitionModel, AgentToolModel
+from src.infrastructure.middleware.models import AgentMiddlewareModel
 from src.infrastructure.agent_builder.subscription_model import UserAgentSubscriptionModel
 
 
@@ -58,6 +59,9 @@ class AgentDefinitionRepository(AgentDefinitionRepositoryInterface):
                 ],
             )
             self._session.add(model)
+            # builtin-middleware D5: 미들웨어 스냅샷 동승 (동일 세션·단일 flush —
+            # FK 삽입 순서는 SQLAlchemy 의존성 정렬이 보장)
+            self._insert_middleware_rows(agent.id, agent.middleware_types or [])
             await self._session.flush()
             self._logger.info(
                 "AgentDefinition save done", request_id=request_id, agent_id=agent.id
@@ -114,6 +118,9 @@ class AgentDefinitionRepository(AgentDefinitionRepositoryInterface):
             model.llm_model_id = agent.llm_model_id
             model.updated_at = datetime.now(timezone.utc)
             await self._sync_workers(model, agent.workers)
+            # builtin-middleware D5: None = 미변경 (미로드 상태에서 스냅샷 소실 방지)
+            if agent.middleware_types is not None:
+                await self._sync_middleware(agent.id, agent.middleware_types)
             await self._session.flush()
             self._logger.info(
                 "AgentDefinition update done", request_id=request_id, agent_id=agent.id
@@ -150,6 +157,34 @@ class AgentDefinitionRepository(AgentDefinitionRepositoryInterface):
                     category=w.category,
                 )
             )
+
+    def _insert_middleware_rows(
+        self, agent_id: str, middleware_types: list[str]
+    ) -> None:
+        """스냅샷 행 생성 — 순서는 전달 리스트 순서(카탈로그 sort_order 반영)."""
+        for i, mw_type in enumerate(middleware_types):
+            self._session.add(
+                AgentMiddlewareModel(
+                    id=str(uuid.uuid4()),
+                    agent_id=agent_id,
+                    middleware_type=mw_type,
+                    config=None,
+                    sort_order=i,
+                    created_at=datetime.now(timezone.utc),
+                )
+            )
+
+    async def _sync_middleware(
+        self, agent_id: str, middleware_types: list[str]
+    ) -> None:
+        """builtin-middleware D5: 전체 교체 (delete 후 재삽입 — _sync_workers 대칭)."""
+        await self._session.execute(
+            delete(AgentMiddlewareModel).where(
+                AgentMiddlewareModel.agent_id == agent_id
+            )
+        )
+        await self._session.flush()
+        self._insert_middleware_rows(agent_id, middleware_types)
 
     async def list_by_user(
         self, user_id: str, request_id: str

@@ -9,6 +9,8 @@ dependencies = [
     "pydantic[email]>=2.5.0",
     "pydantic-settings>=2.1.0",
     # LangChain / LangGraph
+    # builtin-middleware S1: create_agent + 빌트인 미들웨어 (v1 필수)
+    "langchain>=1.0",
     "langchain-core>=0.3.0",
     "langchain-openai>=0.3.0",
     "langchain-community>=0.3.0",
