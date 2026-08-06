@@ -3566,6 +3566,7 @@ def create_agent_composer_factories():
     from src.application.agent_composer.compose_agent_use_case import (
         ComposeAgentUseCase,
     )
+    from src.application.agent_composer.planner import AgentPlanner
     from src.infrastructure.llm_model.llm_model_repository import (
         LlmModelRepository,
     )
@@ -3582,10 +3583,17 @@ def create_agent_composer_factories():
         logger=app_logger,
         max_candidates=settings.composer_max_candidates,
     )
+    # fix-agent-planner-hitl D6: Planner는 Composer와 동일 LLM 인스턴스 재사용
+    planner = AgentPlanner(
+        llm=llm,
+        logger=app_logger,
+        max_candidates=settings.composer_max_candidates,
+    )
 
     def compose_factory(session: AsyncSession = Depends(get_session)):
         return ComposeAgentUseCase(
             composer=composer,
+            planner=planner,
             tool_catalog_repo=ToolCatalogRepository(
                 session=session, logger=app_logger
             ),

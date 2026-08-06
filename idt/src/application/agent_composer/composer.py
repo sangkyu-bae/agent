@@ -9,11 +9,35 @@ from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
 from src.application.agent_composer.schemas import ComposeCurrentConfig
-from src.domain.agent_composer.schemas import CandidateTool
+from src.domain.agent_composer.schemas import BuildPlan, CandidateTool
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.infrastructure.langsmith.langsmith import make_composer_tracer
 
 _RUN_NAME_PREVIEW_LEN = 30
+
+
+def build_candidates_block(
+    candidates: list[CandidateTool],
+    max_candidates: int,
+    logger: LoggerInterface,
+    request_id: str,
+) -> str:
+    """후보 도구를 프롬프트 라인으로 변환. 상한 초과분은 절단 + 경고 로그.
+
+    fix-agent-planner-hitl: AgentComposer/AgentPlanner가 동일 포맷을 공유한다.
+    """
+    selected = candidates[:max_candidates]
+    if len(candidates) > max_candidates:
+        logger.warning(
+            "Composer candidates truncated",
+            request_id=request_id,
+            total=len(candidates),
+            max_candidates=max_candidates,
+        )
+    return "\n".join(
+        f"- {c.tool_id} ({c.source}): {c.name} — {c.description}"
+        for c in selected
+    )
 
 
 class _CapabilityOutput(BaseModel):
@@ -94,6 +118,18 @@ class AgentComposer:
 - system_prompt는 기존 내용을 바탕으로 요청된 변경만 반영해 다시 작성하세요.
 """
 
+    # fix-agent-planner-hitl: Planner 계획 블록 (plan 있을 때만 부착)
+    _PLAN_BLOCK = """
+[빌드 계획]
+- 요구 요약: {requirement_summary}
+{tool_hint_lines}
+- 계획: {plan_summary}
+
+[계획 준수 규칙]
+- 위 계획을 따르되, 후보 목록에 없는 도구는 여전히 사용 금지입니다.
+- 계획과 사용자의 명시적 최신 요청이 충돌하면 사용자 요청이 우선입니다.
+"""
+
     def __init__(
         self,
         llm: ChatOpenAI,
@@ -111,11 +147,13 @@ class AgentComposer:
         request_id: str,
         current_config: ComposeCurrentConfig | None = None,
         history: list[dict] | None = None,
+        plan: BuildPlan | None = None,
     ) -> _ComposeOutput:
-        """자연어 요청 + 후보 도구 (+ 현재 설정/이전 대화) → 초안 structured output.
+        """자연어 요청 + 후보 도구 (+ 현재 설정/이전 대화/빌드 계획) → 초안.
 
         history는 호출부(use case)가 ComposePolicy.clamp_history로 절단한
-        {role, content} dict 목록이다.
+        {role, content} dict 목록이다. plan은 Planner가 확정한 빌드 계획으로,
+        None이면 기존 단발 compose와 완전히 동일하게 동작한다.
         """
         self._logger.info(
             "AgentComposer start",
@@ -123,12 +161,15 @@ class AgentComposer:
             candidate_count=len(candidates),
             has_current_config=current_config is not None,
             history_turns=len(history) if history else 0,
+            has_plan=plan is not None,
         )
         try:
             block = self._build_candidates_block(candidates, request_id)
             system = self._SYSTEM_PROMPT.format(candidates_block=block)
             if current_config is not None:
                 system += self._build_current_config_block(current_config)
+            if plan is not None:
+                system += self._build_plan_block(plan)
             messages: list[dict] = [{"role": "system", "content": system}]
             messages += history or []
             messages.append({"role": "user", "content": user_request})
@@ -191,16 +232,21 @@ class AgentComposer:
     def _build_candidates_block(
         self, candidates: list[CandidateTool], request_id: str
     ) -> str:
-        """후보 도구를 프롬프트 라인으로 변환. 상한 초과분은 절단 + 경고 로그."""
-        selected = candidates[: self._max_candidates]
-        if len(candidates) > self._max_candidates:
-            self._logger.warning(
-                "AgentComposer candidates truncated",
-                request_id=request_id,
-                total=len(candidates),
-                max_candidates=self._max_candidates,
-            )
-        return "\n".join(
-            f"- {c.tool_id} ({c.source}): {c.name} — {c.description}"
-            for c in selected
+        """후보 도구 블록 — 공용 build_candidates_block에 위임."""
+        return build_candidates_block(
+            candidates, self._max_candidates, self._logger, request_id
+        )
+
+    def _build_plan_block(self, plan: BuildPlan) -> str:
+        """Planner 빌드 계획을 프롬프트 블록으로 변환 (fix-agent-planner-hitl)."""
+        hint_lines = "\n".join(
+            f"- 역량→도구 방향: {h.capability}: "
+            f"{', '.join(h.suggested_tool_ids) or '(제안 없음)'}"
+            + (f" ({h.note})" if h.note else "")
+            for h in plan.tool_hints
+        )
+        return self._PLAN_BLOCK.format(
+            requirement_summary=plan.requirement_summary,
+            tool_hint_lines=hint_lines,
+            plan_summary=plan.plan_summary,
         )

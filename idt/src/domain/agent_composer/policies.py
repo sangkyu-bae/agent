@@ -60,3 +60,33 @@ class ComposePolicy:
         if missing:
             return "partial"
         return "full"
+
+
+class PlannerPolicy:
+    """Planner HITL 질문 판정 규칙 (fix-agent-planner-hitl).
+
+    클라이언트가 신고하는 라운드 값은 신뢰하지 않고 서버가 clamp한다.
+    """
+
+    CONFIDENCE_THRESHOLD: float = 0.8
+    MAX_CLARIFICATION_ROUNDS: int = 2
+    MAX_QUESTIONS_PER_ROUND: int = 3
+
+    @classmethod
+    def clamp_round(cls, round_: int) -> int:
+        """클라이언트 신고 라운드를 0..MAX 범위로 clamp (음수·과대값 방어)."""
+        return max(0, min(round_, cls.MAX_CLARIFICATION_ROUNDS))
+
+    @classmethod
+    def should_ask(cls, confidence: float, question_count: int, round_: int) -> bool:
+        """질문 있음 AND confidence < 임계값 AND 라운드 여유 → 질문 반환."""
+        return (
+            question_count > 0
+            and confidence < cls.CONFIDENCE_THRESHOLD
+            and round_ < cls.MAX_CLARIFICATION_ROUNDS
+        )
+
+    @classmethod
+    def clamp_questions(cls, questions: list) -> list:
+        """상위 MAX_QUESTIONS_PER_ROUND개만 유지."""
+        return questions[: cls.MAX_QUESTIONS_PER_ROUND]

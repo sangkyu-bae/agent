@@ -61,6 +61,16 @@ const ComposeDraftCard = ({
         </span>
       </div>
 
+      {/* fix-agent-planner-hitl: Planner 계획 요약 — 초안의 판단 근거 노출 */}
+      {draft.plan_summary && (
+        <div className="mt-2 rounded-lg border-l-2 border-violet-400 bg-violet-50/60 px-3 py-2">
+          <p className="text-[11px] font-semibold text-violet-500">빌드 계획</p>
+          <p className="mt-0.5 text-[12.5px] leading-relaxed text-zinc-700">
+            {draft.plan_summary}
+          </p>
+        </div>
+      )}
+
       {isNone ? (
         <p className="mt-2 text-[13px] text-zinc-500">
           현재 등록된 도구로는 요청을 수행할 수 없습니다.
