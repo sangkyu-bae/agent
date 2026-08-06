@@ -399,7 +399,13 @@
       "PowerShell(.venv\\\\Scripts\\\\python.exe -m pytest tests/infrastructure/middleware/test_repository.py -q --no-header 2>$null | Select-Object -Last 3)",
       "PowerShell(.venv\\\\Scripts\\\\python.exe -m pytest tests/application/middleware/test_call_limit_scenario.py -q --no-header 2>$null | Select-Object -Last 3)",
       "PowerShell(.venv\\\\Scripts\\\\python.exe -m pytest tests/application/middleware tests/infrastructure/middleware tests/domain/middleware -q --no-header 2>$null | Select-Object -Last 3)",
-      "PowerShell(.venv\\\\Scripts\\\\python.exe -m pytest tests/api/test_middleware_catalog_router.py tests/application/agent_builder/test_workflow_compiler_middleware.py tests/application/agent_builder/test_create_agent_equivalence.py tests/application/general_chat/test_middleware_wiring.py -q --no-header 2>$null | Select-Object -Last 3)"
+      "PowerShell(.venv\\\\Scripts\\\\python.exe -m pytest tests/api/test_middleware_catalog_router.py tests/application/agent_builder/test_workflow_compiler_middleware.py tests/application/agent_builder/test_create_agent_equivalence.py tests/application/general_chat/test_middleware_wiring.py -q --no-header 2>$null | Select-Object -Last 3)",
+      "Bash(./venv/Scripts/python.exe -m pytest tests/domain/agent_composer/ tests/application/agent_composer/ -q)",
+      "Bash(./.venv/Scripts/python.exe -m pytest tests/domain/agent_composer/ tests/application/agent_composer/ -q)",
+      "Bash(./.venv/Scripts/python.exe -m py_compile src/api/main.py src/application/agent_composer/planner.py src/application/agent_composer/interfaces.py)",
+      "Bash(echo \"TSC_EXIT=$?\")",
+      "Bash(./.venv/Scripts/python.exe -m pytest tests/api/test_agent_composer_router.py -q)",
+      "Bash(./.venv/Scripts/python.exe -m pytest tests/domain/agent_composer/ tests/application/agent_composer/ tests/api/test_agent_composer_router.py -q)"
     ]
   }
 }
