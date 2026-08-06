@@ -10,7 +10,11 @@ from src.application.agent_composer.composer import (
     _WorkerOutput,
 )
 from src.application.agent_composer.schemas import ComposeCurrentConfig
-from src.domain.agent_composer.schemas import CandidateTool
+from src.domain.agent_composer.schemas import (
+    BuildPlan,
+    CandidateTool,
+    ToolDirectionHint,
+)
 
 
 def _make_output() -> _ComposeOutput:
@@ -185,6 +189,48 @@ class TestAgentComposerToolInstructions:
         mock_llm.ainvoke = AsyncMock(return_value=output)
         result = await composer.compose("검색 에이전트", _candidates(), "req-1")
         assert result.workers[0].instruction == "최신 정보 질문에만 사용."
+
+
+class TestAgentComposerPlanInjection:
+    """fix-agent-planner-hitl G7: 빌드 계획 블록 부착 검증 (설계 §2.7)."""
+
+    def _plan(self) -> BuildPlan:
+        return BuildPlan(
+            requirement_summary="여신 규정 질의응답 요구",
+            tool_hints=[
+                ToolDirectionHint(
+                    capability="내부 문서 검색",
+                    suggested_tool_ids=["tavily_search"],
+                    note="규정 범위",
+                )
+            ],
+            plan_summary="검색 도구 하나로 구성한다.",
+            confidence=0.9,
+        )
+
+    @pytest.mark.asyncio
+    async def test_plan_block_injected_into_system_prompt(self):
+        composer, mock_llm, _ = _make_composer()
+        await composer.compose(
+            "규정 봇 만들어줘", _candidates(), "req-1", plan=self._plan()
+        )
+        messages = mock_llm.ainvoke.call_args[0][0]
+        system_msg = next(m for m in messages if m["role"] == "system")
+        assert "[빌드 계획]" in system_msg["content"]
+        assert "[계획 준수 규칙]" in system_msg["content"]
+        assert "여신 규정 질의응답 요구" in system_msg["content"]
+        assert "검색 도구 하나로 구성한다." in system_msg["content"]
+        assert "내부 문서 검색: tavily_search (규정 범위)" in system_msg["content"]
+
+    @pytest.mark.asyncio
+    async def test_without_plan_no_block(self):
+        """plan=None이면 기존 단발 compose와 완전히 동일 (블록 미부착)."""
+        composer, mock_llm, _ = _make_composer()
+        await composer.compose("규정 봇 만들어줘", _candidates(), "req-1")
+        messages = mock_llm.ainvoke.call_args[0][0]
+        system_msg = next(m for m in messages if m["role"] == "system")
+        assert "[빌드 계획]" not in system_msg["content"]
+        assert "[계획 준수 규칙]" not in system_msg["content"]
 
 
 class TestAgentComposerTracing:

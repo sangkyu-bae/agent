@@ -5,7 +5,9 @@ AgentComposer LLM 1회 → 서버 측 보정(drop/매핑/clamp, D7) → 초안 �
 DB 쓰기 없음 — 저장은 기존 POST /agents(tool_ids 명시)로 수행된다.
 """
 from src.application.agent_composer.composer import AgentComposer, _ComposeOutput
+from src.application.agent_composer.interfaces import PlannerInterface, PlanResult
 from src.application.agent_composer.schemas import (
+    ClarifyingQuestionDto,
     ComposeAgentDraftResponse,
     ComposeAgentRequest,
     MissingCapabilityDto,
@@ -14,9 +16,10 @@ from src.application.agent_builder.schemas import WorkerInfo
 from src.domain.agent_builder.policies import AgentBuilderPolicy
 from src.domain.agent_builder.schemas import WorkerDefinition
 from src.domain.agent_builder.tool_registry import get_all_tools
-from src.domain.agent_composer.policies import ComposePolicy
+from src.domain.agent_composer.policies import ComposePolicy, PlannerPolicy
 from src.domain.agent_composer.schemas import (
     CandidateTool,
+    ClarificationAnswer,
     ComposedDraft,
     MissingCapability,
 )
@@ -36,8 +39,11 @@ class ComposeAgentUseCase:
         mcp_server_repo: MCPServerRegistryRepositoryInterface,
         llm_model_repository: LlmModelRepositoryInterface,
         logger: LoggerInterface,
+        planner: PlannerInterface | None = None,
     ) -> None:
+        # fix-agent-planner-hitl: planner 미주입 시 기존 단발 compose와 동일 동작
         self._composer = composer
+        self._planner = planner
         self._tool_catalog_repo = tool_catalog_repo
         self._mcp_server_repo = mcp_server_repo
         self._llm_model_repository = llm_model_repository
@@ -57,12 +63,23 @@ class ComposeAgentUseCase:
                 if request.history
                 else None
             )
+            round_ = PlannerPolicy.clamp_round(request.clarification_round)
+            plan_result = await self._try_plan(
+                request, candidates, history, request_id, round_
+            )
+            clarification = self._maybe_clarification(
+                round_, plan_result, request, llm_model_id, request_id
+            )
+            if clarification is not None:
+                return clarification
+            plan = plan_result.plan if plan_result else None
             output = await self._composer.compose(
                 request.user_request,
                 candidates,
                 request_id,
                 current_config=request.current_config,
                 history=history,
+                plan=plan,
             )
             draft = self._assemble_draft(
                 output, candidates, fallback_note, request_id
@@ -73,12 +90,93 @@ class ComposeAgentUseCase:
                 coverage=draft.coverage,
                 worker_count=len(draft.workers),
             )
-            return self._to_response(request, draft, llm_model_id)
+            return self._to_response(
+                request, draft, llm_model_id,
+                plan_summary=plan.plan_summary if plan else "",
+            )
         except Exception as e:
             self._logger.error(
                 "ComposeAgentUseCase failed", exception=e, request_id=request_id
             )
             raise
+
+    # ── Planner 오케스트레이션 (fix-agent-planner-hitl) ───────────
+
+    async def _try_plan(
+        self,
+        request: ComposeAgentRequest,
+        candidates: list[CandidateTool],
+        history: list[dict] | None,
+        request_id: str,
+        round_: int,
+    ) -> PlanResult | None:
+        """Planner 호출. 미주입/실패 시 None — 기존 단발 compose로 폴백 (FR-08)."""
+        if self._planner is None:
+            return None
+        answers = [
+            ClarificationAnswer(
+                question_id=a.question_id, question=a.question, answer=a.answer
+            )
+            for a in request.clarification_answers or []
+        ]
+        try:
+            return await self._planner.plan(
+                request.user_request,
+                candidates,
+                request_id,
+                current_config=request.current_config,
+                history=history,
+                answers=answers or None,
+                round_=round_,
+            )
+        except Exception as e:
+            self._logger.warning(
+                "AgentPlanner failed — fallback to direct compose",
+                request_id=request_id,
+                exception=e,
+            )
+            return None
+
+    def _maybe_clarification(
+        self,
+        round_: int,
+        plan_result: PlanResult | None,
+        request: ComposeAgentRequest,
+        llm_model_id: str,
+        request_id: str,
+    ) -> ComposeAgentDraftResponse | None:
+        """질문 필요 판정 → needs_clarification 응답 또는 None(진행)."""
+        if plan_result is None:
+            return None
+        questions = PlannerPolicy.clamp_questions(plan_result.questions)
+        if not PlannerPolicy.should_ask(
+            plan_result.plan.confidence, len(questions), round_
+        ):
+            return None
+        self._logger.info(
+            "ComposeAgentUseCase needs_clarification",
+            request_id=request_id,
+            round=round_,
+            question_count=len(questions),
+            confidence=plan_result.plan.confidence,
+        )
+        return ComposeAgentDraftResponse(
+            status="needs_clarification",
+            questions=[
+                ClarifyingQuestionDto(
+                    id=f"q{round_}-{i + 1}",
+                    question=q.question,
+                    options=q.options,
+                    allow_free_text=q.allow_free_text,
+                )
+                for i, q in enumerate(questions)
+            ],
+            plan_summary=plan_result.plan.plan_summary,
+            coverage="none",
+            name_suggestion=request.name or "",
+            llm_model_id=llm_model_id,
+            notes="추가 정보가 필요합니다.",
+        )
 
     # ── 후보 수집 (D6 + D2 폴백) ──────────────────────────────────
 
@@ -276,6 +374,7 @@ class ComposeAgentUseCase:
         request: ComposeAgentRequest,
         draft: ComposedDraft,
         llm_model_id: str,
+        plan_summary: str = "",
     ) -> ComposeAgentDraftResponse:
         missing = [
             MissingCapabilityDto(
@@ -291,10 +390,12 @@ class ComposeAgentUseCase:
                 llm_model_id=llm_model_id,
                 missing_capabilities=missing,
                 notes=draft.notes,
+                plan_summary=plan_summary,
             )
         return ComposeAgentDraftResponse(
             coverage=draft.coverage,
             name_suggestion=name,
+            plan_summary=plan_summary,
             system_prompt=draft.system_prompt,
             tool_ids=[w.tool_id for w in draft.workers],
             workers=[

@@ -30,6 +30,51 @@ class MissingCapability:
 
 
 @dataclass(frozen=True)
+class ToolDirectionHint:
+    """계획의 역량→도구 방향 힌트 (fix-agent-planner-hitl D5).
+
+    확정 선택이 아니다 — 최종 도구 결정·검증은 Composer와 서버 보정이 수행한다.
+    """
+
+    capability: str
+    suggested_tool_ids: list[str]
+    note: str = ""
+
+
+@dataclass(frozen=True)
+class ClarifyingQuestion:
+    """HITL 구조화 질문. options가 비면 자유 입력 전용."""
+
+    id: str
+    question: str
+    options: list[str]
+    allow_free_text: bool = True
+
+
+@dataclass(frozen=True)
+class ClarificationAnswer:
+    """사용자 답변. answer==""는 무응답(부분 답변 허용).
+
+    question 텍스트는 stateless 재구성용 에코백이다(D8) — 서버 세션이 없으므로
+    요청만으로 이전 Q/A 맥락을 복원한다.
+    """
+
+    question_id: str
+    question: str
+    answer: str = ""
+
+
+@dataclass(frozen=True)
+class BuildPlan:
+    """Planner 산출 빌드 계획 — Composer 프롬프트 주입 단위."""
+
+    requirement_summary: str
+    tool_hints: list[ToolDirectionHint]
+    plan_summary: str
+    confidence: float
+
+
+@dataclass(frozen=True)
 class ComposedDraft:
     """초안 조립 결과 — 응답 조립의 입력."""
 
