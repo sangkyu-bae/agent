@@ -15,12 +15,33 @@ export interface ComposeHistoryTurn {
   content: string;
 }
 
+/** fix-agent-planner-hitl: HITL 질문 답변. answer===''는 무응답(부분 답변 허용).
+ * question 텍스트는 stateless 재구성용 에코백(D8). */
+export interface ClarificationAnswer {
+  question_id: string;
+  question: string;
+  answer: string;
+}
+
+/** fix-agent-planner-hitl: 구조화 질문 — 선택지+자유 입력 허용 플래그. */
+export interface ClarifyingQuestion {
+  id: string;
+  question: string;
+  options: string[];
+  allow_free_text: boolean;
+}
+
+export type ComposeStatus = 'draft' | 'needs_clarification';
+
 export interface ComposeAgentRequest {
   user_request: string;
   name?: string | null;
   llm_model_id?: string | null;
   current_config?: ComposeCurrentConfig | null;
   history?: ComposeHistoryTurn[] | null;
+  /** fix-agent-planner-hitl: HITL 왕복 (미전송 시 기존 동작과 동일) */
+  clarification_answers?: ClarificationAnswer[] | null;
+  clarification_round?: number;
 }
 
 export interface ComposeMissingCapability {
@@ -45,6 +66,12 @@ export interface ComposeWorkerInfo {
 export type ComposeCoverage = 'full' | 'partial' | 'none';
 
 export interface ComposeAgentDraftResponse {
+  /** fix-agent-planner-hitl: 미수신(구 응답) 시 'draft'로 간주 */
+  status?: ComposeStatus;
+  /** status==='needs_clarification'일 때만 채워짐 */
+  questions?: ClarifyingQuestion[];
+  /** Planner 계획 요약 — 초안 카드 "빌드 계획" 섹션에 표시 */
+  plan_summary?: string;
   coverage: ComposeCoverage;
   name_suggestion: string;
   system_prompt: string;
@@ -65,4 +92,8 @@ export interface FixChatMessage {
   draft?: ComposeAgentDraftResponse;
   isError?: boolean;
   applied?: boolean;
+  /** fix-agent-planner-hitl: HITL 질문 카드 메시지 */
+  questions?: ClarifyingQuestion[];
+  planSummary?: string;
+  answered?: boolean;
 }

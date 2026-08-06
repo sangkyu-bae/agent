@@ -3,10 +3,12 @@ import { useComposeAgent } from '@/hooks/useAgentComposer';
 import type { AgentBuilderFormData } from '@/types/agentBuilder';
 import type { LlmModel } from '@/types/llmModel';
 import type {
+  ClarificationAnswer,
   ComposeAgentDraftResponse,
   ComposeHistoryTurn,
   FixChatMessage,
 } from '@/types/agentComposer';
+import ClarifyQuestionCard from './ClarifyQuestionCard';
 import ComposeDraftCard from './ComposeDraftCard';
 
 interface FixAgentPanelProps {
@@ -42,6 +44,11 @@ const summarizeDraft = (m: FixChatMessage): string => {
 const FixAgentPanel = ({ mode, form, models, onApplyDraft }: FixAgentPanelProps) => {
   const [messages, setMessages] = useState<FixChatMessage[]>([]);
   const [input, setInput] = useState('');
+  // fix-agent-planner-hitl: 진행 중 HITL 왕복 (원 요청 문장 + 다음 라운드 번호)
+  const [pendingClarify, setPendingClarify] = useState<{
+    userRequest: string;
+    round: number;
+  } | null>(null);
   const composeMutation = useComposeAgent();
   const isPending = composeMutation.isPending;
 
@@ -54,20 +61,15 @@ const FixAgentPanel = ({ mode, form, models, onApplyDraft }: FixAgentPanelProps)
       }))
       .slice(-MAX_HISTORY_TURNS);
 
-  const handleSend = () => {
-    const text = input.trim().slice(0, MAX_USER_REQUEST_CHARS);
-    if (!text || isPending) return;
-
+  /** compose 호출 공통 경로 — clarify가 있으면 HITL 답변 재호출(stateless). */
+  const sendCompose = (
+    userRequest: string,
+    clarify?: { answers: ClarificationAnswer[]; round: number },
+  ) => {
     const history = buildHistory();
-    setMessages((prev) => [
-      ...prev,
-      { id: crypto.randomUUID(), role: 'user', content: text },
-    ]);
-    setInput('');
-
     composeMutation.mutate(
       {
-        user_request: text,
+        user_request: userRequest,
         name: form.name || null,
         current_config: {
           name: form.name || null,
@@ -78,9 +80,33 @@ const FixAgentPanel = ({ mode, form, models, onApplyDraft }: FixAgentPanelProps)
           temperature: form.temperature,
         },
         history: history.length > 0 ? history : null,
+        ...(clarify
+          ? {
+              clarification_answers: clarify.answers,
+              clarification_round: clarify.round,
+            }
+          : {}),
       },
       {
         onSuccess: (draft) => {
+          if (draft.status === 'needs_clarification') {
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: crypto.randomUUID(),
+                role: 'assistant',
+                content: '더 정확한 초안을 위해 확인이 필요합니다.',
+                questions: draft.questions ?? [],
+                planSummary: draft.plan_summary,
+              },
+            ]);
+            setPendingClarify({
+              userRequest,
+              round: (clarify?.round ?? 0) + 1,
+            });
+            return;
+          }
+          setPendingClarify(null);
           setMessages((prev) => [
             ...prev,
             {
@@ -106,9 +132,41 @@ const FixAgentPanel = ({ mode, form, models, onApplyDraft }: FixAgentPanelProps)
     );
   };
 
+  const handleSend = () => {
+    const text = input.trim().slice(0, MAX_USER_REQUEST_CHARS);
+    if (!text || isPending) return;
+
+    // 질문 카드를 건너뛰고 새 문장을 치면 새 요청으로 취급 (HITL 왕복 폐기)
+    setPendingClarify(null);
+    setMessages((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), role: 'user', content: text },
+    ]);
+    setInput('');
+    sendCompose(text);
+  };
+
+  /** 질문 카드 답변 제출 — 원 요청+구조화 답변으로 같은 엔드포인트 재호출. */
+  const handleAnswerSubmit = (
+    messageId: string,
+    answers: ClarificationAnswer[],
+  ) => {
+    if (!pendingClarify || isPending) return;
+    const summary = answers.map((a) => a.answer || '무응답').join(' / ');
+    setMessages((prev) => [
+      ...prev.map((m) => (m.id === messageId ? { ...m, answered: true } : m)),
+      { id: crypto.randomUUID(), role: 'user' as const, content: `답변: ${summary}` },
+    ]);
+    sendCompose(pendingClarify.userRequest, {
+      answers,
+      round: pendingClarify.round,
+    });
+  };
+
   const handleNewChat = () => {
     setMessages([]);
     setInput('');
+    setPendingClarify(null);
   };
 
   const handleApply = (messageId: string, draft: ComposeAgentDraftResponse) => {
@@ -183,6 +241,15 @@ const FixAgentPanel = ({ mode, form, models, onApplyDraft }: FixAgentPanelProps)
                     !!models && !models.some((mm) => mm.id === m.draft!.llm_model_id)
                   }
                   onApply={() => handleApply(m.id, m.draft!)}
+                />
+              ) : m.questions ? (
+                <ClarifyQuestionCard
+                  key={m.id}
+                  questions={m.questions}
+                  planSummary={m.planSummary}
+                  answered={!!m.answered}
+                  isPending={isPending}
+                  onSubmit={(answers) => handleAnswerSubmit(m.id, answers)}
                 />
               ) : (
                 <div

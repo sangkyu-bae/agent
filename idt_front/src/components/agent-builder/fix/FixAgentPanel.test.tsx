@@ -176,3 +176,132 @@ describe('FixAgentPanel (fix-agent-composer F3~F6)', () => {
     expect(screen.getByRole('textbox')).not.toBeDisabled(); // 재시도 가능
   });
 });
+
+describe('FixAgentPanel HITL (fix-agent-planner-hitl)', () => {
+  const clarificationResponse = {
+    status: 'needs_clarification',
+    questions: [
+      {
+        id: 'q0-1',
+        question: '문서 범위는 어디까지인가요?',
+        options: ['여신심사', '전체'],
+        allow_free_text: true,
+      },
+    ],
+    plan_summary: '규정 질의응답 에이전트로 이해했어요.',
+    coverage: 'none',
+    name_suggestion: '',
+    system_prompt: '',
+    tool_ids: [],
+    workers: [],
+    flow_hint: '',
+    llm_model_id: 'model-default',
+    temperature: 0.7,
+    missing_capabilities: [],
+    notes: '추가 정보가 필요합니다.',
+  };
+
+  const draftResponse = {
+    status: 'draft',
+    questions: [],
+    plan_summary: '내부 문서 검색 도구로 구성한다.',
+    coverage: 'full',
+    name_suggestion: '규정 봇',
+    system_prompt: '프롬프트',
+    tool_ids: ['internal_document_search'],
+    workers: [],
+    flow_hint: '',
+    llm_model_id: 'model-default',
+    temperature: 0.7,
+    missing_capabilities: [],
+    notes: '',
+  };
+
+  /** 1차: needs_clarification, 2차부터: draft — 요청 body 캡처 */
+  const captureHitl = () => {
+    const captured: ComposeAgentRequest[] = [];
+    server.use(
+      http.post('*/api/v1/agents/compose', async ({ request }) => {
+        captured.push((await request.json()) as ComposeAgentRequest);
+        return HttpResponse.json(
+          captured.length === 1 ? clarificationResponse : draftResponse,
+        );
+      }),
+    );
+    return captured;
+  };
+
+  it('needs_clarification 응답 시 질문 카드를 렌더한다', async () => {
+    captureHitl();
+    renderPanel();
+
+    await userEvent.type(screen.getByRole('textbox'), '규정 봇 만들어줘{enter}');
+
+    expect(
+      await screen.findByText('문서 범위는 어디까지인가요?'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('규정 질의응답 에이전트로 이해했어요.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '적용하기' })).not.toBeInTheDocument();
+  });
+
+  it('답변 제출 시 원 요청+구조화 답변+round=1로 재호출하고 초안 카드를 받는다', async () => {
+    const captured = captureHitl();
+    renderPanel();
+
+    await userEvent.type(screen.getByRole('textbox'), '규정 봇 만들어줘{enter}');
+    await screen.findByText('문서 범위는 어디까지인가요?');
+
+    await userEvent.click(screen.getByRole('button', { name: '여신심사' }));
+    await userEvent.click(screen.getByRole('button', { name: '답변 제출' }));
+
+    expect(await screen.findByRole('button', { name: '적용하기' })).toBeInTheDocument();
+
+    expect(captured).toHaveLength(2);
+    const second = captured[1];
+    expect(second.user_request).toBe('규정 봇 만들어줘'); // 원 요청 재전송
+    expect(second.clarification_round).toBe(1);
+    expect(second.clarification_answers).toEqual([
+      {
+        question_id: 'q0-1',
+        question: '문서 범위는 어디까지인가요?',
+        answer: '여신심사',
+      },
+    ]);
+    // 답변 요약 user 버블 + 카드 답변 완료 표시
+    expect(screen.getByText('답변: 여신심사')).toBeInTheDocument();
+    expect(screen.getByText('✓ 답변 완료')).toBeInTheDocument();
+  });
+
+  it('초안 카드에 plan_summary(빌드 계획) 섹션이 표시된다', async () => {
+    captureHitl();
+    renderPanel();
+
+    await userEvent.type(screen.getByRole('textbox'), '규정 봇 만들어줘{enter}');
+    await screen.findByText('문서 범위는 어디까지인가요?');
+    await userEvent.click(screen.getByRole('button', { name: '답변 제출' }));
+
+    await screen.findByRole('button', { name: '적용하기' });
+    expect(screen.getByText('빌드 계획')).toBeInTheDocument();
+    expect(screen.getByText('내부 문서 검색 도구로 구성한다.')).toBeInTheDocument();
+  });
+
+  it('질문 카드를 무시하고 새 문장을 치면 새 요청(round=0 미전송)으로 처리한다', async () => {
+    const captured = captureHitl();
+    renderPanel();
+
+    await userEvent.type(screen.getByRole('textbox'), '규정 봇 만들어줘{enter}');
+    await screen.findByText('문서 범위는 어디까지인가요?');
+
+    await userEvent.type(
+      screen.getByLabelText('Fix 에이전트 입력'),
+      '그냥 검색 봇으로 해줘{enter}',
+    );
+    await screen.findByRole('button', { name: '적용하기' });
+
+    expect(captured).toHaveLength(2);
+    expect(captured[1].user_request).toBe('그냥 검색 봇으로 해줘');
+    expect(captured[1].clarification_answers).toBeUndefined();
+  });
+});
