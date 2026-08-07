@@ -109,6 +109,19 @@ from src.api.routes.agent_schedule_router import (
     get_list_schedule_runs_use_case,
     get_trigger_due_schedules_use_case,
 )
+from src.api.routes.agent_webhook_router import (
+    router as agent_webhook_router,
+    get_enable_webhook_use_case,
+    get_get_webhook_use_case,
+    get_rotate_webhook_use_case,
+    get_update_webhook_use_case,
+    get_disable_webhook_use_case,
+    get_list_webhook_deliveries_use_case,
+)
+from src.api.routes.webhook_public_router import (
+    router as webhook_public_router,
+    get_invoke_webhook_use_case,
+)
 from src.api.routes.rag_tool_router import (
     router as rag_tool_router,
     get_qdrant_client as rag_tool_get_qdrant_client,
@@ -2709,10 +2722,11 @@ def create_agent_builder_factories():
     )
 
 
-def create_agent_schedule_factories(build_run_agent_uc):
+def create_agent_schedule_factories(build_run_agent_uc, outbound_dispatcher=None):
     """agent-schedule DI: CRUD 요청-스코프 팩토리 + 트리거 싱글턴.
 
     트리거 싱글턴은 AsyncSession 을 보유하지 않는다(session_factory 만) — DB-001.
+    outbound_dispatcher는 agent-webhook-outbound 훅 ① (optional — 미주입 무동작).
     """
     from src.application.agent_schedule.create_schedule_use_case import (
         CreateScheduleUseCase,
@@ -2789,6 +2803,7 @@ def create_agent_schedule_factories(build_run_agent_uc):
         run_agent_uc_builder=build_run_agent_uc,
         sink=DbScheduleRunSink(get_session_factory(), app_logger),
         logger=app_logger,
+        outbound_dispatcher=outbound_dispatcher,
     )
 
     def trigger_f():
@@ -2797,6 +2812,111 @@ def create_agent_schedule_factories(build_run_agent_uc):
     return (
         create_f, list_f, get_f, update_f, delete_f,
         toggle_f, list_runs_f, trigger_f,
+    )
+
+
+def create_agent_webhook_factories(build_run_agent_uc):
+    """agent-webhook DI: 관리 5종 + 공개 invoke 요청-스코프 팩토리 (Design §4-5).
+
+    invoke는 스케줄과 공유하는 build_run_agent_uc로 실행 파이프라인을 재사용하고,
+    소유자 AuthContext는 요청 세션 스코프의 AssembleAuthContextUseCase로 조립한다 (D3).
+
+    M2(outbound): 디스패처는 앱 수명 싱글턴(D11) — 요청 세션 비의존(session_factory만).
+    반환된 dispatcher를 create_agent_schedule_factories에 전달해 훅 ①을 배선한다.
+    """
+    from src.application.agent_webhook.dispatch_outbound_use_case import (
+        DispatchOutboundWebhookUseCase,
+    )
+    from src.application.agent_webhook.invoke_webhook_agent_use_case import (
+        InvokeWebhookAgentUseCase,
+    )
+    from src.application.agent_webhook.manage_webhook_use_cases import (
+        DisableWebhookUseCase,
+        EnableWebhookUseCase,
+        GetWebhookUseCase,
+        ListWebhookDeliveriesUseCase,
+        RotateWebhookSecretUseCase,
+        UpdateWebhookUseCase,
+    )
+    from src.infrastructure.agent_webhook.delivery_repository import (
+        AgentWebhookDeliveryRepository,
+    )
+    from src.infrastructure.agent_webhook.repository import (
+        AgentWebhookRepository,
+    )
+    from src.infrastructure.webhook.outbound_sender import HttpxOutboundSender
+
+    app_logger = get_app_logger()
+
+    def _make_webhook_repo(session: AsyncSession):
+        return AgentWebhookRepository(session=session, logger=app_logger)
+
+    def _make_delivery_repo(session: AsyncSession):
+        return AgentWebhookDeliveryRepository(session=session, logger=app_logger)
+
+    outbound_dispatcher = DispatchOutboundWebhookUseCase(
+        session_factory=get_session_factory(),
+        webhook_repo_builder=_make_webhook_repo,
+        delivery_repo_builder=_make_delivery_repo,
+        sender=HttpxOutboundSender(app_logger),
+        logger=app_logger,
+    )
+
+    def _make_agent_repo(session: AsyncSession):
+        return AgentDefinitionRepository(session=session, logger=app_logger)
+
+    def _make_assemble_uc(session: AsyncSession):
+        return AssembleAuthContextUseCase(
+            profile_repo=UserProfileRepository(session=session, logger=app_logger),
+            department_repo=DepartmentRepository(session=session, logger=app_logger),
+            permission_repo=PermissionRepository(session=session, logger=app_logger),
+            logger=app_logger,
+        )
+
+    def enable_f(session: AsyncSession = Depends(get_session)):
+        return EnableWebhookUseCase(
+            _make_webhook_repo(session), _make_agent_repo(session), app_logger
+        )
+
+    def get_f(session: AsyncSession = Depends(get_session)):
+        return GetWebhookUseCase(
+            _make_webhook_repo(session), _make_agent_repo(session), app_logger
+        )
+
+    def rotate_f(session: AsyncSession = Depends(get_session)):
+        return RotateWebhookSecretUseCase(
+            _make_webhook_repo(session), _make_agent_repo(session), app_logger
+        )
+
+    def update_f(session: AsyncSession = Depends(get_session)):
+        return UpdateWebhookUseCase(
+            _make_webhook_repo(session), _make_agent_repo(session), app_logger
+        )
+
+    def disable_f(session: AsyncSession = Depends(get_session)):
+        return DisableWebhookUseCase(
+            _make_webhook_repo(session), _make_agent_repo(session), app_logger
+        )
+
+    def invoke_f(session: AsyncSession = Depends(get_session)):
+        return InvokeWebhookAgentUseCase(
+            webhook_repo=_make_webhook_repo(session),
+            agent_repo=_make_agent_repo(session),
+            user_repo=UserRepository(session=session, logger=app_logger),
+            assemble_auth_context_uc=_make_assemble_uc(session),
+            run_agent_uc=build_run_agent_uc(session),
+            logger=app_logger,
+            outbound_dispatcher=outbound_dispatcher,  # M2 훅 ② (비차단 spawn)
+        )
+
+    def deliveries_f(session: AsyncSession = Depends(get_session)):
+        return ListWebhookDeliveriesUseCase(
+            _make_delivery_repo(session), _make_agent_repo(session), app_logger
+        )
+
+    return (
+        enable_f, get_f, rotate_f, update_f, disable_f, invoke_f,
+        deliveries_f, outbound_dispatcher,
     )
 
 
@@ -4175,11 +4295,29 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_list_available_sub_agents_use_case] = _list_available_sub_agents_uc
     app.dependency_overrides[get_load_mcp_tools_use_case] = create_load_mcp_tools_factory()
 
-    # Agent Schedule DI (agent-schedule Design §6.2)
+    # Agent Webhook DI (agent-webhook Design §4-5 + M2 §4-6)
+    # 스케줄 DI보다 먼저 — outbound 디스패처 싱글턴을 훅 ①에 전달해야 한다.
+    (
+        _wh_enable_f, _wh_get_f, _wh_rotate_f, _wh_update_f,
+        _wh_disable_f, _wh_invoke_f, _wh_deliveries_f, _wh_dispatcher,
+    ) = create_agent_webhook_factories(_build_run_agent_uc)
+    app.dependency_overrides[get_enable_webhook_use_case] = _wh_enable_f
+    app.dependency_overrides[get_get_webhook_use_case] = _wh_get_f
+    app.dependency_overrides[get_rotate_webhook_use_case] = _wh_rotate_f
+    app.dependency_overrides[get_update_webhook_use_case] = _wh_update_f
+    app.dependency_overrides[get_disable_webhook_use_case] = _wh_disable_f
+    app.dependency_overrides[get_invoke_webhook_use_case] = _wh_invoke_f
+    app.dependency_overrides[get_list_webhook_deliveries_use_case] = (
+        _wh_deliveries_f
+    )
+
+    # Agent Schedule DI (agent-schedule Design §6.2 + outbound 훅 ①)
     (
         _sch_create_f, _sch_list_f, _sch_get_f, _sch_update_f, _sch_delete_f,
         _sch_toggle_f, _sch_list_runs_f, _sch_trigger_f,
-    ) = create_agent_schedule_factories(_build_run_agent_uc)
+    ) = create_agent_schedule_factories(
+        _build_run_agent_uc, outbound_dispatcher=_wh_dispatcher
+    )
     app.dependency_overrides[get_create_schedule_use_case] = _sch_create_f
     app.dependency_overrides[get_list_schedules_use_case] = _sch_list_f
     app.dependency_overrides[get_get_schedule_use_case] = _sch_get_f
@@ -4645,6 +4783,8 @@ def create_app() -> FastAPI:
     app.include_router(agent_builder_router)
     app.include_router(agent_schedule_router)
     app.include_router(agent_schedule_trigger_router)
+    app.include_router(agent_webhook_router)
+    app.include_router(webhook_public_router)
     app.include_router(rag_tool_router)
     app.include_router(department_router)
     app.include_router(tool_catalog_router)
