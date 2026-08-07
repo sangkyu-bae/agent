@@ -9,6 +9,7 @@ import type { CatalogTool } from '@/types/toolCatalog';
 import type { AgentBuilderFormData } from '@/types/agentBuilder';
 import type { RagToolConfig } from '@/types/ragToolConfig';
 import { DEFAULT_RAG_CONFIG } from '@/types/ragToolConfig';
+import { MAX_ITERATIONS } from '@/constants/agentSettings';
 import { mapDraftToolIdsToCatalog } from './draftToolMapping';
 
 /** RAG 도구의 저장 형식 tool_id (worker.tool_id) */
@@ -70,5 +71,7 @@ export function mapDetailToForm(
     excludedBuiltinMiddlewares: [],
     // builtin-middleware: edit 폼 프리필 (전체 교체 전송의 기준선)
     middlewares: detail.middleware_types ?? [],
+    // agent-settings-tab D5: 서버는 항상 값을 반환 — 폴백은 방어용
+    maxIterations: detail.max_iterations ?? MAX_ITERATIONS.DEFAULT,
   };
 }

@@ -9,11 +9,12 @@ source_refs:
   - idt/docs/archive/2026-08/builtin-tools/builtin-tools.report.md (PATCH /builtin)
   - idt/docs/archive/2026-07/wiki-tree-performance/wiki-tree-performance.report.md (인증 선행·싱글턴)
   - idt_front/docs/archive/2026-08/utility-page/utility-page.report.md (skills/list POST)
+  - docs/archive/2026-08/fix-agent-planner-hitl/fix-agent-planner-hitl.report.md (compose HITL)
 confidence: 0.85
-version: 2
+version: 3
 created: 2026-07-21
-updated: 2026-08-03
-verified_at: 4f650d3c
+updated: 2026-08-06
+verified_at: 18fd521e
 ---
 
 라우터 파일 단위의 책임 지도. 엔드포인트 상세는 코드/OpenAPI(`/docs`)가 기록한다.
@@ -35,12 +36,12 @@ verified_at: 4f650d3c
 | 라우터 | prefix | 책임 |
 |---|---|---|
 | `agent_builder_router` | `/api/v1/agents` | 에이전트 CRUD + 스토어(구독/포크) + 실행 |
-| `agent_composer_router` | `/api/v1/agents` | 자연어 → 에이전트 초안 조합(무저장, compose) |
+| `agent_composer_router` | `/api/v1/agents` | 자연어 → 에이전트 초안 조합(무저장, compose) + stateless HITL 질문 왕복(`needs_clarification`) — [[stateless-hitl-clarification]] |
 | `agent_schedule_router` | `/api/v1/agents` | 에이전트 스케줄 CRUD + 트리거 |
 | `agent_run_router` | `/api/v1` | 런 관측(ai_run 계열 집계·상세, admin usage + 내 사용량) |
 | `agent_attachment_router` | `/api/v1/agent` | 엑셀 첨부 업로드 → file_id 발급 |
 | `middleware_agent_router` | `/api/v2/agents` | Middleware Agent Builder (v2) |
-| `auto_agent_builder_router` | `/api/v3/agents/auto` | 자연어 자동 빌더 (v3) |
+| `auto_agent_builder_router` | `/api/v3/agents/auto` | 자연어 자동 빌더 (v3) — 세션 기반 질문 루프 보유하나 **Fix 탭(compose)과 무관한 별개 경로** (혼동 주의) |
 | `tool_catalog_router` | `/api/v1/tool-catalog` | 도구 카탈로그 조회 + 빌트인 지정/해제(`PATCH /builtin`, admin) — is_builtin은 upsert 보존 계약 ([[builtin-tools-optout-channel]]) |
 | `skill_builder_router` | `/api/v1/skills` | 스킬 정의 CRUD/포크 + 에이전트-스킬 attach — **목록 조회 `/skills/list`는 GET이 아니라 POST** (프론트 MSW 핸들러 작성 시 함정) |
 | `mcp_registry_router` | `/api/v1/mcp-registry` | MCP 서버 레지스트리 CRUD + 연결 테스트 |

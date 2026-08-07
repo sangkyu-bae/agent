@@ -1,6 +1,6 @@
 {
   "version": "2.0",
-  "lastUpdated": "2026-08-06T07:46:32.217Z",
+  "lastUpdated": "2026-08-07T08:09:51.008Z",
   "activeFeatures": [
     "websocket-common-module",
     "agent-chat-multiturn",
@@ -162,10 +162,22 @@
     "eval-hub",
     "AdminMiddlewarePage",
     "builtin-middleware",
-    "fix-agent-planner-hitl"
+    "fix-agent-planner-hitl",
+    "agent_webhook",
+    "agent-webhook",
+    "webhook",
+    "agent-webhook-outbound"
   ],
-  "primaryFeature": "scratchpad",
+  "primaryFeature": "fix-agent-planner-hitl",
   "archivedFeatures": {
+    "agent-settings-tab": {
+      "phase": "archived",
+      "matchRate": 97.7,
+      "iterationCount": 0,
+      "startedAt": "2026-08-07T00:00:00.000Z",
+      "archivedAt": "2026-08-07T00:00:00.000Z",
+      "archivedTo": "docs/archive/2026-08/agent-settings-tab/"
+    },
     "kb-excel-upload": {
       "phase": "archived",
       "matchRate": 97.6,
@@ -689,9 +701,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-04T10:53:02.380Z",
-        "lastUpdated": "2026-08-06T07:12:13.365Z"
+        "lastUpdated": "2026-08-07T07:43:07.020Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\api\\main.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\api\\test_agent_webhook_router.py"
     },
     "routes": {
       "phase": "do",
@@ -702,9 +714,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-04T10:57:06.857Z",
-        "lastUpdated": "2026-08-04T11:04:57.761Z"
+        "lastUpdated": "2026-08-07T07:41:38.777Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\api\\routes\\middleware_catalog_router.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\api\\routes\\agent_webhook_router.py"
     },
     "retrieval": {
       "phase": "do",
@@ -1056,9 +1068,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-04-01T11:13:23.704Z",
-        "lastUpdated": "2026-08-04T11:31:06.588Z"
+        "lastUpdated": "2026-08-07T07:44:54.348Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\constants\\adminNav.test.ts"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\constants\\api.ts"
     },
     "idt_front": {
       "phase": "do",
@@ -1069,9 +1081,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-04-01T11:13:30.494Z",
-        "lastUpdated": "2026-08-06T07:13:48.991Z"
+        "lastUpdated": "2026-08-07T07:45:15.174Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\types\\agentComposer.ts"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\hooks\\useAgentWebhook.ts"
     },
     "ChatPage": {
       "phase": "do",
@@ -1122,7 +1134,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-04-12T11:15:57.166Z",
-        "lastUpdated": "2026-07-06T05:38:33.516Z"
+        "lastUpdated": "2026-08-07T02:07:56.387Z"
       },
       "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\__tests__\\components\\AgentBuilderStudio.test.tsx"
     },
@@ -2035,9 +2047,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-06-27T05:55:37.925Z",
-        "lastUpdated": "2026-08-04T11:28:30.166Z"
+        "lastUpdated": "2026-08-07T01:48:01.418Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\AgentBuilderPage\\index.tsx"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\AgentBuilderPage\\index.test.tsx"
     },
     "agent-builder-studio-ui": {
       "phase": "act",
@@ -2150,9 +2162,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-07-03T00:43:41.697Z",
-        "lastUpdated": "2026-07-03T04:11:25.521Z"
+        "lastUpdated": "2026-08-07T07:27:09.892Z"
       },
-      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\domain\\agent_schedule\\policies.py"
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\application\\agent_schedule\\trigger_due_schedules_use_case.py"
     },
     "agent_composer": {
       "phase": "do",
@@ -2877,6 +2889,60 @@
       },
       "previousPhase": "check",
       "autoAdvanced": true
+    },
+    "agent_webhook": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-08-07T05:50:59.583Z",
+        "lastUpdated": "2026-08-07T08:08:15.001Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\tests\\application\\agent_webhook\\test_outbound_hooks.py"
+    },
+    "agent-webhook": {
+      "phase": "act",
+      "phaseNumber": 5,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-08-07T06:56:32.854Z",
+        "lastUpdated": "2026-08-07T06:56:32.857Z"
+      },
+      "previousPhase": "check",
+      "autoAdvanced": true
+    },
+    "webhook": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-08-07T07:25:10.032Z",
+        "lastUpdated": "2026-08-07T08:08:12.488Z"
+      },
+      "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\infrastructure\\webhook\\outbound_sender.py"
+    },
+    "agent-webhook-outbound": {
+      "phase": "act",
+      "phaseNumber": 5,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-08-07T08:09:51.005Z",
+        "lastUpdated": "2026-08-07T08:09:51.007Z"
+      },
+      "previousPhase": "check",
+      "autoAdvanced": true
     }
   },
   "pipeline": {
@@ -2887,7 +2953,7 @@
   "session": {
     "startedAt": "2026-03-04T10:49:14.367Z",
     "onboardingCompleted": false,
-    "lastActivity": "2026-08-06T07:46:32.217Z"
+    "lastActivity": "2026-08-07T08:09:51.008Z"
   },
   "history": [
     {
@@ -22459,6 +22525,606 @@
     {
       "timestamp": "2026-08-06T07:46:32.217Z",
       "feature": "fix-agent-planner-hitl",
+      "phase": "act",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T01:44:32.909Z",
+      "feature": "constants",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T01:44:35.681Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T01:44:38.703Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T01:44:41.503Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T01:44:43.208Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T01:44:53.740Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T01:44:56.715Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T01:44:58.981Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T01:47:05.247Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T01:47:06.826Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T01:47:09.819Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T01:47:13.726Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T01:47:15.460Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T01:47:17.600Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T01:47:20.656Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T01:47:22.253Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T01:47:44.901Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T01:48:01.418Z",
+      "feature": "AgentBuilderPage",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T02:07:56.387Z",
+      "feature": "__tests__",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T02:25:00.432Z",
+      "feature": "agent-settings-tab",
+      "phase": "report",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T05:50:59.583Z",
+      "feature": "agent_webhook",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T05:51:01.395Z",
+      "feature": "agent_webhook",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T05:51:10.354Z",
+      "feature": "agent_webhook",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T05:51:13.998Z",
+      "feature": "agent_webhook",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T05:51:30.026Z",
+      "feature": "agent_webhook",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T05:51:30.956Z",
+      "feature": "agent_webhook",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T05:51:38.632Z",
+      "feature": "agent_webhook",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T05:51:49.560Z",
+      "feature": "agent_webhook",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T05:52:08.624Z",
+      "feature": "agent_webhook",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T05:52:14.361Z",
+      "feature": "agent_webhook",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T05:52:17.734Z",
+      "feature": "agent_webhook",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T05:52:42.331Z",
+      "feature": "agent_webhook",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T05:52:58.679Z",
+      "feature": "agent_webhook",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T05:53:29.637Z",
+      "feature": "agent_webhook",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T05:53:49.571Z",
+      "feature": "agent_webhook",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T06:00:10.714Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T06:00:20.818Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T06:00:40.438Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T06:00:54.071Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T06:01:05.214Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T06:01:06.818Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T06:01:54.417Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T06:02:08.037Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T06:12:50.520Z",
+      "feature": "constants",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T06:13:02.556Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T06:13:04.514Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T06:13:05.430Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T06:13:10.883Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T06:56:32.857Z",
+      "feature": "agent-webhook",
+      "phase": "act",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:24:08.255Z",
+      "feature": "agent_webhook",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:24:09.177Z",
+      "feature": "agent_webhook",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:24:16.664Z",
+      "feature": "agent_webhook",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:24:28.910Z",
+      "feature": "agent_webhook",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:24:39.977Z",
+      "feature": "agent_webhook",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:24:42.350Z",
+      "feature": "agent_webhook",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:24:56.702Z",
+      "feature": "agent_webhook",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:25:04.984Z",
+      "feature": "agent_webhook",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:25:10.032Z",
+      "feature": "webhook",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:25:21.610Z",
+      "feature": "webhook",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:25:30.232Z",
+      "feature": "agent_webhook",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:25:38.367Z",
+      "feature": "agent_webhook",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:25:57.223Z",
+      "feature": "agent_webhook",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:26:08.660Z",
+      "feature": "agent_webhook",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:26:09.756Z",
+      "feature": "agent_webhook",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:26:26.062Z",
+      "feature": "agent_webhook",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:26:34.099Z",
+      "feature": "agent_webhook",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:26:38.291Z",
+      "feature": "agent_webhook",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:26:43.415Z",
+      "feature": "agent_webhook",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:26:53.728Z",
+      "feature": "agent_webhook",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:26:58.612Z",
+      "feature": "agent_schedule",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:27:04.840Z",
+      "feature": "agent_schedule",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:27:09.892Z",
+      "feature": "agent_schedule",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:27:42.346Z",
+      "feature": "agent_webhook",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:28:06.288Z",
+      "feature": "agent_webhook",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:28:27.430Z",
+      "feature": "agent_webhook",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:41:29.265Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:41:31.247Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:41:38.777Z",
+      "feature": "routes",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:41:55.116Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:41:58.195Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:42:09.862Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:42:14.613Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:42:27.507Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:42:40.307Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:42:51.071Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:42:55.937Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:42:58.784Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:43:07.020Z",
+      "feature": "api",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:44:52.025Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:44:54.348Z",
+      "feature": "constants",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:44:57.712Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:45:00.633Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:45:02.898Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:45:08.685Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T07:45:15.174Z",
+      "feature": "idt_front",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T08:08:04.584Z",
+      "feature": "agent_webhook",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T08:08:09.482Z",
+      "feature": "agent_webhook",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T08:08:12.489Z",
+      "feature": "webhook",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T08:08:15.001Z",
+      "feature": "agent_webhook",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-08-07T08:09:51.007Z",
+      "feature": "agent-webhook-outbound",
       "phase": "act",
       "action": "updated"
     }

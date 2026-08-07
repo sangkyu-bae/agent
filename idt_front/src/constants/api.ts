@@ -224,6 +224,15 @@ export const API_ENDPOINTS = {
   AGENT_SCHEDULE_RUNS: (agentId: string, scheduleId: string) =>
     `/api/v1/agents/${agentId}/schedules/${scheduleId}/runs`,
 
+  // Agent Webhook (agent-webhook) — 관리(JWT) + 공개 inbound 경로
+  AGENT_WEBHOOK: (agentId: string) => `/api/v1/agents/${agentId}/webhook`,
+  AGENT_WEBHOOK_ROTATE: (agentId: string) =>
+    `/api/v1/agents/${agentId}/webhook/rotate`,
+  AGENT_WEBHOOK_DELIVERIES: (agentId: string) =>
+    `/api/v1/agents/${agentId}/webhook/deliveries`,
+  /** 공개 inbound 경로 — API_BASE_URL과 조합해 외부 시스템에 전달할 URL 표시용 */
+  WEBHOOK_INBOUND: (agentId: string) => `/api/v1/webhooks/agents/${agentId}`,
+
   // Embedding Models
   EMBEDDING_MODELS: '/api/v1/embedding-models',
 

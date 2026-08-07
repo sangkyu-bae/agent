@@ -39,12 +39,15 @@ class TriggerDueSchedulesUseCase:
         run_agent_uc_builder: Callable[[AsyncSession], object],
         sink: ScheduleRunSinkInterface,
         logger: LoggerInterface,
+        outbound_dispatcher=None,
     ) -> None:
         self._session_factory = session_factory
         self._schedule_repo_builder = schedule_repo_builder
         self._run_agent_uc_builder = run_agent_uc_builder
         self._sink = sink
         self._logger = logger
+        # agent-webhook-outbound 훅 ① — optional 주입, 미주입 시 무동작 (FR-16)
+        self._outbound_dispatcher = outbound_dispatcher
         self._last_triggered_at: datetime | None = None
         self._last_result: TriggerResponse | None = None
 
@@ -106,6 +109,7 @@ class TriggerDueSchedulesUseCase:
                 session_id=response.session_id,
                 run_id=response.run_id,
             )
+            await self._dispatch_outbound(schedule, response, request_id)
             succeeded = True
         except Exception as e:
             self._logger.error(
@@ -144,6 +148,26 @@ class TriggerDueSchedulesUseCase:
                     request_id,
                     viewer_user_id=schedule.user_id,
                 )
+
+    async def _dispatch_outbound(self, schedule, response, request_id) -> None:
+        """agent-webhook-outbound 훅 ① — 인라인 발송 (배치 특성상 지연 무해, D12).
+
+        dispatch()는 raise 금지 계약(D16)이지만 스케줄 이력 오염 방지를 위해
+        이중 방어한다 — 발송 실패는 이력 success 판정에 불영향 (FR-13).
+        """
+        if self._outbound_dispatcher is None:
+            return
+        try:
+            await self._outbound_dispatcher.dispatch(
+                schedule.agent_id, response, "schedule", request_id
+            )
+        except Exception as e:
+            self._logger.error(
+                "outbound dispatch hook failed",
+                exception=e,
+                request_id=request_id,
+                schedule_id=schedule.id,
+            )
 
     async def _touch_last_run(self, schedule_id: str, request_id: str) -> None:
         async with self._session_factory() as session:

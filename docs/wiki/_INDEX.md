@@ -19,6 +19,8 @@
   - ✅ [무거운 외부 클라이언트는 앱 수명 싱글턴](backend/patterns/app-lifetime-client-singleton.md) — **임베딩·Qdrant·ES 클라이언트를 쓰는 DI/라우터 추가 시, 또는 특정 API가 초 단위로 느릴 때** — per-request 생성이면 요청당 ~6.5s+누수, 인증 파라미터는 use_case보다 앞에, 무토큰 4xx도 느리면 DI 병목
   - ✅ [Supervisor 그래프 계약 3종](backend/patterns/supervisor-graph-contracts.md) — **워커 래퍼·수퍼바이저 프롬프트·강제 라우팅 트리거를 수정하기 전 필수** — 워커 산출물=AIMessage(name) 1건(위반 시 고아 tool 400), 능력 목록 프레이밍은 과차단 유발, 재주입분은 강제 라우팅 제외
   - ✅ [빌트인 도구 — opt-out 채널 분리](backend/patterns/builtin-tools-optout-channel.md) — **표준 도구를 전 에이전트에 보급하거나 "LLM은 못 빼고 사용자만 뺄 수 있는" 요구를 만났을 때** — is_builtin(V054) SoT·upsert 보존 계약·exclude 필드 부재로 채팅 우회 구조 차단
+  - ✅ [Stateless HITL 질문 왕복](backend/patterns/stateless-hitl-clarification.md) — **무상태 API에 "부족하면 되묻기" 다회 왕복을 넣을 때, 또는 compose/Fix 탭 질문 흐름 수정 전** — 세션 테이블 대신 질문 에코백+클라 신고값 서버 재clamp 2요소, Protocol이 application DTO를 물면 application 레이어 배치, v3 auto_agent_builder 루프와 혼동 금지
+  - ✅ [logger.warning의 exception kwarg](backend/patterns/structured-logger-warning-exception.md) — **예외 삼키고 폴백하는 경로에 warning 로그를 쓸 때** — `exception=e`로 스택 트레이스 기록 가능(`error=str(e)` 금지), 인터페이스에 없어도 구현(_log)이 받는다
 
 ## frontend/
 - chat/
@@ -28,14 +30,14 @@
   - ✅ [2차 네비는 레이아웃 소유 탭](frontend/patterns/layout-owned-nav-tabs.md) — **네비게이션 계층 추가·관리자 메뉴 항목 추가 시** — 탭은 레이아웃이 경로 역산으로 소유(페이지 무수정), adminNav.ts 단일 소스, 개수 하드코딩 단언 금지(관계 기반), ENTRY_PATH=/admin/dashboard
 - screens/
   - 📝 [화면↔API 지도 — 채팅·계정·설정](frontend/screens/chat-screens.md) — **ChatPage/Settings/Usage/Login 수정 전** 해당 화면의 API 절단면 확인용
-  - 📝 [화면↔API 지도 — 에이전트](frontend/screens/agent-screens.md) — **스토어/빌더/워크스페이스/유틸리티 화면 수정 전** — 도구 ID 변환·update 화이트리스트·빌트인 해제 전용 상태·skills/list=POST 함정 포함
+  - 📝 [화면↔API 지도 — 에이전트](frontend/screens/agent-screens.md) — **스토어/빌더/워크스페이스/유틸리티 화면 수정 전** — 도구 ID 변환·update 화이트리스트·빌트인 해제 전용 상태·compose HITL 에코백·skills/list=POST 함정 포함
   - 📝 [화면↔API 지도 — 지식베이스·컬렉션](frontend/screens/kb-screens.md) — **KB·컬렉션 화면 수정 전** — KB vs 컬렉션 계층 구분 + 전체 교체·source 토글 계약
   - 📝 [화면↔API 지도 — 관리자](frontend/screens/admin-screens.md) — **/admin/* 화면 수정하거나 관리 메뉴를 추가하기 전** — 4그룹+2차탭 구조(URL 불변)·ENTRY_PATH=/admin/dashboard·PUT 전체 교체·메타 기준 적재량 주의
   - 📝 [화면↔API 지도 — 위키·지식 노출](frontend/screens/wiki-screens.md) — **위키/지식 화면 수정 전** — tree 선언 순서·can_manage 인가 계약
 
 ## conventions/
 - 📝 ["데이터는 있고 노출 경로만 없다" 패턴](conventions/data-exists-exposure-missing.md) — **새 계산·집계 기능을 만들기 전** — 기존 산출물(버려지는 반환값·잘린 응답 스키마)에 이미 있는지 먼저 확인
-- 📝 [계약 확장은 additive + 응답 타입 분리](conventions/additive-contract-extension.md) — **공용 스키마·API·WS 계약을 변경할 때** — 기존 소비자 무변경(신규 응답 타입·optional 필드)으로 회귀 0, 독립 opt-in 선호
+- 📝 [계약 확장은 additive + 응답 타입 분리](conventions/additive-contract-extension.md) — **공용 스키마·API·WS 계약을 변경하거나 기존 UseCase에 협력자를 추가할 때** — 기존 소비자 무변경(신규 응답 타입·optional 필드·optional 마지막 인자+폴백)으로 회귀 0, 신규 상태값은 구형 소비자 안전 강하 동반, 독립 opt-in 선호
 - 📝 [PDCA gap 명시적 이월](conventions/explicit-gap-carryover.md) — **gap 분석 후 미달 항목 처리 방침 정할 때** — 억지로 메우지 않고 후속 소형 사이클로 회수
 
 ## ops/

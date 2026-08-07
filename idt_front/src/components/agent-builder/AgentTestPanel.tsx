@@ -7,6 +7,7 @@ import TestChatView from './TestChatView';
 import AgentSkillPanel from './AgentSkillPanel';
 import SchedulePanel from './schedule/SchedulePanel';
 import FixAgentPanel from './fix/FixAgentPanel';
+import SettingsPanel from './settings/SettingsPanel';
 
 interface AgentTestPanelProps {
   mode: 'create' | 'edit';
@@ -20,6 +21,8 @@ interface AgentTestPanelProps {
   stagedSchedules: StagedSchedule[];
   onStagedScheduleAdd: (item: StagedSchedule) => void;
   onStagedScheduleRemove: (localId: string) => void;
+  /** agent-settings-tab D6: 반복 한도 확정값 반영 (clamp는 SettingsPanel 책임) */
+  onMaxIterationsChange: (value: number) => void;
 }
 
 interface TabDef {
@@ -29,11 +32,12 @@ interface TabDef {
 }
 
 /**
- * 우측 패널 — 탭 바 + Fix/테스트/스킬/스케줄 콘텐츠.
+ * 우측 패널 — 탭 바 + Fix/테스트/스킬/스케줄/설정 콘텐츠.
  * Fix는 채팅→compose→초안 적용(fix-agent-composer), 테스트는 항상 활성,
  * 스킬은 생성·수정 모두 활성(agent-skill-toggle, staged),
- * 스케줄은 생성=staged/수정=즉시 CRUD (agent-schedule).
- * 나머지(오프너/파일/설정)는 비활성 placeholder — Design §5.1.
+ * 스케줄은 생성=staged/수정=즉시 CRUD (agent-schedule),
+ * 설정은 생성·수정 모두 활성 (agent-settings-tab — Recursion Limit 실기능).
+ * 나머지(오프너/파일)는 비활성 placeholder — Design §5.1.
  */
 const AgentTestPanel = ({
   mode,
@@ -47,6 +51,7 @@ const AgentTestPanel = ({
   stagedSchedules,
   onStagedScheduleAdd,
   onStagedScheduleRemove,
+  onMaxIterationsChange,
 }: AgentTestPanelProps) => {
   const [tab, setTab] = useState<RightTabId>('test');
 
@@ -57,7 +62,7 @@ const AgentTestPanel = ({
     { id: 'file', label: '파일', enabled: false },
     { id: 'skill', label: '스킬', enabled: true },
     { id: 'schedule', label: '스케줄', enabled: true },
-    { id: 'settings', label: '설정', enabled: false },
+    { id: 'settings', label: '설정', enabled: true },
   ];
 
   return (
@@ -104,6 +109,12 @@ const AgentTestPanel = ({
             stagedSchedules={stagedSchedules}
             onStagedAdd={onStagedScheduleAdd}
             onStagedRemove={onStagedScheduleRemove}
+          />
+        ) : tab === 'settings' ? (
+          <SettingsPanel
+            agentId={agentId}
+            maxIterations={form.maxIterations}
+            onMaxIterationsChange={onMaxIterationsChange}
           />
         ) : (
           <TestChatView mode={mode} agentId={agentId} agentName={agentName} />

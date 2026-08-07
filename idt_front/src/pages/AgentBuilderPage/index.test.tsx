@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeAll, afterEach, afterAll, describe, it, expect } from 'vitest';
 import { http, HttpResponse } from 'msw';
@@ -203,5 +203,124 @@ describe('AgentBuilderPage 빌트인 도구 (builtin-tools D8)', () => {
     await user.click(screen.getByRole('button', { name: '저장' }));
     await waitFor(() => expect(captured).not.toBeNull());
     expect(captured!.exclude_builtin_tool_ids).toEqual(['internal:wiki_read']);
+  });
+});
+
+// ── agent-settings-tab Design §5-3 ─────────────────────────────
+
+const EDIT_SUMMARY = {
+  agent_id: 'a-9',
+  name: '수정용 봇',
+  description: '설명',
+  visibility: 'private',
+  department_name: null,
+  owner_user_id: 'u1',
+  owner_email: null,
+  temperature: 0.7,
+  can_edit: true,
+  can_delete: true,
+  created_at: '2026-08-01T00:00:00Z',
+};
+
+const EDIT_DETAIL = {
+  agent_id: 'a-9',
+  name: '수정용 봇',
+  description: '설명',
+  system_prompt: '기존 지침',
+  tool_ids: [],
+  skill_ids: [],
+  middleware_types: [],
+  max_iterations: 500,
+  workers: [],
+  flow_hint: '',
+  llm_model_id: 'model-1',
+  status: 'active',
+  visibility: 'private',
+  department_id: null,
+  department_name: null,
+  temperature: 0.7,
+  owner_user_id: 'u1',
+  can_edit: true,
+  can_delete: true,
+  created_at: '2026-08-01T00:00:00Z',
+  updated_at: '2026-08-01T00:00:00Z',
+};
+
+describe('AgentBuilderPage 설정 탭 (agent-settings-tab)', () => {
+  it('create 저장 → max_iterations 기본값 25가 전송된다', async () => {
+    useBuilderHandlers();
+    let captured: Record<string, unknown> | null = null;
+    server.use(
+      http.post('*/api/v1/agents', async ({ request }) => {
+        captured = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({
+          agent_id: 'a-1',
+          name: '테스트 에이전트',
+          system_prompt: '테스트 지침',
+          tool_ids: [],
+          workers: [],
+          flow_hint: '',
+          llm_model_id: 'model-1',
+          visibility: 'private',
+          temperature: 0.7,
+          max_iterations: 25,
+          created_at: '2026-08-01T00:00:00Z',
+          has_sub_agents: false,
+        });
+      }),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await enterCreateView(user);
+
+    // 설정 탭이 활성화되어 진입 가능하다
+    await user.click(screen.getByRole('button', { name: '설정' }));
+    expect(
+      screen.getByRole('spinbutton', { name: '최대 반복 횟수' }),
+    ).toHaveValue(25);
+
+    await user.click(screen.getByRole('button', { name: '저장' }));
+    await waitFor(() => expect(captured).not.toBeNull());
+    expect(captured!.max_iterations).toBe(25);
+  });
+
+  it('edit 프라임(500) → 300으로 수정 저장 → update에 max_iterations가 실린다', async () => {
+    useBuilderHandlers();
+    let captured: Record<string, unknown> | null = null;
+    server.use(
+      http.get('*/api/v1/agents', () =>
+        HttpResponse.json({ agents: [EDIT_SUMMARY], total: 1, page: 1, size: 20 }),
+      ),
+      http.get('*/api/v1/agents/a-9', () => HttpResponse.json(EDIT_DETAIL)),
+      http.patch('*/api/v1/agents/a-9', async ({ request }) => {
+        captured = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({
+          agent_id: 'a-9',
+          name: '수정용 봇',
+          system_prompt: '기존 지침',
+          updated_at: '2026-08-02T00:00:00Z',
+        });
+      }),
+    );
+    const user = userEvent.setup();
+    renderPage();
+
+    // list → edit 진입 → detail 프라임 대기 (이름 입력이 채워짐)
+    await user.click(await screen.findByRole('button', { name: '수정용 봇 수정' }));
+    await waitFor(() =>
+      expect(screen.getByLabelText('에이전트 이름')).toHaveValue('수정용 봇'),
+    );
+
+    // 설정 탭 — detail의 max_iterations(500)가 프라임되어 표시된다
+    await user.click(screen.getByRole('button', { name: '설정' }));
+    const input = screen.getByRole('spinbutton', { name: '최대 반복 횟수' });
+    expect(input).toHaveValue(500);
+
+    fireEvent.change(input, { target: { value: '300' } });
+    fireEvent.blur(input);
+
+    await user.click(screen.getByRole('button', { name: '저장' }));
+    await waitFor(() => expect(captured).not.toBeNull());
+    expect(captured!.max_iterations).toBe(300);
   });
 });
