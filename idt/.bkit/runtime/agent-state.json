@@ -2,12 +2,12 @@
   "version": "1.0",
   "enabled": false,
   "teamName": "",
-  "feature": "scratchpad",
-  "pdcaPhase": "do",
+  "feature": "fix-agent-planner-hitl",
+  "pdcaPhase": "act",
   "orchestrationPattern": "leader",
   "ctoAgent": "opus",
-  "startedAt": "2026-08-06T07:21:56.506Z",
-  "lastUpdated": "2026-08-06T07:53:44.000Z",
+  "startedAt": "2026-08-07T08:02:07.047Z",
+  "lastUpdated": "2026-08-07T08:10:12.317Z",
   "teammates": [],
   "progress": {
     "totalTasks": 0,
@@ -21,8 +21,8 @@
       "from": "system",
       "to": "all",
       "content": "Phase check → act (auto-advanced)",
-      "timestamp": "2026-08-06T07:46:32.234Z"
+      "timestamp": "2026-08-07T08:09:51.039Z"
     }
   ],
-  "sessionId": "f97db89a-9f3a-418e-92e6-ba87511058e3"
+  "sessionId": "a6d1b254-4649-4769-8b49-2efcef922c58"
 }
