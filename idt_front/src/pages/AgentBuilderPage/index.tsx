@@ -18,6 +18,7 @@ import type { StoreAgentSummary } from '@/types/agentStore';
 import type { AgentBuilderFormData } from '@/types/agentBuilder';
 import type { ComposeAgentDraftResponse } from '@/types/agentComposer';
 import { MAX_ATTACHED_SKILLS } from '@/constants/agentSkill';
+import { MAX_ITERATIONS } from '@/constants/agentSettings';
 import { DOCUMENT_EXTRACTOR_TOOL_ID } from '@/types/documentExtractor';
 import { buildDocumentTemplateRequest } from '@/utils/documentTemplate';
 import { mapDraftToolIdsToCatalog } from '@/utils/draftToolMapping';
@@ -53,6 +54,7 @@ const DEFAULT_FORM: AgentBuilderFormData = {
   excludedBuiltinTools: [],
   excludedBuiltinMiddlewares: [],
   middlewares: [],
+  maxIterations: MAX_ITERATIONS.DEFAULT,
 };
 
 const AgentBuilderPage = () => {
@@ -160,6 +162,8 @@ const AgentBuilderPage = () => {
             skill_ids: form.skills,
             // builtin-middleware D10: 프리필 기준 전체 교체 (빈 배열=전부 해제)
             middleware_types: form.middlewares,
+            // agent-settings-tab D5: 프라임 값 기반 항상 전송
+            max_iterations: form.maxIterations,
             // undefined = 템플릿 변경 안 함, 값 = 교체 (기존 soft-delete)
             document_template: buildDocumentTemplateRequest(
               form.documentExtractorDraft,
@@ -216,6 +220,8 @@ const AgentBuilderPage = () => {
             form.documentExtractorDraft,
             form.name,
           ),
+          // agent-settings-tab D5: 설정 탭 반복 한도 (기본 25)
+          max_iterations: form.maxIterations,
         },
         {
           onSuccess: async (response) => {
@@ -325,6 +331,11 @@ const AgentBuilderPage = () => {
           : [...prev.skills, skillId],
       };
     });
+  };
+
+  // agent-settings-tab D6: SettingsPanel이 clamp 완료한 확정값만 올라온다
+  const handleMaxIterationsChange = (value: number) => {
+    setForm((prev) => ({ ...prev, maxIterations: value }));
   };
 
   const handleStagedScheduleAdd = (item: StagedSchedule) => {
@@ -462,6 +473,7 @@ const AgentBuilderPage = () => {
           onMiddlewareToggle={handleMiddlewareToggle}
           onStagedScheduleAdd={handleStagedScheduleAdd}
           onStagedScheduleRemove={handleStagedScheduleRemove}
+          onMaxIterationsChange={handleMaxIterationsChange}
           onApplyDraft={handleApplyDraft}
           onSave={handleSave}
           onCancel={() => setView('list')}
@@ -648,6 +660,7 @@ const AgentCard = ({ agent, onEdit, onDelete }: AgentCardProps) => {
           {agent.can_edit && (
             <button
               onClick={() => onEdit(agent)}
+              aria-label={`${agent.name} 수정`}
               className="rounded-lg p-1.5 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700"
             >
               <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
@@ -658,6 +671,7 @@ const AgentCard = ({ agent, onEdit, onDelete }: AgentCardProps) => {
           {agent.can_delete && (
             <button
               onClick={() => onDelete(agent)}
+              aria-label={`${agent.name} 삭제`}
               className="rounded-lg p-1.5 text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-500"
             >
               <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">

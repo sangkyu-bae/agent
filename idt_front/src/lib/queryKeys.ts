@@ -216,6 +216,17 @@ export const queryKeys = {
       [...queryKeys.agentSchedules.all, 'runs', agentId, scheduleId] as const,
   },
 
+  // ── Agent Webhook (agent-webhook) ──────────────────────
+  agentWebhook: {
+    all: ['agentWebhook'] as const,
+    /** 에이전트별 웹훅 설정 */
+    config: (agentId: string) =>
+      [...queryKeys.agentWebhook.all, 'config', agentId] as const,
+    /** outbound 발송 이력 (M2) */
+    deliveries: (agentId: string) =>
+      [...queryKeys.agentWebhook.all, 'deliveries', agentId] as const,
+  },
+
   // ── Agent Store ────────────────────────────────────────
   agentStore: {
     all: ['agentStore'] as const,

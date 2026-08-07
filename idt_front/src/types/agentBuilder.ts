@@ -58,6 +58,8 @@ export interface CreateBuilderAgentRequest {
   skill_ids?: string[];
   // document-template-extractor GA4: 확정 템플릿 (document_extractor 도구 필요)
   document_template?: DocumentTemplateRequest;
+  // agent-settings-tab D5: supervisor 반복 한도 (백엔드 기본 25, 범위 10~1000)
+  max_iterations?: number;
 }
 
 export interface CreateBuilderAgentResponse {
@@ -100,6 +102,8 @@ export interface UpdateBuilderAgentRequest {
   llm_model_id?: string;
   // builtin-middleware D5: undefined = 변경 안 함, [] = 전부 해제, [...] = 전체 교체
   middleware_types?: string[];
+  // agent-settings-tab D5: undefined = 변경 안 함 (폼은 프라임 값 기반으로 항상 전송)
+  max_iterations?: number;
 }
 
 export interface UpdateBuilderAgentResponse {
@@ -134,6 +138,8 @@ export interface AgentBuilderFormData {
   excludedBuiltinMiddlewares: string[];
   // builtin-middleware D10: 적용 미들웨어 타입 (edit 전용 — detail 프리필 후 전체 교체 전송)
   middlewares: string[];
+  // agent-settings-tab: supervisor 반복 한도 (설정 탭 — 저장 시 max_iterations로 전송)
+  maxIterations: number;
 }
 
 // ── Studio UI (프론트엔드 전용) ────────────────

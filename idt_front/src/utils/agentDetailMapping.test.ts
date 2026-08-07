@@ -234,6 +234,25 @@ describe('mapDetailToForm — 서브에이전트/스킬 회귀 고정', () => {
     ).toEqual([]);
   });
 
+  // agent-settings-tab Design §5-2
+  it('max_iterations를 maxIterations로 프라임한다', () => {
+    const form = mapDetailToForm(
+      makeDetail({ max_iterations: 500 }),
+      [makeModel()],
+      [],
+    );
+    expect(form.maxIterations).toBe(500);
+  });
+
+  it('max_iterations 결측 시 기본값 25로 폴백한다', () => {
+    const form = mapDetailToForm(
+      makeDetail({ max_iterations: undefined }),
+      [makeModel()],
+      [],
+    );
+    expect(form.maxIterations).toBe(25);
+  });
+
   it('기본 필드와 edit 모드 스케줄 정책(빈 배열)을 유지한다', () => {
     const form = mapDetailToForm(makeDetail(), [makeModel()], []);
     expect(form.name).toBe('테스트 봇');

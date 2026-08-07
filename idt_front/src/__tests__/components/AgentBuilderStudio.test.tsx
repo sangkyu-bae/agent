@@ -581,6 +581,7 @@ describe('AgentBuilderPage — Studio 레이아웃', () => {
   it('비활성 placeholder(서브에이전트/미들웨어)를 표시한다', async () => {
     await enterStudio();
     expect(screen.getByText('서브에이전트가 없습니다')).toBeInTheDocument();
-    expect(screen.getByText('추가된 미들웨어가 없습니다')).toBeInTheDocument();
+    // builtin-middleware에서 빈 상태 문구 변경 — 카탈로그 미응답 시 빈 상태
+    expect(screen.getByText('적용 가능한 미들웨어가 없습니다')).toBeInTheDocument();
   });
 });

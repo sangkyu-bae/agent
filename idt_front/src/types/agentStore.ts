@@ -49,6 +49,8 @@ export interface AgentDetail {
   skill_ids?: string[];
   // builtin-middleware D5: 적용 미들웨어 스냅샷(edit 폼 프라임용)
   middleware_types?: string[];
+  // agent-settings-tab: supervisor 반복 한도 (edit 폼 프라임용 — 서버는 항상 반환)
+  max_iterations?: number;
   workers: WorkerInfo[];
   flow_hint: string;
   llm_model_id: string;

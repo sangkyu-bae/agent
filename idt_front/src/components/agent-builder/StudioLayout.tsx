@@ -22,6 +22,8 @@ interface StudioLayoutProps {
   onMiddlewareToggle: (middlewareType: string) => void;
   onStagedScheduleAdd: (item: StagedSchedule) => void;
   onStagedScheduleRemove: (localId: string) => void;
+  /** agent-settings-tab D6: 설정 탭 반복 한도 확정값 반영 */
+  onMaxIterationsChange: (value: number) => void;
   onApplyDraft: (draft: ComposeAgentDraftResponse) => void;
   onSave: () => void;
   onCancel: () => void;
@@ -55,6 +57,7 @@ const StudioLayout = ({
   onMiddlewareToggle,
   onStagedScheduleAdd,
   onStagedScheduleRemove,
+  onMaxIterationsChange,
   onApplyDraft,
   onSave,
   onCancel,
@@ -119,6 +122,7 @@ const StudioLayout = ({
             stagedSchedules={form.schedules}
             onStagedScheduleAdd={onStagedScheduleAdd}
             onStagedScheduleRemove={onStagedScheduleRemove}
+            onMaxIterationsChange={onMaxIterationsChange}
           />
         </div>
       </div>
