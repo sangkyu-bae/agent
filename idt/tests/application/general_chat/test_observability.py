@@ -216,3 +216,100 @@ class TestFailurePaths:
         await uc.execute(req, request_id="req-1")
 
         tracker.attach_user_message.assert_not_awaited()
+
+
+class _FakeTx:
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+
+class _FakeSession:
+    def begin(self):
+        return _FakeTx()
+
+
+class _FakeSessionFactory:
+    """async_sessionmaker 대역 — 호출 횟수와 세션 사용을 관찰한다."""
+
+    def __init__(self) -> None:
+        self.session = _FakeSession()
+        self.call_count = 0
+
+    def __call__(self):
+        self.call_count += 1
+        outer = self
+
+        class _Ctx:
+            async def __aenter__(self):
+                return outer.session
+
+            async def __aexit__(self, *exc):
+                return False
+
+        return _Ctx()
+
+
+class TestPersistMessagesSeparateSession:
+    """AGENT-OBS-001 fix 미러링 (general_chat): 메시지는 별도 세션 즉시 commit.
+
+    요청 세션에 미커밋 user 메시지가 남으면 tracker의 별도 세션
+    `UPDATE ai_run SET user_message_id=?`가 FK 검사에서 그 row 락을 기다리다
+    innodb_lock_wait_timeout(50s) 후 Error 1205로 실패한다 — 자기 자신과의 경합.
+    """
+
+    @pytest.mark.asyncio
+    async def test_session_factory_persists_in_separate_session(
+        self, monkeypatch,
+    ) -> None:
+        """session_factory 주입 시: 별도 세션 repo로 저장, 요청 세션 repo 미사용."""
+        tracker = _make_tracker()
+        factory = _FakeSessionFactory()
+
+        separate_repo = AsyncMock()
+        separate_repo.save.side_effect = [
+            _make_saved_msg(201, MessageRole.USER),
+            _make_saved_msg(202, MessageRole.ASSISTANT),
+        ]
+        captured_sessions: list = []
+
+        def _repo_ctor(session):
+            captured_sessions.append(session)
+            return separate_repo
+
+        monkeypatch.setattr(
+            "src.application.general_chat.use_case."
+            "SQLAlchemyConversationMessageRepository",
+            _repo_ctor,
+        )
+
+        uc, msg_repo, _ = _make_use_case(tracker=tracker)
+        uc._session_factory = factory
+        req = GeneralChatRequest(user_id="u1", session_id="s1", message="질문")
+
+        await uc.execute(req, request_id="req-1")
+
+        # 별도 세션에서 user+assistant 2건 저장, 요청 세션 repo는 저장에 미사용
+        assert factory.call_count == 1
+        assert captured_sessions == [factory.session]
+        assert separate_repo.save.await_count == 2
+        msg_repo.save.assert_not_awaited()
+
+        # commit된 id(201)로 attach — 락 경합 없이 즉시 성공 가능
+        tracker.attach_user_message.assert_awaited_once()
+        assert tracker.attach_user_message.await_args.args[1] == 201
+
+    @pytest.mark.asyncio
+    async def test_no_session_factory_legacy_fallback(self) -> None:
+        """session_factory 미주입 시 기존 요청 세션 repo 경로 100% 유지."""
+        tracker = _make_tracker()
+        uc, msg_repo, _ = _make_use_case(tracker=tracker)
+        req = GeneralChatRequest(user_id="u1", session_id="s1", message="질문")
+
+        await uc.execute(req, request_id="req-1")
+
+        assert msg_repo.save.await_count == 2
+        tracker.attach_user_message.assert_awaited_once()
+        assert tracker.attach_user_message.await_args.args[1] == 101
