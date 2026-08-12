@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { useLogout } from '@/hooks/useAuth';
+import NotificationBell from '@/components/layout/NotificationBell';
 import { ADMIN_NAV_GROUPS, isAdminItemActive, type AdminNavGroup } from '@/constants/adminNav';
 
 interface DropdownItem {
@@ -45,6 +46,12 @@ const NAV_MENUS: NavMenu[] = [
         path: '/agent-builder',
         icon: 'M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z',
         description: '새로운 AI 에이전트를 설계하고 구성합니다',
+      },
+      {
+        label: '작업함',
+        path: '/jobs',
+        icon: 'M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z',
+        description: '백그라운드 작업과 스케줄 실행 이력을 확인합니다',
       },
       {
         label: '유틸리티',
@@ -220,6 +227,9 @@ const TopNav = () => {
             </div>
           );
         })}
+
+        {/* background-jobs S8: 백그라운드 작업 알림 벨 */}
+        {user && <NotificationBell />}
 
         {/* 사용자 아바타 + 드롭다운 */}
         {user && (

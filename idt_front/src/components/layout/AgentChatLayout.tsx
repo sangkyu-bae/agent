@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Outlet, useLocation, useSearchParams } from 'react-router-dom';
 import AppSidebar from '@/components/layout/AppSidebar';
 import ChatHistoryPanel from '@/components/layout/ChatHistoryPanel';
 import { useLayoutStore } from '@/store/layoutStore';
@@ -37,6 +37,23 @@ const AgentChatLayout = () => {
 
   const prevAgentIdRef = useRef(selectedAgentId);
 
+  // background-jobs: 작업함/벨 딥링크(?agentId=&sessionId=) 소비 —
+  // 에이전트 전환이 필요한 경우 전환 리셋 effect 가 draft 대신 이 세션을 선택한다
+  const [searchParams, setSearchParams] = useSearchParams();
+  const deepLinkSessionRef = useRef<string | null>(null);
+  useEffect(() => {
+    const qAgentId = searchParams.get('agentId');
+    const qSessionId = searchParams.get('sessionId');
+    if (!qAgentId || !qSessionId) return;
+    if (qAgentId !== selectedAgentId) {
+      deepLinkSessionRef.current = qSessionId;
+      selectAgent(qAgentId);
+    } else {
+      setActiveSessionId(qSessionId);
+    }
+    setSearchParams({}, { replace: true });
+  }, [searchParams, selectedAgentId, selectAgent, setSearchParams]);
+
   const {
     data: serverSessions = [],
     isLoading: sessionsLoading,
@@ -53,10 +70,16 @@ const AgentChatLayout = () => {
 
   const myAgents = useMemo(() => myAgentsData?.agents ?? [], [myAgentsData]);
 
-  // 에이전트 전환 시 세션 초기화
+  // 에이전트 전환 시 세션 초기화 (딥링크 전환이면 해당 세션 선택)
   useEffect(() => {
     if (prevAgentIdRef.current !== selectedAgentId) {
       prevAgentIdRef.current = selectedAgentId;
+      if (deepLinkSessionRef.current) {
+        setDraftSessions([]);
+        setActiveSessionId(deepLinkSessionRef.current);
+        deepLinkSessionRef.current = null;
+        return;
+      }
       const newDraft = createDraftSession();
       setDraftSessions([newDraft]);
       setActiveSessionId(newDraft.id);

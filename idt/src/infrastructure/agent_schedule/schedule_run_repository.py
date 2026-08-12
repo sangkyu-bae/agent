@@ -5,7 +5,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.domain.agent_schedule.entity import ScheduleRun
 from src.domain.agent_schedule.interfaces import ScheduleRunRepositoryInterface
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
-from src.infrastructure.agent_schedule.models import AgentScheduleRunModel
+from src.infrastructure.agent_builder.models import AgentDefinitionModel
+from src.infrastructure.agent_schedule.models import (
+    AgentScheduleModel,
+    AgentScheduleRunModel,
+)
 
 
 def _to_entity(model: AgentScheduleRunModel) -> ScheduleRun:
@@ -75,3 +79,36 @@ class ScheduleRunRepository(ScheduleRunRepositoryInterface):
         )
         result = await self._session.execute(stmt)
         return [_to_entity(m) for m in result.scalars().all()]
+
+    async def list_by_user(
+        self, user_id: str, limit: int, offset: int, request_id: str
+    ) -> list[tuple[ScheduleRun, str, str | None]]:
+        """내 스케줄 실행 이력 전체 (background-jobs D9 — 작업함 스케줄 탭).
+
+        agent_schedule ⋈ agent_schedule_run 으로 소유자 필터 + 스케줄명·에이전트명
+        동반 반환. read-only — 기존 스케줄 계약 무변경 (additive).
+        """
+        stmt = (
+            select(
+                AgentScheduleRunModel,
+                AgentScheduleModel.name,
+                AgentDefinitionModel.name,
+            )
+            .join(
+                AgentScheduleModel,
+                AgentScheduleRunModel.schedule_id == AgentScheduleModel.id,
+            )
+            .outerjoin(
+                AgentDefinitionModel,
+                AgentScheduleRunModel.agent_id == AgentDefinitionModel.id,
+            )
+            .where(AgentScheduleModel.user_id == user_id)
+            .order_by(AgentScheduleRunModel.started_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        result = await self._session.execute(stmt)
+        return [
+            (_to_entity(model), name, agent_name)
+            for model, name, agent_name in result.all()
+        ]

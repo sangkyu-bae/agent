@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import ChatHeader from '@/components/layout/ChatHeader';
@@ -11,6 +11,13 @@ import { useAgentRunStream } from '@/hooks/useAgentRunStream';
 import { agentStepsToToolEvents } from '@/hooks/agentStepToToolEvent';
 import { useAuthStore } from '@/store/authStore';
 import { useChatPreferencesStore } from '@/store/chatPreferencesStore';
+import {
+  extractJobError,
+  isJobConflictError,
+  useEnqueueJob,
+  useJobList,
+} from '@/hooks/useBackgroundJobs';
+import { isJobActive } from '@/types/backgroundJob';
 import agentAttachmentService from '@/services/agentAttachmentService';
 import { queryKeys } from '@/lib/queryKeys';
 import type { Message } from '@/types/chat';
@@ -118,6 +125,43 @@ const ChatPage = () => {
 
   // Design §3.1 — 단일 ActiveStream 상태로 chat / agent stream을 mutually exclusive.
   const [activeStream, setActiveStream] = useState<ActiveStream | null>(null);
+
+  // background-jobs S9: 현재 세션의 진행중 백그라운드 작업 가드 (D5 프론트 축)
+  const { data: myJobs } = useJobList();
+  const enqueueJob = useEnqueueJob();
+  const [bgNotice, setBgNotice] = useState<string | null>(null);
+  const activeSessionJob = useMemo(
+    () =>
+      (myJobs ?? []).find(
+        (j) => j.session_id === activeSessionId && isJobActive(j.status),
+      ) ?? null,
+    [myJobs, activeSessionId],
+  );
+
+  // 진행중이던 job이 종료되면 세션 이력을 재조회해 결과를 표시한다 (FR-13)
+  const prevActiveJobIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (activeSessionJob) {
+      prevActiveJobIdRef.current = activeSessionJob.id;
+      return;
+    }
+    if (prevActiveJobIdRef.current !== null) {
+      prevActiveJobIdRef.current = null;
+      setBgNotice(null);
+      if (agentId && userId && activeSessionId) {
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.chat.agentSessionMessages(
+            agentId,
+            activeSessionId,
+            userId,
+          ),
+        });
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.chat.agentHistory(agentId, userId),
+        });
+      }
+    }
+  }, [activeSessionJob, agentId, userId, activeSessionId, queryClient]);
 
   const chatStream = useChatStream({
     streamId: activeStream?.kind === 'chat' ? activeStream.streamId : '',
@@ -307,6 +351,32 @@ const ChatPage = () => {
     }
   };
 
+  // background-jobs S9: 현재 질문을 백그라운드 작업으로 등록 (agent 모드 전용)
+  const handleSendBackground = (content: string) => {
+    if (!activeSessionId || isPending) return;
+    if (!selectedAgent || selectedAgent.id === 'super') return;
+    enqueueJob.mutate(
+      {
+        agentId: selectedAgent.id,
+        data: { query: content, session_id: activeSessionId, source: 'chat' },
+      },
+      {
+        onSuccess: () =>
+          setBgNotice(
+            '백그라운드에서 실행 중입니다 — 채팅방을 나가도 계속 실행되며, 완료되면 상단 알림과 작업함에서 확인할 수 있어요.',
+          ),
+        onError: (e) =>
+          setBgNotice(
+            isJobConflictError(e)
+              ? '이미 이 대화에서 진행 중인 백그라운드 작업이 있어요. 완료된 뒤 다시 시도해 주세요.'
+              : extractJobError(e),
+          ),
+      },
+    );
+  };
+
+  const backgroundBlocked = activeSessionJob !== null;
+
   const toolEvents = view?.toolEvents ?? [];
 
   return (
@@ -342,9 +412,28 @@ const ChatPage = () => {
       )}
 
       <div style={{ background: '#fff' }}>
+        {/* background-jobs S9: 진행중 배너 + 접수 안내 */}
+        {(backgroundBlocked || bgNotice) && (
+          <div className="mx-auto max-w-3xl px-4 pb-1 sm:px-6">
+            <div
+              role="status"
+              className="flex items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-4 py-2.5 text-[13px] text-violet-700"
+            >
+              <svg className="h-4 w-4 shrink-0 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              <span>
+                {/* 에러/접수 안내(bgNotice) 우선 — 진행중 배너가 409 안내를 가리지 않는다 */}
+                {bgNotice ??
+                  '이 대화에서 백그라운드 작업이 실행 중입니다. 완료되면 답변이 여기에 표시돼요.'}
+              </span>
+            </div>
+          </div>
+        )}
         <ChatInput
           onSend={handleSend}
-          isLoading={isPending}
+          isLoading={isPending || backgroundBlocked}
           useRag={useRag}
           onToggleRag={() => setUseRag((v) => !v)}
           attachmentEnabled={!!selectedAgent && selectedAgent.id !== 'super'}
@@ -352,6 +441,8 @@ const ChatPage = () => {
           attachmentUploading={attachmentUploading}
           onAttachFile={handleAttachFile}
           onRemoveAttachment={() => setPendingAttachment(null)}
+          backgroundEnabled={!!selectedAgent && selectedAgent.id !== 'super'}
+          onSendBackground={handleSendBackground}
         />
       </div>
     </div>

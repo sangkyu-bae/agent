@@ -224,6 +224,15 @@ export const API_ENDPOINTS = {
   AGENT_SCHEDULE_RUNS: (agentId: string, scheduleId: string) =>
     `/api/v1/agents/${agentId}/schedules/${scheduleId}/runs`,
 
+  // Background Jobs (background-jobs)
+  AGENT_JOBS: (agentId: string) => `/api/v1/agents/${agentId}/jobs`,
+  JOBS: '/api/v1/jobs',
+  JOBS_UNSEEN_COUNT: '/api/v1/jobs/unseen-count',
+  JOBS_SEEN_ALL: '/api/v1/jobs/seen-all',
+  JOB_DETAIL: (jobId: string) => `/api/v1/jobs/${jobId}`,
+  JOB_SEEN: (jobId: string) => `/api/v1/jobs/${jobId}/seen`,
+  MY_SCHEDULE_RUNS: '/api/v1/schedule-runs',
+
   // Agent Webhook (agent-webhook) — 관리(JWT) + 공개 inbound 경로
   AGENT_WEBHOOK: (agentId: string) => `/api/v1/agents/${agentId}/webhook`,
   AGENT_WEBHOOK_ROTATE: (agentId: string) =>

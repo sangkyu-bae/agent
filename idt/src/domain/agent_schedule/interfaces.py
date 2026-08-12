@@ -67,6 +67,15 @@ class ScheduleRunRepositoryInterface(ABC):
         self, schedule_id: str, limit: int, offset: int, request_id: str
     ) -> list[ScheduleRun]: ...
 
+    async def list_by_user(
+        self, user_id: str, limit: int, offset: int, request_id: str
+    ) -> list[tuple[ScheduleRun, str, str | None]]:
+        """내 스케줄 실행 이력 (run, schedule_name, agent_name) — background-jobs D9.
+
+        additive 확장이라 기존 구현체 호환을 위해 비추상(기본 미지원)으로 둔다.
+        """
+        raise NotImplementedError
+
 
 class ScheduleRunSinkInterface(ABC):
     """실행 결과 처리 포트 (R6): 기본 구현은 이력 테이블 기록.

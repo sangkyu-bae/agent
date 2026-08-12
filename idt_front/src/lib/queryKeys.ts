@@ -216,6 +216,23 @@ export const queryKeys = {
       [...queryKeys.agentSchedules.all, 'runs', agentId, scheduleId] as const,
   },
 
+  // ── Background Jobs (background-jobs) ──────────────────
+  backgroundJobs: {
+    all: ['backgroundJobs'] as const,
+    /** 내 작업 목록 (작업함) */
+    list: (params?: { status?: string; limit?: number; offset?: number }) =>
+      [...queryKeys.backgroundJobs.all, 'list', params] as const,
+    /** 단건 조회 */
+    detail: (jobId: string) =>
+      [...queryKeys.backgroundJobs.all, 'detail', jobId] as const,
+    /** 미확인 완료/실패 카운트 (벨 배지) */
+    unseenCount: () =>
+      [...queryKeys.backgroundJobs.all, 'unseenCount'] as const,
+    /** 내 스케줄 실행 이력 (작업함 스케줄 탭, D9) */
+    scheduleRuns: (params?: { limit?: number; offset?: number }) =>
+      [...queryKeys.backgroundJobs.all, 'scheduleRuns', params] as const,
+  },
+
   // ── Agent Webhook (agent-webhook) ──────────────────────
   agentWebhook: {
     all: ['agentWebhook'] as const,
