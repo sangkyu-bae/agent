@@ -15,6 +15,7 @@ EXPECTED_TOOL_IDS = {
     "python_code_executor",
     "data_analysis",
     "document_extractor",
+    "document_generator",
     "wiki_read",
     "wiki_list",
 }

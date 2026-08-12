@@ -246,6 +246,195 @@ const EDIT_DETAIL = {
   updated_at: '2026-08-01T00:00:00Z',
 };
 
+// ── doc-generator Design §5·§6: 문서 유형 왕복 (MSW 통합) ─────────
+
+const GENERATOR_CATALOG = {
+  tools: [
+    ...CATALOG.tools,
+    {
+      tool_id: 'internal:document_generator',
+      source: 'internal',
+      name: '문서생성기',
+      description: '문서 유형 기반 문서 작성',
+      mcp_server_id: null,
+      mcp_server_name: null,
+      requires_env: [],
+      is_builtin: false,
+    },
+  ],
+};
+
+describe('AgentBuilderPage 문서생성기 (doc-generator)', () => {
+  it('create: 도구 추가 → 유형 편집 → 저장 시 document_generation_type 전송', async () => {
+    server.use(
+      http.get('*/api/v1/tool-catalog', () => HttpResponse.json(GENERATOR_CATALOG)),
+      http.get('*/api/v1/llm-models', () => HttpResponse.json(LLM_MODELS)),
+    );
+    let captured: Record<string, unknown> | null = null;
+    server.use(
+      http.post('*/api/v1/agents', async ({ request }) => {
+        captured = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({
+          agent_id: 'a-1',
+          name: '테스트 에이전트',
+          system_prompt: '테스트 지침',
+          tool_ids: ['document_generator'],
+          workers: [],
+          flow_hint: '',
+          llm_model_id: 'model-1',
+          visibility: 'private',
+          temperature: 0.7,
+          max_iterations: 25,
+          created_at: '2026-08-01T00:00:00Z',
+          has_sub_agents: false,
+        });
+      }),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await enterCreateView(user);
+
+    // 도구함에서 문서생성기 추가 → 설정 모달 자동 오픈
+    await user.click(screen.getByRole('button', { name: '도구' }));
+    await user.click(await screen.findByRole('button', { name: /문서생성기/ }));
+    expect(
+      await screen.findByText('문서생성기 — 문서 유형'),
+    ).toBeInTheDocument();
+
+    // 유형 이름 + 섹션 1개 입력
+    await user.type(screen.getByLabelText('문서 유형명'), '시장조사 보고서');
+    await user.click(screen.getByRole('button', { name: '+ 섹션 추가' }));
+    await user.type(screen.getByLabelText('섹션 1 제목'), '개요');
+    await user.click(screen.getByRole('button', { name: '완료' }));
+
+    // 도구함 배지에 요약 표시
+    expect(screen.getByText(/시장조사 보고서 · 섹션 1/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '저장' }));
+    await waitFor(() => expect(captured).not.toBeNull());
+    expect(captured!.document_generation_type).toEqual({
+      name: '시장조사 보고서',
+      description: '',
+      sections: [{ title: '개요', guidance: '' }],
+      output_format: 'docx',
+      mcp_html_to_doc_tool_id: '',
+    });
+  });
+
+  it('create: 유형 미편집(섹션 0)이면 document_generation_type을 전송하지 않는다', async () => {
+    useBuilderHandlers();
+    let captured: Record<string, unknown> | null = null;
+    server.use(
+      http.post('*/api/v1/agents', async ({ request }) => {
+        captured = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({
+          agent_id: 'a-1',
+          name: '테스트 에이전트',
+          system_prompt: '테스트 지침',
+          tool_ids: [],
+          workers: [],
+          flow_hint: '',
+          llm_model_id: 'model-1',
+          visibility: 'private',
+          temperature: 0.7,
+          max_iterations: 25,
+          created_at: '2026-08-01T00:00:00Z',
+          has_sub_agents: false,
+        });
+      }),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await enterCreateView(user);
+    await user.click(screen.getByRole('button', { name: '저장' }));
+    await waitFor(() => expect(captured).not.toBeNull());
+    expect(captured!.document_generation_type).toBeUndefined();
+  });
+
+  it('edit: detail 프리필 → 섹션 수정 저장 → 교체 payload 전송 (FR-12 왕복)', async () => {
+    let captured: Record<string, unknown> | null = null;
+    server.use(
+      http.get('*/api/v1/tool-catalog', () => HttpResponse.json(GENERATOR_CATALOG)),
+      http.get('*/api/v1/llm-models', () => HttpResponse.json(LLM_MODELS)),
+      http.get('*/api/v1/agents', () =>
+        HttpResponse.json({ agents: [EDIT_SUMMARY], total: 1, page: 1, size: 20 }),
+      ),
+      http.get('*/api/v1/agents/a-9', () =>
+        HttpResponse.json({
+          ...EDIT_DETAIL,
+          tool_ids: ['document_generator'],
+          workers: [
+            {
+              tool_id: 'document_generator',
+              worker_id: 'document_generator_worker',
+              description: '문서생성기',
+              sort_order: 0,
+              tool_config: {
+                type_id: 't-1',
+                mcp_html_to_doc_tool_id: 'mcp_h2d',
+                output_format: 'docx',
+              },
+              worker_type: 'tool',
+              ref_agent_id: null,
+              ref_agent_name: null,
+            },
+          ],
+          document_generation_type: {
+            name: '시장조사 보고서',
+            description: '시장 동향',
+            sections: [
+              { title: '개요', guidance: '' },
+              { title: '시장 현황', guidance: '웹서치 근거 위주' },
+            ],
+            output_format: 'docx',
+            mcp_html_to_doc_tool_id: 'mcp_h2d',
+          },
+        }),
+      ),
+      http.patch('*/api/v1/agents/a-9', async ({ request }) => {
+        captured = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({
+          agent_id: 'a-9',
+          name: '수정용 봇',
+          system_prompt: '기존 지침',
+          updated_at: '2026-08-02T00:00:00Z',
+        });
+      }),
+    );
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: '수정용 봇 수정' }));
+    await waitFor(() =>
+      expect(screen.getByLabelText('에이전트 이름')).toHaveValue('수정용 봇'),
+    );
+
+    // 프리필 배지 확인 → 설정 열어 섹션 제목 수정
+    expect(
+      await screen.findByText(/시장조사 보고서 · 섹션 2/),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '문서생성기 설정' }));
+    const titleInput = screen.getByLabelText('섹션 2 제목');
+    expect(titleInput).toHaveValue('시장 현황');
+    await user.clear(titleInput);
+    await user.type(titleInput, '경쟁 분석');
+    await user.click(screen.getByRole('button', { name: '완료' }));
+
+    await user.click(screen.getByRole('button', { name: '저장' }));
+    await waitFor(() => expect(captured).not.toBeNull());
+    expect(captured!.document_generation_type).toEqual({
+      name: '시장조사 보고서',
+      description: '시장 동향',
+      sections: [
+        { title: '개요', guidance: '' },
+        { title: '경쟁 분석', guidance: '웹서치 근거 위주' },
+      ],
+      output_format: 'docx',
+      mcp_html_to_doc_tool_id: 'mcp_h2d',
+    });
+  });
+});
+
 describe('AgentBuilderPage 설정 탭 (agent-settings-tab)', () => {
   it('create 저장 → max_iterations 기본값 25가 전송된다', async () => {
     useBuilderHandlers();

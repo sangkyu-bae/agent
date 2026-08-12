@@ -2,11 +2,17 @@
 import uuid
 from datetime import datetime, timezone
 
+from src.application.agent_builder.document_generation_type_binding import (
+    build_document_generation_type_plan,
+    ensure_generation_type_wiring,
+    persist_document_generation_type,
+)
 from src.application.agent_builder.document_template_binding import (
     build_document_template_plan,
     ensure_template_wiring,
     persist_document_template,
 )
+from src.domain.document_generator.policies import DEFAULT_MAX_SECTIONS
 from src.application.agent_builder.schemas import (
     CreateAgentRequest, CreateAgentResponse, RagToolConfigRequest, WorkerInfo,
 )
@@ -51,6 +57,8 @@ class CreateAgentUseCase:
         document_template_repo=None,
         source_archiver=None,
         max_template_slots: int = DEFAULT_MAX_SLOTS,
+        document_generation_type_repo=None,
+        max_generation_sections: int = DEFAULT_MAX_SECTIONS,
         mcp_server_repo=None,
         kb_repo: KnowledgeBaseRepositoryInterface | None = None,
         tool_catalog_repo: "ToolCatalogRepositoryInterface | None" = None,
@@ -67,6 +75,9 @@ class CreateAgentUseCase:
         self._document_template_repo = document_template_repo
         self._source_archiver = source_archiver
         self._max_template_slots = max_template_slots
+        # doc-generator §4-3 (미주입 시 문서 유형 요청은 에러)
+        self._document_generation_type_repo = document_generation_type_repo
+        self._max_generation_sections = max_generation_sections
         # nl-agent-composer FR-08: mcp_* tool_id 메타 해석용 (미주입 시 mcp_* 거부)
         self._mcp_server_repo = mcp_server_repo
         # kb-rag-filter D7: kb_id 검증·scope clamp용 (kb_id 지정 요청은 주입 필수)
@@ -134,6 +145,17 @@ class CreateAgentUseCase:
                     request.document_template,
                     skeleton.workers,
                     self._max_template_slots,
+                )
+
+            # Step 1.8 (doc-generator §4-3): 문서 유형 검증 + 워커 tool_config 주입.
+            # 실패 시 예외 전파 = 생성 전체 롤백(R6).
+            generation_type_plan = None
+            if request.document_generation_type is not None:
+                ensure_generation_type_wiring(self._document_generation_type_repo)
+                generation_type_plan = build_document_generation_type_plan(
+                    request.document_generation_type,
+                    skeleton.workers,
+                    self._max_generation_sections,
                 )
 
             # Step 2: Policy 검증
@@ -210,6 +232,14 @@ class CreateAgentUseCase:
                     template_plan, saved.id,
                     self._document_template_repo, self._source_archiver,
                     request_id,
+                )
+
+            # Step 4.7 (doc-generator §4-3): document_generation_type 저장 —
+            # 동일 세션 트랜잭션 편승(R6).
+            if generation_type_plan is not None:
+                await persist_document_generation_type(
+                    generation_type_plan, saved.id,
+                    self._document_generation_type_repo, request_id,
                 )
 
             self._logger.info(

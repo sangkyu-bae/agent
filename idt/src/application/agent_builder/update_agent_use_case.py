@@ -1,9 +1,15 @@
 """UpdateAgentUseCase: 시스템 프롬프트 / 이름 / 서브에이전트 / 문서 템플릿 수정."""
+from src.application.agent_builder.document_generation_type_binding import (
+    build_document_generation_type_plan,
+    ensure_generation_type_wiring,
+    persist_document_generation_type,
+)
 from src.application.agent_builder.document_template_binding import (
     build_document_template_plan,
     ensure_template_wiring,
     persist_document_template,
 )
+from src.domain.document_generator.policies import DEFAULT_MAX_SECTIONS
 from src.application.agent_builder.schemas import UpdateAgentRequest, UpdateAgentResponse
 from src.domain.document_extractor.policies import DEFAULT_MAX_SLOTS
 from src.application.agent_builder.sub_agent_worker_builder import SubAgentWorkerBuilder
@@ -38,6 +44,8 @@ class UpdateAgentUseCase:
         document_template_repo=None,
         source_archiver=None,
         max_template_slots: int = DEFAULT_MAX_SLOTS,
+        document_generation_type_repo=None,
+        max_generation_sections: int = DEFAULT_MAX_SECTIONS,
         kb_repo: KnowledgeBaseRepositoryInterface | None = None,
         llm_model_repo: LlmModelRepositoryInterface | None = None,
         middleware_catalog_repo=None,
@@ -53,6 +61,9 @@ class UpdateAgentUseCase:
         self._document_template_repo = document_template_repo
         self._source_archiver = source_archiver
         self._max_template_slots = max_template_slots
+        # doc-generator §4-3 (미주입 시 문서 유형 요청은 에러)
+        self._document_generation_type_repo = document_generation_type_repo
+        self._max_generation_sections = max_generation_sections
         # agent-builder-edit-mapping FR-5: llm_model_id 수정 시 존재 검증용
         self._llm_model_repo = llm_model_repo
         # builtin-middleware D5: middleware_types 수정 시 카탈로그 존재 검증용
@@ -141,6 +152,13 @@ class UpdateAgentUseCase:
             if request.document_template is not None:
                 await self._replace_document_template(agent, request, request_id)
 
+            # 문서 유형 교체 (doc-generator §4-3): None = 변경 안 함.
+            # 기존 active soft-delete → 신규 저장 → worker tool_config 갱신.
+            if request.document_generation_type is not None:
+                await self._replace_document_generation_type(
+                    agent, request, request_id
+                )
+
             updated = await self._repository.update(agent, request_id)
 
             self._logger.info(
@@ -208,6 +226,32 @@ class UpdateAgentUseCase:
         await persist_document_template(
             plan, agent.id,
             self._document_template_repo, self._source_archiver, request_id,
+        )
+
+    async def _replace_document_generation_type(
+        self,
+        agent,
+        request: UpdateAgentRequest,
+        request_id: str,
+    ) -> None:
+        """문서 유형 교체: 기존 active soft-delete + 신규 저장 (앱 레벨 정합)."""
+        ensure_generation_type_wiring(self._document_generation_type_repo)
+        plan = build_document_generation_type_plan(
+            request.document_generation_type,
+            agent.workers,
+            self._max_generation_sections,
+        )
+        existing = (
+            await self._document_generation_type_repo.find_active_by_agent_worker(
+                agent.id, plan.worker_id, request_id
+            )
+        )
+        if existing is not None:
+            await self._document_generation_type_repo.soft_delete(
+                existing.id, request_id
+            )
+        await persist_document_generation_type(
+            plan, agent.id, self._document_generation_type_repo, request_id,
         )
 
     async def _apply_sub_agents(

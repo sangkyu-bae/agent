@@ -3,6 +3,10 @@ import type {
   DocumentExtractorDraft,
   DocumentTemplateRequest,
 } from './documentExtractor';
+import type {
+  DocumentGenerationTypeRequest,
+  DocumentGeneratorDraft,
+} from './documentGenerator';
 import type { StagedSchedule } from './agentSchedule';
 
 // ── Sub-Agent ──────────────────────────────────
@@ -58,6 +62,8 @@ export interface CreateBuilderAgentRequest {
   skill_ids?: string[];
   // document-template-extractor GA4: 확정 템플릿 (document_extractor 도구 필요)
   document_template?: DocumentTemplateRequest;
+  // doc-generator: 문서 유형 (document_generator 도구 필요)
+  document_generation_type?: DocumentGenerationTypeRequest;
   // agent-settings-tab D5: supervisor 반복 한도 (백엔드 기본 25, 범위 10~1000)
   max_iterations?: number;
 }
@@ -98,6 +104,8 @@ export interface UpdateBuilderAgentRequest {
   skill_ids?: string[];
   // document-template-extractor: undefined = 변경 안 함, 값 = 템플릿 교체
   document_template?: DocumentTemplateRequest;
+  // doc-generator: undefined = 변경 안 함, 값 = 문서 유형 교체
+  document_generation_type?: DocumentGenerationTypeRequest;
   // agent-builder-edit-mapping FR-5: undefined = 모델 변경 안 함
   llm_model_id?: string;
   // builtin-middleware D5: undefined = 변경 안 함, [] = 전부 해제, [...] = 전체 교체
@@ -128,6 +136,8 @@ export interface AgentBuilderFormData {
   skills: string[];
   // document-template-extractor: 확정 전까지 프론트가 보유하는 드래프트 (R4)
   documentExtractorDraft?: DocumentExtractorDraft | null;
+  // doc-generator: 문서 유형 드래프트 (저장 시 document_generation_type으로 전송)
+  documentGeneratorDraft?: DocumentGeneratorDraft | null;
   // agent-schedule: 생성 모드 전용 staged 스케줄 (생성 성공 후 순차 POST, edit에선 미사용)
   schedules: StagedSchedule[];
   // builtin-tools D8: 수동 해제된 빌트인 도구(카탈로그 형식) — ToolPickerModal에서만
