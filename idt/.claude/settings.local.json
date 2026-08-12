@@ -405,7 +405,18 @@
       "Bash(./.venv/Scripts/python.exe -m py_compile src/api/main.py src/application/agent_composer/planner.py src/application/agent_composer/interfaces.py)",
       "Bash(echo \"TSC_EXIT=$?\")",
       "Bash(./.venv/Scripts/python.exe -m pytest tests/api/test_agent_composer_router.py -q)",
-      "Bash(./.venv/Scripts/python.exe -m pytest tests/domain/agent_composer/ tests/application/agent_composer/ tests/api/test_agent_composer_router.py -q)"
+      "Bash(./.venv/Scripts/python.exe -m pytest tests/domain/agent_composer/ tests/application/agent_composer/ tests/api/test_agent_composer_router.py -q)",
+      "PowerShell(Out-Null *)",
+      "PowerShell(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('C:/sangplus/sangplusbot/idt/.bkit/state/pdca-status.json','utf8'\\)\\); console.log\\('JSON OK \\(node\\)'\\)\")",
+      "Bash(./.venv/Scripts/python.exe -m pytest tests/domain/agent_webhook tests/application/agent_webhook -q)",
+      "Bash(./.venv/Scripts/python.exe -m pytest tests/api/test_agent_webhook_router.py tests/api/test_webhook_public_router.py tests/db/test_migration_ddl_comments.py -q)",
+      "Bash(./.venv/Scripts/python.exe -m pytest tests/db/test_migration_ddl_comments.py -q)",
+      "Bash(./.venv/Scripts/python.exe -m py_compile src/api/main.py src/api/routes/agent_webhook_router.py src/api/routes/webhook_public_router.py src/application/agent_webhook/*.py src/infrastructure/agent_webhook/*.py src/domain/agent_webhook/*.py)",
+      "Bash(./.venv/Scripts/python.exe -c \"from src.api.main import create_app; app = create_app\\(\\); routes = [r.path for r in app.routes if 'webhook' in r.path]; print\\(routes\\)\")",
+      "Bash(./.venv/Scripts/python.exe -m pytest tests/domain/agent_webhook tests/application/agent_webhook tests/api/test_agent_webhook_router.py tests/api/test_webhook_public_router.py tests/db/test_migration_ddl_comments.py -q)",
+      "PowerShell(C:\\\\sangplus\\\\sangplusbot\\\\idt\\\\.venv\\\\Scripts\\\\python.exe -m pytest C:\\\\sangplus\\\\sangplusbot\\\\idt\\\\tests\\\\application\\\\general_chat\\\\test_observability.py::TestPersistMessagesSeparateSession -x -q)",
+      "PowerShell(C:\\\\sangplus\\\\sangplusbot\\\\idt\\\\.venv\\\\Scripts\\\\python.exe -m pytest C:\\\\sangplus\\\\sangplusbot\\\\idt\\\\tests\\\\application\\\\general_chat\\\\test_observability.py -q)",
+      "PowerShell(C:\\\\sangplus\\\\sangplusbot\\\\idt\\\\.venv\\\\Scripts\\\\python.exe -m pytest C:\\\\sangplus\\\\sangplusbot\\\\idt\\\\tests\\\\application\\\\general_chat -q)"
     ]
   }
 }
