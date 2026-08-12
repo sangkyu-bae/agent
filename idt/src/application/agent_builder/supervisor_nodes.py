@@ -186,6 +186,7 @@ def create_supervisor_node(
     logger: LoggerInterface,
     analysis_worker_ids: list[str] | None = None,
     viz_policy: VisualizationRoutingPolicy | None = None,
+    docgen_guidance_block: str = "",
 ):
     worker_descriptions = "\n".join(
         f"- {w.worker_id}: {w.description}" for w in workers
@@ -230,7 +231,9 @@ def create_supervisor_node(
             f"사용 가능한 워커:\n{worker_descriptions}"
             f"{attachment_block}"
             f"{data_block}"
-            f"{viz_block}\n\n"
+            f"{viz_block}"
+            # doc-generator D6: 문서 생성 라우팅 판단 기준 (빈 문자열이면 무영향)
+            f"{docgen_guidance_block}\n\n"
             f"다음 중 선택하세요:\n"
             f"- 워커 호출이 필요하면 해당 worker_id를 선택\n"
             f"- 처리 가능한 워커가 사용 가능 목록에 있으면 거부하지 말고 그 워커를 선택\n"

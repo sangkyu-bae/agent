@@ -10,6 +10,7 @@ import ToolPickerModal from './ToolPickerModal';
 import SkillPickerModal from './SkillPickerModal';
 import RagConfigModal from './RagConfigModal';
 import DocumentExtractorConfigModal from './DocumentExtractorConfigModal';
+import DocumentGeneratorConfigModal from './DocumentGeneratorConfigModal';
 import SubAgentManagerModal from './SubAgentManagerModal';
 import { useSkills } from '@/hooks/useSkills';
 import { useMiddlewareCatalog } from '@/hooks/useMiddlewareCatalog';
@@ -19,6 +20,8 @@ import { useKnowledgeBases } from '@/hooks/useKnowledgeBases';
 import { MAX_ATTACHED_SKILLS } from '@/constants/agentSkill';
 import { DOCUMENT_EXTRACTOR_TOOL_ID } from '@/types/documentExtractor';
 import type { DocumentExtractorDraft } from '@/types/documentExtractor';
+import { DOCUMENT_GENERATOR_TOOL_ID } from '@/types/documentGenerator';
+import type { DocumentGeneratorDraft } from '@/types/documentGenerator';
 import {
   loadDraftFromSession,
   saveDraftToSession,
@@ -33,6 +36,7 @@ const RAG_TOOL_ID = RAG_CATALOG_TOOL_ID;
 const CONFIGURABLE_TOOL_IDS: readonly string[] = [
   RAG_TOOL_ID,
   DOCUMENT_EXTRACTOR_TOOL_ID,
+  DOCUMENT_GENERATOR_TOOL_ID,
 ];
 
 interface LeftConfigPanelProps {
@@ -90,6 +94,7 @@ const LeftConfigPanel = ({
   const [isSubAgentModalOpen, setSubAgentModalOpen] = useState(false);
   const [isRagConfigOpen, setRagConfigOpen] = useState(false);
   const [isExtractorConfigOpen, setExtractorConfigOpen] = useState(false);
+  const [isGeneratorConfigOpen, setGeneratorConfigOpen] = useState(false);
 
   const subAgents = form.subAgents ?? [];
   const { data: skillList } = useSkills({ scope: 'all', size: 100 });
@@ -125,6 +130,7 @@ const LeftConfigPanel = ({
     if (isAdding && CONFIGURABLE_TOOL_IDS.includes(toolId)) {
       setToolModalOpen(false);
       if (toolId === RAG_TOOL_ID) setRagConfigOpen(true);
+      else if (toolId === DOCUMENT_GENERATOR_TOOL_ID) setGeneratorConfigOpen(true);
       else setExtractorConfigOpen(true);
     }
   };
@@ -132,6 +138,7 @@ const LeftConfigPanel = ({
   const openConfig = (toolId: string) => {
     if (toolId === RAG_TOOL_ID) setRagConfigOpen(true);
     else if (toolId === DOCUMENT_EXTRACTOR_TOOL_ID) setExtractorConfigOpen(true);
+    else if (toolId === DOCUMENT_GENERATOR_TOOL_ID) setGeneratorConfigOpen(true);
   };
 
   const handleAddSubAgent = (candidate: SubAgentCandidate) => {
@@ -410,6 +417,9 @@ const LeftConfigPanel = ({
                     {tool.tool_id === DOCUMENT_EXTRACTOR_TOOL_ID && (
                       <ExtractorSummaryBadge draft={form.documentExtractorDraft ?? null} />
                     )}
+                    {tool.tool_id === DOCUMENT_GENERATOR_TOOL_ID && (
+                      <GeneratorSummaryBadge draft={form.documentGeneratorDraft ?? null} />
+                    )}
                   </li>
                 );
               })}
@@ -514,6 +524,12 @@ const LeftConfigPanel = ({
         draft={form.documentExtractorDraft ?? null}
         onChange={(draft) => onChange({ ...form, documentExtractorDraft: draft })}
         onClose={() => setExtractorConfigOpen(false)}
+      />
+      <DocumentGeneratorConfigModal
+        isOpen={isGeneratorConfigOpen}
+        draft={form.documentGeneratorDraft ?? null}
+        onChange={(draft) => onChange({ ...form, documentGeneratorDraft: draft })}
+        onClose={() => setGeneratorConfigOpen(false)}
       />
       <SkillPickerModal
         isOpen={isSkillModalOpen}
@@ -697,6 +713,28 @@ const ExtractorSummaryBadge = ({ draft }: ExtractorSummaryBadgeProps) => {
   return (
     <p className="mt-1.5 inline-block rounded bg-emerald-50 px-1.5 py-0.5 text-[11.5px] font-medium text-emerald-700">
       ✓ 양식 확정됨
+    </p>
+  );
+};
+
+// ── 문서생성기 요약 배지 (doc-generator §5-2) ─────────────────
+
+interface GeneratorSummaryBadgeProps {
+  draft: DocumentGeneratorDraft | null;
+}
+
+const GeneratorSummaryBadge = ({ draft }: GeneratorSummaryBadgeProps) => {
+  if (!draft || draft.sections.length === 0) {
+    return (
+      <p className="mt-1.5 inline-block rounded bg-amber-50 px-1.5 py-0.5 text-[11.5px] font-medium text-amber-600">
+        ⚠ 문서 유형 미등록
+      </p>
+    );
+  }
+  return (
+    <p className="mt-1.5 inline-block rounded bg-emerald-50 px-1.5 py-0.5 text-[11.5px] font-medium text-emerald-700">
+      ✓ {draft.name || '문서 유형'} · 섹션 {draft.sections.length} ·{' '}
+      {draft.outputFormat.toUpperCase()}
     </p>
   );
 };

@@ -20,6 +20,7 @@ if TYPE_CHECKING:  # 순환 import 방지: tracker는 런타임에 duck-typed
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain.agents import create_agent
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.application.agent_run.auth_context import (
     reset_current_auth_context,
@@ -63,6 +64,9 @@ from src.domain.visualization.interfaces import (
 from src.domain.visualization.policies import VisualizationRoutingPolicy
 from src.domain.visualization.schemas import VizDecision
 from src.infrastructure.langsmith.langsmith import langsmith
+from src.infrastructure.persistence.repositories.conversation_repository import (
+    SQLAlchemyConversationMessageRepository,
+)
 
 _SYSTEM_PROMPT = (
     "당신은 사용자의 일반 질문에 답하는 AI 어시스턴트입니다.\n"
@@ -141,6 +145,7 @@ class GeneralChatUseCase:
         snapshot_policy: AnalysisSnapshotPolicy | None = None,
         snapshot_excluded_tools: frozenset[str] | None = None,
         tracker: "RunTracker | None" = None,
+        session_factory: async_sessionmaker[AsyncSession] | None = None,
         memory_assembler=None,
         memory_extractor=None,
         middleware_provider=None,
@@ -170,6 +175,11 @@ class GeneralChatUseCase:
         )
         # retrieval-observability: 미주입(None) 시 관측성 완전 비활성 (하위호환).
         self._tracker = tracker
+        # AGENT-OBS-001 fix 미러링: 메시지는 별도 세션에서 즉시 commit해야
+        # tracker의 별도 세션 attach(UPDATE ai_run.user_message_id)가
+        # FK 검사에서 미커밋 메시지 row 락을 기다리다 1205로 죽지 않는다.
+        # None이면 요청 세션 repo 사용 (legacy fallback — 테스트/기존 경로).
+        self._session_factory = session_factory
         # agent-memory: 미주입(None) 시 메모리 주입 비활성 (하위호환).
         # MemoryContextAssembler — 실패 격리("" 반환)는 assembler 내부 책임.
         self._memory_assembler = memory_assembler
@@ -780,6 +790,10 @@ class GeneralChatUseCase:
         재투입하지 않되, 캡션 1줄은 _to_langchain_message에서 부착한다.
         analysis-data-continuity: analysis_data는 assistant 메시지에만 부속.
         retrieval-observability D2: 저장된 user 메시지 id 반환 (ai_run attach용).
+
+        AGENT-OBS-001 fix 미러링: session_factory 주입 시 별도 세션에서 즉시
+        commit — 요청 세션은 스트림 종료까지 안 닫히므로, 거기 남은 미커밋
+        메시지 row는 tracker attach의 FK 검사를 50초(1205) 블록시킨다.
         """
         super_agent = AgentId.super()
         user_msg = ConversationMessage(
@@ -787,7 +801,6 @@ class GeneralChatUseCase:
             agent_id=super_agent, role=MessageRole.USER, content=user_query,
             turn_index=TurnIndex(base_turn + 1), created_at=datetime.utcnow(),
         )
-        saved_user = await self._msg_repo.save(user_msg)
         ai_msg = ConversationMessage(
             id=None, user_id=user_id, session_id=session_id,
             agent_id=super_agent, role=MessageRole.ASSISTANT, content=answer,
@@ -795,7 +808,16 @@ class GeneralChatUseCase:
             charts=charts,
             analysis_data=analysis_data,
         )
-        saved_ai = await self._msg_repo.save(ai_msg)
+        if self._session_factory is not None:
+            async with self._session_factory() as session:
+                async with session.begin():
+                    repo = SQLAlchemyConversationMessageRepository(session)
+                    saved_user = await repo.save(user_msg)
+                    saved_ai = await repo.save(ai_msg)
+        else:
+            # legacy fallback (session_factory 미주입 시) — 기존 동작 유지
+            saved_user = await self._msg_repo.save(user_msg)
+            saved_ai = await self._msg_repo.save(ai_msg)
         # agent-eval-gate 결정 ④: assistant 메시지 id도 반환 → ANSWER_COMPLETED 노출
         return (self._message_id_of(saved_user), self._message_id_of(saved_ai))
 

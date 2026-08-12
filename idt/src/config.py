@@ -139,6 +139,13 @@ class Settings(BaseSettings):
     document_extractor_preview_mode: str = "layout"
     document_extractor_preview_dpi: int = 120         # 72~300 (MCP 계약)
 
+    # Document Generator (doc-generator Design §4-5)
+    document_generator_max_sections: int = 20         # 섹션 개수 상한
+    # 작성 LLM 입력(근거/대화 각각) 상한(문자) — 모델 TPM 한도 초과(429) 방지
+    document_generator_llm_input_max_chars: int = 20000
+    # 기본 MCP 변환 도구 id — 빈 값이면 extractor 키로 폴백 (D5 체인)
+    document_generator_html_to_doc_tool_id: str = ""
+
     # MCP Registry
     # transport별 인증/서버 config(auth_config/server_config)를 DB 저장 시
     # Fernet 대칭암호화하는 키 (urlsafe base64 32B). 빈 값이면 암호화 비활성(SSE 호환).
@@ -208,6 +215,14 @@ class Settings(BaseSettings):
     # Wiki Feedback Loop (wiki-feedback-loop §3-1)
     # 이유 있는 👎 → 위키 draft 환류 — memory 환류와 독립 opt-in, 기본 off.
     wiki_feedback_draft_enabled: bool = False
+
+    # Background Jobs (background-jobs Design §4-4)
+    # 워커 루프 기동 스위치 (D13) — 테스트/도구 실행 시 false 로 무회귀 보장.
+    background_worker_enabled: bool = True
+    background_job_poll_interval_sec: float = 5.0
+    background_job_max_concurrency: int = 2
+    # 내장 스케줄러 틱 주기 (D1) — 외부 cron 대체
+    background_schedule_tick_interval_sec: float = 30.0
 
     # Application
     debug: bool = False

@@ -142,6 +142,8 @@ class WorkflowCompiler:
         search_compress_threshold: int | None = None,
         document_template_repository=None,
         document_composer=None,
+        document_generation_type_repository=None,
+        document_generator=None,
         wiki_toc_provider=None,
         middleware_provider=None,
     ) -> None:
@@ -165,6 +167,9 @@ class WorkflowCompiler:
         # document-template-extractor Design §4-1: 합성 노드 의존 (미주입 시 안내 노옵).
         self._document_template_repository = document_template_repository
         self._document_composer = document_composer
+        # doc-generator §4-4: 생성 노드 의존 (미주입 시 안내 노옵 — D9).
+        self._document_generation_type_repository = document_generation_type_repository
+        self._document_generator = document_generator
         # wiki-agentic-navigation D1: 위키 목차 블록 공급자 (미주입 시 완전 비활성).
         self._wiki_toc_provider = wiki_toc_provider
         # builtin-middleware D6: 미들웨어 공급자 (미주입 시 미들웨어 0 — 무회귀).
@@ -275,6 +280,18 @@ class WorkflowCompiler:
                     function_node_ids.add(worker_def.worker_id)
                     continue
 
+                # doc-generator Design §4-4: 전용 생성 노드 (추출기 동형).
+                # 조사·분석은 상류 워커 담당 — 노드는 누적 컨텍스트만 소비 (D1).
+                if worker_def.tool_id == "document_generator":
+                    worker_map[worker_def.worker_id] = (
+                        self._create_document_generator_node(
+                            llm, worker_def,
+                            auth_ctx=auth_ctx, request_id=request_id,
+                        )
+                    )
+                    function_node_ids.add(worker_def.worker_id)
+                    continue
+
                 category = self._resolve_category(worker_def)
 
                 # analysis 노드는 도구를 직접 쓰지 않으므로 tool 생성을 생략한다.
@@ -370,6 +387,10 @@ class WorkflowCompiler:
                 logger=self._logger,
                 analysis_worker_ids=sorted(analysis_worker_ids),
                 viz_policy=viz_policy,
+                # doc-generator D6: 문서 생성 라우팅 판단 기준 (강제 아님)
+                docgen_guidance_block=self._render_docgen_guidance_block(
+                    workflow.workers
+                ),
             )
             quality_gate_fn = create_quality_gate_node(
                 policy=policy, logger=self._logger,
@@ -821,6 +842,164 @@ class WorkflowCompiler:
             return _reply(state, self._render_compose_summary(template, result))
 
         return document_extractor_node
+
+    def _create_document_generator_node(
+        self, llm, worker_def: WorkerDefinition, *, auth_ctx, request_id: str,
+    ):
+        """문서생성기 전용 생성 노드 (doc-generator Design §4-4, 추출기 동형).
+
+        지정 문서 유형 로드 → 누적 컨텍스트(모든 워커 산출물+대화, D1) →
+        DocumentGenerator(작성 LLM 1회+커버리지 재시도 + MCP html→pdf/doc) →
+        다운로드 참조 AIMessage 반환. 가드 실패는 안내 노옵 — 그래프 비중단 (D9).
+        """
+        logger = self._logger
+        repo = self._document_generation_type_repository
+        generator = self._document_generator
+        worker_id = worker_def.worker_id
+        tool_config = worker_def.tool_config or {}
+        owner_user_id = str(auth_ctx.user_id) if auth_ctx is not None else ""
+
+        def _reply(state: SupervisorState, content: str) -> dict:
+            from langchain_core.messages import AIMessage
+
+            return {
+                "messages": [AIMessage(content=content, name=worker_id)],
+                "last_worker_id": worker_id,
+                "token_usage": state["token_usage"] + len(content) // 4,
+            }
+
+        async def document_generator_node(state: SupervisorState) -> dict:
+            from src.domain.document_extractor.exceptions import (
+                McpConversionError,
+                McpToolNotConfiguredError,
+            )
+            from src.domain.document_generator.exceptions import GenerateError
+            from src.domain.document_generator.tool_config import (
+                DocumentGeneratorToolConfig,
+            )
+
+            if repo is None or generator is None:
+                return _reply(state, (
+                    "문서생성기가 아직 구성되지 않았습니다 "
+                    "(document_generation_type_repository/generator 미배선)."
+                ))
+            type_id = tool_config.get("type_id", "")
+            if not type_id:
+                return _reply(state, (
+                    "등록된 문서 유형이 없습니다. "
+                    "에이전트 편집에서 문서 유형을 등록해주세요."
+                ))
+            gen_type = await repo.find_by_id(type_id, request_id)
+            if gen_type is None or gen_type.status != "active":
+                return _reply(state, (
+                    "문서 유형을 찾을 수 없습니다(삭제되었을 수 있음). "
+                    "에이전트 편집에서 문서 유형을 다시 등록해주세요."
+                ))
+
+            evidence_block, conversation_block = self._split_fill_context(
+                state["messages"]
+            )
+            try:
+                config = DocumentGeneratorToolConfig(**tool_config)
+                result = await generator.generate(
+                    llm=llm,
+                    gen_type=gen_type,
+                    tool_config=config,
+                    evidence_block=evidence_block,
+                    conversation_block=conversation_block,
+                    owner_user_id=owner_user_id,
+                    request_id=request_id,
+                )
+            except (
+                GenerateError,
+                McpConversionError,
+                McpToolNotConfiguredError,
+                ValueError,
+            ) as e:
+                logger.error(
+                    "document_generator_node generate failed",
+                    exception=e,
+                    request_id=request_id,
+                    type_id=type_id,
+                )
+                return _reply(state, f"문서 생성 실패: {e}")
+
+            logger.info(
+                "document_generator_node done",
+                request_id=request_id,
+                type_id=type_id,
+                file_id=result.file_id,
+                missing_count=len(result.missing_sections),
+            )
+            return _reply(state, self._render_generate_summary(gen_type, result))
+
+        return document_generator_node
+
+    @staticmethod
+    def _render_generate_summary(gen_type, result) -> str:
+        """생성 결과 AIMessage 본문 (D8) — 근거 사용 여부·누락 섹션 안내."""
+        lines = [
+            f"문서 「{gen_type.name}」 생성 완료 ({result.filename})",
+            (
+                f"다운로드: [{result.filename}]"
+                f"(/api/v1/document-extractor/files/{result.file_id})"
+            ),
+        ]
+        if not result.used_evidence:
+            lines.append("(외부 근거 없이 대화 문맥 기반으로 작성됨)")
+        if result.missing_sections:
+            lines.append(
+                "[누락 섹션(재시도 후에도 미포함 — 직접 확인 필요)] "
+                + ", ".join(result.missing_sections)
+            )
+        return "\n".join(lines)
+
+    def _render_docgen_guidance_block(
+        self, workers: list[WorkerDefinition]
+    ) -> str:
+        """문서 생성 라우팅 판단 기준 블록 (D6 — 순서 강제 아님).
+
+        주입 조건: generator 워커 존재 and 그 외 워커 1개 이상.
+        """
+        generator_ids = [
+            w.worker_id for w in workers
+            if w.worker_type == "tool" and w.tool_id == "document_generator"
+        ]
+        others = [w for w in workers if w.worker_id not in generator_ids]
+        if not generator_ids or not others:
+            return ""
+        search_ids = [
+            w.worker_id for w in others
+            if w.worker_type == "tool" and self._resolve_category(w) == "search"
+        ]
+        analysis_ids = [
+            w.worker_id for w in others
+            if w.worker_type == "tool" and self._resolve_category(w) == "analysis"
+        ]
+        gen_list = ", ".join(generator_ids)
+        lines = [
+            "\n\n[문서 생성 처리 기준]",
+            (
+                f"문서 생성 요청 시: 문서 아웃라인을 채우는 데 필요한 정보가 "
+                f"대화와 보유 데이터에 충분하면 다른 워커를 거치지 말고 바로 "
+                f"문서생성 워커({gen_list})로 위임하세요"
+                f"(예: 날짜·사유가 대화에 명시된 신청서류)."
+            ),
+        ]
+        if search_ids:
+            lines.append(
+                f"외부/내부 근거 조사가 필요하면 검색 워커"
+                f"({', '.join(search_ids)})를 먼저 호출해 수집한 뒤 위임하세요."
+            )
+        if analysis_ids:
+            lines.append(
+                f"데이터 분석이 필요하면 분석 워커"
+                f"({', '.join(analysis_ids)})를 먼저 호출한 뒤 위임하세요."
+            )
+        lines.append(
+            "문서생성 워커는 이전 워커들의 산출물 전체를 근거로 사용합니다."
+        )
+        return "\n".join(lines)
 
     @staticmethod
     def _split_fill_context(messages: list) -> tuple[str, str]:

@@ -51,6 +51,8 @@ export interface AgentDetail {
   middleware_types?: string[];
   // agent-settings-tab: supervisor 반복 한도 (edit 폼 프라임용 — 서버는 항상 반환)
   max_iterations?: number;
+  // doc-generator FR-12: 활성 문서 유형 (edit 폼 프리필용 — 없으면 null/생략)
+  document_generation_type?: import('./documentGenerator').DocumentGenerationTypeInfo | null;
   workers: WorkerInfo[];
   flow_hint: string;
   llm_model_id: string;

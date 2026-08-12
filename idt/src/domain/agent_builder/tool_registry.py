@@ -51,6 +51,17 @@ TOOL_REGISTRY: dict[str, ToolMeta] = {
         ),
         requires_env=[],
     ),
+    "document_generator": ToolMeta(
+        tool_id="document_generator",
+        name="문서생성기",
+        description=(
+            "등록된 문서 유형(섹션 아웃라인)에 따라 문서를 처음부터 작성해 "
+            "PDF/Word 파일로 생성합니다. 이전 워커들이 수집한 근거와 대화 내용을 "
+            "재료로 사용합니다. 양식 빈칸 채우기는 문서추출기, 내용 자체를 "
+            "조사·작성하는 문서는 이 도구를 사용하세요."
+        ),
+        requires_env=[],
+    ),
     "wiki_read": ToolMeta(
         tool_id="wiki_read",
         name="에이전트 위키 열람",

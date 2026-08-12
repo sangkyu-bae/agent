@@ -11,6 +11,9 @@ interface ChatInputProps {
   attachmentUploading?: boolean;
   onAttachFile?: (file: File) => void;
   onRemoveAttachment?: () => void;
+  // background-jobs S9: 백그라운드 전환 (agent 모드에서만 노출)
+  backgroundEnabled?: boolean;
+  onSendBackground?: (content: string) => void;
 }
 
 const ChatInput = ({
@@ -23,6 +26,8 @@ const ChatInput = ({
   attachmentUploading = false,
   onAttachFile,
   onRemoveAttachment,
+  backgroundEnabled = false,
+  onSendBackground,
 }: ChatInputProps) => {
   const [value, setValue] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -59,6 +64,17 @@ const ChatInput = ({
   };
 
   const canSend = value.trim().length > 0 && !isLoading;
+
+  // background-jobs S9: 현재 입력을 백그라운드 작업으로 등록하고 입력창을 비운다.
+  const handleSendBackground = () => {
+    const trimmed = value.trim();
+    if (!trimmed || isLoading || !onSendBackground) return;
+    onSendBackground(trimmed);
+    setValue('');
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
+  };
 
   return (
     <div className="px-4 pb-5 pt-2 sm:px-6">
@@ -154,6 +170,26 @@ const ChatInput = ({
 
             {/* 오른쪽: 힌트 + 전송 */}
             <div className="flex items-center gap-3">
+              {/* background-jobs S9: 백그라운드 전환 (agent 모드에서만) */}
+              {backgroundEnabled && (
+                <button
+                  type="button"
+                  onClick={handleSendBackground}
+                  disabled={!canSend}
+                  title="백그라운드로 실행 — 채팅방을 나가도 계속 실행됩니다"
+                  aria-label="백그라운드로 실행"
+                  className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-[13px] font-medium transition-all duration-150 ${
+                    canSend
+                      ? 'border border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100'
+                      : 'cursor-not-allowed border border-zinc-200 bg-zinc-50 text-zinc-400'
+                  }`}
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                  </svg>
+                  백그라운드
+                </button>
+              )}
               <span className="hidden text-[12px] text-zinc-400 sm:block">
                 {value.length > 0 ? `${value.length}자` : 'Enter 전송 · Shift+Enter 줄바꿈'}
               </span>

@@ -109,6 +109,16 @@ from src.api.routes.agent_schedule_router import (
     get_list_schedule_runs_use_case,
     get_trigger_due_schedules_use_case,
 )
+from src.api.routes.background_job_router import (
+    router as background_job_router,
+    get_enqueue_job_use_case,
+    get_list_jobs_use_case,
+    get_get_job_use_case,
+    get_count_unseen_use_case,
+    get_mark_seen_use_case,
+    get_mark_all_seen_use_case,
+    get_list_my_schedule_runs_use_case,
+)
 from src.api.routes.agent_webhook_router import (
     router as agent_webhook_router,
     get_enable_webhook_use_case,
@@ -667,6 +677,9 @@ _excel_upload_use_case: Optional[ExcelUploadUseCase] = None
 
 # ws-agent-excel-attachment: Global attachment store (initialized on startup)
 _attachment_store: Optional[AgentAttachmentStore] = None
+
+# background-jobs: 워커 루프 싱글턴 (create_app 에서 조립, lifespan 에서 start/stop)
+_background_job_worker = None
 
 # Global retrieval use case instance (initialized on startup)
 _retrieval_use_case: Optional[RetrievalUseCase] = None
@@ -2356,6 +2369,9 @@ def create_general_chat_use_case_factory():
             logger=app_logger,
             llm_factory=_llm_factory,
             llm_model=_default_llm_model,
+            # AGENT-OBS-001 fix 미러링: 메시지 별도 세션 즉시 commit —
+            # tracker attach의 FK 검사가 요청 세션 미커밋 row에 1205로 막히지 않게.
+            session_factory=get_session_factory(),
             viz_policy=VisualizationRoutingPolicy(),
             viz_classifier=viz_classifier,
             chart_builder=chart_builder,
@@ -2489,6 +2505,15 @@ def create_agent_builder_factories():
     _dt_runtime_template_repo = SessionScopedDocumentTemplateRepository(
         session_factory=get_session_factory(), logger=app_logger,
     )
+    # doc-generator §4-6: 생성 노드 의존(싱글톤) — 추출기와 동일 패턴.
+    from src.infrastructure.document_generator.generation_type_repository import (
+        DocumentGenerationTypeRepository,
+        SessionScopedDocumentGenerationTypeRepository,
+    )
+    from src.infrastructure.document_generator.generator import DocumentGenerator
+    _dg_runtime_type_repo = SessionScopedDocumentGenerationTypeRepository(
+        session_factory=get_session_factory(), logger=app_logger,
+    )
     _dt_conversion_adapter = DocumentConversionAdapter(
         mcp_tool_loader=MCPToolLoader(logger=app_logger),
         mcp_repository=SessionScopedMcpServerRepository(
@@ -2508,6 +2533,15 @@ def create_agent_builder_factories():
         archive_dir=_document_template_archive_dir(),
         logger=app_logger,
     )
+    # doc-generator §4-6: 변환 어댑터·첨부 저장소는 기존 인스턴스 공유 (신규 생성 금지).
+    _dg_generator = DocumentGenerator(
+        conversion_adapter=_dt_conversion_adapter,
+        attachment_store=_attachment_store or create_attachment_store(),
+        logger=app_logger,
+        default_html_to_doc_tool_id=settings.document_generator_html_to_doc_tool_id,
+        fallback_html_to_doc_tool_id=settings.document_extractor_html_to_doc_tool_id,
+        llm_input_max_chars=settings.document_generator_llm_input_max_chars,
+    )
 
     workflow_compiler = WorkflowCompiler(
         tool_factory=tool_factory, llm_factory=_llm_factory, logger=app_logger,
@@ -2518,6 +2552,9 @@ def create_agent_builder_factories():
         search_compress_threshold=settings.search_compress_threshold,
         document_template_repository=_dt_runtime_template_repo,
         document_composer=_dt_composer,
+        # ★ doc-generator §4-4: 생성 노드 의존
+        document_generation_type_repository=_dg_runtime_type_repo,
+        document_generator=_dg_generator,
         # ★ wiki-agentic-navigation D1: wiki_read 에이전트 목차 블록 주입
         wiki_toc_provider=_wiki_toc_provider,
         # ★ builtin-middleware D6: 스냅샷 ∪ enforced 미들웨어 조립
@@ -2553,6 +2590,9 @@ def create_agent_builder_factories():
     def _make_document_template_repo(session: AsyncSession):
         return DocumentTemplateRepository(session=session, logger=app_logger)
 
+    def _make_document_generation_type_repo(session: AsyncSession):
+        return DocumentGenerationTypeRepository(session=session, logger=app_logger)
+
     def _make_kb_repo(session: AsyncSession):
         from src.infrastructure.knowledge_base.repository import (
             KnowledgeBaseRepository,
@@ -2582,6 +2622,11 @@ def create_agent_builder_factories():
             document_template_repo=_make_document_template_repo(session),
             source_archiver=_dt_archiver,
             max_template_slots=settings.document_extractor_max_slots,
+            # doc-generator §4-3: 문서 유형 저장 (동일 세션 편승)
+            document_generation_type_repo=_make_document_generation_type_repo(
+                session
+            ),
+            max_generation_sections=settings.document_generator_max_sections,
             # nl-agent-composer FR-08: mcp_* tool_id 메타 해석
             mcp_server_repo=MCPServerRepository(
                 session=session, logger=app_logger, cipher=_mcp_cipher()
@@ -2606,6 +2651,11 @@ def create_agent_builder_factories():
             document_template_repo=_make_document_template_repo(session),
             source_archiver=_dt_archiver,
             max_template_slots=settings.document_extractor_max_slots,
+            # doc-generator §4-3: 문서 유형 교체 (동일 세션 편승)
+            document_generation_type_repo=_make_document_generation_type_repo(
+                session
+            ),
+            max_generation_sections=settings.document_generator_max_sections,
             # kb-rag-filter D7: kb_id 워커 scope 검증
             kb_repo=_make_kb_repo(session),
             # agent-builder-edit-mapping FR-5: 모델 변경 검증
@@ -2656,6 +2706,10 @@ def create_agent_builder_factories():
             agent_skill_repo=_make_agent_skill_repo(session),
             # builtin-middleware D5: edit 폼 프라임용 스냅샷 노출
             agent_middleware_repo=_make_agent_middleware_repo(session),
+            # doc-generator FR-12: edit 폼 프리필용 활성 유형 노출
+            document_generation_type_repo=_make_document_generation_type_repo(
+                session
+            ),
         )
 
     def list_uc_factory(session: AsyncSession = Depends(get_session)):
@@ -2679,6 +2733,10 @@ def create_agent_builder_factories():
                 logger=app_logger,
             ),
             document_template_repo=_make_document_template_repo(session),
+            # doc-generator: 종속 문서 유형 soft-delete 캐스케이드
+            document_generation_type_repo=_make_document_generation_type_repo(
+                session
+            ),
         )
 
     def subscribe_uc_factory(session: AsyncSession = Depends(get_session)):
@@ -2917,6 +2975,116 @@ def create_agent_webhook_factories(build_run_agent_uc):
     return (
         enable_f, get_f, rotate_f, update_f, disable_f, invoke_f,
         deliveries_f, outbound_dispatcher,
+    )
+
+
+def create_background_job_factories(
+    build_run_agent_uc, outbound_dispatcher=None, schedule_trigger_uc=None
+):
+    """background-jobs DI (Design §4-5): 요청-스코프 팩토리 + 워커 싱글턴.
+
+    워커는 AsyncSession 을 보유하지 않는다 (session_factory 만, DB-001).
+    AuthContext 는 실행 시점에 등록자 기준으로 재조립한다 (D3 — webhook 동형).
+    """
+    from src.application.background_job.enqueue_job_use_case import (
+        EnqueueJobUseCase,
+    )
+    from src.application.background_job.list_my_schedule_runs_use_case import (
+        ListMyScheduleRunsUseCase,
+    )
+    from src.application.background_job.query_use_cases import (
+        CountUnseenUseCase,
+        GetJobUseCase,
+        ListJobsUseCase,
+        MarkAllSeenUseCase,
+        MarkSeenUseCase,
+    )
+    from src.application.background_job.worker import BackgroundJobWorker
+    from src.infrastructure.agent_schedule.schedule_run_repository import (
+        ScheduleRunRepository,
+    )
+    from src.infrastructure.background_job.job_repository import (
+        BackgroundJobRepository,
+    )
+
+    app_logger = get_app_logger()
+    session_factory = get_session_factory()
+
+    def _make_job_repo(session: AsyncSession):
+        return BackgroundJobRepository(session=session, logger=app_logger)
+
+    def _make_agent_repo(session: AsyncSession):
+        return AgentDefinitionRepository(session=session, logger=app_logger)
+
+    async def _assemble_job_auth_context(user_id: str, request_id: str):
+        """등록자 AuthContext 재조립 (D3) — 사용자 미존재/비활성 시 None."""
+        from src.domain.auth.entities import UserStatus
+
+        async with session_factory() as session:
+            user_repo = UserRepository(session=session, logger=app_logger)
+            try:
+                user = await user_repo.find_by_id(int(user_id))
+            except (TypeError, ValueError):
+                return None
+            if user is None or user.status != UserStatus.APPROVED:
+                return None
+            assemble_uc = AssembleAuthContextUseCase(
+                profile_repo=UserProfileRepository(
+                    session=session, logger=app_logger
+                ),
+                department_repo=DepartmentRepository(
+                    session=session, logger=app_logger
+                ),
+                permission_repo=PermissionRepository(
+                    session=session, logger=app_logger
+                ),
+                logger=app_logger,
+            )
+            return await assemble_uc.execute(user, request_id)
+
+    def enqueue_f(session: AsyncSession = Depends(get_session)):
+        return EnqueueJobUseCase(
+            _make_job_repo(session), _make_agent_repo(session), app_logger
+        )
+
+    def list_f(session: AsyncSession = Depends(get_session)):
+        return ListJobsUseCase(_make_job_repo(session), app_logger)
+
+    def get_f(session: AsyncSession = Depends(get_session)):
+        return GetJobUseCase(_make_job_repo(session), app_logger)
+
+    def unseen_f(session: AsyncSession = Depends(get_session)):
+        return CountUnseenUseCase(_make_job_repo(session), app_logger)
+
+    def seen_f(session: AsyncSession = Depends(get_session)):
+        return MarkSeenUseCase(_make_job_repo(session), app_logger)
+
+    def seen_all_f(session: AsyncSession = Depends(get_session)):
+        return MarkAllSeenUseCase(_make_job_repo(session), app_logger)
+
+    def schedule_runs_f(session: AsyncSession = Depends(get_session)):
+        return ListMyScheduleRunsUseCase(
+            ScheduleRunRepository(session=session, logger=app_logger),
+            app_logger,
+        )
+
+    worker = BackgroundJobWorker(
+        session_factory=session_factory,
+        job_repo_builder=_make_job_repo,
+        run_agent_uc_builder=build_run_agent_uc,
+        assemble_auth_context=_assemble_job_auth_context,
+        logger=app_logger,
+        schedule_trigger_uc=schedule_trigger_uc,
+        outbound_dispatcher=outbound_dispatcher,
+        poll_interval_sec=settings.background_job_poll_interval_sec,
+        schedule_tick_interval_sec=settings.background_schedule_tick_interval_sec,
+        max_concurrency=settings.background_job_max_concurrency,
+        enabled=settings.background_worker_enabled,
+    )
+
+    return (
+        enqueue_f, list_f, get_f, unseen_f, seen_f, seen_all_f,
+        schedule_runs_f, worker,
     )
 
 
@@ -4203,7 +4371,16 @@ async def lifespan(app: FastAPI):
     # 생성해야 chart_builder LLM 주입이 가능하다(시각화 분기 활성화).
     _analyze_excel_use_case = create_analyze_excel_use_case()
 
+    # background-jobs D1·D13: 워커 루프 기동 (enabled=False 면 내부 no-op).
+    # asyncio.create_task 는 실행 중인 이벤트 루프가 필요해 lifespan 에서 시작한다.
+    if _background_job_worker is not None:
+        _background_job_worker.start()
+
     yield
+
+    # background-jobs D7: 루프·활성 job 취소 + failed 마킹 시도 (reconcile 이중 방어)
+    if _background_job_worker is not None:
+        await _background_job_worker.stop()
 
     # Shutdown: Cleanup (if needed)
     _document_processor = None
@@ -4326,6 +4503,25 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_toggle_schedule_use_case] = _sch_toggle_f
     app.dependency_overrides[get_list_schedule_runs_use_case] = _sch_list_runs_f
     app.dependency_overrides[get_trigger_due_schedules_use_case] = _sch_trigger_f
+
+    # Background Job DI (background-jobs Design §4-5)
+    # 스케줄 DI 이후 — 워커의 내장 스케줄러 틱(D1)이 트리거 싱글턴을 공유한다.
+    global _background_job_worker
+    (
+        _bj_enqueue_f, _bj_list_f, _bj_get_f, _bj_unseen_f,
+        _bj_seen_f, _bj_seen_all_f, _bj_sch_runs_f, _background_job_worker,
+    ) = create_background_job_factories(
+        _build_run_agent_uc,
+        outbound_dispatcher=_wh_dispatcher,
+        schedule_trigger_uc=_sch_trigger_f(),
+    )
+    app.dependency_overrides[get_enqueue_job_use_case] = _bj_enqueue_f
+    app.dependency_overrides[get_list_jobs_use_case] = _bj_list_f
+    app.dependency_overrides[get_get_job_use_case] = _bj_get_f
+    app.dependency_overrides[get_count_unseen_use_case] = _bj_unseen_f
+    app.dependency_overrides[get_mark_seen_use_case] = _bj_seen_f
+    app.dependency_overrides[get_mark_all_seen_use_case] = _bj_seen_all_f
+    app.dependency_overrides[get_list_my_schedule_runs_use_case] = _bj_sch_runs_f
 
     # document-template-extractor Design §6: extract/refine/files DI
     _de_extract_f, _de_refine_f = create_document_extractor_factories()
@@ -4783,6 +4979,7 @@ def create_app() -> FastAPI:
     app.include_router(agent_builder_router)
     app.include_router(agent_schedule_router)
     app.include_router(agent_schedule_trigger_router)
+    app.include_router(background_job_router)
     app.include_router(agent_webhook_router)
     app.include_router(webhook_public_router)
     app.include_router(rag_tool_router)

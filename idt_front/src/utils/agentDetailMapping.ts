@@ -11,6 +11,7 @@ import type { RagToolConfig } from '@/types/ragToolConfig';
 import { DEFAULT_RAG_CONFIG } from '@/types/ragToolConfig';
 import { MAX_ITERATIONS } from '@/constants/agentSettings';
 import { mapDraftToolIdsToCatalog } from './draftToolMapping';
+import { draftFromGenerationTypeInfo } from './documentGenerator';
 
 /** RAG 도구의 저장 형식 tool_id (worker.tool_id) */
 const RAG_WORKER_TOOL_ID = 'internal_document_search';
@@ -71,6 +72,10 @@ export function mapDetailToForm(
     excludedBuiltinMiddlewares: [],
     // builtin-middleware: edit 폼 프리필 (전체 교체 전송의 기준선)
     middlewares: detail.middleware_types ?? [],
+    // doc-generator FR-12: 활성 문서 유형 프리필 (없으면 null — 저장 시 미전송=무변경)
+    documentGeneratorDraft: detail.document_generation_type
+      ? draftFromGenerationTypeInfo(detail.document_generation_type)
+      : null,
     // agent-settings-tab D5: 서버는 항상 값을 반환 — 폴백은 방어용
     maxIterations: detail.max_iterations ?? MAX_ITERATIONS.DEFAULT,
   };

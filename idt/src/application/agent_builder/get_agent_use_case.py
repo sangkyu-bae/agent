@@ -1,5 +1,13 @@
 """GetAgentUseCase: 에이전트 정의 조회."""
-from src.application.agent_builder.schemas import GetAgentResponse, WorkerInfo
+from src.application.agent_builder.document_generation_type_binding import (
+    DOCUMENT_GENERATOR_TOOL_ID,
+)
+from src.application.agent_builder.schemas import (
+    DocumentGenerationTypeInfo,
+    DocumentSectionRequest,
+    GetAgentResponse,
+    WorkerInfo,
+)
 from src.domain.agent_builder.interfaces import AgentDefinitionRepositoryInterface
 from src.domain.agent_builder.policies import AccessCheckInput, VisibilityPolicy
 from src.domain.agent_skill.interfaces import AgentSkillRepositoryInterface
@@ -15,6 +23,7 @@ class GetAgentUseCase:
         logger: LoggerInterface,
         agent_skill_repo: AgentSkillRepositoryInterface | None = None,
         agent_middleware_repo=None,
+        document_generation_type_repo=None,
     ) -> None:
         self._repository = repository
         self._dept_repository = dept_repository
@@ -22,6 +31,8 @@ class GetAgentUseCase:
         self._agent_skill_repo = agent_skill_repo
         # builtin-middleware D5: edit 폼 프라임용 스냅샷 조회 (미주입 시 빈 목록)
         self._agent_middleware_repo = agent_middleware_repo
+        # doc-generator FR-12: edit 폼 프리필용 활성 유형 조회 (미주입 시 None)
+        self._document_generation_type_repo = document_generation_type_repo
 
     async def execute(
         self,
@@ -93,6 +104,10 @@ class GetAgentUseCase:
                 )
                 middleware_types = [r.middleware_type for r in records]
 
+            generation_type_info = await self._load_generation_type_info(
+                agent, request_id
+            )
+
             return GetAgentResponse(
                 agent_id=agent.id,
                 name=agent.name,
@@ -110,6 +125,7 @@ class GetAgentUseCase:
                 temperature=agent.temperature,
                 max_iterations=agent.max_iterations,
                 middleware_types=middleware_types,
+                document_generation_type=generation_type_info,
                 owner_user_id=agent.user_id,
                 can_edit=can_edit,
                 can_delete=can_delete,
@@ -121,3 +137,40 @@ class GetAgentUseCase:
                 "GetAgentUseCase failed", exception=e, request_id=request_id
             )
             raise
+
+    async def _load_generation_type_info(
+        self, agent, request_id: str
+    ) -> DocumentGenerationTypeInfo | None:
+        """doc-generator FR-12: generator 워커의 활성 유형 → 프리필 스냅샷."""
+        if self._document_generation_type_repo is None:
+            return None
+        worker = next(
+            (
+                w for w in agent.workers
+                if w.worker_type == "tool"
+                and w.tool_id == DOCUMENT_GENERATOR_TOOL_ID
+            ),
+            None,
+        )
+        if worker is None:
+            return None
+        gen_type = (
+            await self._document_generation_type_repo.find_active_by_agent_worker(
+                agent.id, worker.worker_id, request_id
+            )
+        )
+        if gen_type is None:
+            return None
+        tool_config = worker.tool_config or {}
+        return DocumentGenerationTypeInfo(
+            name=gen_type.name,
+            description=gen_type.description,
+            sections=[
+                DocumentSectionRequest(title=s.title, guidance=s.guidance)
+                for s in gen_type.sections
+            ],
+            output_format=gen_type.output_format,
+            mcp_html_to_doc_tool_id=tool_config.get(
+                "mcp_html_to_doc_tool_id", ""
+            ),
+        )

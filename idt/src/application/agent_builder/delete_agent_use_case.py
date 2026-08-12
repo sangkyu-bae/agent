@@ -18,12 +18,15 @@ class DeleteAgentUseCase:
         logger: LoggerInterface,
         auto_fork_service: AutoForkService | None = None,
         document_template_repo=None,
+        document_generation_type_repo=None,
     ) -> None:
         self._repository = repository
         self._logger = logger
         self._auto_fork_service = auto_fork_service
         # document-template-extractor: 종속 템플릿 soft-delete (원본 파일은 보관)
         self._document_template_repo = document_template_repo
+        # doc-generator: 종속 문서 유형 soft-delete
+        self._document_generation_type_repo = document_generation_type_repo
 
     async def execute(
         self,
@@ -78,6 +81,20 @@ class DeleteAgentUseCase:
                     request_id=request_id,
                     agent_id=agent_id,
                     template_count=deleted,
+                )
+
+            # 종속 문서 유형 soft-delete (doc-generator — 추출기 캐스케이드 동형).
+            if self._document_generation_type_repo is not None:
+                deleted_types = (
+                    await self._document_generation_type_repo.soft_delete_by_agent(
+                        agent_id, request_id
+                    )
+                )
+                self._logger.info(
+                    "DeleteAgentUseCase generation types soft-deleted",
+                    request_id=request_id,
+                    agent_id=agent_id,
+                    type_count=deleted_types,
                 )
             self._logger.info(
                 "DeleteAgentUseCase done",

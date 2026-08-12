@@ -97,6 +97,16 @@ def make_composer_tracer(tags: Optional[list[str]] = None):
 
 DOCUMENT_EXTRACTOR_PROJECT_NAME = "document-extractor"
 
+DOCUMENT_GENERATOR_PROJECT_NAME = "document-generator"
+
+
+def make_document_generator_tracer(tags: Optional[list[str]] = None):
+    """문서생성기 추적용 per-run tracer — 고정 프로젝트 'document-generator'.
+
+    문서 작성 LLM 호출을 run_name(generate:{유형명})으로 구분 추적한다 (D7).
+    """
+    return _make_project_tracer(DOCUMENT_GENERATOR_PROJECT_NAME, tags)
+
 
 def make_document_extractor_tracer(tags: Optional[list[str]] = None):
     """문서추출기 추적용 per-run tracer — 고정 프로젝트 'document-extractor'.

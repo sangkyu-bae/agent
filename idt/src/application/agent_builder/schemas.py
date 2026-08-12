@@ -21,6 +21,27 @@ class DocumentTemplateRequest(BaseModel):
     mcp_html_to_doc_tool_id: str
 
 
+class DocumentSectionRequest(BaseModel):
+    """doc-generator: 섹션 아웃라인 한 항목. 상세 검증은 SectionPolicy(도메인)."""
+
+    title: str
+    guidance: str = ""
+
+
+class DocumentGenerationTypeRequest(BaseModel):
+    """doc-generator Design §4-3: 문서 유형 저장 요청.
+
+    tool_configs와 분리된 전용 필드 (기존 경로 무회귀 — DocumentTemplateRequest 동형).
+    상세 검증(섹션/이름/포맷)은 도메인 정책이 전담 — 위반 시 400.
+    """
+
+    name: str = Field(..., max_length=200)
+    description: str = ""
+    sections: list[DocumentSectionRequest] = Field(default_factory=list)
+    output_format: str = "docx"                 # D4 기본값
+    mcp_html_to_doc_tool_id: str = ""           # 빈 값 = settings 폴백 (D5)
+
+
 class RagToolConfigRequest(BaseModel):
     """RAG 도구 설정 요청 스키마."""
     collection_name: str | None = None
@@ -76,6 +97,8 @@ class CreateAgentRequest(BaseModel):
     skill_ids: list[str] | None = None
     # document-template-extractor GA4: 확정 템플릿 (document_extractor 도구 필요)
     document_template: DocumentTemplateRequest | None = None
+    # doc-generator §4-3: 문서 유형 (document_generator 도구 필요)
+    document_generation_type: DocumentGenerationTypeRequest | None = None
     # agent-instruction-required: 지침 필수. None/빈 값이면 생성 시 에러(자동생성 제거).
     # 자동 구성은 Fix 에이전트(agent_composer)가 초안을 프리필하는 방식으로만 제공.
     system_prompt: str | None = Field(None, max_length=4000)
@@ -119,6 +142,8 @@ class UpdateAgentRequest(BaseModel):
     skill_ids: list[str] | None = None
     # document-template-extractor: None = 템플릿 변경 안 함, 값 = 교체(기존 soft-delete)
     document_template: DocumentTemplateRequest | None = None
+    # doc-generator: None = 문서 유형 변경 안 함, 값 = 교체(기존 soft-delete)
+    document_generation_type: DocumentGenerationTypeRequest | None = None
     # agent-builder-edit-mapping FR-5: None = 모델 변경 안 함
     llm_model_id: str | None = None
     # builtin-middleware D5: None = 미들웨어 변경 안 함, 값 = 전체 교체
@@ -131,6 +156,16 @@ class UpdateAgentResponse(BaseModel):
     name: str
     system_prompt: str
     updated_at: str
+
+
+class DocumentGenerationTypeInfo(BaseModel):
+    """doc-generator FR-12: 수정 폼 프리필용 활성 문서 유형 스냅샷."""
+
+    name: str
+    description: str = ""
+    sections: list[DocumentSectionRequest] = Field(default_factory=list)
+    output_format: str = "docx"
+    mcp_html_to_doc_tool_id: str = ""
 
 
 class GetAgentResponse(BaseModel):
@@ -153,6 +188,8 @@ class GetAgentResponse(BaseModel):
     max_iterations: int = 25
     # builtin-middleware D5: 적용 미들웨어 스냅샷 — edit 폼 프라임용
     middleware_types: list[str] = []
+    # doc-generator FR-12: 활성 문서 유형 — edit 폼 프리필용 (없으면 None)
+    document_generation_type: DocumentGenerationTypeInfo | None = None
     owner_user_id: str
     can_edit: bool
     can_delete: bool

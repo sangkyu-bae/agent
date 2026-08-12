@@ -20,7 +20,9 @@ import type { ComposeAgentDraftResponse } from '@/types/agentComposer';
 import { MAX_ATTACHED_SKILLS } from '@/constants/agentSkill';
 import { MAX_ITERATIONS } from '@/constants/agentSettings';
 import { DOCUMENT_EXTRACTOR_TOOL_ID } from '@/types/documentExtractor';
+import { DOCUMENT_GENERATOR_TOOL_ID } from '@/types/documentGenerator';
 import { buildDocumentTemplateRequest } from '@/utils/documentTemplate';
+import { buildDocumentGenerationTypeRequest } from '@/utils/documentGenerator';
 import { mapDraftToolIdsToCatalog } from '@/utils/draftToolMapping';
 import { mapDetailToForm, RAG_CATALOG_TOOL_ID } from '@/utils/agentDetailMapping';
 
@@ -169,6 +171,11 @@ const AgentBuilderPage = () => {
               form.documentExtractorDraft,
               form.name,
             ),
+            // doc-generator: undefined = 문서 유형 변경 안 함, 값 = 교체
+            document_generation_type: buildDocumentGenerationTypeRequest(
+              form.documentGeneratorDraft,
+              form.name,
+            ),
           },
         },
         {
@@ -218,6 +225,11 @@ const AgentBuilderPage = () => {
           skill_ids: form.skills.length > 0 ? form.skills : undefined,
           document_template: buildDocumentTemplateRequest(
             form.documentExtractorDraft,
+            form.name,
+          ),
+          // doc-generator: 섹션이 정의된 드래프트만 전송 (없으면 미등록)
+          document_generation_type: buildDocumentGenerationTypeRequest(
+            form.documentGeneratorDraft,
             form.name,
           ),
           // agent-settings-tab D5: 설정 탭 반복 한도 (기본 25)
@@ -282,6 +294,10 @@ const AgentBuilderPage = () => {
       const next = { ...prev, tools: newTools, toolConfigs: newConfigs };
       if (toolId === DOCUMENT_EXTRACTOR_TOOL_ID && isRemoving) {
         next.documentExtractorDraft = null;
+      }
+      // 문서생성기 해제 시 문서 유형 드래프트 정리 (doc-generator)
+      if (toolId === DOCUMENT_GENERATOR_TOOL_ID && isRemoving) {
+        next.documentGeneratorDraft = null;
       }
       return next;
     });
@@ -387,6 +403,9 @@ const AgentBuilderPage = () => {
         toolConfigs: newConfigs,
         documentExtractorDraft: newTools.includes(DOCUMENT_EXTRACTOR_TOOL_ID)
           ? prev.documentExtractorDraft
+          : null,
+        documentGeneratorDraft: newTools.includes(DOCUMENT_GENERATOR_TOOL_ID)
+          ? prev.documentGeneratorDraft
           : null,
       };
     });
