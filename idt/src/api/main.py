@@ -154,6 +154,10 @@ from src.api.routes.agent_attachment_router import (
     router as agent_attachment_router,
     get_upload_attachment_use_case,
 )
+from src.api.routes.intent_router import (
+    router as intent_router,
+    get_analyze_intent_use_case,
+)
 from src.api.routes.document_extractor_router import (
     router as document_extractor_router,
     get_extract_document_use_case,
@@ -183,6 +187,7 @@ from src.infrastructure.mcp_registry.session_scoped_repository import (
 )
 from src.application.agent_attachment.resolver import AttachmentResolver
 from src.application.agent_attachment.upload_use_case import UploadAttachmentUseCase
+from src.application.intent.use_case import AnalyzeIntentUseCase
 from src.infrastructure.agent_attachment.store import AgentAttachmentStore
 from src.application.agent_run.ws_auth_context import WsAuthContextResolver
 from src.infrastructure.general_chat.stream_cache import InMemoryChatStreamCache
@@ -411,9 +416,16 @@ from src.infrastructure.config.analysis_config import AnalysisConfig
 from src.infrastructure.excel.pandas_excel_parser import PandasExcelParser
 from src.infrastructure.llm.claude_client import ClaudeClient
 from src.infrastructure.llm.llm_factory import LLMFactory
+from src.infrastructure.tool_selection.adapters.langchain_filter import (
+    LangChainToolFilter,
+)
+from src.infrastructure.tool_selection.llm_tool_selector import (
+    LLMToolSelector,
+)
 from src.infrastructure.web_search.tavily_tool import TavilySearchTool
 from src.application.hallucination.use_case import HallucinationEvaluatorUseCase
 from src.infrastructure.hallucination.adapter import HallucinationEvaluatorAdapter
+from src.infrastructure.intent.adapter import LLMIntentAnalyzerAdapter
 from src.infrastructure.search_decision.adapter import LLMSearchDecisionAdapter
 from src.infrastructure.persistence.database import (
     get_engine,
@@ -2383,6 +2395,8 @@ def create_general_chat_use_case_factory():
             memory_extractor=get_memory_extraction_service(),
             # builtin-middleware D7: 카탈로그 빌트인 ∪ enforced 적용
             middleware_provider=get_middleware_provider(),
+            # tool-recommender module-4: 킬스위치 off면 None → 선별 비활성
+            tool_filter=_build_tool_filter(),
         )
 
     return _factory
@@ -2395,6 +2409,61 @@ _SEARCH_PIPELINE_API_KEY_ENV = {
     "anthropic": "ANTHROPIC_API_KEY",
     "ollama": "",  # ollama는 API 키 불필요
 }
+
+
+def _build_tool_selector_llm_model() -> LlmModel | None:
+    """settings → 도구 선별용 경량 LlmModel (DB 미등록 인라인 엔티티).
+
+    tool-recommender Design §10.3. provider/model 미설정 시 None.
+    """
+    provider = settings.tool_selector_provider
+    model_name = settings.tool_selector_model_name
+    if not provider or not model_name:
+        return None
+    now = datetime.now()
+    return LlmModel(
+        id="tool-selector-llm",
+        provider=provider,
+        model_name=model_name,
+        display_name=f"Tool Selector ({model_name})",
+        description=None,
+        api_key_env=_SEARCH_PIPELINE_API_KEY_ENV.get(provider, "OPENAI_API_KEY"),
+        max_tokens=None,
+        is_active=True,
+        is_default=False,
+        created_at=now,
+        updated_at=now,
+    )
+
+
+def _build_tool_filter():
+    """도구 선별 어댑터. 킬스위치가 꺼져 있거나 조립 실패 시 None.
+
+    tool-recommender module-4 결선. None이면 GeneralChatUseCase가 선별을
+    건너뛰어 기존과 동일하게 전량 바인딩한다 (하위호환).
+    """
+    if not settings.tool_selector_enabled:
+        return None
+    logger = get_app_logger()
+    llm_model = _build_tool_selector_llm_model()
+    if llm_model is None:
+        logger.warning(
+            "Tool selector enabled but provider/model unset — disabling"
+        )
+        return None
+    try:
+        selector = LLMToolSelector(
+            llm_factory=_llm_factory,
+            llm_model=llm_model,
+            logger=logger,
+            top_k=settings.tool_selector_top_k,
+            timeout_sec=settings.tool_selector_timeout_sec,
+        )
+        return LangChainToolFilter(selector=selector, logger=logger)
+    except Exception as e:
+        # 선별은 부가 기능이다 — 조립 실패가 채팅을 막아선 안 된다.
+        logger.warning("Tool filter build failed — disabling", exception=e)
+        return None
 
 
 def _build_search_pipeline_llm_model() -> LlmModel | None:
@@ -4626,6 +4695,13 @@ def create_app() -> FastAPI:
         get_configured_ws_attachment_resolver
     )
 
+    # intent-analyzer Design §2.1 — 독립 모듈. 기존 그래프에는 배선하지 않는다(Plan D8).
+    # 어댑터 1개를 앱 수명 동안 재사용한다 (위키 app-lifetime-client-singleton).
+    _intent_use_case = AnalyzeIntentUseCase(
+        analyzer=LLMIntentAnalyzerAdapter(logger=logger)
+    )
+    app.dependency_overrides[get_analyze_intent_use_case] = lambda: _intent_use_case
+
     # ws-chat-streaming Design §4.4: in-memory ChatStreamCache + reuse GeneralChat factory.
     _chat_stream_cache = InMemoryChatStreamCache(ttl_seconds=300, max_sessions=1000)
     app.dependency_overrides[get_chat_stream_cache] = lambda: _chat_stream_cache
@@ -4965,6 +5041,7 @@ def create_app() -> FastAPI:
     app.include_router(analysis_router)
     app.include_router(excel_upload_router)
     app.include_router(agent_attachment_router)
+    app.include_router(intent_router)
     app.include_router(document_extractor_router)
     app.include_router(retrieval_router)
     app.include_router(routed_retrieval_router)
