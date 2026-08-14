@@ -1,0 +1,50 @@
+[
+  {
+    "sessionId": "702bef0a-0dd4-46b2-b175-809582864116",
+    "reason": "other",
+    "endedAt": "2026-08-12T12:37:13.751Z",
+    "feature": null,
+    "phase": "do",
+    "progress": null
+  },
+  {
+    "sessionId": "d57e9e81-5c76-45cb-bc34-b0825492371d",
+    "reason": "resume",
+    "endedAt": "2026-08-13T00:39:20.235Z",
+    "feature": null,
+    "phase": "do",
+    "progress": null
+  },
+  {
+    "sessionId": "702bef0a-0dd4-46b2-b175-809582864116",
+    "reason": "clear",
+    "endedAt": "2026-08-13T09:23:38.231Z",
+    "feature": null,
+    "phase": "design",
+    "progress": null
+  },
+  {
+    "sessionId": "c222587c-3294-4878-abcb-0552d8d2c442",
+    "reason": "other",
+    "endedAt": "2026-08-13T12:03:36.104Z",
+    "feature": null,
+    "phase": null,
+    "progress": null
+  },
+  {
+    "sessionId": "e30b12df-46dd-401a-a7c5-59d41fe7b0bc",
+    "reason": "other",
+    "endedAt": "2026-08-13T12:03:37.445Z",
+    "feature": null,
+    "phase": null,
+    "progress": null
+  },
+  {
+    "sessionId": "05947f70-78cc-48b1-aa62-001726181c14",
+    "reason": "resume",
+    "endedAt": "2026-08-14T00:57:34.045Z",
+    "feature": null,
+    "phase": null,
+    "progress": null
+  }
+]

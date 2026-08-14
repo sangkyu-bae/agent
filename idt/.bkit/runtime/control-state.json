@@ -1,0 +1,25 @@
+{
+  "version": "1.0",
+  "currentLevel": 0,
+  "previousLevel": 2,
+  "levelChangedAt": null,
+  "levelChangeReason": null,
+  "trustScore": 38,
+  "sessionStats": {
+    "approvals": 0,
+    "rejections": 0,
+    "modifications": 0,
+    "destructiveBlocked": 0,
+    "checkpointsCreated": 24,
+    "rollbacksPerformed": 0,
+    "phaseComplete": 20
+  },
+  "emergencyStop": false,
+  "cooldownUntil": null,
+  "lastEscalation": null,
+  "lastDowngrade": null,
+  "level": "manual",
+  "levelCode": 0,
+  "lastAutoTransition": "2026-08-12T12:05:19.966Z",
+  "lastAutoTransitionReason": "trust-downgrade"
+}

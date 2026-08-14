@@ -1,0 +1,194 @@
+[
+  {
+    "id": "cp-1786536319823",
+    "createdAt": "2026-08-12T12:05:19.823Z",
+    "type": "phase_transition",
+    "phase": "plan",
+    "feature": "agent-create-entry",
+    "description": "plan → design"
+  },
+  {
+    "id": "cp-1786537046626",
+    "createdAt": "2026-08-12T12:17:26.626Z",
+    "type": "phase_transition",
+    "phase": "design",
+    "feature": "agent-create-entry",
+    "description": "design → do"
+  },
+  {
+    "id": "cp-1786538176636",
+    "createdAt": "2026-08-12T12:36:16.636Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "agent-create-entry",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1786589318564",
+    "createdAt": "2026-08-13T02:48:38.564Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "agent-create-entry",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1786589870240",
+    "createdAt": "2026-08-13T02:57:50.240Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "agent-create-entry",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1786590009808",
+    "createdAt": "2026-08-13T03:00:09.808Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "agent-create-entry",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1786596301812",
+    "createdAt": "2026-08-13T04:45:01.812Z",
+    "type": "phase_transition",
+    "phase": "plan",
+    "feature": "tool-recommender",
+    "description": "plan → design"
+  },
+  {
+    "id": "cp-1786596508558",
+    "createdAt": "2026-08-13T04:48:28.558Z",
+    "type": "phase_transition",
+    "phase": "plan",
+    "feature": "intent-analyzer",
+    "description": "plan → design"
+  },
+  {
+    "id": "cp-1786596916556",
+    "createdAt": "2026-08-13T04:55:16.556Z",
+    "type": "phase_transition",
+    "phase": "plan",
+    "feature": "intent-analyzer",
+    "description": "plan → design"
+  },
+  {
+    "id": "cp-1786597188039",
+    "createdAt": "2026-08-13T04:59:48.039Z",
+    "type": "phase_transition",
+    "phase": "plan",
+    "feature": "intent-analyzer",
+    "description": "plan → design"
+  },
+  {
+    "id": "cp-1786597234224",
+    "createdAt": "2026-08-13T05:00:34.224Z",
+    "type": "phase_transition",
+    "phase": "design",
+    "feature": "intent-analyzer",
+    "description": "design → do"
+  },
+  {
+    "id": "cp-1786604529771",
+    "createdAt": "2026-08-13T07:02:09.771Z",
+    "type": "phase_transition",
+    "phase": "design",
+    "feature": "intent-analyzer",
+    "description": "design → do"
+  },
+  {
+    "id": "cp-1786604533772",
+    "createdAt": "2026-08-13T07:02:13.772Z",
+    "type": "phase_transition",
+    "phase": "design",
+    "feature": "intent-analyzer",
+    "description": "design → do"
+  },
+  {
+    "id": "cp-1786612957134",
+    "createdAt": "2026-08-13T09:22:37.134Z",
+    "type": "phase_transition",
+    "phase": "design",
+    "feature": "intent-analyzer",
+    "description": "design → do"
+  },
+  {
+    "id": "cp-1786613266479",
+    "createdAt": "2026-08-13T09:27:46.479Z",
+    "type": "phase_transition",
+    "phase": "design",
+    "feature": "intent-analyzer",
+    "description": "design → do"
+  },
+  {
+    "id": "cp-1786613489118",
+    "createdAt": "2026-08-13T09:31:29.118Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "intent-analyzer",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1786614278839",
+    "createdAt": "2026-08-13T09:44:38.839Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "intent-analyzer",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1786614396931",
+    "createdAt": "2026-08-13T09:46:36.931Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "intent-analyzer",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1786614794921",
+    "createdAt": "2026-08-13T09:53:14.921Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "intent-analyzer",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1786615005372",
+    "createdAt": "2026-08-13T09:56:45.372Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "intent-analyzer",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1786615664128",
+    "createdAt": "2026-08-13T10:07:44.128Z",
+    "type": "phase_transition",
+    "phase": "check",
+    "feature": "intent-analyzer",
+    "description": "check → act"
+  },
+  {
+    "id": "cp-1786616277358",
+    "createdAt": "2026-08-13T10:17:57.358Z",
+    "type": "phase_transition",
+    "phase": "check",
+    "feature": "intent-analyzer",
+    "description": "check → act"
+  },
+  {
+    "id": "cp-1786616307767",
+    "createdAt": "2026-08-13T10:18:27.767Z",
+    "type": "phase_transition",
+    "phase": "check",
+    "feature": "intent-analyzer",
+    "description": "check → act"
+  },
+  {
+    "id": "cp-1786616489956",
+    "createdAt": "2026-08-13T10:21:29.956Z",
+    "type": "phase_transition",
+    "phase": "check",
+    "feature": "intent-analyzer",
+    "description": "check → act"
+  }
+]

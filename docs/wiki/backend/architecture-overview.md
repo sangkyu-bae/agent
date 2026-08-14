@@ -1,9 +1,11 @@
 ---
 title: 백엔드 아키텍처 조감도 — 요청→응답 전체 경로
-status: approved
+status: draft
 source_type: conversation
 source_refs:
   - idt/src/api/main.py (컴포지션 루트, 라우터 52 등록, lifespan)
+  - idt/src/application/background_job/worker.py (v2 추가 — lifespan 워커 싱글턴)
+  - idt/src/application/general_chat/use_case.py (v2 추가 — tool_filter optional 이음매)
   - idt/src/api/routes/ws_router.py (/ws/chat, /ws/agent 와이어 프로토콜)
   - idt/src/api/routes/agent_builder_router.py (SSE text/event-stream)
   - idt/src/application/general_chat/use_case.py (stream() transport-독립 설계)
@@ -13,12 +15,14 @@ source_refs:
   - idt/src/application/eval/use_cases.py (_kickoff_feedback_fanout)
   - docs/SOURCE-OF-TRUTH.md (2026-07-23, 커밋 6cc25656 기준 전면 갱신본)
 confidence: 0.9
-version: 1
+version: 2
 created: 2026-07-23
-updated: 2026-07-23
-verified_at: 6cc25656
-reviewer: 배상규
+updated: 2026-08-14
+verified_at: 12c69b4
 ---
+
+> v2에서 실행 경로 (e) 백그라운드 잡과 §2-(a)의 도구 선별 이음매를 추가하며
+> approved → draft로 강등했다 (재승인 필요). 나머지 절은 v1 그대로.
 
 # 백엔드 아키텍처 조감도 — 요청→응답 전체 경로
 
@@ -61,6 +65,9 @@ ws_router.ws_chat → JWT 검증 → GeneralChatUseCase.stream()
 - `stream()`은 **transport-독립** AsyncIterator[ChatEvent]. HTTP용 `execute()`는
   stream()을 내부 소비하는 래퍼다 — 스트리밍/논스트리밍이 한 구현을 공유한다.
 - 차트 렌더링·메모리 상주 주입은 이 경로에만 배선되어 있다 (Supervisor 경로 아님).
+- **도구 선별 이음매**(v2): `ChatToolBuilder.build()` 직후, 에이전트 생성 직전에
+  optional `tool_filter`가 질의 기준으로 도구를 좁힌다. `tool_filter=None`(기본,
+  `tool_selector_enabled=False`)이면 이 단계가 없던 것과 동일 — [[detachable-module-seam]].
 
 **(b) Agent 실행 — Supervisor 그래프** (POST `/api/v1/agents/.../run` SSE + `/ws/agent/{run_id}`)
 ```
@@ -94,6 +101,19 @@ IngestDocumentUseCase: 파서 레지스트리에서 선택(pymupdf/pymupdf4llm/l
 - 벡터는 Qdrant, 메타는 MySQL, 전문검색은 ES — **한 문서가 3곳에 흩어진다**.
   삭제·정합성 작업 시 세 저장소를 모두 추적해야 한다 (KB 콘텐츠 브라우저의 source 토글이 이 검증용).
 
+**(e) 백그라운드 잡 — HTTP 요청 밖의 다섯 번째 경로** (V060, v2 추가)
+```
+POST 등록 → 202 + job_id 즉시 반환 (agent_background_job 테이블 = 큐)
+lifespan 워커 싱글턴(BackgroundJobWorker)
+  ├─ 기동 시 reconcile: 고아 running → failed
+  ├─ poll 5s: claim_queued(FOR UPDATE SKIP LOCKED) → running → RunAgentUseCase 실행
+  │            → 결과를 세션 메시지로 저장 + 웹훅 outbound(source="job")
+  └─ tick 30s: 스케줄 트리거 (single-flight, 외부 cron 불필요)
+```
+- **요청→응답 모델을 벗어나는 유일한 경로**다. 브로커·cron 프로세스는 없다.
+- `background_worker_enabled` 기본 **True** (성장 루프 플래그들과 반대).
+- 상세: [[db-queue-inprocess-worker]]
+
 ### 3. 성장 루프 배선 (평가 → 메모리/위키 환류)
 
 ```
@@ -121,6 +141,9 @@ POST eval → SubmitFeedbackUseCase (application/eval/use_cases.py)
    인증 필터는 반드시 양 축 대칭으로.
 5. **성장 루프에 새 소비자 추가 시** `_kickoff_feedback_fanout`에 enabled 가드 + kickoff 패턴으로
    편승한다 (Q/A 복원 공유, 독립 opt-in env 플래그 신설).
+6. **오래 걸리는 작업·주기 실행은 (e) 큐에 편승**한다 — 새 브로커/cron 도입 금지.
+7. **실험적 모듈을 기존 경로에 끼울 때는 optional 협력자 + `None` 킬스위치**로
+   ([[detachable-module-seam]]). 미주입 = 기능이 없던 상태가 되도록.
 
 ## 관련 문서
 
