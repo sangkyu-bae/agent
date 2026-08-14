@@ -1,5 +1,6 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { beforeAll, afterEach, afterAll, describe, it, expect } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { server } from '@/__tests__/mocks/server';
@@ -60,8 +61,14 @@ const useBuilderHandlers = () => {
   );
 };
 
+// agent-create-entry: 페이지가 [취소] 복귀 분기에 useNavigate를 쓰므로 Router가 필요
 const renderPage = () =>
-  render(<AgentBuilderPage />, { wrapper: createWrapper() });
+  render(
+    <MemoryRouter>
+      <AgentBuilderPage />
+    </MemoryRouter>,
+    { wrapper: createWrapper() },
+  );
 
 /** list → create 진입 + 필수값(이름·지침) 입력 */
 const enterCreateView = async (user: ReturnType<typeof userEvent.setup>) => {

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useToolCatalog } from '@/hooks/useToolCatalog';
 import { useLlmModels } from '@/hooks/useLlmModels';
 import {
@@ -23,7 +24,8 @@ import { DOCUMENT_EXTRACTOR_TOOL_ID } from '@/types/documentExtractor';
 import { DOCUMENT_GENERATOR_TOOL_ID } from '@/types/documentGenerator';
 import { buildDocumentTemplateRequest } from '@/utils/documentTemplate';
 import { buildDocumentGenerationTypeRequest } from '@/utils/documentGenerator';
-import { mapDraftToolIdsToCatalog } from '@/utils/draftToolMapping';
+import { composeDraftToForm } from '@/utils/composeDraftToForm';
+import { useAgentDraftStore } from '@/store/agentDraftStore';
 import { mapDetailToForm, RAG_CATALOG_TOOL_ID } from '@/utils/agentDetailMapping';
 
 type ViewMode = 'list' | 'create' | 'edit';
@@ -60,6 +62,7 @@ const DEFAULT_FORM: AgentBuilderFormData = {
 };
 
 const AgentBuilderPage = () => {
+  const navigate = useNavigate();
   const [view, setView] = useState<ViewMode>('list');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<AgentBuilderFormData>(DEFAULT_FORM);
@@ -67,6 +70,9 @@ const AgentBuilderPage = () => {
   const [saveResult, setSaveResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   // agent-instruction-required: 지침 미입력 시 저장 차단 + 인라인 에러
   const [promptError, setPromptError] = useState<string | null>(null);
+  // agent-create-entry FR-11: 진입 화면(/agent-builder/new) 경유로 들어왔는지.
+  // [취소] 복귀 지점을 목록 대신 진입 화면으로 되돌리는 데만 쓴다.
+  const [fromEntry, setFromEntry] = useState(false);
 
   const { data: agentsData, isLoading: isAgentsLoading, isError: isAgentsError, refetch: refetchAgents } = useMyBuilderAgents();
   const { data: editDetail } = useBuilderAgentDetail(editingId && view === 'edit' ? editingId : null);
@@ -102,6 +108,35 @@ const AgentBuilderPage = () => {
     setForm(mapDetailToForm(editDetail, models, catalogTools));
   }, [editDetail, models, catalogTools, isModelsLoading, isToolsLoading, view, editingId]);
 
+  // agent-create-entry Design §2.4 — 진입 화면이 적재한 의도를 소비해 스튜디오를 연다.
+  // G4: mount 후 1회 + ref 가드. selector 구독 없이 getState()로만 접근한다
+  //     (구독하면 소비 → 리렌더 → 재소비 루프가 생긴다).
+  // G5: catalogTools·models가 settled된 뒤에만 소비한다. 로딩 중 변환하면
+  //     도구 매핑·모델 역매핑이 조용히 실패해 빈 칩/원시 id가 남는다.
+  const consumedIntentRef = useRef(false);
+  useEffect(() => {
+    if (consumedIntentRef.current) return;
+    if (isToolsLoading || isModelsLoading) return;
+    consumedIntentRef.current = true;
+
+    const intent = useAgentDraftStore.getState().consumePendingIntent();
+    if (!intent) return;
+
+    /* eslint-disable react-hooks/set-state-in-effect --
+       라우트 간 핸드오프 소비는 mount 후 1회만 가능하고, ref 가드로 캐스케이드가 없다 */
+    setEditingId(null);
+    setPromptError(null);
+    primedAgentRef.current = null;
+    setFromEntry(true);
+    setForm(
+      intent.kind === 'draft'
+        ? composeDraftToForm(intent.draft, DEFAULT_FORM, { catalogTools, models })
+        : DEFAULT_FORM,
+    );
+    setView('create');
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [isToolsLoading, isModelsLoading, catalogTools, models]);
+
   // 폼 변경 시 지침이 채워지면 인라인 에러 해제 (effect 내 setState 지양)
   const handleFormChange = (next: AgentBuilderFormData) => {
     if (promptError && next.systemPrompt.trim()) setPromptError(null);
@@ -113,12 +148,15 @@ const AgentBuilderPage = () => {
     setEditingId(null);
     setPromptError(null);
     primedAgentRef.current = null;
+    // 목록 헤더/빈 상태 경유 — [취소]는 기존대로 목록으로 (Design §5.4)
+    setFromEntry(false);
     setView('create');
   };
 
   const handleEdit = (agent: StoreAgentSummary) => {
     setEditingId(agent.agent_id);
     setPromptError(null);
+    setFromEntry(false);
     // 재진입 시 최신 detail로 재프라임 허용 (react-query가 refetch)
     primedAgentRef.current = null;
     setView('edit');
@@ -366,49 +404,11 @@ const AgentBuilderPage = () => {
   };
 
   // fix-agent-composer FR-05: 초안 카드 [적용하기] → 폼 원자적 반영
-  // compose-tool-instructions FR-08: 저장 형식 tool_ids → 카탈로그 형식 변환
-  // (변환 없이는 도구함 체크 비교/RAG_TOOL_ID 부수효과가 모두 미동작)
+  // agent-create-entry Design §3.2: 변환 규칙은 composeDraftToForm에 단일화되어
+  // 진입 화면(/agent-builder/new)과 공유된다. 여기는 얇은 래퍼로만 남긴다.
   const handleApplyDraft = (draft: ComposeAgentDraftResponse) => {
     if (draft.system_prompt?.trim()) setPromptError(null);
-    setForm((prev) => {
-      // builtin-tools D8: 초안이 빌트인을 포함해도 form.tools에 혼입하지 않는다
-      // (표시·전송은 파생값 — 서버 주입과의 중복 칩 방지, excluded는 불변)
-      const builtinIds = new Set(
-        (catalogTools ?? []).filter((t) => t.is_builtin).map((t) => t.tool_id),
-      );
-      const newTools = mapDraftToolIdsToCatalog(draft.tool_ids, catalogTools).filter(
-        (id) => !builtinIds.has(id),
-      );
-
-      // handleToolToggle과 동일한 부수효과 동기화 (RAG 설정 / 문서추출기 드래프트)
-      const newConfigs = { ...prev.toolConfigs };
-      if (newTools.includes(RAG_TOOL_ID)) {
-        if (!newConfigs[RAG_TOOL_ID]) {
-          newConfigs[RAG_TOOL_ID] = { ...DEFAULT_RAG_CONFIG };
-        }
-      } else {
-        delete newConfigs[RAG_TOOL_ID];
-      }
-
-      // llm_model_id 역매핑 실패 시 모델 미변경 (카드에 안내 표시됨)
-      const modelName = models?.find((m) => m.id === draft.llm_model_id)?.model_name;
-
-      return {
-        ...prev,
-        name: draft.name_suggestion,
-        systemPrompt: draft.system_prompt,
-        tools: newTools,
-        temperature: draft.temperature,
-        model: modelName ?? prev.model,
-        toolConfigs: newConfigs,
-        documentExtractorDraft: newTools.includes(DOCUMENT_EXTRACTOR_TOOL_ID)
-          ? prev.documentExtractorDraft
-          : null,
-        documentGeneratorDraft: newTools.includes(DOCUMENT_GENERATOR_TOOL_ID)
-          ? prev.documentGeneratorDraft
-          : null,
-      };
-    });
+    setForm((prev) => composeDraftToForm(draft, prev, { catalogTools, models }));
   };
 
   const handleRagConfigChange = (config: RagToolConfig) => {
@@ -418,8 +418,19 @@ const AgentBuilderPage = () => {
     }));
   };
 
+  // agent-create-entry FR-11: 진입 화면 경유면 그 화면으로 되돌리고,
+  // 그 외(목록 헤더·빈 상태·편집)는 기존대로 목록 뷰로 복귀한다.
+  const handleCancel = () => {
+    if (fromEntry) {
+      navigate('/agent-builder/new');
+      return;
+    }
+    setView('list');
+  };
+
   const handleSaveResultConfirm = () => {
     if (saveResult?.type === 'success') {
+      setFromEntry(false);
       setView('list');
     }
     setSaveResult(null);
@@ -495,7 +506,7 @@ const AgentBuilderPage = () => {
           onMaxIterationsChange={handleMaxIterationsChange}
           onApplyDraft={handleApplyDraft}
           onSave={handleSave}
-          onCancel={() => setView('list')}
+          onCancel={handleCancel}
           isSaving={isSaving}
           systemPromptError={promptError}
           catalogTools={catalogTools}
