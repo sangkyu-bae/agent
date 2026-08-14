@@ -48,7 +48,13 @@
       "PowerShell(npx vitest run src/constants/adminNav.test.ts --pool=threads)",
       "PowerShell(npx vitest run src/components/layout/AdminSectionTabs.test.tsx src/components/layout/AdminLayout.test.tsx --pool=threads)",
       "PowerShell(npx vitest run src/components/layout src/constants/adminNav.test.ts --pool=threads)",
-      "PowerShell(npx eslint src/constants/adminNav.ts src/constants/adminNav.test.ts src/components/layout/AdminLayout.tsx src/components/layout/AdminSectionTabs.tsx src/components/layout/AdminSectionTabs.test.tsx src/components/layout/AdminLayout.test.tsx src/components/layout/TopNav.tsx src/components/layout/TopNav.test.tsx src/components/layout/AppSidebar.test.tsx)"
+      "PowerShell(npx eslint src/constants/adminNav.ts src/constants/adminNav.test.ts src/components/layout/AdminLayout.tsx src/components/layout/AdminSectionTabs.tsx src/components/layout/AdminSectionTabs.test.tsx src/components/layout/AdminLayout.test.tsx src/components/layout/TopNav.tsx src/components/layout/TopNav.test.tsx src/components/layout/AppSidebar.test.tsx)",
+      "PowerShell(npm *)",
+      "PowerShell(Get-Command *)",
+      "PowerShell(winget install *)",
+      "PowerShell(npm ci *)",
+      "PowerShell($ok=$false; for\\($i=0;$i -lt 20;$i++\\){ try { $r = Invoke-WebRequest -Uri \"http://localhost:5173/\" -UseBasicParsing -TimeoutSec 3; Write-Output \"HTTP $\\($r.StatusCode\\)\"; $ok=$true; break } catch { Start-Sleep -Milliseconds 1000 } }; if\\(-not $ok\\){ Write-Output \"no response\" })",
+      "PowerShell(try { python --version } catch { \"python: not found\" }; try { \\(Get-Command py -ErrorAction Stop\\).Source } catch { \"py launcher: not found\" }; try { \\(Get-Command docker -ErrorAction Stop\\).Source } catch { \"docker: not found\" })"
     ]
   }
 }

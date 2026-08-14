@@ -91,10 +91,12 @@ const AppSidebar = ({
         <span className="text-[13px] font-semibold text-white leading-tight">상상인플러스저축은행</span>
       </div>
 
-      {/* (b) New agent button */}
+      {/* (b) New agent button
+          agent-create-entry FR-01: 사이드바 진입점만 생성 화면으로 보낸다.
+          목록 헤더·빈 상태 버튼은 기존대로 빈 스튜디오 직행 (Design §5.4). */}
       <div className="px-3 pb-2">
         <button
-          onClick={() => navigate('/agent-builder')}
+          onClick={() => navigate('/agent-builder/new')}
           className="flex w-full items-center gap-2 rounded-xl border border-white/10 px-3 py-2.5 text-[13px] text-white/60 hover:bg-white/[0.08] transition-all"
         >
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">

@@ -117,6 +117,14 @@ class Settings(BaseSettings):
     # 검색결과 압축 발동 임계 길이(자). 이하면 원문 그대로 전달.
     search_compress_threshold: int = 4000
 
+    # Tool Selector (tool-recommender Design §10.3)
+    # 바인딩 직전 유저 질의 기준으로 도구를 좁히는 경량 LLM 셀렉터.
+    tool_selector_provider: str = "openai"
+    tool_selector_model_name: str = "gpt-4o-mini"
+    tool_selector_top_k: int = 8            # 선별 상한. 후보가 이하면 LLM 미호출
+    tool_selector_timeout_sec: float = 3.0  # 초과 시 필수 세트로 폴백
+    tool_selector_enabled: bool = False     # 킬스위치. 결선(module-4)에서 활성화
+
     # Agent Attachment (ws-agent-excel-attachment Design §10.2)
     # 빈 값이면 main.py에서 {tempdir}/agent_attachments 로 해석한다.
     agent_attachment_upload_dir: str = ""

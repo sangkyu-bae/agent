@@ -34,7 +34,7 @@ from src.application.agent_run.context import (
 from src.application.agent_run.prompt_rendering import render_user_context_block
 from src.domain.agent_run.value_objects import RunId
 from src.application.conversation.interfaces import ConversationSummarizerInterface
-from src.application.general_chat.tools import ChatToolBuilder
+from src.application.general_chat.tools import REQUIRED_TOOL_IDS, ChatToolBuilder
 from src.application.repositories.conversation_repository import ConversationMessageRepository
 from src.application.repositories.conversation_summary_repository import (
     ConversationSummaryRepository,
@@ -149,8 +149,12 @@ class GeneralChatUseCase:
         memory_assembler=None,
         memory_extractor=None,
         middleware_provider=None,
+        tool_filter=None,
     ) -> None:
         self._tool_builder = chat_tool_builder
+        # tool-recommender module-4: 미주입(None) 시 도구 선별 비활성 —
+        # 즉 이 기능이 없던 상태와 동일하게 전량 바인딩된다 (하위호환).
+        self._tool_filter = tool_filter
         self._msg_repo = message_repo
         self._summary_repo = summary_repo
         self._summarizer = summarizer
@@ -365,6 +369,16 @@ class GeneralChatUseCase:
             tools = await self._tool_builder.build(
                 top_k=request.top_k, request_id=request_id, auth_ctx=auth_ctx,
             )
+            # tool-recommender Design §4.3: 바인딩 직전 질의 기준으로 도구를 좁힌다.
+            # Plan SC: 회귀 방지 — 실패 시 filter가 입력을 그대로 돌려주므로
+            # 도구가 줄어들 뿐 사라지지 않는다.
+            if self._tool_filter is not None:
+                tools = await self._tool_filter.filter(
+                    tools,
+                    request.message,
+                    required_ids=REQUIRED_TOOL_IDS,
+                    request_id=request_id,
+                )
             # agent-memory 결정 ③: 블록 조립은 agent 생성 직전 1회 (비동기).
             # agent-memory-org-scope: 소속 부서 org 메모리도 병합 (auth_ctx 기반).
             memory_block = ""

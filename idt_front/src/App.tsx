@@ -5,6 +5,7 @@ import AdminRoute from '@/components/common/AdminRoute';
 import ChatPage from '@/pages/ChatPage';
 import EvalDatasetPage from '@/pages/EvalDatasetPage';
 import AgentBuilderPage from '@/pages/AgentBuilderPage';
+import AgentCreateEntryPage from '@/pages/AgentCreateEntryPage';
 import UtilityPage from '@/pages/UtilityPage';
 import ToolAdminPage from '@/pages/ToolAdminPage';
 import WorkflowDesignerPage from '@/pages/WorkflowDesignerPage';
@@ -59,6 +60,9 @@ const App = () => (
           <Route path="/documents" element={<Navigate to="/collections" replace />} />
           <Route path="/eval-dataset" element={<EvalDatasetPage />} />
           <Route path="/agent-builder" element={<AgentBuilderPage />} />
+          {/* agent-create-entry Design §5.2: 에이전트 생성 진입 화면.
+              ProtectedRoute 하위 배치 — 비인증 접근 시 로그인 리디렉트(§7). */}
+          <Route path="/agent-builder/new" element={<AgentCreateEntryPage />} />
           <Route path="/tool-connection" element={<UtilityPage />} />
           <Route path="/tool-admin" element={<ToolAdminPage />} />
           <Route path="/workflow-designer" element={<WorkflowDesignerPage />} />

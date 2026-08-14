@@ -1,0 +1,62 @@
+[
+  {
+    "timestamp": "2026-08-13T01:10:26.127Z",
+    "errorType": "unknown",
+    "category": "unknown",
+    "severity": "low",
+    "agentId": null,
+    "agentType": null,
+    "sessionId": "702bef0a-0dd4-46b2-b175-809582864116",
+    "message": "",
+    "parseStatus": "partial",
+    "parseWarnings": "StopFailure payload missing useful fields (keys: session_id,transcript_path,cwd,prompt_id,effort,hook_event_name,error,last_assistant_message)"
+  },
+  {
+    "timestamp": "2026-08-13T05:04:06.961Z",
+    "errorType": "unknown",
+    "category": "unknown",
+    "severity": "low",
+    "agentId": null,
+    "agentType": null,
+    "sessionId": "e30b12df-46dd-401a-a7c5-59d41fe7b0bc",
+    "message": "",
+    "parseStatus": "partial",
+    "parseWarnings": "StopFailure payload missing useful fields (keys: session_id,transcript_path,cwd,prompt_id,effort,hook_event_name,error,last_assistant_message)"
+  },
+  {
+    "timestamp": "2026-08-13T05:06:35.829Z",
+    "errorType": "unknown",
+    "category": "unknown",
+    "severity": "low",
+    "agentId": "aef5f8d8b821f3f0c",
+    "agentType": null,
+    "sessionId": "c222587c-3294-4878-abcb-0552d8d2c442",
+    "message": "",
+    "parseStatus": "ok",
+    "parseWarnings": null
+  },
+  {
+    "timestamp": "2026-08-13T05:08:50.690Z",
+    "errorType": "unknown",
+    "category": "unknown",
+    "severity": "low",
+    "agentId": null,
+    "agentType": null,
+    "sessionId": "702bef0a-0dd4-46b2-b175-809582864116",
+    "message": "",
+    "parseStatus": "partial",
+    "parseWarnings": "StopFailure payload missing useful fields (keys: session_id,transcript_path,cwd,prompt_id,effort,hook_event_name,error,last_assistant_message)"
+  },
+  {
+    "timestamp": "2026-08-13T05:12:08.027Z",
+    "errorType": "unknown",
+    "category": "unknown",
+    "severity": "low",
+    "agentId": "a56e179b92935b5a1",
+    "agentType": null,
+    "sessionId": "e30b12df-46dd-401a-a7c5-59d41fe7b0bc",
+    "message": "",
+    "parseStatus": "ok",
+    "parseWarnings": null
+  }
+]

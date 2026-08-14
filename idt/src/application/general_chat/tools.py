@@ -12,6 +12,17 @@ from typing import Any
 
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 
+REQUIRED_TOOL_IDS: tuple[str, ...] = (
+    "internal:tavily_search",
+    "internal:internal_document_search",
+)
+"""도구 선별 시 항상 살아남는 필수 세트 (tool-recommender Plan FR-04).
+
+셀렉터가 무엇을 고르든 이 둘은 바인딩된다. 선별 모듈이 이 목록을 직접 조회하지
+않고 호출부가 주입하는 구조라(탈부착 계약), 여기가 그 원천이다.
+표기는 카탈로그 형식 — `DefaultToolIdResolver`가 `internal:{tool.name}`을 만든다.
+"""
+
 
 class MCPToolCache:
     """MCP Tool 목록을 TTL 기반으로 인메모리 캐시.
