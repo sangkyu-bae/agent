@@ -7,6 +7,7 @@ from src.domain.agent_create_pipeline.policies import PipelinePolicy
 from src.domain.agent_create_pipeline.stages import (
     STAGE_ORDER,
     PipelineStage,
+    PipelineStop,
     StageRecord,
     StageStatus,
 )
@@ -156,3 +157,202 @@ def test_round_is_reclamped_server_side() -> None:
     assert PipelinePolicy.clamp_round(-1, max_rounds=2) == 0
     assert PipelinePolicy.clamp_round(0, max_rounds=2) == 0
     assert PipelinePolicy.clamp_round(99, max_rounds=2) == 2
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# agent-create-wizard — 정지 지점 규칙 (Design §3.2 / §8.3)
+# ═══════════════════════════════════════════════════════════════════════════
+
+# --- stages_to_run (§8.3 #1~#3) --------------------------------------------
+
+
+def test_stages_to_run_without_stop_matches_legacy_tuple() -> None:
+    """**회귀 잠금장치** — stop 이 없으면 기존 하드코딩 4단계와 글자 그대로 같다.
+
+    이 단언이 깨지면 논스톱 파이프라인의 동작이 바뀐 것이다 (Plan FR-B09).
+    """
+    assert PipelinePolicy.stages_to_run(None) == (
+        PipelineStage.TOOLS,
+        PipelineStage.PROMPT,
+        PipelineStage.CREATE,
+        PipelineStage.BIND,
+    )
+
+
+def test_stages_to_run_without_stop_equals_stage_order_tail() -> None:
+    """intent 는 UseCase 가 별도로 먼저 실행한다 — 목록은 그 뒤만 담는다."""
+    assert PipelinePolicy.stages_to_run(None) == STAGE_ORDER[1:]
+
+
+def test_stages_to_run_stopping_at_tools() -> None:
+    assert PipelinePolicy.stages_to_run(PipelineStop.TOOLS) == (
+        PipelineStage.TOOLS,
+    )
+
+
+def test_stages_to_run_stopping_at_prompt() -> None:
+    assert PipelinePolicy.stages_to_run(PipelineStop.PROMPT) == (
+        PipelineStage.TOOLS,
+        PipelineStage.PROMPT,
+    )
+
+
+def test_stages_to_run_never_includes_create_when_stopping() -> None:
+    """위저드는 에이전트를 만들지 않는다 — 중복 생성 위험이 구조적으로 0이다."""
+    for stop in (PipelineStop.TOOLS, PipelineStop.PROMPT):
+        stages = PipelinePolicy.stages_to_run(stop)
+        assert PipelineStage.CREATE not in stages
+        assert PipelineStage.BIND not in stages
+
+
+# --- decide_after_stage (§8.3 #4) ------------------------------------------
+
+
+def test_decide_after_stage_without_stop_always_continues() -> None:
+    for stage in STAGE_ORDER:
+        assert PipelinePolicy.decide_after_stage(stage, None) == "continue"
+
+
+def test_decide_after_stage_stops_at_matching_stage() -> None:
+    assert (
+        PipelinePolicy.decide_after_stage(PipelineStage.TOOLS, PipelineStop.TOOLS)
+        == "stop"
+    )
+    assert (
+        PipelinePolicy.decide_after_stage(
+            PipelineStage.PROMPT, PipelineStop.PROMPT
+        )
+        == "stop"
+    )
+
+
+def test_decide_after_stage_continues_before_stop_point() -> None:
+    assert (
+        PipelinePolicy.decide_after_stage(
+            PipelineStage.TOOLS, PipelineStop.PROMPT
+        )
+        == "continue"
+    )
+
+
+# --- stop_status (§8.3 #5) --------------------------------------------------
+
+
+def test_stop_status_wire_strings_are_fixed() -> None:
+    """응답 status 문자열 — 프론트가 분기하는 값이다."""
+    assert PipelinePolicy.stop_status(PipelineStop.TOOLS) == "tools_proposed"
+    assert PipelinePolicy.stop_status(PipelineStop.PROMPT) == "prompt_ready"
+
+
+# --- confirmed_selection (§8.3 #6~#7 / D1) ---------------------------------
+
+
+def test_confirmed_selection_uses_user_ids_as_final() -> None:
+    selection = PipelinePolicy.confirmed_selection(("internal:a", "internal:b"))
+    assert selection.final_ids == ("internal:a", "internal:b")
+    assert selection.required_ids == ("internal:a", "internal:b")
+
+
+def test_confirmed_selection_is_not_a_fallback() -> None:
+    """강하가 아니라 정상 경로다 — 사람이 결정했으므로 추천이 불필요할 뿐이다.
+
+    fallback=True 로 두면 steps.tools 가 degraded 로 칠해져 화면이
+    "도구 추천 실패"로 오표시된다.
+    """
+    assert PipelinePolicy.confirmed_selection(("internal:a",)).fallback is False
+
+
+def test_confirmed_selection_dedupes_preserving_order() -> None:
+    selection = PipelinePolicy.confirmed_selection(("b", "a", "b", "c"))
+    assert selection.final_ids == ("b", "a", "c")
+
+
+def test_confirmed_selection_accepts_empty_list() -> None:
+    """도구 없는 에이전트도 유효하다."""
+    selection = PipelinePolicy.confirmed_selection(())
+    assert selection.final_ids == ()
+    assert selection.fallback is False
+
+
+def test_confirmed_selection_records_reason_for_observability() -> None:
+    assert PipelinePolicy.confirmed_selection(("a",)).reason
+
+
+# --- reuse_intent (§8.3 #8 / D2) -------------------------------------------
+
+
+def _spec():
+    from src.domain.agent_create_pipeline.spec import build_agent_create_spec
+
+    return build_agent_create_spec()
+
+
+def test_reuse_intent_accepts_valid_echo() -> None:
+    echo = IntentResult(
+        label="agent_build",
+        filled_slots={"purpose": "문서 Q&A", "tone": "격식체"},
+    )
+    reused = PipelinePolicy.reuse_intent(echo, _spec())
+    assert reused is not None
+    assert reused.filled_slots == {"purpose": "문서 Q&A", "tone": "격식체"}
+
+
+def test_reuse_intent_returns_none_for_missing_echo() -> None:
+    """에코백이 없으면 호출자가 intent LLM 을 정상 실행한다."""
+    assert PipelinePolicy.reuse_intent(None, _spec()) is None
+
+
+def test_reuse_intent_rejects_degraded_echo() -> None:
+    """판정 실패를 재사용하면 실패가 영속된다 — 다시 판정하는 편이 낫다."""
+    echo = IntentResult(degraded=True, filled_slots={"purpose": "x"})
+    assert PipelinePolicy.reuse_intent(echo, _spec()) is None
+
+
+def test_reuse_intent_drops_slot_keys_outside_spec() -> None:
+    """클라이언트가 보낸 임의 키는 스펙 밖이면 버린다 (신뢰 경계)."""
+    echo = IntentResult(filled_slots={"purpose": "문서 Q&A", "evil": "주입"})
+    reused = PipelinePolicy.reuse_intent(echo, _spec())
+    assert reused is not None
+    assert "evil" not in reused.filled_slots
+
+
+def test_reuse_intent_clamps_slot_values() -> None:
+    echo = IntentResult(filled_slots={"purpose": "가" * 5000})
+    reused = PipelinePolicy.reuse_intent(echo, _spec())
+    assert reused is not None
+    assert len(reused.filled_slots["purpose"]) == PipelinePolicy.SLOT_VALUE_MAX_CHARS
+
+
+def test_reuse_intent_recomputes_complete_and_missing() -> None:
+    """계산 필드는 클라이언트 신고값을 쓰지 않는다 (llm-output-trust-boundary).
+
+    required(purpose)가 비었는데 complete=true 로 신고해도 서버가 뒤집는다.
+    """
+    echo = IntentResult(
+        filled_slots={"tone": "격식체"}, complete=True, missing_slots=[]
+    )
+    reused = PipelinePolicy.reuse_intent(echo, _spec())
+    assert reused is not None
+    assert reused.complete is False
+    assert "purpose" in reused.missing_slots
+
+
+def test_reuse_intent_marks_complete_when_required_filled() -> None:
+    echo = IntentResult(filled_slots={"purpose": "문서 Q&A"}, complete=False)
+    reused = PipelinePolicy.reuse_intent(echo, _spec())
+    assert reused is not None
+    assert reused.complete is True
+
+
+def test_reuse_intent_drops_questions_from_echo() -> None:
+    """재사용 경로는 되묻기를 다시 열지 않는다 — 이미 답을 받고 넘어온 단계다."""
+    echo = IntentResult(filled_slots={"purpose": "p"}, questions=[_question()])
+    reused = PipelinePolicy.reuse_intent(echo, _spec())
+    assert reused is not None
+    assert reused.questions == []
+
+
+def test_reuse_intent_returns_none_when_no_usable_slot_remains() -> None:
+    """스펙 밖 키만 온 에코백은 재사용할 값이 없다 — 정상 판정으로 돌린다."""
+    echo = IntentResult(filled_slots={"evil": "주입"})
+    assert PipelinePolicy.reuse_intent(echo, _spec()) is None

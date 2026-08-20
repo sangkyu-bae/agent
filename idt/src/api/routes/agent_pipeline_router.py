@@ -32,11 +32,12 @@ from src.application.prompt_composer.errors import PromptSessionNotFoundError
 from src.domain.agent_create_pipeline.policies import PipelinePolicy
 from src.domain.agent_create_pipeline.stages import (
     PipelineStage,
+    PipelineStop,
     StageRecord,
     StageStatus,
 )
 from src.domain.auth.entities import User
-from src.domain.intent.schemas import SlotAnswer, Turn
+from src.domain.intent.schemas import IntentResult, SlotAnswer, Turn
 from src.interfaces.dependencies.auth import get_current_user
 from src.interfaces.schemas.agent_pipeline import (
     AgentPipelineRequest,
@@ -200,7 +201,28 @@ def _run_kwargs(
         "name": request.name,
         "llm_model_id": request.llm_model_id,
         "session_id": request.session_id,
+        # agent-create-wizard §4.2 — 미지정이면 전부 no-op 기본값이라
+        # 기존 논스톱 호출의 동작이 변하지 않는다 (FR-B09).
+        "stop_after": (
+            PipelineStop(request.stop_after) if request.stop_after else None
+        ),
+        "tools_confirmed": request.tools_confirmed,
+        "intent_echo": _to_intent_echo(request.intent),
     }
+
+
+def _to_intent_echo(echo) -> IntentResult | None:
+    """에코백 DTO → IntentResult. **검증은 하지 않는다** — Policy 의 몫이다.
+
+    여기서 걸러내면 신뢰 경계가 라우터와 domain 두 곳으로 갈린다.
+    """
+    if echo is None:
+        return None
+    return IntentResult(
+        label=echo.label,
+        filled_slots=dict(echo.filled_slots),
+        degraded=echo.degraded,
+    )
 
 
 def _record_out(record: StageRecord) -> StageRecordOut:
@@ -248,6 +270,8 @@ def _to_response(outcome: PipelineOutcome) -> AgentPipelineResponse:
         agent_name=outcome.agent_name,
         assembled_prompt=outcome.assembled_prompt,
         bind_ok=outcome.bind_ok,
+        suggested_name=outcome.suggested_name,
+        prompt_clamp_reason=outcome.prompt_clamp_reason,
     )
 
 

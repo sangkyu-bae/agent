@@ -29,6 +29,7 @@ from src.domain.agent_create_pipeline.policies import PipelinePolicy
 from src.domain.agent_create_pipeline.spec import build_agent_create_spec
 from src.domain.agent_create_pipeline.stages import (
     PipelineStage,
+    PipelineStop,
     StageRecord,
     StageStatus,
 )
@@ -44,6 +45,8 @@ from src.domain.tool_selection.schemas import SelectionResult
 
 _NEED_INPUT = "need_input"
 _NOT_REACHED = "not_reached"
+_STOPPED = "stopped_for_review"
+"""정지로 미도달한 단계의 skip 사유 (agent-create-wizard §4.3)."""
 
 
 @dataclass
@@ -60,6 +63,11 @@ class _Run:
     name: str | None
     llm_model_id: str | None
     session_id: str | None
+    # agent-create-wizard §2.2 — 위저드 입력 3종. 전부 no-op 기본값이므로
+    # 미지정이면 기존 논스톱 실행과 동일하다 (FR-B09).
+    stop: PipelineStop | None = None
+    tools_confirmed: bool = False
+    intent_echo: IntentResult | None = None
     records: list[StageRecord] = field(default_factory=list)
     intent: IntentResult | None = None
     selection: SelectionResult | None = None
@@ -104,8 +112,16 @@ class AgentCreatePipelineUseCase:
         name: str | None = None,
         llm_model_id: str | None = None,
         session_id: str | None = None,
+        stop_after: PipelineStop | None = None,
+        tools_confirmed: bool = False,
+        intent_echo: IntentResult | None = None,
     ) -> AsyncIterator[StageEvent | PipelineOutcome]:
-        """파이프라인 실행 — StageEvent* 를 yield 하고 PipelineOutcome 으로 끝난다."""
+        """파이프라인 실행 — StageEvent* 를 yield 하고 PipelineOutcome 으로 끝난다.
+
+        agent-create-wizard §2.2 — `stop_after` 가 주어지면 해당 단계 직후
+        멈추고 `tools_proposed`/`prompt_ready` 로 끝난다. 미지정이면 기존
+        논스톱 실행(intent→…→bind)과 완전히 동일하다.
+        """
         ctx = _Run(
             user_id=user_id,
             user_request=user_request,
@@ -117,25 +133,38 @@ class AgentCreatePipelineUseCase:
             name=name,
             llm_model_id=llm_model_id,
             session_id=session_id,
+            stop=stop_after,
+            tools_confirmed=tools_confirmed,
+            intent_echo=intent_echo,
         )
         self._logger.info(
-            "pipeline start", request_id=request_id, round=ctx.round
+            "pipeline start",
+            request_id=request_id,
+            round=ctx.round,
+            stop_after=stop_after.value if stop_after else None,
         )
         async for event in self._stage(PipelineStage.INTENT, ctx, self._run_intent):
             yield event
         assert ctx.intent is not None  # _run_intent 가 항상 채운다
+        # 되묻기가 정지 지점보다 우선한다 — 물을 것이 남았는데 도구를
+        # 추천하면 근거 없는 추천이 된다.
         if PipelinePolicy.decide_after_intent(ctx.intent) == "ask":
             yield self._need_input_outcome(ctx)
             return
-        remaining: tuple = (
-            (PipelineStage.TOOLS, self._run_tools),
-            (PipelineStage.PROMPT, self._run_prompt),
-            (PipelineStage.CREATE, self._run_create),
-            (PipelineStage.BIND, self._run_bind),
-        )
-        for stage, stage_fn in remaining:
-            async for event in self._stage(stage, ctx, stage_fn):
+        # 실행 단계 목록은 domain Policy 가 계산한다 — 분기가 흐름 코드에
+        # 흩어지면 후속 R1 수렴에서 재사용할 수 없다 (Design Option C).
+        runners = {
+            PipelineStage.TOOLS: self._run_tools,
+            PipelineStage.PROMPT: self._run_prompt,
+            PipelineStage.CREATE: self._run_create,
+            PipelineStage.BIND: self._run_bind,
+        }
+        for stage in PipelinePolicy.stages_to_run(ctx.stop):
+            async for event in self._stage(stage, ctx, runners[stage]):
                 yield event
+            if PipelinePolicy.decide_after_stage(stage, ctx.stop) == "stop":
+                yield self._stopped_outcome(ctx)
+                return
         yield self._created_outcome(ctx)
 
     # ── 단계 공통 실행기 ────────────────────────────────────────────────────
@@ -159,6 +188,16 @@ class AgentCreatePipelineUseCase:
     # ── 단계별 실행 ─────────────────────────────────────────────────────────
 
     async def _run_intent(self, ctx: _Run) -> StageRecord:
+        # agent-create-wizard D2 — 확정된 의도를 에코백받았으면 LLM 을 다시
+        # 돌리지 않는다. 재판정하면 사용자가 도구를 고른 근거였던 의도와
+        # 프롬프트 생성에 쓰인 의도가 달라질 수 있다. 신뢰 경계(spec 검증·
+        # 계산 필드 재계산)는 Policy 가 처리한다.
+        reused = PipelinePolicy.reuse_intent(ctx.intent_echo, self._spec)
+        if reused is not None:
+            ctx.intent = reused
+            return StageRecord(
+                PipelineStage.INTENT, StageStatus.OK, "확정된 의도 재사용"
+            )
         result = await self._intent.execute(
             message=ctx.user_request,
             spec=self._spec,
@@ -177,6 +216,15 @@ class AgentCreatePipelineUseCase:
         return StageRecord(PipelineStage.INTENT, StageStatus.OK)
 
     async def _run_tools(self, ctx: _Run) -> StageRecord:
+        # agent-create-wizard D1 — 사용자가 확정한 목록은 셀렉터를 태우지
+        # 않는다. required_ids 로 넘기면 final = 추천 ∪ 확정 이 되어 사용자가
+        # 제거한 도구가 되살아난다 (포트 계약상 required 는 항상 보존되므로).
+        if ctx.tools_confirmed:
+            selection = PipelinePolicy.confirmed_selection(ctx.tool_ids)
+            ctx.selection = selection
+            return StageRecord(
+                PipelineStage.TOOLS, StageStatus.OK, selection.reason
+            )
         candidates = await self._candidates.list_active()
         if candidates:
             selection = await self._selector.select(
@@ -270,6 +318,44 @@ class AgentCreatePipelineUseCase:
             questions=tuple(ctx.intent.questions),
             round=ctx.round + 1,
             intent=ctx.intent,
+        )
+
+    def _stopped_outcome(self, ctx: _Run) -> PipelineOutcome:
+        """정지 지점 결과 조립 — tools_proposed / prompt_ready 공통 (§4.3).
+
+        빌더를 상태별로 쪼개지 않는 이유: 두 응답의 차이는 "compose 가
+        끝났는가" 하나뿐이고, 쪼개면 steps·intent·도구 목록 조립이 복사된다.
+        """
+        assert ctx.stop is not None and ctx.selection is not None
+        compose = ctx.compose
+        prompt, clamp_reason = (
+            PipelinePolicy.clamp_prompt(compose.prompt.assembled)
+            if compose is not None
+            else (None, None)
+        )
+        self._logger.info(
+            "pipeline stopped for review",
+            request_id=ctx.request_id,
+            stop_after=ctx.stop.value,
+            tool_count=len(ctx.selection.final_ids),
+        )
+        return PipelineOutcome(
+            status=PipelinePolicy.stop_status(ctx.stop),
+            steps=PipelinePolicy.finalize_steps(ctx.records, _STOPPED),
+            round=ctx.round,
+            intent=ctx.intent,
+            recommended_tool_ids=ctx.selection.selected_ids,
+            final_tool_ids=ctx.selection.final_ids,
+            unknown_tool_ids=(
+                compose.prompt.unknown_tool_ids if compose is not None else ()
+            ),
+            session_id=compose.session_id if compose is not None else None,
+            version_id=compose.version_id if compose is not None else None,
+            assembled_prompt=prompt,
+            prompt_clamp_reason=clamp_reason,
+            suggested_name=PipelinePolicy.resolve_agent_name(
+                ctx.name, ctx.intent, ctx.user_request
+            ),
         )
 
     def _created_outcome(self, ctx: _Run) -> PipelineOutcome:

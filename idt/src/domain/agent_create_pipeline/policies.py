@@ -12,13 +12,21 @@ from typing import Literal
 from src.domain.agent_create_pipeline.spec import PURPOSE_SLOT_KEY
 from src.domain.agent_create_pipeline.stages import (
     STAGE_ORDER,
+    PipelineStage,
+    PipelineStop,
     StageRecord,
     StageStatus,
 )
-from src.domain.intent.schemas import IntentResult
+from src.domain.intent.schemas import IntentResult, IntentSpec
 from src.domain.tool_selection.schemas import SelectionResult
 
 _FALLBACK_NAME = "새 에이전트"
+
+# agent-create-wizard §3.2 — 정지 지점 → 응답 status 매핑 (wire 계약).
+_STOP_STATUS: dict[PipelineStop, str] = {
+    PipelineStop.TOOLS: "tools_proposed",
+    PipelineStop.PROMPT: "prompt_ready",
+}
 
 
 class PipelinePolicy:
@@ -29,6 +37,13 @@ class PipelinePolicy:
 
     NAME_MAX_CHARS = 200
     NAME_PREVIEW_CHARS = 30
+
+    SLOT_VALUE_MAX_CHARS = 200
+    """클라이언트 에코백 슬롯값 상한 (agent-create-wizard §3.2 / D2).
+
+    intent 모듈은 슬롯값 길이를 제한하지 않는다 — LLM 출력이라 사실상 짧기
+    때문이다. 그러나 에코백은 클라이언트가 만든 입력이므로 상한이 필요하다.
+    """
 
     @staticmethod
     def decide_after_intent(result: IntentResult) -> Literal["ask", "proceed"]:
@@ -43,6 +58,106 @@ class PipelinePolicy:
         if not result.questions:
             return "proceed"
         return "ask"
+
+    # ── 정지 지점 규칙 (agent-create-wizard §3.2) ───────────────────────
+
+    @staticmethod
+    def stages_to_run(stop: PipelineStop | None) -> tuple[PipelineStage, ...]:
+        """intent 이후 실행할 단계 목록 (§3.2).
+
+        `stop` 이 None 이면 `STAGE_ORDER[1:]` — 기존 논스톱 파이프라인의
+        하드코딩 튜플과 **글자 그대로 동일**하다. 이 동일성이 FR-B09(회귀 0)를
+        리뷰가 아니라 구조로 보장한다.
+        """
+        after_intent = STAGE_ORDER[1:]
+        if stop is None:
+            return after_intent
+        end = after_intent.index(PipelineStage(stop.value)) + 1
+        return after_intent[:end]
+
+    @staticmethod
+    def decide_after_stage(
+        stage: PipelineStage, stop: PipelineStop | None
+    ) -> Literal["stop", "continue"]:
+        """이 단계 직후 멈출지 판정. `stop` 이 None 이면 항상 continue."""
+        if stop is not None and stage.value == stop.value:
+            return "stop"
+        return "continue"
+
+    @staticmethod
+    def stop_status(stop: PipelineStop) -> str:
+        """정지 지점 → 응답 status 문자열. 프론트가 분기하는 값이다."""
+        return _STOP_STATUS[stop]
+
+    @staticmethod
+    def confirmed_selection(user_ids: Sequence[str]) -> SelectionResult:
+        """사용자가 확정한 도구를 셀렉터 호출 없이 SelectionResult 로 (D1).
+
+        **이것이 없으면 위저드가 성립하지 않는다**: 확정 후 재호출에서
+        `_run_tools` 가 셀렉터를 다시 돌리면 `final_ids` 가
+        `셀렉터출력 ∪ 확정목록` 이 되어 사용자가 제거한 도구가 되살아난다.
+
+        `empty_candidate_selection` 과 달리 `fallback=False` 다 — 강하가 아니라
+        "사람이 결정했으므로 추천이 불필요"한 정상 경로이기 때문이다.
+        fallback=True 로 두면 steps.tools 가 degraded 로 칠해져 화면이
+        "도구 추천 실패"로 오표시된다.
+        """
+        deduped = tuple(dict.fromkeys(user_ids))
+        return SelectionResult(
+            selected_ids=deduped,
+            required_ids=deduped,
+            final_ids=deduped,
+            candidate_count=len(deduped),
+            fallback=False,
+            reason="사용자 확정 도구 — 추천 생략",
+        )
+
+    @staticmethod
+    def reuse_intent(
+        echo: IntentResult | None, spec: IntentSpec
+    ) -> IntentResult | None:
+        """클라이언트 에코백 의도를 spec 기준으로 재검증한다 (D2).
+
+        재사용이 필요한 이유: 왕복마다 intent LLM 을 다시 돌리면 사용자가
+        도구를 고른 근거였던 의도와 프롬프트 생성에 쓰인 의도가 달라질 수 있다.
+
+        신뢰 경계 — 에코백은 클라이언트가 만든 입력이므로 그대로 믿지 않는다
+        (stateless-hitl 의 "클라 신고값 재clamp" 와 같은 계열):
+          · spec 에 없는 slot key 는 버린다
+          · 값은 `SLOT_VALUE_MAX_CHARS` 로 clamp
+          · degraded 로 신고된 에코백은 무시한다 — 실패를 영속시키지 않는다
+          · `complete`/`missing_slots` 는 신고값을 쓰지 않고 **서버가 재계산**
+            (llm-output-trust-boundary 를 클라이언트 입력에도 동일 적용)
+          · `questions` 는 버린다 — 답을 받고 넘어온 단계에서 되묻기를
+            다시 열면 위저드가 뒤로 돌아간다
+
+        Returns:
+            재사용 가능한 IntentResult, 또는 None(호출자가 intent 를 정상 실행).
+        """
+        if echo is None or echo.degraded:
+            return None
+        allowed = {slot.key for slot in spec.slots}
+        filled = {
+            key: value.strip()[: PipelinePolicy.SLOT_VALUE_MAX_CHARS]
+            for key, value in echo.filled_slots.items()
+            if key in allowed and value.strip()
+        }
+        if not filled:
+            return None
+        return IntentResult(
+            label=echo.label,
+            confidence=echo.confidence,
+            ambiguous=echo.ambiguous,
+            reason=echo.reason,
+            filled_slots=filled,
+            suggestions={},
+            questions=[],
+            missing_slots=[s.key for s in spec.slots if s.key not in filled],
+            complete=all(s.key in filled for s in spec.slots if s.required),
+            degraded=False,
+        )
+
+    # ── 기존 규칙 ───────────────────────────────────────────────────────
 
     @staticmethod
     def build_selector_query(

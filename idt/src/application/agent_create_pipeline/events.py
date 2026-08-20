@@ -30,7 +30,14 @@ class StageEvent:
 class PipelineOutcome:
     """제너레이터의 마지막 yield — 동기 응답/SSE 최종 이벤트의 본문."""
 
-    status: Literal["need_input", "created"]
+    status: Literal[
+        "need_input",
+        # agent-create-wizard §3.3 — 위저드 정지 지점 2종 (additive).
+        # 구형 소비자는 이 값을 받지 않는다: stop_after 를 보내야만 나온다.
+        "tools_proposed",
+        "prompt_ready",
+        "created",
+    ]
     steps: tuple[StageRecord, ...]
     """항상 5단계 전체 (PipelinePolicy.finalize_steps 계약)."""
 
@@ -51,3 +58,14 @@ class PipelineOutcome:
     """에이전트에 실제 저장된 프롬프트 (4000자 clamp 반영값)."""
 
     bind_ok: bool | None = None
+
+    # --- agent-create-wizard §3.3 (정지 응답 전용) ---
+    suggested_name: str | None = None
+    """스튜디오 프리필용 이름 후보. 위저드는 이름을 서버 제안으로 채운다."""
+
+    prompt_clamp_reason: str | None = None
+    """prompt_ready 에서 4000자 절단이 일어났을 때의 사유 (D3).
+
+    `assembled_prompt` 는 절단된 값이므로 "보이는 것 = 저장될 것"이 성립하고,
+    절단 사실은 이 필드로만 알 수 있다.
+    """

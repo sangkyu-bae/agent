@@ -27,6 +27,23 @@ STAGE_ORDER: tuple[PipelineStage, ...] = (
 )
 
 
+class PipelineStop(StrEnum):
+    """위저드 정지 지점 — 요청 `stop_after` 의 wire 계약.
+
+    agent-create-wizard Design Ref: §3.1.
+
+    값은 `PipelineStage` 와 **의도적으로 동일한 문자열**이다: "어느 단계 직후에
+    멈출 것인가"를 표현하므로 별도 이름 체계를 두면 매핑 표가 하나 더 생긴다.
+    `PipelinePolicy` 가 이 동일성에 의존한다 (test_stages 가 고정).
+
+    create/bind 는 정지 지점이 될 수 없다 — 생성 뒤에 멈춰봐야 되돌릴 수 없고,
+    위저드는 애초에 생성 전에 끝난다.
+    """
+
+    TOOLS = "tools"
+    PROMPT = "prompt"
+
+
 class StageStatus(StrEnum):
     OK = "ok"
     DEGRADED = "degraded"

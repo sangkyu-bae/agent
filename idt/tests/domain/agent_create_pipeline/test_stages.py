@@ -35,3 +35,22 @@ def test_stage_record_defaults() -> None:
     record = StageRecord(stage=PipelineStage.INTENT, status=StageStatus.OK)
     assert record.reason is None
     assert record.elapsed_ms == 0
+
+
+# --- PipelineStop (agent-create-wizard §3.1) --------------------------------
+
+
+def test_pipeline_stop_values_are_wire_contract() -> None:
+    """요청의 stop_after 문자열 — 변경은 곧 프론트 계약 파괴."""
+    from src.domain.agent_create_pipeline.stages import PipelineStop
+
+    assert PipelineStop.TOOLS.value == "tools"
+    assert PipelineStop.PROMPT.value == "prompt"
+
+
+def test_pipeline_stop_values_match_stage_values() -> None:
+    """정지 지점 이름은 단계 이름과 같아야 한다 — Policy 가 이 동일성에 의존한다."""
+    from src.domain.agent_create_pipeline.stages import PipelineStop
+
+    assert PipelineStop.TOOLS.value == PipelineStage.TOOLS.value
+    assert PipelineStop.PROMPT.value == PipelineStage.PROMPT.value

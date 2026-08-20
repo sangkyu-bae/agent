@@ -22,6 +22,21 @@ class PipelineAnswerIn(BaseModel):
     value: str = Field(..., min_length=1)
 
 
+class IntentEchoIn(BaseModel):
+    """확정된 의도 에코백 (agent-create-wizard §4.2 / D2).
+
+    `IntentSummaryOut` 을 그대로 되돌려 보내는 형태다 — 서버가 자신이 낸
+    산출물을 다시 받는 stateless HITL 관례와 같은 계열.
+
+    `complete`/`missing_slots` 는 **받지 않는다**: 계산 필드를 외부 입력으로
+    받으면 오염값이 판정을 뒤집는다. 서버가 spec 으로 재계산한다.
+    """
+
+    label: str | None = Field(None, max_length=100)
+    filled_slots: dict[str, str] = Field(default_factory=dict)
+    degraded: bool = False
+
+
 class AgentPipelineRequest(BaseModel):
     """두 엔드포인트(동기/SSE) 공용 요청. 검증 규칙: Design §4.2."""
 
@@ -35,6 +50,16 @@ class AgentPipelineRequest(BaseModel):
     name: str | None = Field(None, max_length=200)
     llm_model_id: str | None = None
     session_id: str | None = None
+
+    # --- agent-create-wizard §4.2 (위저드 전용, 전부 no-op 기본값) ---
+    stop_after: Literal["tools", "prompt"] | None = None
+    """지정 단계 직후 정지. 미지정이면 기존 논스톱 실행과 완전히 동일하다."""
+
+    tools_confirmed: bool = False
+    """true 면 `tool_ids` 가 사용자 확정 목록이므로 셀렉터를 돌리지 않는다 (D1)."""
+
+    intent: IntentEchoIn | None = None
+    """확정된 의도 재사용. 서버가 spec 으로 재검증한 뒤에만 신뢰한다 (D2)."""
 
 
 class StageRecordOut(BaseModel):
@@ -65,7 +90,7 @@ class IntentSummaryOut(BaseModel):
 class AgentPipelineResponse(BaseModel):
     """동기 200 응답 = SSE 최종 이벤트 payload (FR-15)."""
 
-    status: Literal["need_input", "created"]
+    status: Literal["need_input", "tools_proposed", "prompt_ready", "created"]
     round: int = 0
     steps: list[StageRecordOut]
     degraded_stages: list[str] = Field(default_factory=list)
@@ -81,3 +106,6 @@ class AgentPipelineResponse(BaseModel):
     agent_name: str | None = None
     assembled_prompt: str | None = None
     bind_ok: bool | None = None
+    # --- agent-create-wizard §4.3 (정지 응답 전용, optional) ---
+    suggested_name: str | None = None
+    prompt_clamp_reason: str | None = None
