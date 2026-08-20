@@ -1,0 +1,10 @@
+[
+  {
+    "id": "cp-1786857449818",
+    "createdAt": "2026-08-16T05:17:29.818Z",
+    "type": "phase_transition",
+    "phase": "design",
+    "feature": "prompt-composer",
+    "description": "design → do"
+  }
+]

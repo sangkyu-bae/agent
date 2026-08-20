@@ -1,1 +1,2 @@
 - [agent-user-context Iteration 1](project_agent_user_context.md) — wiring gaps fixed, Match Rate 78%→95%, 2026-05-28
+- [agent-create-wizard Iteration 1](project_agent_create_wizard.md) — 프론트 Critical 2+Important 5 수정, 잔여 SC-2 실서버 E2E, vitest/tsc baseline 비-clean, MSW SSE 끊김 재현 불가

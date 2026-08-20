@@ -2,12 +2,12 @@
   "version": "1.0",
   "enabled": false,
   "teamName": "",
-  "feature": "mutation-pending-guard",
+  "feature": "question-card",
   "pdcaPhase": "archived",
   "orchestrationPattern": "leader",
-  "ctoAgent": "opus",
-  "startedAt": "2026-08-02T09:37:03.654Z",
-  "lastUpdated": "2026-08-02T09:43:44.532Z",
+  "ctoAgent": "fable",
+  "startedAt": "2026-08-20T13:34:47.623Z",
+  "lastUpdated": "2026-08-20T13:44:44.875Z",
   "teammates": [],
   "progress": {
     "totalTasks": 0,
@@ -17,5 +17,5 @@
     "pendingTasks": 0
   },
   "recentMessages": [],
-  "sessionId": "ab177fff-ba5a-4592-8eaf-f8d56d8d727f"
+  "sessionId": "5c46467d-266d-4818-b87b-a72b82dc4ba1"
 }

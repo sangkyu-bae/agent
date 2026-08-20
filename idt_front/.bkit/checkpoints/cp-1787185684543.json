@@ -1,0 +1,2627 @@
+{
+  "id": "cp-1787185684543",
+  "createdAt": "2026-08-20T00:28:04.543Z",
+  "type": "phase_transition",
+  "phase": "plan",
+  "feature": "question-card",
+  "description": "plan → design",
+  "pdcaStatusHash": "4ab15ac5107ec3ff3f20943cb1cc93b66ee642fe5ee7e971e34e65dd1c3043d8",
+  "pdcaStatus": {
+    "version": "3.0",
+    "lastUpdated": "2026-08-20T02:40:00.000Z",
+    "activeFeatures": [
+      "mutation-pending-guard",
+      "llm-register",
+      "doc-extractor-slot-add-fix",
+      "fix-agent-composer",
+      "unified-pdf-upload",
+      "collection-management-ui",
+      "tools",
+      "chat-history-api",
+      "chat",
+      "layout",
+      "ChatPage",
+      "idt_front",
+      "store",
+      "constants",
+      "mocks",
+      "rag",
+      "DocumentPage",
+      "EvalDatasetPage",
+      "AgentBuilderPage",
+      "ToolConnectionPage",
+      "WorkflowDesignerPage",
+      "ToolAdminPage",
+      "WorkflowBuilderPage",
+      "__tests__",
+      "collection",
+      "CollectionPage",
+      "api",
+      "CollectionDocumentsPage",
+      "Gap analysis for chat-sidebar-collapse",
+      "agent-store",
+      "AgentStorePage",
+      "AdminDepartmentsPage",
+      "AdminUsersPage",
+      "agent-builder-api-integration",
+      "agent-session-switching",
+      "AdminAgentRunsPage",
+      "AdminRagasPage",
+      "AdminSkillsPage",
+      "AdminMcpServersPage",
+      "admin",
+      "tool-config-modal",
+      "WikiPage",
+      "agent-schedule",
+      "agent_composer",
+      "AdminLlmModelsPage",
+      "AgentKnowledgePage",
+      "admin-nav-restructure",
+      "utility-page",
+      "progress-card",
+      "question-card"
+    ],
+    "primaryFeature": "question-card",
+    "features": {
+      "utility-page": {
+        "phase": "archived",
+        "matchRate": 94.4,
+        "iterationCount": 0,
+        "startedAt": "2026-08-02T00:00:00.000Z",
+        "completedAt": "2026-08-02T04:00:00.000Z",
+        "archivedAt": "2026-08-02T05:00:00.000Z",
+        "archivedTo": "docs/archive/2026-08/utility-page/",
+        "stateMachine": {
+          "currentState": "archived",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "mutation-pending-guard": {
+        "phase": "archived",
+        "matchRate": 98,
+        "iterationCount": 0,
+        "startedAt": "2026-07-29T00:00:00.000Z",
+        "completedAt": "2026-08-01T00:00:00.000Z",
+        "archivedAt": "2026-08-01T00:00:00.000Z",
+        "archivedTo": "docs/archive/2026-08/mutation-pending-guard/",
+        "stateMachine": {
+          "currentState": "archived",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "llm-register": {
+        "phase": "archived",
+        "matchRate": 100,
+        "iterationCount": 1,
+        "startedAt": "2026-07-11T00:00:00.000Z",
+        "completedAt": "2026-07-11T09:00:00.000Z",
+        "archivedAt": "2026-07-11T09:00:00.000Z",
+        "archivedTo": "docs/archive/2026-07/llm-register/",
+        "stateMachine": {
+          "currentState": "archived",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "doc-extractor-slot-add-fix": {
+        "phase": "archived",
+        "matchRate": 98,
+        "iterationCount": 0,
+        "startedAt": "2026-07-06T00:00:00.000Z",
+        "completedAt": "2026-07-06T03:15:00.000Z",
+        "archivedAt": "2026-07-06T03:30:00.000Z",
+        "archivedTo": "docs/archive/2026-07/doc-extractor-slot-add-fix/",
+        "stateMachine": {
+          "currentState": "archived",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "fix-agent-composer": {
+        "phase": "archived",
+        "matchRate": 93,
+        "iterationCount": 0,
+        "startedAt": "2026-07-04T00:00:00.000Z",
+        "completedAt": "2026-07-05T06:36:51.666Z",
+        "archivedAt": "2026-07-05T07:00:00.000Z",
+        "archivedTo": "docs/archive/2026-07/fix-agent-composer/",
+        "stateMachine": {
+          "currentState": "archived",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "agent-schedule": {
+        "phase": "report",
+        "phaseNumber": 6,
+        "matchRate": 100,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {
+          "plan": "docs/01-plan/features/agent-schedule.plan.md",
+          "design": "docs/02-design/features/agent-schedule.design.md",
+          "analysis": "docs/03-analysis/features/agent-schedule.analysis.md"
+        },
+        "timestamps": {
+          "started": "2026-07-03T00:00:00.000Z",
+          "lastUpdated": "2026-07-03T07:01:23.763Z"
+        },
+        "planPath": "docs/01-plan/features/agent-schedule.plan.md",
+        "lastFile": "src/components/agent-builder/schedule/SchedulePanel.tsx",
+        "previousPhase": "check",
+        "autoAdvanced": true,
+        "stateMachine": {
+          "currentState": "report",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "tool-config-modal": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {
+          "plan": "docs/01-plan/features/tool-config-modal.plan.md",
+          "design": "docs/02-design/features/tool-config-modal.design.md"
+        },
+        "timestamps": {
+          "started": "2026-07-02T00:00:00.000Z",
+          "lastUpdated": "2026-07-02T01:00:00.000Z"
+        },
+        "planPath": "docs/01-plan/features/tool-config-modal.plan.md",
+        "stateMachine": {
+          "currentState": "do",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "collection-department-dropdown": {
+        "phase": "do",
+        "matchRate": null,
+        "iterationCount": 0,
+        "startedAt": "2026-05-08T00:00:00.000Z",
+        "planPath": "docs/01-plan/features/collection-department-dropdown.plan.md",
+        "stateMachine": {
+          "currentState": "do",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "rag-tool-collections-401-fix": {
+        "phase": "plan",
+        "matchRate": null,
+        "iterationCount": 0,
+        "startedAt": "2026-05-05T10:00:00.000Z",
+        "planPath": "docs/01-plan/features/rag-tool-collections-401-fix.plan.md",
+        "stateMachine": {
+          "currentState": "plan",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "admin-ui": {
+        "phase": "archived",
+        "matchRate": 92,
+        "iterationCount": 0,
+        "startedAt": "2026-05-05T08:00:00.000Z",
+        "completedAt": "2026-05-05T09:30:00.000Z",
+        "archivedAt": "2026-05-05T09:56:00.000Z",
+        "archivedTo": "docs/archive/2026-05/admin-ui/",
+        "stateMachine": {
+          "currentState": "archived",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "agent-subscription": {
+        "phase": "archived",
+        "matchRate": 95,
+        "iterationCount": 1,
+        "startedAt": "2026-05-04T00:00:00.000Z",
+        "completedAt": "2026-05-04T00:00:00.000Z",
+        "archivedAt": "2026-05-04T00:00:00.000Z",
+        "archivedTo": "docs/archive/2026-05/agent-subscription/",
+        "stateMachine": {
+          "currentState": "archived",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "document-delete-api": {
+        "phase": "archived",
+        "matchRate": 94,
+        "iterationCount": 0,
+        "startedAt": "2026-04-30T00:00:00.000Z",
+        "archivedAt": "2026-04-30T05:00:00.000Z",
+        "archivedTo": "docs/archive/2026-04/document-delete-api/",
+        "stateMachine": {
+          "currentState": "archived",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "chat-sidebar-collapse": {
+        "phase": "archived",
+        "matchRate": 91,
+        "iterationCount": 0,
+        "startedAt": "2026-04-29T12:00:00.000Z",
+        "archivedAt": "2026-04-29T15:10:00.000Z",
+        "archivedTo": "docs/archive/2026-04/chat-sidebar-collapse/",
+        "stateMachine": {
+          "currentState": "archived",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "hybrid-search-ui": {
+        "phase": "archived",
+        "phaseNumber": 7,
+        "matchRate": 99,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {
+          "plan": "docs/archive/2026-04/hybrid-search-ui/hybrid-search-ui.plan.md",
+          "design": "docs/archive/2026-04/hybrid-search-ui/hybrid-search-ui.design.md",
+          "analysis": "docs/archive/2026-04/hybrid-search-ui/hybrid-search-ui.analysis.md",
+          "report": "docs/archive/2026-04/hybrid-search-ui/hybrid-search-ui.report.md"
+        },
+        "timestamps": {
+          "started": "2026-04-28T12:00:00.000Z",
+          "lastUpdated": "2026-04-29T06:05:00.000Z",
+          "archivedAt": "2026-04-29T06:05:00.000Z"
+        },
+        "archivedTo": "docs/archive/2026-04/hybrid-search-ui/",
+        "previousPhase": "completed",
+        "autoAdvanced": true,
+        "stateMachine": {
+          "currentState": "archived",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "unified-pdf-upload": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {
+          "plan": "docs/01-plan/features/unified-pdf-upload.plan.md",
+          "design": "docs/02-design/features/unified-pdf-upload.design.md"
+        },
+        "timestamps": {
+          "started": "2026-04-27T00:00:00.000Z",
+          "lastUpdated": "2026-04-27T09:47:00.000Z"
+        },
+        "lastFile": "src/components/collection/UploadDocumentModal.tsx",
+        "stateMachine": {
+          "currentState": "do",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "layout-scroll-fix": {
+        "phase": "plan",
+        "phaseNumber": 1,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {
+          "plan": "docs/01-plan/features/layout-scroll-fix.plan.md"
+        },
+        "timestamps": {
+          "started": "2026-04-23T12:00:00.000Z",
+          "lastUpdated": "2026-04-23T12:00:00.000Z"
+        },
+        "lastFile": "docs/01-plan/features/layout-scroll-fix.plan.md",
+        "stateMachine": {
+          "currentState": "plan",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "collection-document-chunks": {
+        "phase": "archived",
+        "matchRate": 97,
+        "iterationCount": 0,
+        "startedAt": "2026-04-23T09:00:00.000Z",
+        "archivedAt": "2026-04-23T15:00:00.000Z",
+        "archivedTo": "docs/archive/2026-04/collection-document-chunks/",
+        "stateMachine": {
+          "currentState": "archived",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "embedding-model-registry": {
+        "phase": "archived",
+        "matchRate": 100,
+        "iterationCount": 0,
+        "startedAt": "2026-04-22T00:00:00.000Z",
+        "archivedAt": "2026-04-23T06:40:00.000Z",
+        "archivedTo": "docs/archive/2026-04/embedding-model-registry/",
+        "stateMachine": {
+          "currentState": "archived",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "collection-permission-management": {
+        "phase": "archived",
+        "matchRate": 100,
+        "iterationCount": 1,
+        "startedAt": "2026-04-23T00:00:00.000Z",
+        "archivedAt": "2026-04-23T12:00:00.000Z",
+        "archivedTo": "docs/archive/2026-04/collection-permission-management/",
+        "stateMachine": {
+          "currentState": "archived",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "collection-management-ui": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {
+          "plan": "docs/01-plan/features/collection-management-ui.plan.md",
+          "design": "docs/02-design/features/collection-management-ui.design.md"
+        },
+        "timestamps": {
+          "started": "2026-04-22T00:00:00.000Z",
+          "lastUpdated": "2026-04-22T04:45:00.000Z"
+        },
+        "lastFile": "src/pages/CollectionPage/index.tsx",
+        "stateMachine": {
+          "currentState": "do",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "custom-rag-tool-frontend": {
+        "phase": "archived",
+        "matchRate": 100,
+        "iterationCount": 1,
+        "startedAt": "2026-04-21T12:00:00.000Z",
+        "archivedAt": "2026-04-21T12:00:00.000Z",
+        "archivedTo": "docs/archive/2026-04/custom-rag-tool-frontend/",
+        "stateMachine": {
+          "currentState": "archived",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "llm-model": {
+        "phase": "archived",
+        "matchRate": 100,
+        "iterationCount": 0,
+        "startedAt": "2026-04-21T09:00:00.000Z",
+        "archivedAt": "2026-04-21T12:00:00.000Z",
+        "archivedTo": "docs/archive/2026-04/llm-model/",
+        "stateMachine": {
+          "currentState": "archived",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "tools": {
+        "phase": "archived",
+        "matchRate": 100,
+        "iterationCount": 1,
+        "startedAt": "2026-04-21T00:00:00.000Z",
+        "archivedAt": "2026-04-21T12:30:00.000Z",
+        "archivedTo": "docs/archive/2026-04/tools/",
+        "stateMachine": {
+          "currentState": "archived",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "chat-history-api": {
+        "phase": "check",
+        "phaseNumber": 4,
+        "matchRate": 97,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {
+          "plan": "docs/01-plan/features/chat-history-api.plan.md",
+          "design": "docs/02-design/features/chat-history-api.design.md",
+          "analysis": "docs/03-analysis/features/chat-history-api.analysis.md"
+        },
+        "timestamps": {
+          "started": "2026-04-17T00:00:00.000Z",
+          "lastUpdated": "2026-05-02T09:10:00.000Z"
+        },
+        "lastFile": "src/__tests__/components/ChatPageIntegration.test.tsx",
+        "stateMachine": {
+          "currentState": "check",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "chat": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-03-16T14:41:16.262Z",
+          "lastUpdated": "2026-06-05T10:34:27.668Z"
+        },
+        "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\components\\chat\\MessageBubble.tsx",
+        "stateMachine": {
+          "currentState": "do",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "layout": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-03-16T14:42:54.427Z",
+          "lastUpdated": "2026-08-02T09:23:08.179Z"
+        },
+        "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\components\\layout\\AppSidebar.test.tsx",
+        "stateMachine": {
+          "currentState": "do",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "ChatPage": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-03-17T01:54:47.749Z",
+          "lastUpdated": "2026-05-27T09:56:05.397Z"
+        },
+        "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\ChatPage\\streamRouting.test.tsx",
+        "stateMachine": {
+          "currentState": "do",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "idt_front": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-03-17T02:00:46.710Z",
+          "lastUpdated": "2026-07-29T10:47:23.413Z"
+        },
+        "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\components\\common\\LoadingButton.tsx",
+        "stateMachine": {
+          "currentState": "do",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "store": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-03-17T13:07:19.915Z",
+          "lastUpdated": "2026-05-09T07:54:49.610Z"
+        },
+        "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\store\\layoutStore.ts",
+        "stateMachine": {
+          "currentState": "do",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "constants": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-03-17T14:39:41.105Z",
+          "lastUpdated": "2026-08-02T09:15:39.927Z"
+        },
+        "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\constants\\adminNav.ts",
+        "stateMachine": {
+          "currentState": "do",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "mocks": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-03-17T14:40:33.713Z",
+          "lastUpdated": "2026-07-11T07:45:27.132Z"
+        },
+        "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\__tests__\\mocks\\handlers.ts",
+        "stateMachine": {
+          "currentState": "do",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "rag": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-03-17T14:41:11.780Z",
+          "lastUpdated": "2026-07-02T10:54:23.590Z"
+        },
+        "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\components\\rag\\ChunkViewer.tsx",
+        "stateMachine": {
+          "currentState": "do",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "DocumentPage": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-03-17T14:41:57.466Z",
+          "lastUpdated": "2026-03-24T06:17:54.767Z"
+        },
+        "lastFile": "C:\\sangplus\\idt_front\\src\\pages\\DocumentPage\\index.tsx",
+        "stateMachine": {
+          "currentState": "do",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "EvalDatasetPage": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-03-20T04:37:43.712Z",
+          "lastUpdated": "2026-04-29T02:59:22.913Z"
+        },
+        "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\EvalDatasetPage\\index.tsx",
+        "stateMachine": {
+          "currentState": "do",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "AgentBuilderPage": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-03-20T05:20:57.277Z",
+          "lastUpdated": "2026-07-05T06:00:13.869Z"
+        },
+        "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\AgentBuilderPage\\index.tsx",
+        "stateMachine": {
+          "currentState": "do",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "ToolConnectionPage": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-03-20T05:38:16.817Z",
+          "lastUpdated": "2026-04-29T02:59:58.434Z"
+        },
+        "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\ToolConnectionPage\\index.tsx",
+        "stateMachine": {
+          "currentState": "do",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "WorkflowDesignerPage": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-03-20T05:52:43.620Z",
+          "lastUpdated": "2026-04-29T02:59:39.427Z"
+        },
+        "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\WorkflowDesignerPage\\index.tsx",
+        "stateMachine": {
+          "currentState": "do",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "ToolAdminPage": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-03-21T06:08:11.869Z",
+          "lastUpdated": "2026-07-02T10:56:06.748Z"
+        },
+        "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\ToolAdminPage\\index.tsx",
+        "stateMachine": {
+          "currentState": "do",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "WorkflowBuilderPage": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-03-24T05:09:14.521Z",
+          "lastUpdated": "2026-04-29T03:00:54.642Z"
+        },
+        "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\WorkflowBuilderPage\\index.tsx",
+        "stateMachine": {
+          "currentState": "do",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "__tests__": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-04-12T07:57:56.857Z",
+          "lastUpdated": "2026-07-05T06:01:46.061Z"
+        },
+        "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\__tests__\\components\\AgentBuilderStudio.test.tsx",
+        "stateMachine": {
+          "currentState": "do",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "collection": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-04-22T04:41:44.838Z",
+          "lastUpdated": "2026-07-02T10:53:44.402Z"
+        },
+        "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\components\\collection\\ChunkDetailModal.tsx",
+        "stateMachine": {
+          "currentState": "do",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "CollectionPage": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-04-22T04:43:06.955Z",
+          "lastUpdated": "2026-04-29T06:32:05.919Z"
+        },
+        "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\CollectionPage\\index.tsx",
+        "stateMachine": {
+          "currentState": "do",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "api": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-04-23T07:39:17.249Z",
+          "lastUpdated": "2026-07-03T05:41:56.758Z"
+        },
+        "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\services\\api\\authClient.ts",
+        "stateMachine": {
+          "currentState": "do",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "CollectionDocumentsPage": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-04-23T10:35:14.596Z",
+          "lastUpdated": "2026-04-30T02:25:43.033Z"
+        },
+        "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\CollectionDocumentsPage\\index.tsx",
+        "stateMachine": {
+          "currentState": "do",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "agent-chat-layout": {
+        "phase": "archived",
+        "matchRate": null,
+        "iterationCount": 0,
+        "startedAt": "2026-04-28T15:00:00.000Z",
+        "archivedAt": "2026-04-29T06:00:00.000Z",
+        "archivedTo": "docs/archive/2026-04/agent-chat-layout/",
+        "stateMachine": {
+          "currentState": "archived",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "Gap analysis for chat-sidebar-collapse": {
+        "phase": "act",
+        "phaseNumber": 5,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-04-29T05:57:17.645Z",
+          "lastUpdated": "2026-04-29T05:57:17.646Z"
+        },
+        "previousPhase": "check",
+        "autoAdvanced": true,
+        "stateMachine": {
+          "currentState": "act",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "agent-store": {
+        "phase": "do",
+        "matchRate": 96,
+        "iterationCount": 1,
+        "startedAt": "2026-05-04T13:26:15.264Z",
+        "archivedAt": "2026-05-04T13:51:00.000Z",
+        "archivedTo": "docs/archive/2026-05/agent-store/",
+        "phaseNumber": 3,
+        "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\components\\agent-store\\AgentDetailModal.tsx",
+        "timestamps": {
+          "lastUpdated": "2026-07-02T10:53:43.944Z"
+        },
+        "stateMachine": {
+          "currentState": "do",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "AgentStorePage": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-05-04T13:29:41.492Z",
+          "lastUpdated": "2026-05-04T13:41:03.223Z"
+        },
+        "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\AgentStorePage\\index.tsx",
+        "stateMachine": {
+          "currentState": "do",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "AdminDepartmentsPage": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-05-05T08:32:53.032Z",
+          "lastUpdated": "2026-07-02T10:54:36.955Z"
+        },
+        "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\AdminDepartmentsPage\\index.tsx",
+        "stateMachine": {
+          "currentState": "do",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "AdminUsersPage": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-05-05T08:33:00.014Z",
+          "lastUpdated": "2026-05-05T08:33:00.014Z"
+        },
+        "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\AdminUsersPage\\index.tsx",
+        "stateMachine": {
+          "currentState": "do",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "agent-builder-api-integration": {
+        "phase": "act",
+        "phaseNumber": 5,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-05-08T05:17:32.717Z",
+          "lastUpdated": "2026-05-08T05:17:32.718Z"
+        },
+        "previousPhase": "check",
+        "autoAdvanced": true,
+        "stateMachine": {
+          "currentState": "act",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "agent-session-switching": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-05-09T12:00:00.000Z",
+          "lastUpdated": "2026-05-09T12:00:00.000Z"
+        },
+        "planPath": "docs/01-plan/features/agent-session-switching.plan.md",
+        "stateMachine": {
+          "currentState": "do",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "chatpage-rerequest-stale-state-fix": {
+        "phase": "archived",
+        "matchRate": 97,
+        "iterationCount": 0,
+        "startedAt": "2026-05-27T00:00:00.000Z",
+        "completedAt": "2026-05-27T09:50:00.000Z",
+        "archivedAt": "2026-05-27T10:05:00.000Z",
+        "archivedTo": "docs/archive/2026-05/chatpage-rerequest-stale-state-fix/",
+        "stateMachine": {
+          "currentState": "archived",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "agent-store-nav": {
+        "phase": "archived",
+        "matchRate": null,
+        "iterationCount": 0,
+        "startedAt": "2026-06-10T00:00:00.000Z",
+        "completedAt": "2026-06-10T07:53:27.359Z",
+        "archivedAt": "2026-06-10T07:53:27.359Z",
+        "archivedTo": "docs/archive/2026-06/agent-store-nav/",
+        "documents": {
+          "plan": "docs/archive/2026-06/agent-store-nav/agent-store-nav.plan.md",
+          "report": "docs/archive/2026-06/agent-store-nav/agent-store-nav.report.md"
+        },
+        "note": "Design/Analysis skipped (lightweight NAV item); verified via TDD 6/6",
+        "stateMachine": {
+          "currentState": "archived",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "AdminAgentRunsPage": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-06-28T05:49:31.305Z",
+          "lastUpdated": "2026-06-28T05:49:33.920Z"
+        },
+        "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\AdminAgentRunsPage\\index.tsx",
+        "stateMachine": {
+          "currentState": "do",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "AdminRagasPage": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-06-28T05:49:38.908Z",
+          "lastUpdated": "2026-06-28T05:49:46.810Z"
+        },
+        "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\AdminRagasPage\\index.tsx",
+        "stateMachine": {
+          "currentState": "do",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "AdminSkillsPage": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-06-28T05:49:55.804Z",
+          "lastUpdated": "2026-07-02T10:54:58.833Z"
+        },
+        "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\AdminSkillsPage\\index.tsx",
+        "stateMachine": {
+          "currentState": "do",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "AdminMcpServersPage": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-06-28T05:50:02.880Z",
+          "lastUpdated": "2026-07-02T10:55:22.593Z"
+        },
+        "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\AdminMcpServersPage\\index.tsx",
+        "stateMachine": {
+          "currentState": "do",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "admin": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-06-28T05:50:47.514Z",
+          "lastUpdated": "2026-07-02T10:54:12.650Z"
+        },
+        "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\components\\admin\\UserRegisterModal.tsx",
+        "stateMachine": {
+          "currentState": "do",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "WikiPage": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-07-02T10:54:30.539Z",
+          "lastUpdated": "2026-07-02T10:54:58.244Z"
+        },
+        "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\WikiPage\\WikiDetailPanel.tsx",
+        "stateMachine": {
+          "currentState": "do",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "agent_composer": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-07-05T05:36:25.244Z",
+          "lastUpdated": "2026-07-05T05:38:40.477Z"
+        },
+        "lastFile": "C:\\sangplus\\sangplusbot\\idt\\src\\application\\agent_composer\\compose_agent_use_case.py",
+        "stateMachine": {
+          "currentState": "do",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "AdminLlmModelsPage": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-07-11T07:51:41.102Z",
+          "lastUpdated": "2026-07-11T08:50:49.899Z"
+        },
+        "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\AdminLlmModelsPage\\index.test.tsx",
+        "stateMachine": {
+          "currentState": "do",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "AgentKnowledgePage": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-07-29T10:49:32.924Z",
+          "lastUpdated": "2026-07-31T00:59:05.289Z"
+        },
+        "lastFile": "C:\\sangplus\\sangplusbot\\idt_front\\src\\pages\\AgentKnowledgePage\\index.tsx",
+        "stateMachine": {
+          "currentState": "do",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "admin-nav-restructure": {
+        "phase": "act",
+        "phaseNumber": 5,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-08-02T09:35:31.946Z",
+          "lastUpdated": "2026-08-02T09:35:31.948Z"
+        },
+        "previousPhase": "check",
+        "autoAdvanced": true,
+        "stateMachine": {
+          "currentState": "act",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      },
+      "progress-card": {
+        "phase": "completed",
+        "matchRate": 98,
+        "iterationCount": 0,
+        "startedAt": "2026-08-19T03:00:00.000Z",
+        "documents": {
+          "plan": "docs/01-plan/features/progress-card.plan.md",
+          "design": "docs/02-design/features/progress-card.design.md",
+          "analysis": "docs/03-analysis/progress-card.analysis.md",
+          "report": "docs/04-report/progress-card.report.md"
+        },
+        "stateMachine": {
+          "currentState": "completed",
+          "previousState": "check",
+          "transitionAt": "2026-08-20T02:40:00.000Z"
+        },
+        "completedAt": "2026-08-20T02:40:00.000Z",
+        "qaStatus": "SKIP"
+      },
+      "question-card": {
+        "phase": "plan",
+        "phaseNumber": 1,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {
+          "plan": "docs/01-plan/features/question-card.plan.md"
+        },
+        "timestamps": {
+          "started": "2026-08-20T02:00:00.000Z",
+          "lastUpdated": "2026-08-20T02:00:00.000Z"
+        },
+        "planPath": "docs/01-plan/features/question-card.plan.md",
+        "lastFile": "docs/01-plan/features/question-card.plan.md",
+        "stateMachine": {
+          "currentState": "plan",
+          "previousState": null,
+          "stateHistory": [],
+          "retryCount": 0,
+          "maxRetries": 5,
+          "circuitBreakerOpen": false
+        },
+        "metrics": {
+          "qualityScore": null,
+          "conventionCompliance": null,
+          "apiCompliance": null,
+          "cycleTimeMs": null,
+          "iterationEfficiency": null
+        },
+        "phaseTimestamps": {},
+        "automationLevel": 2
+      }
+    },
+    "pipeline": {
+      "currentPhase": 1,
+      "level": "Dynamic",
+      "phaseHistory": []
+    },
+    "session": {
+      "startedAt": "2026-03-16T14:41:16.262Z",
+      "onboardingCompleted": false,
+      "lastActivity": "2026-08-20T00:22:08.045Z"
+    },
+    "history": [
+      {
+        "timestamp": "2026-07-03T05:48:29.107Z",
+        "feature": "idt_front",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-03T05:48:31.949Z",
+        "feature": "idt_front",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-03T05:49:19.698Z",
+        "feature": "AgentBuilderPage",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-03T05:49:21.709Z",
+        "feature": "AgentBuilderPage",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-03T05:49:24.044Z",
+        "feature": "AgentBuilderPage",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-03T05:49:25.866Z",
+        "feature": "AgentBuilderPage",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-03T05:49:38.407Z",
+        "feature": "AgentBuilderPage",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-03T05:49:40.764Z",
+        "feature": "AgentBuilderPage",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-03T05:49:43.259Z",
+        "feature": "AgentBuilderPage",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-03T05:50:37.861Z",
+        "feature": "__tests__",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-03T05:54:49.794Z",
+        "feature": "constants",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-03T06:57:38.790Z",
+        "feature": "idt_front",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-03T06:58:05.075Z",
+        "feature": "idt_front",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-03T07:01:23.765Z",
+        "feature": "agent-schedule",
+        "phase": "report",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-05T05:36:25.244Z",
+        "feature": "agent_composer",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-05T05:36:35.758Z",
+        "feature": "agent_composer",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-05T05:36:55.159Z",
+        "feature": "agent_composer",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-05T05:37:06.509Z",
+        "feature": "agent_composer",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-05T05:37:14.056Z",
+        "feature": "agent_composer",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-05T05:37:23.240Z",
+        "feature": "agent_composer",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-05T05:37:57.055Z",
+        "feature": "agent_composer",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-05T05:38:01.152Z",
+        "feature": "agent_composer",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-05T05:38:11.488Z",
+        "feature": "agent_composer",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-05T05:38:16.119Z",
+        "feature": "agent_composer",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-05T05:38:28.871Z",
+        "feature": "agent_composer",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-05T05:38:31.758Z",
+        "feature": "agent_composer",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-05T05:38:40.477Z",
+        "feature": "agent_composer",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-05T05:39:43.705Z",
+        "feature": "idt_front",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-05T05:39:48.364Z",
+        "feature": "idt_front",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-05T05:39:50.564Z",
+        "feature": "idt_front",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-05T05:40:07.933Z",
+        "feature": "constants",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-05T05:40:44.726Z",
+        "feature": "mocks",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-05T05:42:42.637Z",
+        "feature": "idt_front",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-05T05:53:08.797Z",
+        "feature": "idt_front",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-05T06:00:00.687Z",
+        "feature": "AgentBuilderPage",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-05T06:00:04.979Z",
+        "feature": "AgentBuilderPage",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-05T06:00:11.985Z",
+        "feature": "AgentBuilderPage",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-05T06:00:13.869Z",
+        "feature": "AgentBuilderPage",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-05T06:01:30.792Z",
+        "feature": "__tests__",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-05T06:01:46.061Z",
+        "feature": "__tests__",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-05T06:36:51.668Z",
+        "feature": "fix-agent-composer",
+        "phase": "report",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-06T02:33:24.858Z",
+        "feature": "idt_front",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-06T02:33:32.518Z",
+        "feature": "idt_front",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-06T02:37:55.246Z",
+        "feature": "idt_front",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-06T02:49:01.349Z",
+        "feature": "doc-extractor-slot-add-fix",
+        "phase": "report",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-06T04:58:30.026Z",
+        "feature": "idt_front",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-06T05:00:24.515Z",
+        "feature": "idt_front",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-11T07:44:43.396Z",
+        "feature": "idt_front",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-11T07:44:46.664Z",
+        "feature": "constants",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-11T07:44:52.482Z",
+        "feature": "idt_front",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-11T07:45:27.132Z",
+        "feature": "mocks",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-11T07:45:40.363Z",
+        "feature": "idt_front",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-11T07:45:48.030Z",
+        "feature": "idt_front",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-11T07:46:28.578Z",
+        "feature": "idt_front",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-11T07:49:41.551Z",
+        "feature": "idt_front",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-11T07:49:43.563Z",
+        "feature": "idt_front",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-11T07:51:41.102Z",
+        "feature": "AdminLlmModelsPage",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-11T07:52:46.236Z",
+        "feature": "AdminLlmModelsPage",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-11T07:53:36.724Z",
+        "feature": "AdminLlmModelsPage",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-11T07:53:40.091Z",
+        "feature": "AdminLlmModelsPage",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-11T07:54:33.565Z",
+        "feature": "AdminLlmModelsPage",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-11T07:54:36.243Z",
+        "feature": "AdminLlmModelsPage",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-11T07:55:03.725Z",
+        "feature": "idt_front",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-11T07:55:05.953Z",
+        "feature": "idt_front",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-11T07:55:10.276Z",
+        "feature": "constants",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-11T07:55:14.405Z",
+        "feature": "constants",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-11T07:55:24.275Z",
+        "feature": "constants",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-11T08:35:59.842Z",
+        "feature": "llm-register",
+        "phase": "report",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-11T08:50:28.536Z",
+        "feature": "idt_front",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-11T08:50:36.630Z",
+        "feature": "idt_front",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-11T08:50:38.818Z",
+        "feature": "AdminLlmModelsPage",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-11T08:50:40.794Z",
+        "feature": "AdminLlmModelsPage",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-11T08:50:49.422Z",
+        "feature": "AdminLlmModelsPage",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-11T08:50:49.899Z",
+        "feature": "AdminLlmModelsPage",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-29T10:40:25.728Z",
+        "feature": "idt_front",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-29T10:47:23.413Z",
+        "feature": "idt_front",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-29T10:49:32.924Z",
+        "feature": "AgentKnowledgePage",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-29T10:49:51.875Z",
+        "feature": "AgentKnowledgePage",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-31T00:58:35.576Z",
+        "feature": "AgentKnowledgePage",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-31T00:58:40.835Z",
+        "feature": "AgentKnowledgePage",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-31T00:58:51.678Z",
+        "feature": "AgentKnowledgePage",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-31T00:58:59.366Z",
+        "feature": "AgentKnowledgePage",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-07-31T00:59:05.289Z",
+        "feature": "AgentKnowledgePage",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-08-02T09:07:50.610Z",
+        "feature": "constants",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-08-02T09:15:39.927Z",
+        "feature": "constants",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-08-02T09:17:35.427Z",
+        "feature": "layout",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-08-02T09:17:39.376Z",
+        "feature": "layout",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-08-02T09:17:55.861Z",
+        "feature": "layout",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-08-02T09:18:06.672Z",
+        "feature": "layout",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-08-02T09:22:32.438Z",
+        "feature": "layout",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-08-02T09:22:34.401Z",
+        "feature": "layout",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-08-02T09:22:40.062Z",
+        "feature": "layout",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-08-02T09:22:54.439Z",
+        "feature": "layout",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-08-02T09:23:03.810Z",
+        "feature": "layout",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-08-02T09:23:08.179Z",
+        "feature": "layout",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-08-02T09:35:31.948Z",
+        "feature": "admin-nav-restructure",
+        "phase": "act",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-08-19T02:54:16.154Z",
+        "feature": "progress-card",
+        "event": "PLAN_DONE",
+        "from": "plan",
+        "to": "design",
+        "action": "state_transition",
+        "automationLevel": 2
+      },
+      {
+        "timestamp": "2026-08-19T03:04:24.280Z",
+        "feature": "progress-card",
+        "event": "DESIGN_DONE",
+        "from": "design",
+        "to": "do",
+        "action": "state_transition",
+        "automationLevel": 2
+      },
+      {
+        "timestamp": "2026-08-20T00:18:19.865Z",
+        "feature": "question-card",
+        "event": "PLAN_DONE",
+        "from": "plan",
+        "to": "design",
+        "action": "state_transition",
+        "automationLevel": 2
+      },
+      {
+        "timestamp": "2026-08-20T00:22:08.045Z",
+        "feature": "question-card",
+        "event": "PLAN_DONE",
+        "from": "plan",
+        "to": "design",
+        "action": "state_transition",
+        "automationLevel": 2
+      }
+    ],
+    "stateMachine": {
+      "defaultWorkflow": "default",
+      "activeWorkflows": {},
+      "totalTransitions": 0
+    },
+    "automation": {
+      "globalLevel": 2,
+      "trustScore": 38,
+      "pendingApprovals": 0,
+      "lastGateResult": null
+    },
+    "team": {
+      "enabled": true,
+      "stateFile": ".bkit/runtime/agent-state.json",
+      "eventsFile": ".bkit/runtime/agent-events.jsonl"
+    }
+  },
+  "fileHashes": null,
+  "path": "C:\\Users\\tkdrb\\project\\agent\\agent\\idt_front\\.bkit\\checkpoints\\cp-1787185684543.json"
+}

@@ -1,0 +1,76 @@
+{
+  "fileEditCounts": {
+    "C:\\Users\\tkdrb\\project\\agent\\agent\\docs\\01-plan\\features\\wizard-chat-layout.plan.md": {
+      "count": 7,
+      "ts": 1787230106842
+    },
+    "C:\\Users\\tkdrb\\project\\agent\\agent\\docs\\02-design\\features\\wizard-chat-layout.design.md": {
+      "count": 2,
+      "ts": 1787232821192
+    },
+    "C:\\Users\\tkdrb\\project\\agent\\agent\\idt_front\\src\\pages\\AgentCreateEntryPage\\components\\WizardShell.test.tsx": {
+      "count": 1,
+      "ts": 1787231142211
+    },
+    "C:\\Users\\tkdrb\\project\\agent\\agent\\idt_front\\src\\pages\\AgentCreateEntryPage\\components\\WizardShell.tsx": {
+      "count": 1,
+      "ts": 1787231158485
+    },
+    "C:\\Users\\tkdrb\\project\\agent\\agent\\idt_front\\src\\pages\\AgentCreateEntryPage\\components\\DescriptionComposer.test.tsx": {
+      "count": 1,
+      "ts": 1787231177331
+    },
+    "C:\\Users\\tkdrb\\project\\agent\\agent\\idt_front\\src\\pages\\AgentCreateEntryPage\\components\\DescriptionComposer.tsx": {
+      "count": 3,
+      "ts": 1787231196636
+    },
+    "C:\\Users\\tkdrb\\project\\agent\\agent\\idt_front\\src\\pages\\AgentCreateEntryPage\\components\\ToolsStep.test.tsx": {
+      "count": 1,
+      "ts": 1787231206644
+    },
+    "C:\\Users\\tkdrb\\project\\agent\\agent\\idt_front\\src\\pages\\AgentCreateEntryPage\\components\\ToolsStep.tsx": {
+      "count": 6,
+      "ts": 1787231233180
+    },
+    "C:\\Users\\tkdrb\\project\\agent\\agent\\idt_front\\src\\pages\\AgentCreateEntryPage\\components\\IntentStep.test.tsx": {
+      "count": 1,
+      "ts": 1787231242779
+    },
+    "C:\\Users\\tkdrb\\project\\agent\\agent\\idt_front\\src\\pages\\AgentCreateEntryPage\\components\\IntentStep.tsx": {
+      "count": 1,
+      "ts": 1787231246303
+    },
+    "C:\\Users\\tkdrb\\project\\agent\\agent\\idt_front\\src\\pages\\AgentCreateEntryPage\\index.tsx": {
+      "count": 1,
+      "ts": 1787231403421
+    },
+    "C:\\Users\\tkdrb\\project\\agent\\agent\\idt_front\\src\\pages\\AgentCreateEntryPage\\index.test.tsx": {
+      "count": 4,
+      "ts": 1787231505466
+    },
+    "C:\\Users\\tkdrb\\project\\agent\\agent\\idt_front\\src\\components\\common\\question-card\\QuestionOptionItem.tsx": {
+      "count": 1,
+      "ts": 1787232655068
+    },
+    "C:\\Users\\tkdrb\\project\\agent\\agent\\idt_front\\src\\components\\common\\question-card\\QuestionFreeTextOption.tsx": {
+      "count": 1,
+      "ts": 1787232657017
+    },
+    "C:\\Users\\tkdrb\\project\\agent\\agent\\idt_front\\src\\components\\common\\question-card\\QuestionCardParts.test.tsx": {
+      "count": 2,
+      "ts": 1787232781491
+    },
+    "C:\\Users\\tkdrb\\project\\agent\\agent\\docs\\03-analysis\\wizard-chat-layout.analysis.md": {
+      "count": 2,
+      "ts": 1787233473007
+    },
+    "C:\\Users\\tkdrb\\project\\agent\\agent\\docs\\04-report\\wizard-chat-layout.report.md": {
+      "count": 1,
+      "ts": 1787233626004
+    },
+    "C:\\Users\\tkdrb\\project\\agent\\agent\\docs\\archive\\2026-08\\_INDEX.md": {
+      "count": 2,
+      "ts": 1787233888080
+    }
+  }
+}

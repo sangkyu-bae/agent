@@ -1,0 +1,60 @@
+{
+  "id": "cp-1786857449818",
+  "createdAt": "2026-08-16T05:17:29.818Z",
+  "type": "phase_transition",
+  "phase": "design",
+  "feature": "prompt-composer",
+  "description": "design → do",
+  "pdcaStatusHash": "c1e90f2c144122cd32971d9c8c02f6a7c90cab026fb24f30f0cc6b363ef78bd8",
+  "pdcaStatus": {
+    "version": "3.0",
+    "lastUpdated": "2026-08-14T08:32:24.704776Z",
+    "activeFeatures": [
+      "prompt-composer"
+    ],
+    "primaryFeature": "prompt-composer",
+    "features": {
+      "prompt-composer": {
+        "phase": "design",
+        "matchRate": 0,
+        "iterationCount": 0,
+        "startedAt": "2026-08-14T06:45:40.099054Z",
+        "lastActivity": "2026-08-14T08:32:24.704776Z",
+        "documents": {
+          "plan": "docs/01-plan/features/prompt-composer.plan.md",
+          "design": "docs/02-design/features/prompt-composer.design.md"
+        }
+      }
+    },
+    "pipeline": {
+      "currentPhase": 1,
+      "level": "Dynamic",
+      "phaseHistory": []
+    },
+    "session": {
+      "startedAt": "2026-08-14T04:24:59.020Z",
+      "onboardingCompleted": false,
+      "lastActivity": "2026-08-14T04:25:32.342Z"
+    },
+    "history": [],
+    "stateMachine": {
+      "defaultWorkflow": "default",
+      "activeWorkflows": {},
+      "totalTransitions": 0
+    },
+    "automation": {
+      "globalLevel": 2,
+      "trustScore": 38,
+      "pendingApprovals": 0,
+      "lastGateResult": null
+    },
+    "team": {
+      "enabled": true,
+      "stateFile": ".bkit/runtime/agent-state.json",
+      "eventsFile": ".bkit/runtime/agent-events.jsonl"
+    },
+    "phase": "design"
+  },
+  "fileHashes": null,
+  "path": "C:\\Users\\tkdrb\\project\\agent\\agent\\.bkit\\checkpoints\\cp-1786857449818.json"
+}
