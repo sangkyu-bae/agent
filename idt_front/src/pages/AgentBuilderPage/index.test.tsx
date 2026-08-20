@@ -6,6 +6,7 @@ import { http, HttpResponse } from 'msw';
 import { server } from '@/__tests__/mocks/server';
 import { createWrapper } from '@/__tests__/mocks/wrapper';
 import { useAgentDraftStore } from '@/store/agentDraftStore';
+import type { WizardResult } from '@/store/agentDraftStore';
 import AgentBuilderPage from './index';
 
 beforeAll(() => server.listen());
@@ -525,7 +526,7 @@ describe('AgentBuilderPage 설정 탭 (agent-settings-tab)', () => {
 // ── 위저드 핸드오프 (agent-create-wizard §2.2 / FR-F13) ─────────────────────
 
 describe('AgentBuilderPage 위저드 핸드오프', () => {
-  const WIZARD_RESULT = {
+  const WIZARD_RESULT: WizardResult = {
     systemPrompt: '당신은 사내 문서를 찾아 답하는 에이전트입니다.',
     promptEdited: false,
     toolIds: ['internal:tavily_search', 'internal:wiki_read'],
@@ -534,7 +535,7 @@ describe('AgentBuilderPage 위저드 핸드오프', () => {
     versionId: 'pv1',
   };
 
-  const seedWizardIntent = (overrides: Partial<typeof WIZARD_RESULT> = {}) => {
+  const seedWizardIntent = (overrides: Partial<WizardResult> = {}) => {
     useAgentDraftStore.getState().setPendingIntent({
       kind: 'wizard',
       result: { ...WIZARD_RESULT, ...overrides },

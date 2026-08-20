@@ -19,7 +19,13 @@ import { server } from '@/__tests__/mocks/server';
 import { createWrapper } from '@/__tests__/mocks/wrapper';
 import { API_ENDPOINTS } from '@/constants/api';
 import { useAgentDraftStore } from '@/store/agentDraftStore';
-import type { AgentPipelineResponse } from '@/types/agentPipeline';
+import { PIPELINE_STAGE_STATUS } from '@/types/agentPipeline';
+import type {
+  AgentPipelineResponse,
+  PipelineStage,
+  PipelineStageStatus,
+  PipelineStepOut,
+} from '@/types/agentPipeline';
 import AgentCreateEntryPage from './index';
 
 const navigateMock = vi.fn();
@@ -42,12 +48,12 @@ beforeEach(() => {
 const STAGES = ['intent', 'tools', 'prompt', 'create', 'bind'] as const;
 
 const steps = (
-  overrides: Partial<Record<(typeof STAGES)[number], string>> = {},
-  reasons: Partial<Record<(typeof STAGES)[number], string>> = {},
-) =>
+  overrides: Partial<Record<PipelineStage, PipelineStageStatus>> = {},
+  reasons: Partial<Record<PipelineStage, string>> = {},
+): PipelineStepOut[] =>
   STAGES.map((stage) => ({
     stage,
-    status: overrides[stage] ?? 'skipped',
+    status: overrides[stage] ?? PIPELINE_STAGE_STATUS.SKIPPED,
     reason: reasons[stage] ?? null,
     elapsed_ms: 0,
   }));
@@ -211,8 +217,18 @@ const submitDescription = async (text = '사내 문서를 찾아주는 에이전
 // ── ① 설명 입력 ────────────────────────────────────────────────────────────
 
 describe('① 설명 입력', () => {
-  it('진행바를 5단계로 고정 렌더한다', () => {
+  it('전송 전에는 진행바를 보여주지 않는다', () => {
+    // 전부 '대기중'인 5단계는 정보가 아니라 잡음이다.
     renderPage();
+    expect(screen.queryByText('의도 파악')).not.toBeInTheDocument();
+    expect(screen.queryByText(/스튜디오에서 \[저장\]/)).not.toBeInTheDocument();
+  });
+
+  it('전송하면 입력창 바로 아래에 5단계 진행바가 붙는다', async () => {
+    stubStream([sseBody(NEED_INPUT)]);
+    renderPage();
+    await submitDescription();
+
     for (const label of [
       '의도 파악',
       '도구 추천',
@@ -220,13 +236,23 @@ describe('① 설명 입력', () => {
       '에이전트 생성',
       '프롬프트 연결',
     ]) {
-      expect(screen.getByText(label)).toBeInTheDocument();
+      expect(await screen.findByText(label)).toBeInTheDocument();
     }
+    expect(screen.getByText(/스튜디오에서 \[저장\]/)).toBeInTheDocument();
   });
 
-  it('저장이 남았다는 안내를 보여준다', () => {
+  it('진행바가 요청 문장과 같은 블록에 놓인다', async () => {
+    // "채팅 바로 아래 붙어 있다"를 DOM 구조로 고정한다 — 사이드바로 되돌아가면
+    // 이 단언이 깨진다.
+    stubStream([sseBody(NEED_INPUT)]);
     renderPage();
-    expect(screen.getByText(/스튜디오에서 \[저장\]/)).toBeInTheDocument();
+    await submitDescription();
+
+    const requestBlock = (await screen.findByText('요청')).closest('p')!;
+    const progressBlock = screen.getByText('의도 파악').closest('div')!;
+    expect(requestBlock.parentElement).toBe(
+      progressBlock.closest('.space-y-3'),
+    );
   });
 
   it('공백만 입력하면 호출하지 않는다', async () => {

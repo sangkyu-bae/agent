@@ -317,30 +317,49 @@ const AgentCreateEntryPage = () => {
     (id) => catalogTools?.find((t) => t.tool_id === id)?.name ?? id,
   );
 
+  // 첫 전송 전에는 진행바를 감춘다 — 전부 '대기중'인 5단계는 정보가 아니라
+  // 잡음이고, 첫 화면은 "한 문장 쓰세요"에 집중시키는 편이 낫다.
+  const showProgress = pipeline.isPending || pipeline.steps.length > 0;
+
   return (
     <div className="h-full overflow-y-auto bg-zinc-50/60">
-      <div className="mx-auto flex min-h-full w-full max-w-[1080px] gap-8 px-6 py-16">
-        <div className="flex min-w-0 flex-1 flex-col justify-center gap-8">
-          {step === 'description' && (
-            <>
-              <EntryHero />
+      <div className="mx-auto flex min-h-full w-full max-w-[760px] flex-col justify-center gap-8 px-6 py-16">
+          {step === 'description' && <EntryHero />}
+
+          {/*
+            입력창과 진행 상황을 한 덩어리로 묶는다 — 사용자가 보낸 문장 바로
+            아래에서 단계가 진행되는 것이 보여야 "지금 뭘 하고 있는지"가
+            시선 이동 없이 읽힌다. 전송 전에는 렌더하지 않는다(빈 5단계는 잡음).
+          */}
+          <div className="space-y-3">
+            {step === 'description' ? (
               <DescriptionComposer
                 value={input}
                 onChange={setInput}
                 onSubmit={handleSubmitDescription}
                 isPending={pipeline.isPending}
               />
-            </>
-          )}
+            ) : (
+              <p className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-[13px] leading-relaxed text-zinc-600">
+                <span className="mr-2 text-[11.5px] font-semibold uppercase tracking-widest text-violet-500">
+                  요청
+                </span>
+                {state.userRequest}
+              </p>
+            )}
 
-          {step !== 'description' && (
-            <p className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-[13px] leading-relaxed text-zinc-600">
-              <span className="mr-2 text-[11.5px] font-semibold uppercase tracking-widest text-violet-500">
-                요청
-              </span>
-              {state.userRequest}
-            </p>
-          )}
+            {showProgress && (
+              <>
+                <WizardProgress
+                  steps={pipeline.steps}
+                  activeStage={pipeline.activeStage}
+                />
+                <p className="px-1 text-[11.5px] leading-relaxed text-zinc-400">
+                  마지막 두 단계는 스튜디오에서 [저장]을 누르면 완료됩니다.
+                </p>
+              </>
+            )}
+          </div>
 
           {step === 'intent' && state.questions.length > 0 && (
             <IntentStep
@@ -395,19 +414,6 @@ const AgentCreateEntryPage = () => {
               onManualCreate={() => goStudio({ kind: 'blank' })}
             />
           )}
-        </div>
-
-        <aside className="hidden w-72 shrink-0 lg:block">
-          <div className="sticky top-8">
-            <WizardProgress
-              steps={pipeline.steps}
-              activeStage={pipeline.activeStage}
-            />
-            <p className="mt-3 px-1 text-[11.5px] leading-relaxed text-zinc-400">
-              마지막 두 단계는 스튜디오에서 [저장]을 누르면 완료됩니다.
-            </p>
-          </div>
-        </aside>
       </div>
     </div>
   );
