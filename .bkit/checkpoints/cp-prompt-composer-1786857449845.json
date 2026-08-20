@@ -1,0 +1,9 @@
+{
+  "feature": "prompt-composer",
+  "state": "do",
+  "timestamp": "2026-08-16T05:17:29.845Z",
+  "context": {
+    "matchRate": 0,
+    "iterationCount": 0
+  }
+}

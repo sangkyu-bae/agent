@@ -11,11 +11,14 @@ source_refs:
   - idt_front/src/components/agent-builder/fix/FixAgentPanel.tsx (sendCompose/pendingClarify)
   - docs/archive/2026-08/fix-agent-planner-hitl/fix-agent-planner-hitl.report.md (D5/D7/D8/D9, Match 100%)
   - 커밋 5bee1d71·923b05e3 (PR #49, 머지 18fd521e)
+  - idt/src/application/agent_create_pipeline/use_case.py (두 번째 적용 — 파이프라인 되묻기, ⚠️ 미커밋)
+  - idt/tests/application/agent_create_pipeline/test_use_case.py:360 (test_clarification_round_trip_completes_creation)
+  - docs/archive/2026-08/agent-create-pipeline/agent-create-pipeline.report.md (§1.5 Plan D3, SC-1)
 confidence: 0.9
-version: 1
+version: 2
 created: 2026-08-06
-updated: 2026-08-07
-verified_at: 18fd521e
+updated: 2026-08-19
+verified_at: 7c3ffdd
 ---
 
 # Stateless HITL 질문 왕복 — 에코백 계약 + 서버 clamp
@@ -47,7 +50,15 @@ LLM이 사용자 요청을 1회 추측으로 처리하면 모호한 요청에서
    유지된다 — Planner 오판의 복구 경로 보존.
 5. **Planner 장애 = 기존 동작 폴백 (FR-08)**: `_try_plan`이 예외를 삼키고 None 반환 →
    기존 단발 compose로 진행. 신규 협력자 장애가 기능 가용성을 깎지 않는다.
-6. **함정 — `auto_agent_builder`(v3)와 혼동 금지**: v3 자동 빌더에 세션 기반
+6. **두 번째 적용 사례 — agent-create-pipeline (v2 추가)**: `POST /api/v1/agents/pipeline`
+   이 같은 2요소(에코백 + 서버 재clamp)로 되묻기를 성립시켰고, 이번에는 왕복 이후
+   **4단계 실행(도구 추천→프롬프트→실생성→바인딩)까지 이어지는** 확장형이다.
+   세션 테이블 여전히 0 — 클라이언트가 `answers`(slot_key+value)와 `round`를 에코백하면
+   서버가 `SlotLimits`(IntentConfig 단일 출처, [[config-single-source-at-consumption]])로
+   재clamp 후 진행한다. 왕복 완주(need_input → 재호출 → created)는
+   `test_clarification_round_trip_completes_creation`이 증명. 이 패턴이 1회성 해법이
+   아니라 재사용 가능한 관행임이 두 사이클로 확인됐다 (⚠️ 파이프라인 코드는 미커밋).
+7. **함정 — `auto_agent_builder`(v3)와 혼동 금지**: v3 자동 빌더에 세션 기반
    clarification 루프가 이미 있지만 Fix 탭(compose)과 **무관한 별개 경로**다.
    플랜 단계에서 프론트 훅(`useComposeAgent`)부터 역추적해 실제 소비 경로를 확정해야
    스코프 오판(기존 루프 재활용 착각)을 막는다.

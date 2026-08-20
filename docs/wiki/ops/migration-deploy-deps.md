@@ -4,6 +4,9 @@ status: approved
 source_type: conversation
 source_refs:
   - idt/db/migration/ (V046~V060 파일 확인, 2026-08-14)
+  - idt/db/migration/V061__create_prompt_session.sql · V062__create_prompt_version.sql (v4, ⚠️ 미커밋)
+  - docs/archive/2026-08/prompt-composer/prompt-composer.design.md (§3.3)
+  - docs/archive/2026-08/agent-create-pipeline/agent-create-pipeline.report.md (마이그레이션 0 — V061/V062 의존)
   - idt/docs/archive/2026-08/background-jobs/background-jobs.report.md
   - idt/docs/archive/2026-08/doc-generator/, agent-webhook/, agent-webhook-outbound/, builtin-middleware/
   - docs/archive/2026-08/eval-hub/
@@ -13,19 +16,22 @@ source_refs:
   - idt/docs/archive/2026-07/wiki-folder-summaries/wiki-folder-summaries.report.md
   - idt/docs/archive/2026-08/builtin-tools/builtin-tools.report.md
 confidence: 0.9
-version: 3
+version: 4
 created: 2026-07-21
-updated: 2026-08-14
-verified_at: 12c69b4
+updated: 2026-08-20
+verified_at: 7c3ffdd
 reviewer: 배상규
 ---
+
+> ⚠️ `verified_at: 7c3ffdd` 에서 재확인한 것은 **V061/V062 행뿐**이며 두 SQL 파일은
+> 아직 미커밋이다. 나머지 행은 `12c69b4` 시점 확인분 그대로다.
 
 ## 문제
 
 기능 코드는 머지됐지만 마이그레이션이 배포 환경에 적용되지 않으면 런타임에서 깨진다.
 어떤 기능이 어느 V버전을 요구하는지가 PDCA 아카이브에 흩어져 있어 배포 시 확인이 어렵다.
 
-## 검증된 사실 — 미적용 시 깨지는 최근 마이그레이션 (V046~V060)
+## 검증된 사실 — 미적용 시 깨지는 최근 마이그레이션 (V046~V062)
 
 | V | 내용 | 요구하는 기능 | 미적용 시 |
 |---|---|---|---|
@@ -45,14 +51,16 @@ reviewer: 배상규
 | V058 | `agent_webhook_delivery` 신규 테이블 (INSERT only 이력) | agent-webhook-outbound + background-jobs 알림 | outbound 발송 이력 기록 실패. FK가 `agent_webhook`이 아니라 `agent_definition` — 채널 삭제 후에도 이력 보존 |
 | V059 | `document_generation_type` 신규 테이블 | doc-generator (문서 생성 타입·빌더 UI) | 문서 유형 관리/생성 노드 실패. UQ 인덱스 없음 — "도구당 active 1개"는 **앱 레이어**가 보장 |
 | V060 | `agent_background_job` 신규 테이블 + 인덱스 3종(claim/user/unseen) | background-jobs ([[db-queue-inprocess-worker]]) | **`background_worker_enabled` 기본 true라 워커가 기동 즉시 테이블 부재로 실패** — 배포 전 필수 |
+| V061 | `prompt_session` 신규 테이블 (⚠️ 미커밋) | prompt-composer | 프롬프트 생성 세션 저장 실패(5xx — DB 실패는 degraded로 위장하지 않음). `agent_id` FK **미설정이 의도** — 에이전트 삭제가 생성 이력 삭제로 전이되면 안 됨(백필 API가 정합 담당) |
+| V062 | `prompt_version` 신규 테이블 (session FK CASCADE, `uq_session_version`, `schema_version` 선반영) | prompt-composer + **agent-create-pipeline(자체 마이그레이션 0이지만 V061/V062 의존)** | 버전 저장 실패. pipeline은 prompt-composer 미가동 시 **라우터 자체가 등록되지 않아 404** ([[router-map]] 조건부 include) |
 
-공통: V046~V060은 전부 additive(컬럼 추가 또는 신규 테이블)라 **역방향 호환** — 먼저 적용해도 구버전 코드가 깨지지 않는다. 신규 테이블/FK는 CHARSET/COLLATE 미명시 원칙을 따른다 ([[mysql-fk-collation]]).
+공통: V046~V062는 전부 additive(컬럼 추가 또는 신규 테이블)라 **역방향 호환** — 먼저 적용해도 구버전 코드가 깨지지 않는다. 신규 테이블/FK는 CHARSET/COLLATE 미명시 원칙을 따른다 ([[mysql-fk-collation]]).
 
 **"적용해도 조용한" 것과 "적용 안 하면 즉시 터지는" 것의 구분**: V054(모델에 컬럼 존재)와 V060(워커 기본 on)은 미적용 시 **기능을 안 써도** 터진다. 나머지는 해당 기능 사용 시에만 터진다.
 
 ## 다음에 적용하는 법
 
-1. 배포 전 대상 환경에서 flyway 이력(또는 `SHOW TABLES`/`SHOW COLUMNS`)으로 V060까지 적용됐는지 확인한다.
+1. 배포 전 대상 환경에서 flyway 이력(또는 `SHOW TABLES`/`SHOW COLUMNS`)으로 V062까지 적용됐는지 확인한다.
 2. 새 기능 사이클이 마이그레이션을 추가하면 이 표에 한 줄 추가한다 (기능명 + 미적용 시 증상).
 3. "마이그레이션 0" 기능도 선행 V에 의존할 수 있다(예: 환류 3부작 → V052, extraction/org-scope → V050) — 의존 열에 명시한다.
 4. 적용 후 E2E 일괄 체크리스트([[e2e-carryover-checklist]])를 소화한다 — 특히 V047은 KB E2E의 선행 조건.

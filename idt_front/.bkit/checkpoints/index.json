@@ -1,0 +1,130 @@
+[
+  {
+    "id": "cp-1787108056116",
+    "createdAt": "2026-08-19T02:54:16.116Z",
+    "type": "phase_transition",
+    "phase": "plan",
+    "feature": "progress-card",
+    "description": "plan → design"
+  },
+  {
+    "id": "cp-1787108664249",
+    "createdAt": "2026-08-19T03:04:24.249Z",
+    "type": "phase_transition",
+    "phase": "design",
+    "feature": "progress-card",
+    "description": "design → do"
+  },
+  {
+    "id": "cp-1787184229557",
+    "createdAt": "2026-08-20T00:03:49.557Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "progress-card",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787184319080",
+    "createdAt": "2026-08-20T00:05:19.080Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "progress-card",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787184785998",
+    "createdAt": "2026-08-20T00:13:05.998Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "progress-card",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787184981021",
+    "createdAt": "2026-08-20T00:16:21.021Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "progress-card",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787185099767",
+    "createdAt": "2026-08-20T00:18:19.767Z",
+    "type": "phase_transition",
+    "phase": "plan",
+    "feature": "question-card",
+    "description": "plan → design"
+  },
+  {
+    "id": "cp-1787185327979",
+    "createdAt": "2026-08-20T00:22:07.979Z",
+    "type": "phase_transition",
+    "phase": "plan",
+    "feature": "question-card",
+    "description": "plan → design"
+  },
+  {
+    "id": "cp-1787185684543",
+    "createdAt": "2026-08-20T00:28:04.543Z",
+    "type": "phase_transition",
+    "phase": "plan",
+    "feature": "question-card",
+    "description": "plan → design"
+  },
+  {
+    "id": "cp-1787185808473",
+    "createdAt": "2026-08-20T00:30:08.473Z",
+    "type": "phase_transition",
+    "phase": "design",
+    "feature": "question-card",
+    "description": "design → do"
+  },
+  {
+    "id": "cp-1787185961176",
+    "createdAt": "2026-08-20T00:32:41.176Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "question-card",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787187556789",
+    "createdAt": "2026-08-20T00:59:16.789Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "question-card",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787187782808",
+    "createdAt": "2026-08-20T01:03:02.808Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "question-card",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787188070276",
+    "createdAt": "2026-08-20T01:07:50.276Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "question-card",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787188289906",
+    "createdAt": "2026-08-20T01:11:29.906Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "question-card",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787188777779",
+    "createdAt": "2026-08-20T01:19:37.779Z",
+    "type": "phase_transition",
+    "phase": "check",
+    "feature": "question-card",
+    "description": "check → act"
+  }
+]

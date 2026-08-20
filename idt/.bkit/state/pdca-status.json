@@ -1,6 +1,6 @@
 {
   "version": "3.0",
-  "lastUpdated": "2026-08-14T00:00:00.000Z",
+  "lastUpdated": "2026-08-20T16:40:00.000Z",
   "activeFeatures": [
     "websocket-common-module",
     "agent-chat-multiturn",
@@ -172,7 +172,8 @@
     "doc-generator",
     "JobsPage",
     "background-jobs",
-    "agent-create-entry"
+    "agent-create-entry",
+    "intent-slot-elicitation"
   ],
   "primaryFeature": null,
   "archivedFeatures": {
@@ -531,6 +532,26 @@
       "carryOver": [
         "G1: 실 LLM 호출 검증 — 배선 사이클 진입 조건"
       ]
+    },
+    "agent-create-pipeline": {
+      "archivedAt": "2026-08-19T08:00:00.000Z",
+      "archivedTo": "docs/archive/2026-08/agent-create-pipeline/"
+    },
+    "prompt-depth": {
+      "phase": "archived",
+      "matchRate": 99,
+      "iterationCount": 1,
+      "startedAt": "2026-08-20T11:00:00.000Z",
+      "archivedAt": "2026-08-20T15:50:00.000Z",
+      "archivedTo": "docs/archive/2026-08/prompt-depth/"
+    },
+    "wizard-chat-layout": {
+      "phase": "archived",
+      "matchRate": 98,
+      "iterationCount": 0,
+      "startedAt": "2026-08-20T13:10:00.000Z",
+      "archivedAt": "2026-08-20T16:40:00.000Z",
+      "archivedTo": "docs/archive/2026-08/wizard-chat-layout/"
     }
   },
   "features": {
@@ -6359,6 +6380,74 @@
       "startedAt": "2026-08-13T00:00:00.000Z",
       "archivedAt": "2026-08-14T00:00:00.000Z",
       "archivedTo": "docs/archive/2026-08/tool-recommender/"
+    },
+    "intent-slot-elicitation": {
+      "phase": "completed",
+      "startedAt": "2026-08-14T00:00:00.000Z",
+      "lastActivity": "2026-08-17T00:00:00.000Z",
+      "matchRate": 99,
+      "iterationCount": 2,
+      "scope": "module-1..5 (complete)"
+    },
+    "agent-create-pipeline": {
+      "phase": "archived",
+      "matchRate": 97,
+      "iterationCount": 1,
+      "startedAt": "2026-08-18T00:00:00.000Z",
+      "archivedAt": "2026-08-19T08:00:00.000Z",
+      "archivedTo": "docs/archive/2026-08/agent-create-pipeline/"
+    },
+    "agent-create-wizard": {
+      "phase": "archived",
+      "matchRate": 95,
+      "iterationCount": 1,
+      "startedAt": "2026-08-20T00:00:00.000Z",
+      "documents": {
+        "plan": "docs/archive/2026-08/agent-create-wizard/agent-create-wizard.plan.md",
+        "design": "docs/archive/2026-08/agent-create-wizard/agent-create-wizard.design.md",
+        "analysis": "docs/archive/2026-08/agent-create-wizard/agent-create-wizard.analysis.md",
+        "report": "docs/archive/2026-08/agent-create-wizard/agent-create-wizard.report.md"
+      },
+      "timestamps": {
+        "started": "2026-08-20T00:00:00.000Z",
+        "lastUpdated": "2026-08-20T10:40:00.000Z",
+        "completed": "2026-08-20T10:30:00.000Z"
+      },
+      "archivedTo": "docs/archive/2026-08/agent-create-wizard/",
+      "archivedAt": "2026-08-20T10:40:00.000Z"
+    },
+    "prompt-depth": {
+      "phase": "archived",
+      "matchRate": 99,
+      "iterationCount": 1,
+      "startedAt": "2026-08-20T11:00:00.000Z",
+      "documents": {
+        "plan": "docs/01-plan/features/prompt-depth.plan.md",
+        "design": "docs/02-design/features/prompt-depth.design.md",
+        "analysis": "docs/03-analysis/prompt-depth.analysis.md",
+        "report": "docs/04-report/prompt-depth.report.md"
+      },
+      "timestamps": {
+        "started": "2026-08-20T11:00:00.000Z",
+        "lastUpdated": "2026-08-20T15:50:00.000Z",
+        "completed": "2026-08-20T15:30:00.000Z"
+      },
+      "scopeProgress": {
+        "module-1": "completed",
+        "module-2": "completed",
+        "module-3": "completed",
+        "module-4": "completed"
+      },
+      "archivedAt": "2026-08-20T15:50:00.000Z",
+      "archivedTo": "docs/archive/2026-08/prompt-depth/"
+    },
+    "wizard-chat-layout": {
+      "phase": "archived",
+      "matchRate": 98,
+      "iterationCount": 0,
+      "startedAt": "2026-08-20T13:10:00.000Z",
+      "archivedAt": "2026-08-20T16:40:00.000Z",
+      "archivedTo": "docs/archive/2026-08/wizard-chat-layout/"
     }
   },
   "pipeline": {
@@ -6369,195 +6458,9 @@
   "session": {
     "startedAt": "2026-03-04T10:49:14.367Z",
     "onboardingCompleted": false,
-    "lastActivity": "2026-08-13T10:07:15.387Z"
+    "lastActivity": "2026-08-20T12:52:45.966Z"
   },
   "history": [
-    {
-      "timestamp": "2026-08-11T12:00:22.852Z",
-      "feature": "doc-generator",
-      "phase": "act",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-11T12:00:32.479Z",
-      "feature": "idt",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-11T12:02:11.788Z",
-      "feature": "api",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-11T12:02:24.220Z",
-      "feature": "api",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-11T12:02:43.573Z",
-      "feature": "api",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-11T12:03:16.557Z",
-      "feature": "api",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-11T12:03:22.226Z",
-      "feature": "api",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-11T12:03:32.947Z",
-      "feature": "api",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-11T12:03:33.952Z",
-      "feature": "api",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-11T12:06:15.206Z",
-      "feature": "idt_front",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-11T12:06:19.352Z",
-      "feature": "constants",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-11T12:06:25.029Z",
-      "feature": "idt_front",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-11T12:06:32.539Z",
-      "feature": "idt_front",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-11T12:06:50.090Z",
-      "feature": "idt_front",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-11T12:08:22.421Z",
-      "feature": "chat",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-11T12:08:25.476Z",
-      "feature": "chat",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-11T12:08:34.175Z",
-      "feature": "chat",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-11T12:08:47.975Z",
-      "feature": "ChatPage",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-11T12:08:49.498Z",
-      "feature": "ChatPage",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-11T12:08:53.435Z",
-      "feature": "ChatPage",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-11T12:09:03.615Z",
-      "feature": "ChatPage",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-11T12:09:18.464Z",
-      "feature": "ChatPage",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-11T12:09:45.370Z",
-      "feature": "layout",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-11T12:09:55.520Z",
-      "feature": "layout",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-11T12:10:01.668Z",
-      "feature": "layout",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-11T12:10:02.804Z",
-      "feature": "layout",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-11T12:10:03.964Z",
-      "feature": "idt_front",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-11T12:10:05.374Z",
-      "feature": "idt_front",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-11T12:10:59.113Z",
-      "feature": "JobsPage",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-11T12:11:39.202Z",
-      "feature": "JobsPage",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-11T12:11:54.865Z",
-      "feature": "layout",
-      "phase": "do",
-      "action": "updated"
-    },
     {
       "timestamp": "2026-08-11T12:12:02.745Z",
       "feature": "chat",
@@ -7003,6 +6906,260 @@
       "matchRate": 100,
       "archivedTo": "docs/archive/2026-08/intent-analyzer/",
       "timestamp": "2026-08-13T11:06:37.419634Z"
+    },
+    {
+      "feature": "intent-slot-elicitation",
+      "phase": "plan",
+      "event": "plan_created",
+      "at": "2026-08-14T00:00:00.000Z"
+    },
+    {
+      "timestamp": "2026-08-14T06:51:58.503Z",
+      "feature": "intent-slot-elicitation",
+      "event": "PLAN_DONE",
+      "from": "plan",
+      "to": "design",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "feature": "intent-slot-elicitation",
+      "phase": "design",
+      "event": "design_created",
+      "at": "2026-08-14T00:00:00.000Z"
+    },
+    {
+      "feature": "intent-slot-elicitation",
+      "phase": "do",
+      "event": "do_module_1_2_done",
+      "at": "2026-08-14T00:00:00.000Z"
+    },
+    {
+      "feature": "intent-slot-elicitation",
+      "phase": "do",
+      "event": "do_module_3_4_done",
+      "at": "2026-08-14T00:00:00.000Z"
+    },
+    {
+      "feature": "intent-slot-elicitation",
+      "phase": "do",
+      "event": "do_complete",
+      "at": "2026-08-14T00:00:00.000Z"
+    },
+    {
+      "feature": "intent-slot-elicitation",
+      "phase": "check",
+      "event": "analyze_done_matchrate_99",
+      "at": "2026-08-16T00:00:00.000Z"
+    },
+    {
+      "feature": "intent-slot-elicitation",
+      "phase": "act",
+      "event": "act1_strict_schema_fix",
+      "at": "2026-08-16T00:00:00.000Z"
+    },
+    {
+      "feature": "intent-slot-elicitation",
+      "phase": "act",
+      "event": "act2_option_fallback_and_anti_confabulation",
+      "at": "2026-08-16T00:00:00.000Z"
+    },
+    {
+      "timestamp": "2026-08-16T05:45:32.266Z",
+      "feature": "intent-slot-elicitation",
+      "event": "ANALYZE_DONE",
+      "from": "act",
+      "to": "check",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "timestamp": "2026-08-16T05:51:21.787Z",
+      "feature": "intent-slot-elicitation",
+      "event": "ANALYZE_DONE",
+      "from": "act",
+      "to": "check",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "feature": "intent-slot-elicitation",
+      "phase": "completed",
+      "event": "report_created",
+      "at": "2026-08-17T00:00:00.000Z"
+    },
+    {
+      "timestamp": "2026-08-18T08:10:51.239Z",
+      "feature": "agent-create-pipeline",
+      "event": "PLAN_DONE",
+      "from": "plan",
+      "to": "design",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "timestamp": "2026-08-18T08:28:23.912Z",
+      "feature": "agent-create-pipeline",
+      "event": "PLAN_DONE",
+      "from": "plan",
+      "to": "design",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "timestamp": "2026-08-20T07:37:37.183Z",
+      "feature": "agent-create-wizard",
+      "event": "ANALYZE_DONE",
+      "from": "act",
+      "to": "check",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "timestamp": "2026-08-20T07:42:30.378Z",
+      "feature": "agent-create-wizard",
+      "event": "ANALYZE_DONE",
+      "from": "act",
+      "to": "check",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "timestamp": "2026-08-20T07:48:52.157Z",
+      "feature": "agent-create-wizard",
+      "event": "ANALYZE_DONE",
+      "from": "act",
+      "to": "check",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "timestamp": "2026-08-20T07:53:17.542Z",
+      "feature": "agent-create-wizard",
+      "event": "ANALYZE_DONE",
+      "from": "act",
+      "to": "check",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "timestamp": "2026-08-20T08:19:36.613Z",
+      "feature": "agent-create-wizard",
+      "event": "ANALYZE_DONE",
+      "from": "act",
+      "to": "check",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "timestamp": "2026-08-20T09:19:32.575Z",
+      "feature": "agent-create-wizard",
+      "event": "ANALYZE_DONE",
+      "from": "act",
+      "to": "check",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "timestamp": "2026-08-20T09:24:31.820Z",
+      "feature": "agent-create-wizard",
+      "event": "ANALYZE_DONE",
+      "from": "act",
+      "to": "check",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "feature": "agent-create-wizard",
+      "action": "report_completed",
+      "from": "check",
+      "to": "completed",
+      "timestamp": "2026-08-20T10:30:00.000Z",
+      "matchRate": 95
+    },
+    {
+      "feature": "prompt-depth",
+      "event": "phase_transition",
+      "from": "plan",
+      "to": "design",
+      "timestamp": "2026-08-20T11:00:00.000Z"
+    },
+    {
+      "feature": "agent-create-wizard",
+      "action": "archived",
+      "from": "completed",
+      "to": "archived",
+      "timestamp": "2026-08-20T10:40:00.000Z",
+      "archivedTo": "docs/archive/2026-08/agent-create-wizard/"
+    },
+    {
+      "feature": "prompt-depth",
+      "event": "phase_transition",
+      "from": "design",
+      "to": "do",
+      "scope": "module-1",
+      "timestamp": "2026-08-20T11:40:00.000Z"
+    },
+    {
+      "feature": "prompt-depth",
+      "event": "scope_completed",
+      "scope": "module-2",
+      "timestamp": "2026-08-20T12:20:00.000Z"
+    },
+    {
+      "feature": "prompt-depth",
+      "event": "scope_completed",
+      "scope": "module-3",
+      "timestamp": "2026-08-20T12:55:00.000Z"
+    },
+    {
+      "feature": "prompt-depth",
+      "event": "scope_completed",
+      "scope": "module-4",
+      "timestamp": "2026-08-20T13:40:00.000Z"
+    },
+    {
+      "timestamp": "2026-08-20T12:52:45.965Z",
+      "feature": "wizard-chat-layout",
+      "event": "PLAN_DONE",
+      "from": "plan",
+      "to": "design",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "feature": "prompt-depth",
+      "event": "phase_transition",
+      "from": "do",
+      "to": "check",
+      "matchRate": 94,
+      "timestamp": "2026-08-20T14:10:00.000Z"
+    },
+    {
+      "feature": "prompt-depth",
+      "event": "phase_transition",
+      "from": "check",
+      "to": "act",
+      "iteration": 1,
+      "matchRate": 99,
+      "note": "G-01 fixed (decide_after_intent)",
+      "timestamp": "2026-08-20T15:00:00.000Z"
+    },
+    {
+      "feature": "prompt-depth",
+      "event": "phase_transition",
+      "from": "act",
+      "to": "completed",
+      "matchRate": 99,
+      "timestamp": "2026-08-20T15:30:00.000Z"
+    },
+    {
+      "feature": "prompt-depth",
+      "event": "phase_transition",
+      "from": "completed",
+      "to": "archived",
+      "archivedTo": "docs/archive/2026-08/prompt-depth/",
+      "timestamp": "2026-08-20T15:50:00.000Z"
     }
   ],
   "featurePhases": {
@@ -7038,7 +7195,10 @@
       "archivedTo": "docs/archive/2026-07/wiki-agentic-navigation/"
     },
     "agent-create-entry": "do",
-    "tool-recommender": "report"
+    "tool-recommender": "report",
+    "intent-slot-elicitation": "completed",
+    "agent-create-wizard": "archived",
+    "prompt-depth": "archived"
   },
   "matchRates": {
     "supervisor-overblock-fix": 100,
@@ -7048,7 +7208,9 @@
     "wiki-user-facing": 100,
     "agent-eval-gate": 97,
     "builtin-tools": 100,
-    "tool-recommender": 97.38
+    "tool-recommender": 97.38,
+    "intent-slot-elicitation": 99,
+    "prompt-depth": 99
   },
   "archivedTo": {
     "self-hosted-qwen-endpoint": "docs/archive/2026-06/self-hosted-qwen-endpoint/",
@@ -7058,7 +7220,9 @@
     "wiki-agentic-navigation": "docs/archive/2026-07/wiki-agentic-navigation/",
     "wiki-folder-summaries": "docs/archive/2026-07/wiki-folder-summaries/",
     "builtin-tools": "docs/archive/2026-08/builtin-tools/",
-    "intent-analyzer": "docs/archive/2026-08/intent-analyzer/"
+    "intent-analyzer": "docs/archive/2026-08/intent-analyzer/",
+    "agent-create-wizard": "docs/archive/2026-08/agent-create-wizard/",
+    "prompt-depth": "docs/archive/2026-08/prompt-depth/"
   },
   "currentFeature": null,
   "stateMachine": {
@@ -7179,6 +7343,72 @@
       "phase": "archive",
       "feature": "intent-analyzer",
       "createdAt": "2026-08-13T11:07:03.976Z"
+    },
+    {
+      "taskId": "1",
+      "phase": "plan",
+      "feature": "prompt-composer",
+      "createdAt": "2026-08-14T06:45:35.916Z"
+    },
+    {
+      "taskId": "1",
+      "phase": "plan",
+      "feature": "intent-slot-elicitation",
+      "createdAt": "2026-08-14T06:51:29.926Z"
+    },
+    {
+      "taskId": "2",
+      "phase": "design",
+      "feature": "intent-slot-elicitation",
+      "createdAt": "2026-08-14T07:02:46.502Z"
+    },
+    {
+      "taskId": "3",
+      "phase": "do",
+      "feature": "intent-slot-elicitation (module-1,2)",
+      "createdAt": "2026-08-14T07:27:32.178Z"
+    },
+    {
+      "taskId": "4",
+      "phase": "do",
+      "feature": "intent-slot-elicitation (module-3,4)",
+      "createdAt": "2026-08-14T08:03:15.236Z"
+    },
+    {
+      "taskId": "5",
+      "phase": "do",
+      "feature": "intent-slot-elicitation (module-5)",
+      "createdAt": "2026-08-14T08:08:54.641Z"
+    },
+    {
+      "taskId": "2",
+      "phase": "design",
+      "feature": "prompt-composer",
+      "createdAt": "2026-08-14T08:32:18.525Z"
+    },
+    {
+      "taskId": "3",
+      "phase": "do",
+      "feature": "prompt-composer (module-1,2)",
+      "createdAt": "2026-08-16T05:19:48.007Z"
+    },
+    {
+      "taskId": "6",
+      "phase": "check",
+      "feature": "intent-slot-elicitation",
+      "createdAt": "2026-08-16T05:44:45.764Z"
+    },
+    {
+      "taskId": "8",
+      "phase": "report",
+      "feature": "intent-slot-elicitation",
+      "createdAt": "2026-08-17T11:36:29.329Z"
+    },
+    {
+      "taskId": "4",
+      "phase": "do",
+      "feature": "prompt-composer (module-3)",
+      "createdAt": "2026-08-17T11:37:23.967Z"
     }
   ]
 }

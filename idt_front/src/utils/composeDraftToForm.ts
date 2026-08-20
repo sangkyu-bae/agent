@@ -2,11 +2,8 @@
 // AgentBuilderPage.handleApplyDraft 본문을 그대로 이관한 것으로, Fix 탭(스튜디오 내부)과
 // 진입 화면(/agent-builder/new)이 같은 함수를 쓴다. 두 곳에 따로 구현하면
 // 도구 ID 매핑·빌트인 제외·RAG 부수효과가 조용히 어긋난다.
-import { DEFAULT_RAG_CONFIG } from '@/types/ragToolConfig';
-import { DOCUMENT_EXTRACTOR_TOOL_ID } from '@/types/documentExtractor';
-import { DOCUMENT_GENERATOR_TOOL_ID } from '@/types/documentGenerator';
 import { mapDraftToolIdsToCatalog } from './draftToolMapping';
-import { RAG_CATALOG_TOOL_ID } from './agentDetailMapping';
+import { applyToolsToForm } from './agentFormPrefill';
 import type { AgentBuilderFormData } from '@/types/agentBuilder';
 import type { ComposeAgentDraftResponse } from '@/types/agentComposer';
 import type { CatalogTool } from '@/types/toolCatalog';
@@ -29,41 +26,23 @@ export const composeDraftToForm = (
   prev: AgentBuilderFormData,
   { catalogTools, models }: DraftToFormDeps,
 ): AgentBuilderFormData => {
-  // builtin-tools D8: 초안이 빌트인을 포함해도 form.tools에 혼입하지 않는다
-  // (표시·전송은 파생값 — 서버 주입과의 중복 칩 방지, excluded는 불변)
-  const builtinIds = new Set(
-    (catalogTools ?? []).filter((t) => t.is_builtin).map((t) => t.tool_id),
+  // 초안 표기(순수 id 등)를 카탈로그 표기로 먼저 맞춘 뒤, 빌트인 제외·RAG
+  // 동기화·문서 드래프트 정리는 위저드와 **공유**한다 (agent-create-wizard FR-F12).
+  const toolSlice = applyToolsToForm(
+    mapDraftToolIdsToCatalog(draft.tool_ids, catalogTools),
+    prev,
+    catalogTools,
   );
-  const newTools = mapDraftToolIdsToCatalog(draft.tool_ids, catalogTools).filter(
-    (id) => !builtinIds.has(id),
-  );
-
-  // handleToolToggle과 동일한 부수효과 동기화 (RAG 설정 / 문서추출기 드래프트)
-  const newConfigs = { ...prev.toolConfigs };
-  if (newTools.includes(RAG_CATALOG_TOOL_ID)) {
-    if (!newConfigs[RAG_CATALOG_TOOL_ID]) {
-      newConfigs[RAG_CATALOG_TOOL_ID] = { ...DEFAULT_RAG_CONFIG };
-    }
-  } else {
-    delete newConfigs[RAG_CATALOG_TOOL_ID];
-  }
 
   // llm_model_id 역매핑 실패 시 모델 미변경 (카드에 안내 표시됨)
   const modelName = models?.find((m) => m.id === draft.llm_model_id)?.model_name;
 
   return {
     ...prev,
+    ...toolSlice,
     name: draft.name_suggestion,
     systemPrompt: draft.system_prompt,
-    tools: newTools,
     temperature: draft.temperature,
     model: modelName ?? prev.model,
-    toolConfigs: newConfigs,
-    documentExtractorDraft: newTools.includes(DOCUMENT_EXTRACTOR_TOOL_ID)
-      ? prev.documentExtractorDraft
-      : null,
-    documentGeneratorDraft: newTools.includes(DOCUMENT_GENERATOR_TOOL_ID)
-      ? prev.documentGeneratorDraft
-      : null,
   };
 };

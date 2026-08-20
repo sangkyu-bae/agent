@@ -4,11 +4,13 @@ import type { AgentBuilderFormData } from '@/types/agentBuilder';
 import type { LlmModel } from '@/types/llmModel';
 import type {
   ClarificationAnswer,
+  ClarifyingQuestion,
   ComposeAgentDraftResponse,
   ComposeHistoryTurn,
   FixChatMessage,
 } from '@/types/agentComposer';
-import ClarifyQuestionCard from './ClarifyQuestionCard';
+import { QuestionCardFlow } from '@/components/common/question-card';
+import type { FlowAnswer } from '@/components/common/question-card';
 import ComposeDraftCard from './ComposeDraftCard';
 
 interface FixAgentPanelProps {
@@ -27,6 +29,22 @@ const EXAMPLE_PROMPTS = [
 
 const MAX_HISTORY_TURNS = 6;
 const MAX_USER_REQUEST_CHARS = 1000;
+
+/**
+ * FlowAnswer → ClarificationAnswer 역매핑 (Design Ref: question-card §3 — 사용처 인라인 매핑).
+ * question 텍스트 에코백(stateless 재구성)은 원본 질문에서 복원한다.
+ */
+const toClarificationAnswers = (
+  qs: ClarifyingQuestion[],
+  answers: FlowAnswer[],
+): ClarificationAnswer[] => {
+  const titleById = new Map(qs.map((q) => [q.id, q.question]));
+  return answers.map((a) => ({
+    question_id: a.id,
+    question: titleById.get(a.id) ?? '',
+    answer: a.value,
+  }));
+};
 
 /** assistant 초안 턴을 history용 요약 텍스트로 변환 (카드 JSON 미전송 — Design §4.4). */
 const summarizeDraft = (m: FixChatMessage): string => {
@@ -243,13 +261,33 @@ const FixAgentPanel = ({ mode, form, models, onApplyDraft }: FixAgentPanelProps)
                   onApply={() => handleApply(m.id, m.draft!)}
                 />
               ) : m.questions ? (
-                <ClarifyQuestionCard
+                <QuestionCardFlow
                   key={m.id}
-                  questions={m.questions}
-                  planSummary={m.planSummary}
-                  answered={!!m.answered}
-                  isPending={isPending}
-                  onSubmit={(answers) => handleAnswerSubmit(m.id, answers)}
+                  compact
+                  questions={m.questions.map((q) => ({
+                    id: q.id,
+                    title: q.question,
+                    options: q.options,
+                    allowFreeText: q.allow_free_text,
+                  }))}
+                  header={
+                    m.planSummary ? (
+                      <p className="text-[12.5px] leading-relaxed text-zinc-500">
+                        {m.planSummary}
+                      </p>
+                    ) : undefined
+                  }
+                  // G1: 새 문장 전송으로 HITL 왕복이 폐기되면(pendingClarify=null)
+                  // 스테일 질문 카드를 비활성화 — 답해도 전송되지 않는데 잠금 배지가
+                  // 뜨는 오표시를 원천 차단한다 (Analysis G1).
+                  disabled={isPending || !pendingClarify}
+                  completed={!!m.answered}
+                  onComplete={(answers) =>
+                    handleAnswerSubmit(
+                      m.id,
+                      toClarificationAnswers(m.questions ?? [], answers),
+                    )
+                  }
                 />
               ) : (
                 <div

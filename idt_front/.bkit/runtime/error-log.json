@@ -1,0 +1,38 @@
+[
+  {
+    "timestamp": "2026-08-20T00:07:18.537Z",
+    "errorType": "unknown",
+    "category": "unknown",
+    "severity": "low",
+    "agentId": null,
+    "agentType": null,
+    "sessionId": "e0284b38-e3e9-4fac-8251-2c66a82a1eb3",
+    "message": "",
+    "parseStatus": "partial",
+    "parseWarnings": "StopFailure payload missing useful fields (keys: session_id,transcript_path,cwd,prompt_id,effort,hook_event_name,error,last_assistant_message)"
+  },
+  {
+    "timestamp": "2026-08-20T00:11:18.991Z",
+    "errorType": "unknown",
+    "category": "unknown",
+    "severity": "low",
+    "agentId": "a40c4d322c597e51d",
+    "agentType": null,
+    "sessionId": "5e855f1c-a4ab-4897-88e8-d9aadc48dba6",
+    "message": "",
+    "parseStatus": "ok",
+    "parseWarnings": null
+  },
+  {
+    "timestamp": "2026-08-20T01:35:10.869Z",
+    "errorType": "unknown",
+    "category": "unknown",
+    "severity": "low",
+    "agentId": "af9ead48891d4838c",
+    "agentType": null,
+    "sessionId": "e0284b38-e3e9-4fac-8251-2c66a82a1eb3",
+    "message": "",
+    "parseStatus": "ok",
+    "parseWarnings": null
+  }
+]

@@ -190,5 +190,277 @@
     "phase": "check",
     "feature": "intent-analyzer",
     "description": "check → act"
+  },
+  {
+    "id": "cp-1786690318449",
+    "createdAt": "2026-08-14T06:51:58.449Z",
+    "type": "phase_transition",
+    "phase": "plan",
+    "feature": "intent-slot-elicitation",
+    "description": "plan → design"
+  },
+  {
+    "id": "cp-1786690992981",
+    "createdAt": "2026-08-14T07:03:12.981Z",
+    "type": "phase_transition",
+    "phase": "design",
+    "feature": "intent-slot-elicitation",
+    "description": "design → do"
+  },
+  {
+    "id": "cp-1786692474232",
+    "createdAt": "2026-08-14T07:27:54.232Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "intent-slot-elicitation",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1786694618913",
+    "createdAt": "2026-08-14T08:03:38.913Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "intent-slot-elicitation",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1786694964352",
+    "createdAt": "2026-08-14T08:09:24.352Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "intent-slot-elicitation",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1786696362868",
+    "createdAt": "2026-08-14T08:32:42.868Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "intent-slot-elicitation",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1786859132224",
+    "createdAt": "2026-08-16T05:45:32.224Z",
+    "type": "phase_transition",
+    "phase": "act",
+    "feature": "intent-slot-elicitation",
+    "description": "act → qa"
+  },
+  {
+    "id": "cp-1786859481771",
+    "createdAt": "2026-08-16T05:51:21.771Z",
+    "type": "phase_transition",
+    "phase": "act",
+    "feature": "intent-slot-elicitation",
+    "description": "act → qa"
+  },
+  {
+    "id": "cp-1787040651210",
+    "createdAt": "2026-08-18T08:10:51.210Z",
+    "type": "phase_transition",
+    "phase": "plan",
+    "feature": "agent-create-pipeline",
+    "description": "plan → design"
+  },
+  {
+    "id": "cp-1787041703879",
+    "createdAt": "2026-08-18T08:28:23.879Z",
+    "type": "phase_transition",
+    "phase": "plan",
+    "feature": "agent-create-pipeline",
+    "description": "plan → design"
+  },
+  {
+    "id": "cp-1787042098123",
+    "createdAt": "2026-08-18T08:34:58.123Z",
+    "type": "phase_transition",
+    "phase": "design",
+    "feature": "agent-create-pipeline",
+    "description": "design → do"
+  },
+  {
+    "id": "cp-1787101118722",
+    "createdAt": "2026-08-19T00:58:38.722Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "agent-create-pipeline",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787101830811",
+    "createdAt": "2026-08-19T01:10:30.811Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "agent-create-pipeline",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787102241040",
+    "createdAt": "2026-08-19T01:17:21.040Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "agent-create-pipeline",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787102525367",
+    "createdAt": "2026-08-19T01:22:05.367Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "agent-create-pipeline",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787102993500",
+    "createdAt": "2026-08-19T01:29:53.500Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "agent-create-pipeline",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787103939295",
+    "createdAt": "2026-08-19T01:45:39.295Z",
+    "type": "phase_transition",
+    "phase": "check",
+    "feature": "agent-create-pipeline",
+    "description": "check → act"
+  },
+  {
+    "id": "cp-1787211457162",
+    "createdAt": "2026-08-20T07:37:37.162Z",
+    "type": "phase_transition",
+    "phase": "act",
+    "feature": "agent-create-wizard",
+    "description": "act → qa"
+  },
+  {
+    "id": "cp-1787211750358",
+    "createdAt": "2026-08-20T07:42:30.358Z",
+    "type": "phase_transition",
+    "phase": "act",
+    "feature": "agent-create-wizard",
+    "description": "act → qa"
+  },
+  {
+    "id": "cp-1787212131312",
+    "createdAt": "2026-08-20T07:48:51.312Z",
+    "type": "phase_transition",
+    "phase": "act",
+    "feature": "agent-create-wizard",
+    "description": "act → qa"
+  },
+  {
+    "id": "cp-1787212397485",
+    "createdAt": "2026-08-20T07:53:17.485Z",
+    "type": "phase_transition",
+    "phase": "act",
+    "feature": "agent-create-wizard",
+    "description": "act → qa"
+  },
+  {
+    "id": "cp-1787213976581",
+    "createdAt": "2026-08-20T08:19:36.581Z",
+    "type": "phase_transition",
+    "phase": "act",
+    "feature": "agent-create-wizard",
+    "description": "act → qa"
+  },
+  {
+    "id": "cp-1787217572512",
+    "createdAt": "2026-08-20T09:19:32.512Z",
+    "type": "phase_transition",
+    "phase": "act",
+    "feature": "agent-create-wizard",
+    "description": "act → qa"
+  },
+  {
+    "id": "cp-1787217871790",
+    "createdAt": "2026-08-20T09:24:31.790Z",
+    "type": "phase_transition",
+    "phase": "act",
+    "feature": "agent-create-wizard",
+    "description": "act → qa"
+  },
+  {
+    "id": "cp-1787217987198",
+    "createdAt": "2026-08-20T09:26:27.198Z",
+    "type": "phase_transition",
+    "phase": "check",
+    "feature": "agent-create-wizard",
+    "description": "check → act"
+  },
+  {
+    "id": "cp-1787219143750",
+    "createdAt": "2026-08-20T09:45:43.750Z",
+    "type": "phase_transition",
+    "phase": "design",
+    "feature": "prompt-depth",
+    "description": "design → do"
+  },
+  {
+    "id": "cp-1787219154591",
+    "createdAt": "2026-08-20T09:45:54.591Z",
+    "type": "phase_transition",
+    "phase": "design",
+    "feature": "prompt-depth",
+    "description": "design → do"
+  },
+  {
+    "id": "cp-1787220216345",
+    "createdAt": "2026-08-20T10:03:36.345Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "prompt-depth",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787221143243",
+    "createdAt": "2026-08-20T10:19:03.243Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "prompt-depth",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787222533435",
+    "createdAt": "2026-08-20T10:42:13.435Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "prompt-depth",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787230365921",
+    "createdAt": "2026-08-20T12:52:45.921Z",
+    "type": "phase_transition",
+    "phase": "plan",
+    "feature": "wizard-chat-layout",
+    "description": "plan → design"
+  },
+  {
+    "id": "cp-1787232507911",
+    "createdAt": "2026-08-20T13:28:27.911Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "wizard-chat-layout",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787232721366",
+    "createdAt": "2026-08-20T13:32:01.366Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "wizard-chat-layout",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787232880619",
+    "createdAt": "2026-08-20T13:34:40.619Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "wizard-chat-layout",
+    "description": "do → check"
   }
 ]

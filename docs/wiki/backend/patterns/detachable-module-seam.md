@@ -11,11 +11,13 @@ source_refs:
   - idt/tests/infrastructure/tool_selection/test_module_boundaries.py (AST import 검사)
   - docs/archive/2026-08/intent-analyzer/intent-analyzer.report.md (§1.3 Core Value, D8·FR-09)
   - docs/archive/2026-08/tool-recommender/tool-recommender.report.md (§1.5 Decision Record, §6.1)
-confidence: 0.6
-version: 2
+  - idt/tests/infrastructure/tool_selection/test_module_boundaries.py:101-159 (_DECLARED_CONSUMERS 확장 + duck typing 예외 원칙, ⚠️ 미커밋)
+  - docs/archive/2026-08/agent-create-pipeline/agent-create-pipeline.report.md (§1.5 Plan D2, §6.1 "탈부착 계약 테스트가 실제로 작동")
+confidence: 0.65
+version: 4
 created: 2026-08-14
-updated: 2026-08-14
-verified_at: 12c69b4
+updated: 2026-08-19
+verified_at: 7c3ffdd
 ---
 
 # 탈착형 모듈 이음매 — None 킬스위치 + AST 경계 테스트
@@ -77,6 +79,11 @@ intent-analyzer와 tool-recommender 두 사이클이 **서로 독립적으로 �
 
 ### 3. LLM 출력은 도메인 정책이 "정규화"만 한다 (판정은 안 함)
 
+> 🗑 **이 절의 결정은 폐기됐다 (v3).** 대체: [[llm-output-trust-boundary]].
+> 아래의 "겸용 스키마 + 3층 방어"는 계산 필드가 3개로 늘면서 확장에 실패했고,
+> 후속 사이클(prompt-composer)은 **LLM 스키마에 계산 필드를 아예 두지 않는**
+> Draft/Result 분리로 바꿨다. 이력 보존을 위해 원문은 남긴다 — 새 모듈에는 적용하지 말 것.
+
 `IntentResultPolicy.normalize()`는 순수 함수라 분기 100% 커버가 가능하다.
 특히 **`raw.degraded`를 읽지 않는다** — LLM이 채울 수 있는 필드이므로 호출자가
 넘긴 `degraded` 인자만 신뢰한다(3층 방어). LLM 출력의 어떤 필드를 신뢰하고 어떤
@@ -93,11 +100,33 @@ intent-analyzer와 tool-recommender 두 사이클이 **서로 독립적으로 �
 `intent`/`tool_selection` 패키지를 참조하는 외부 파일은 `main.py`·`intent_router.py`·
 `interfaces/schemas/intent.py` 뿐이다.
 
+### 4b. 두 번째 소비자 등장 — 선언 목록 확장 프로세스가 실제로 작동했다 (v4 추가)
+
+agent-create-pipeline이 tool_selection의 **두 번째 소비자**가 되자 §4의 AST 계약
+테스트가 즉시 실패했고(전체 스위트에서 신규 실패 2건으로 적발), 의도된 절차대로
+`_DECLARED_CONSUMERS`에 4개 파일이 **근거 주석과 함께** 등록됐다
+(`test_module_boundaries.py:101-112`). "계약 테스트 실패 → 의식적 선언 갱신"이라는
+확장 경로가 설계대로 돌아간 첫 실증이다.
+
+이때 확립된 예외 원칙: **duck typing 규칙은 "떼어도 동작해야 하는" 소비자에게만
+적용된다.** General Chat은 tool_selection이 부가 기능이므로 import 없이
+`tool_filter` duck typing으로 결선하지만(디렉토리 삭제 = 기능 제거), 파이프라인은
+도구 추천이 부가 기능이 아니라 **단계 자체**이므로 `ToolSelectorPort` + 도메인 VO를
+정식 의존으로 선언했다(순수 domain 계약만 물어 프레임워크 격리는 유지). 대신
+"디렉토리 삭제 시 고쳐야 할 지점이 이 4파일만큼 늘었다"를 선언 목록이 정확히
+기록한다 — 탈부착 계약은 "아무도 못 물게"가 아니라 "무는 곳을 전수 열거"가 본질이다.
+
 ### 5. 킬스위치 기본값은 off, 그리고 "off = 이 기능이 없던 상태"
 
 `tool_selector_enabled: bool = False`. 결선(module-4)까지 끝났는데도 기본 off로
 두어, 배포와 활성화를 분리했다. 성장 루프 플래그 4종과 같은 관행이다
 ([[architecture-overview]] §3).
+
+(v4 추가) 라우터 레벨의 등가물: agent-create-pipeline은 킬스위치
+(`AGENT_PIPELINE_ENABLED`) off이거나 선행 협력자(prompt-composer) 미가동이면
+**`include_router` 자체를 하지 않는다** — 노드가 그래프에 없는 것처럼 라우트가 앱에
+없다(404). "off = 없던 상태"를 엔드포인트 단위로 적용한 세 번째 사례
+([[router-map]] 등록 순서 주의 참조).
 
 ## 다음에 적용하는 법
 
@@ -117,6 +146,8 @@ intent-analyzer와 tool-recommender 두 사이클이 **서로 독립적으로 �
 
 ## 관련 문서
 
+- §3 대체 문서: `backend/patterns/llm-output-trust-boundary.md`
+- AST 경계 검사의 확장형: `backend/patterns/ast-source-contract-tests.md`
 - 조감도: `backend/architecture-overview.md`
 - 계약 확장 관행: `conventions/additive-contract-extension.md`
 - 로깅 규약: `backend/patterns/structured-logger-warning-exception.md`

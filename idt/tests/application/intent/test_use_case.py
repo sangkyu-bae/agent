@@ -11,7 +11,14 @@ from typing import Any
 import pytest
 from src.application.intent.use_case import AnalyzeIntentUseCase
 from src.domain.intent.interfaces import IntentAnalyzerInterface
-from src.domain.intent.schemas import IntentLabel, IntentResult, IntentSpec, Turn
+from src.domain.intent.schemas import (
+    IntentLabel,
+    IntentResult,
+    IntentSpec,
+    SlotAnswer,
+    SlotSpec,
+    Turn,
+)
 
 
 class SpyAnalyzer(IntentAnalyzerInterface):
@@ -26,6 +33,8 @@ class SpyAnalyzer(IntentAnalyzerInterface):
         message: str,
         spec: IntentSpec,
         history: list[Turn] | None = None,
+        answers: list[SlotAnswer] | None = None,
+        round_: int = 0,
         request_id: str = "",
     ) -> IntentResult:
         self.calls.append(
@@ -33,6 +42,8 @@ class SpyAnalyzer(IntentAnalyzerInterface):
                 "message": message,
                 "spec": spec,
                 "history": history,
+                "answers": answers,
+                "round_": round_,
                 "request_id": request_id,
             }
         )
@@ -90,6 +101,46 @@ async def test_history_defaults_to_none() -> None:
     assert analyzer.calls[0]["history"] is None
 
 
+# --- 되묻기 왕복 인자 전달 (Plan D4 — stateless) -----------------------------
+
+
+async def test_answers_and_round_are_forwarded() -> None:
+    analyzer = SpyAnalyzer()
+    use_case = AnalyzeIntentUseCase(analyzer=analyzer)
+    spec = IntentSpec(slots=[SlotSpec(key="tone", description="답변 어조")])
+    answers = [SlotAnswer(slot_key="tone", value="친근")]
+
+    await use_case.execute("에이전트 만들어줘", spec, answers=answers, round_=1)
+
+    assert analyzer.calls[0]["answers"] == answers
+    assert analyzer.calls[0]["round_"] == 1
+
+
+async def test_answers_and_round_default_to_empty() -> None:
+    analyzer = SpyAnalyzer()
+    use_case = AnalyzeIntentUseCase(analyzer=analyzer)
+
+    await use_case.execute("여신 규정", _spec())
+
+    assert analyzer.calls[0]["answers"] is None
+    assert analyzer.calls[0]["round_"] == 0
+
+
+async def test_use_case_holds_no_round_state_between_calls() -> None:
+    """모듈은 라운드 사이에 아무것도 기억하지 않는다 — 상태는 전부 인자에 있다."""
+    analyzer = SpyAnalyzer()
+    use_case = AnalyzeIntentUseCase(analyzer=analyzer)
+    spec = IntentSpec(slots=[SlotSpec(key="tone", description="답변 어조")])
+
+    await use_case.execute(
+        "만들어줘", spec, answers=[SlotAnswer(slot_key="tone", value="친근")], round_=1
+    )
+    await use_case.execute("만들어줘", spec)
+
+    assert analyzer.calls[1]["answers"] is None
+    assert analyzer.calls[1]["round_"] == 0
+
+
 # --- degraded 는 UseCase 를 그대로 통과한다 (Plan D6) ------------------------
 
 
@@ -115,6 +166,8 @@ async def test_use_case_has_no_try_except_around_analyzer() -> None:
             message: str,
             spec: IntentSpec,
             history: list[Turn] | None = None,
+            answers: list[SlotAnswer] | None = None,
+            round_: int = 0,
             request_id: str = "",
         ) -> IntentResult:
             raise RuntimeError("포트 계약 위반")

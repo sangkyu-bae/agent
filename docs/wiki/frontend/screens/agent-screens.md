@@ -9,12 +9,16 @@ source_refs:
   - idt_front/docs/archive/2026-08/utility-page/utility-page.report.md
   - idt/docs/archive/2026-08/builtin-tools/builtin-tools.report.md
   - docs/archive/2026-08/fix-agent-planner-hitl/fix-agent-planner-hitl.report.md (Fix 탭 HITL)
+  - idt_front/docs/archive/2026-08/question-card/question-card.report.md (v4 — ClarifyQuestionCard 삭제·question-card 교체, ⚠️ 미커밋)
 confidence: 0.85
-version: 3
+version: 4
 created: 2026-07-21
-updated: 2026-08-06
-verified_at: 18fd521e
+updated: 2026-08-20
+verified_at: 7c3ffdd
 ---
+
+> ⚠️ `verified_at: 7c3ffdd` 에서 재확인한 것은 **질문 카드 교체 행(v4)뿐**이다.
+> 나머지는 `18fd521e` 시점 확인분 그대로다.
 
 ## AgentStorePage — `/agent-store`
 
@@ -36,7 +40,8 @@ verified_at: 18fd521e
 - 계약 주의: 도구 ID는 카탈로그/폼 표기(`internal:{id}`, `mcp:{srv}:{tool}`)와 저장 표기(`{id}`, `mcp_{srv}`)가 다르다 — 경계를 넘길 때 반드시 변환 (agent-tool-id-dual-namespace, MEMORY 선례)
 - 계약 주의: 수정 가능 필드 추가는 스키마+apply_update+repo update()+DI 4곳 세트 — repo 누락 시 조용히 미저장 (agent-repo-update-column-whitelist 선례)
 - 계약 주의: 빌트인 도구는 폼에서 "기본" 배지+기본 선택으로 표시되고, 해제는 전용 상태 `excludedBuiltinTools`(→ 요청 필드 `exclude_builtin_tool_ids`)로만 가능하다. Fix 초안 적용은 이 상태에 접근하지 않는다(불변) — [[builtin-tools-optout-channel]]
-- 계약 주의: compose 응답은 `status==='needs_clarification'`이면 질문 카드(`ClarifyQuestionCard`)를 띄우고, 답변 시 **질문 텍스트 에코백+라운드 번호**를 동봉해 재호출한다(`FixAgentPanel.tsx`의 `sendCompose`/`pendingClarify`). 신규 응답 필드(`status`/`questions`/`plan_summary`)는 전부 optional — 구형 mock/응답 호환. 상세는 [[stateless-hitl-clarification]]
+- 계약 주의: compose 응답은 `status==='needs_clarification'`이면 질문 카드를 띄우고, 답변 시 **질문 텍스트 에코백+라운드 번호**를 동봉해 재호출한다(`FixAgentPanel.tsx`의 `sendCompose`/`pendingClarify`). 신규 응답 필드(`status`/`questions`/`plan_summary`)는 전부 optional — 구형 mock/응답 호환. 상세는 [[stateless-hitl-clarification]]
+- 질문 카드 컴포넌트 주의(v4): 구 `ClarifyQuestionCard`는 **삭제됨** — 현재는 `components/common/question-card/`의 `QuestionCardFlow`(순차 제출 위저드)가 담당하며, 스테일 카드 가드(F10)를 사용처에서도 유지해야 한다 — [[common-card-components]] (⚠️ 교체 코드 미커밋)
 
 ## UtilityPage — `/tool-connection`
 

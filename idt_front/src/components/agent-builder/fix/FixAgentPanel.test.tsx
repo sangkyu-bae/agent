@@ -253,8 +253,8 @@ describe('FixAgentPanel HITL (fix-agent-planner-hitl)', () => {
     await userEvent.type(screen.getByRole('textbox'), '규정 봇 만들어줘{enter}');
     await screen.findByText('문서 범위는 어디까지인가요?');
 
-    await userEvent.click(screen.getByRole('button', { name: '여신심사' }));
-    await userEvent.click(screen.getByRole('button', { name: '답변 제출' }));
+    await userEvent.click(screen.getByText('여신심사'));
+    await userEvent.click(screen.getByRole('button', { name: '제출' }));
 
     expect(await screen.findByRole('button', { name: '적용하기' })).toBeInTheDocument();
 
@@ -280,7 +280,8 @@ describe('FixAgentPanel HITL (fix-agent-planner-hitl)', () => {
 
     await userEvent.type(screen.getByRole('textbox'), '규정 봇 만들어줘{enter}');
     await screen.findByText('문서 범위는 어디까지인가요?');
-    await userEvent.click(screen.getByRole('button', { name: '답변 제출' }));
+    // 선택 없이 넘어가려면 건너뛰기 — 무응답(answer='')으로 제출된다
+    await userEvent.click(screen.getByRole('button', { name: '건너뛰기' }));
 
     await screen.findByRole('button', { name: '적용하기' });
     expect(screen.getByText('빌드 계획')).toBeInTheDocument();
@@ -303,5 +304,27 @@ describe('FixAgentPanel HITL (fix-agent-planner-hitl)', () => {
     expect(captured).toHaveLength(2);
     expect(captured[1].user_request).toBe('그냥 검색 봇으로 해줘');
     expect(captured[1].clarification_answers).toBeUndefined();
+  });
+
+  // Analysis G1 — 폐기된 HITL 왕복의 질문 카드는 조작할 수 없어야 한다
+  it('새 문장을 치면 기존 질문 카드는 비활성화된다 (스테일 카드 오표시 방지)', async () => {
+    const captured = captureHitl();
+    renderPanel();
+
+    await userEvent.type(screen.getByRole('textbox'), '규정 봇 만들어줘{enter}');
+    await screen.findByText('문서 범위는 어디까지인가요?');
+
+    await userEvent.type(
+      screen.getByLabelText('Fix 에이전트 입력'),
+      '그냥 검색 봇으로 해줘{enter}',
+    );
+    await screen.findByRole('button', { name: '적용하기' });
+
+    // 스테일 카드: 라디오·제출·건너뛰기 전부 비활성, 답변 완료 배지 없음
+    expect(screen.getByRole('radio', { name: '여신심사' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '제출' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '건너뛰기' })).toBeDisabled();
+    expect(screen.queryByText('✓ 답변 완료')).not.toBeInTheDocument();
+    expect(captured).toHaveLength(2);
   });
 });

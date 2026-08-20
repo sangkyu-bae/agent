@@ -471,7 +471,12 @@
       "Bash(./.venv/Scripts/python.exe -m pytest -m llm tests/infrastructure/tool_selection -q -p no:cacheprovider --collect-only)",
       "Bash(./.venv/Scripts/python.exe __TRACKED_VAR__/smoke.py __TRACKED_VAR__/real_tools.json)",
       "Bash(./.venv/Scripts/python.exe __TRACKED_VAR__/smoke.py __TRACKED_VAR__/real_tools.json __TRACKED_VAR__/smoke_out.txt)",
-      "Bash(grep -n 'sys.argv\\\\[2\\\\]\\\\|lines.append\\\\|write_text' __TRACKED_VAR__/smoke.py)"
+      "Bash(grep -n 'sys.argv\\\\[2\\\\]\\\\|lines.append\\\\|write_text' __TRACKED_VAR__/smoke.py)",
+      "Bash(./.venv/Scripts/python.exe -m pytest tests/domain/agent_create_pipeline/test_spec.py tests/api/test_prompt_composer_router.py tests/infrastructure/prompt_composer/test_adapter.py -q)",
+      "Bash(./.venv/Scripts/python.exe -m pytest tests/domain/agent_create_pipeline tests/api/test_prompt_composer_router.py tests/infrastructure/prompt_composer tests/application/agent_create_pipeline tests/domain/prompt_composer tests/application/prompt_composer -q)",
+      "Bash(./.venv/Scripts/python.exe -m pytest tests/domain/agent_create_pipeline -q)",
+      "Bash(./.venv/Scripts/python.exe -m ruff check src/domain/agent_create_pipeline/ src/interfaces/schemas/prompt_composer.py src/api/routes/prompt_composer_router.py src/infrastructure/config/intent_config.py tests/domain/agent_create_pipeline/ tests/api/test_prompt_composer_router.py tests/infrastructure/prompt_composer/)",
+      "Bash(./.venv/Scripts/python.exe -m pytest -q -p no:cacheprovider)"
     ]
   }
 }

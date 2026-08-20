@@ -91,6 +91,10 @@ class TestSystemPromptRequired:
         with pytest.raises(ValueError, match="비어"):
             await use_case.execute(_request(""), "req-1")
 
-    def test_over_4000_chars_rejected_by_schema(self):
+    def test_at_8000_chars_accepted_by_schema(self):
+        """prompt-depth FR-20 — 7섹션 프롬프트가 4000자를 넘으므로 8000 으로 완화."""
+        assert _request("가" * 8000).system_prompt is not None
+
+    def test_over_8000_chars_rejected_by_schema(self):
         with pytest.raises(ValidationError):
-            _request("가" * 4001)
+            _request("가" * 8001)

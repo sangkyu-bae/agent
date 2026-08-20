@@ -1,0 +1,9 @@
+{
+  "feature": "question-card",
+  "state": "do",
+  "timestamp": "2026-08-20T00:30:08.501Z",
+  "context": {
+    "matchRate": 0,
+    "iterationCount": 0
+  }
+}

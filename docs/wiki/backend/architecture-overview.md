@@ -1,11 +1,11 @@
 ---
 title: 백엔드 아키텍처 조감도 — 요청→응답 전체 경로
-status: draft
+status: approved
 source_type: conversation
 source_refs:
   - idt/src/api/main.py (컴포지션 루트, 라우터 52 등록, lifespan)
   - idt/src/application/background_job/worker.py (v2 추가 — lifespan 워커 싱글턴)
-  - idt/src/application/general_chat/use_case.py (v2 추가 — tool_filter optional 이음매)
+  - idt/src/application/general_chat/use_case.py (v2 추가 — tool_filter optional 이음매) — ⚠️ 12c69b4 시점 미커밋
   - idt/src/api/routes/ws_router.py (/ws/chat, /ws/agent 와이어 프로토콜)
   - idt/src/api/routes/agent_builder_router.py (SSE text/event-stream)
   - idt/src/application/general_chat/use_case.py (stream() transport-독립 설계)
@@ -15,14 +15,12 @@ source_refs:
   - idt/src/application/eval/use_cases.py (_kickoff_feedback_fanout)
   - docs/SOURCE-OF-TRUTH.md (2026-07-23, 커밋 6cc25656 기준 전면 갱신본)
 confidence: 0.9
-version: 2
+version: 3
 created: 2026-07-23
-updated: 2026-08-14
+updated: 2026-08-16
 verified_at: 12c69b4
+reviewer: 배상규
 ---
-
-> v2에서 실행 경로 (e) 백그라운드 잡과 §2-(a)의 도구 선별 이음매를 추가하며
-> approved → draft로 강등했다 (재승인 필요). 나머지 절은 v1 그대로.
 
 # 백엔드 아키텍처 조감도 — 요청→응답 전체 경로
 
@@ -68,6 +66,8 @@ ws_router.ws_chat → JWT 검증 → GeneralChatUseCase.stream()
 - **도구 선별 이음매**(v2): `ChatToolBuilder.build()` 직후, 에이전트 생성 직전에
   optional `tool_filter`가 질의 기준으로 도구를 좁힌다. `tool_filter=None`(기본,
   `tool_selector_enabled=False`)이면 이 단계가 없던 것과 동일 — [[detachable-module-seam]].
+  ⚠️ **이 항목만 `verified_at: 12c69b4` 시점 미커밋**이라 표류 검사 사각지대다
+  (문서의 나머지 절은 커밋된 코드에 정박). `tool_selection/` 커밋 후 재확인 필요.
 
 **(b) Agent 실행 — Supervisor 그래프** (POST `/api/v1/agents/.../run` SSE + `/ws/agent/{run_id}`)
 ```
