@@ -28,19 +28,24 @@ async def analyze_intent(
     current_user: User = Depends(get_current_user),
     use_case: AnalyzeIntentUseCase = Depends(get_analyze_intent_use_case),
 ) -> AnalyzeIntentResponse:
-    """메시지의 의도를 판정한다.
+    """메시지의 의도를 판정하고, 미충족 축이 있으면 되묻기를 만든다.
 
     Returns:
         200: 판정 결과. degraded=true 면 판정 실패(= 의도 모름)이며 에러가 아니다.
+            complete=false 이고 questions 가 있으면, 사용자가 답한 뒤
+            answers/round 를 실어 다시 호출하면 된다 (stateless 왕복).
 
     Errors:
         401: 인증 실패 (get_current_user)
-        422: labels 2개 미만 / description 누락 / message 빈 문자열
+        422: labels 1개 / labels·slots 둘 다 비어 있음 / description 누락 /
+            message 빈 문자열 / round 음수
     """
     result = await use_case.execute(
         message=request.message,
         spec=request.spec,
         history=request.history,
+        answers=request.answers,
+        round_=request.round,
         request_id=str(current_user.id),
     )
     return AnalyzeIntentResponse(**result.model_dump())

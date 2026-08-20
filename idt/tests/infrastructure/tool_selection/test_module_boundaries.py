@@ -98,15 +98,26 @@ def test_adapters_do_import_langchain():
 # ── 탈부착 (§1.1-2, Plan §4.1) ───────────────────────────────────────────────
 
 
-_DECLARED_CONSUMERS = {"api\\main.py", "api/main.py"}
-"""tool_selection을 import 해도 되는 **선언된** 결선 지점 (module-4).
+_DECLARED_CONSUMERS = {
+    "api/main.py",
+    # agent-create-pipeline Design §2.3 D2 — 파이프라인은 도구 추천을
+    # duck typing이 아니라 **ToolSelectorPort 계약 + 도메인 VO**로 소비하는
+    # 선언된 2번째 소비자다. LLM 구현(infrastructure)이 아니라 순수 domain
+    # 계약만 물므로 프레임워크 격리는 유지된다. 단, tool_selection 디렉토리
+    # 삭제 시 고쳐야 할 지점이 이 4개 파일만큼 늘어난 것을 여기 선언한다.
+    "domain/agent_create_pipeline/policies.py",
+    "domain/agent_create_pipeline/interfaces.py",
+    "application/agent_create_pipeline/use_case.py",
+    "infrastructure/agent_create_pipeline/adapters.py",
+}
+"""tool_selection을 import 해도 되는 **선언된** 결선 지점.
 
 의도적으로 좁게 유지한다. 여기 없는 파일이 모듈을 import 하면 탈부착 계약이
 소리 없이 무너지므로 테스트가 실패해야 한다.
 
 `general_chat/use_case.py`는 여기 없다 — 결선을 duck typing(`tool_filter`)으로
 받아 tool_selection을 **import 하지 않기** 때문이다. 그래서 모듈을 지워도
-application 계층은 그대로 동작한다.
+General Chat 경로는 그대로 동작한다.
 """
 
 
@@ -119,7 +130,7 @@ def test_only_declared_consumers_depend_on_it():
     for path in _py_files(_SRC):
         if _DOMAIN in path.parents or _INFRA in path.parents:
             continue
-        rel = str(path.relative_to(_SRC))
+        rel = str(path.relative_to(_SRC)).replace("\\", "/")
         if rel in _DECLARED_CONSUMERS:
             continue
         if any("tool_selection" in m for m in _module_names(path)):
@@ -132,12 +143,18 @@ def test_application_layer_never_imports_the_module():
 
     `GeneralChatUseCase`가 `LangChainToolFilter`를 직접 import 하는 순간
     "디렉토리 삭제 = 기능 제거"가 깨지고 import 에러가 난다.
+
+    예외: `agent_create_pipeline` — 도구 추천이 부가 기능이 아니라 파이프라인
+    단계 자체이므로 ToolSelectorPort를 정식 의존으로 선언했다
+    (`_DECLARED_CONSUMERS` 참조). duck typing 규칙은 "떼어도 동작해야 하는"
+    소비자(General Chat)에만 적용된다.
     """
     app_dir = _SRC / "application"
     offenders = [
-        str(p.relative_to(_SRC))
+        str(p.relative_to(_SRC)).replace("\\", "/")
         for p in _py_files(app_dir)
-        if any("tool_selection" in m for m in _module_names(p))
+        if "agent_create_pipeline" not in p.parts
+        and any("tool_selection" in m for m in _module_names(p))
     ]
     assert offenders == [], f"application이 모듈을 직접 참조: {offenders}"
 

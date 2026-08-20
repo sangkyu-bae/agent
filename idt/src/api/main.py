@@ -231,6 +231,15 @@ from src.api.routes.agent_composer_router import (
     router as agent_composer_router,
     get_compose_agent_use_case,
 )
+from src.api.routes.prompt_composer_router import (
+    router as prompt_composer_router,
+    get_append_human_version_use_case,
+    get_prompt_composer_use_case,
+)
+from src.api.routes.agent_pipeline_router import (
+    router as agent_pipeline_router,
+    get_agent_pipeline_use_case,
+)
 from src.api.routes.wiki_router import (
     router as wiki_router,
     get_distill_use_case as get_wiki_distill_use_case,
@@ -2466,6 +2475,39 @@ def _build_tool_filter():
         return None
 
 
+def _build_pipeline_tool_selector(cfg):
+    """에이전트 생성 파이프라인용 셀렉터 (agent-create-pipeline D2/§9.3).
+
+    General Chat 의 tool_selector_enabled 킬스위치와 **독립**이다 (Plan O6) —
+    빌더 문맥 파라미터(top_k·timeout)만 파이프라인 config 에서 받는다.
+    LLM 미구성·조립 실패 시 NullToolSelector 로 강하 — 파이프라인은
+    steps.tools=degraded 로 진행한다 (라우터 미등록 낙하가 아니다: 추천이
+    없어도 지정 도구만으로 "쓸 수 있는 결과"가 존재하기 때문).
+    """
+    from src.infrastructure.agent_create_pipeline.adapters import NullToolSelector
+
+    logger = get_app_logger()
+    llm_model = _build_tool_selector_llm_model()
+    if llm_model is None:
+        logger.warning(
+            "Pipeline tool selector provider/model unset — null selector"
+        )
+        return NullToolSelector()
+    try:
+        return LLMToolSelector(
+            llm_factory=_llm_factory,
+            llm_model=llm_model,
+            logger=logger,
+            top_k=cfg.AGENT_PIPELINE_SELECTOR_TOP_K,
+            timeout_sec=cfg.AGENT_PIPELINE_SELECTOR_TIMEOUT_SEC,
+        )
+    except Exception as e:
+        logger.warning(
+            "Pipeline tool selector build failed — null selector", exception=e
+        )
+        return NullToolSelector()
+
+
 def _build_search_pipeline_llm_model() -> LlmModel | None:
     """settings → search 파이프라인용 경량 LlmModel (DB 미등록 인라인 엔티티).
 
@@ -3966,6 +4008,77 @@ def create_agent_composer_factories():
     return compose_factory
 
 
+def create_prompt_composer_factory():
+    """Return per-request DI factory for prompt-composer (Design §9.4).
+
+    LLM 어댑터는 lifespan 1회 생성해 공유하고(세션 무관), 세션에 의존하는
+    Repository 2종만 요청마다 조립한다 — 동일 `AsyncSession` 을 공유해야
+    UseCase 안에서 원자성이 성립한다 (DB-001).
+
+    킬스위치가 꺼져 있거나 조립이 실패하면 None 을 돌려주고, 호출부가 라우터를
+    등록하지 않는다 (tool_selection 관례) — 프롬프트 생성은 부가 기능이며
+    조립 실패가 앱 기동을 막아선 안 된다.
+    """
+    from src.application.prompt_composer.compose_prompt_use_case import (
+        ComposePromptUseCase,
+    )
+    from src.infrastructure.config.prompt_composer_config import (
+        PromptComposerConfig,
+    )
+    from src.infrastructure.prompt_composer.adapter import (
+        LLMPromptGeneratorAdapter,
+    )
+    from src.infrastructure.prompt_composer.repository import (
+        PromptRepository,
+        ToolCatalogMetaReader,
+    )
+
+    app_logger = get_app_logger()
+    config = PromptComposerConfig()
+    if not config.PROMPT_COMPOSER_ENABLED:
+        app_logger.info("Prompt composer disabled — router not registered")
+        return None
+    try:
+        generator = LLMPromptGeneratorAdapter(logger=app_logger, config=config)
+    except Exception as e:
+        app_logger.error("Prompt composer build failed — disabling", exception=e)
+        return None
+
+    def prompt_factory(session: AsyncSession = Depends(get_session)):
+        return ComposePromptUseCase(
+            generator=generator,
+            tool_reader=ToolCatalogMetaReader(session),
+            repository=PromptRepository(session),
+            logger=app_logger,
+        )
+
+    return prompt_factory
+
+
+def create_append_human_version_factory():
+    """Return per-request DI factory for human prompt-version append.
+
+    agent-create-wizard Design Ref: §4.5 — 위저드 4단계의 편집본 저장 경로.
+    LLM 어댑터가 필요 없다(사람이 쓴 글을 그대로 저장할 뿐)므로 생성기 조립
+    실패와 무관하게 항상 조립된다. 라우터 등록 여부는 호출부가
+    `create_prompt_composer_factory()` 결과와 함께 판단한다 — 같은 라우터에
+    속하므로 킬스위치를 공유한다.
+    """
+    from src.application.prompt_composer.append_human_version_use_case import (
+        AppendHumanVersionUseCase,
+    )
+    from src.infrastructure.prompt_composer.repository import PromptRepository
+
+    app_logger = get_app_logger()
+
+    def append_factory(session: AsyncSession = Depends(get_session)):
+        return AppendHumanVersionUseCase(
+            repository=PromptRepository(session), logger=app_logger
+        )
+
+    return append_factory
+
+
 def create_mcp_registry_factories():
     """Return per-request DI factories for MCP Registry use cases (MCP-REG-001)."""
     app_logger = get_app_logger()
@@ -4627,6 +4740,17 @@ def create_app() -> FastAPI:
     _compose_f = create_agent_composer_factories()
     app.dependency_overrides[get_compose_agent_use_case] = _compose_f
 
+    # Prompt Composer DI (prompt-composer Design §9.4)
+    # None이면 라우터를 등록하지 않는다 — 부가 기능이므로 조립 실패가 기동을 막지 않는다.
+    _prompt_f = create_prompt_composer_factory()
+    if _prompt_f is not None:
+        app.dependency_overrides[get_prompt_composer_use_case] = _prompt_f
+        # agent-create-wizard §4.5 — 같은 라우터의 사람 편집본 저장 경로
+        app.dependency_overrides[get_append_human_version_use_case] = (
+            create_append_human_version_factory()
+        )
+        app.include_router(prompt_composer_router)
+
     # Auto Agent Builder DI
     app.dependency_overrides[get_auto_build_use_case] = get_configured_auto_build_use_case
     app.dependency_overrides[get_auto_build_reply_use_case] = get_configured_auto_build_reply_use_case
@@ -4701,6 +4825,60 @@ def create_app() -> FastAPI:
         analyzer=LLMIntentAnalyzerAdapter(logger=logger)
     )
     app.dependency_overrides[get_analyze_intent_use_case] = lambda: _intent_use_case
+
+    # Agent Create Pipeline DI (agent-create-pipeline Design §9)
+    # 킬스위치 off 또는 prompt-composer 미가동이면 등록하지 않는다 (탈착형 낙하).
+    # 여기(DI 섹션)서의 include 가 곧 라우트 우선순위다 — agent_builder 의
+    # /{agent_id} 계열(5100줄대 블록)보다 먼저 등록되어 /pipeline 이 삼켜지지
+    # 않는다 (Design §4.1). 협력자 재사용: _intent_use_case(위 싱글턴),
+    # _prompt_f(ComposePromptUseCase), _create_uc(CreateAgentUseCase).
+    from src.application.agent_create_pipeline.use_case import (
+        AgentCreatePipelineUseCase,
+    )
+    from src.infrastructure.agent_create_pipeline.adapters import (
+        CatalogCandidateReader,
+    )
+    from src.infrastructure.config.agent_create_pipeline_config import (
+        AgentPipelineConfig,
+    )
+    from src.infrastructure.config.intent_config import IntentConfig
+
+    _pipeline_cfg = AgentPipelineConfig()
+    if _pipeline_cfg.AGENT_PIPELINE_ENABLED and _prompt_f is not None:
+        _pipeline_selector = _build_pipeline_tool_selector(_pipeline_cfg)
+        # 되묻기 상한의 단일 출처는 INTENT_* config 다 (Analysis G-02/G-03) —
+        # 어댑터 프롬프트의 "남은 라운드"와 파이프라인 재clamp 가 같은 값을 본다.
+        _pipeline_limits = IntentConfig().slot_limits()
+
+        def _pipeline_factory(
+            session: AsyncSession = Depends(get_session),
+            compose_uc=Depends(_prompt_f),
+            create_uc=Depends(_create_uc),
+        ):
+            # Depends 체인이 요청당 단일 세션을 공유한다 (DB-001 §10.4).
+            return AgentCreatePipelineUseCase(
+                intent_use_case=_intent_use_case,
+                candidate_reader=CatalogCandidateReader(
+                    repository=ToolCatalogRepository(
+                        session=session, logger=logger
+                    ),
+                    logger=logger,
+                ),
+                tool_selector=_pipeline_selector,
+                compose_use_case=compose_uc,
+                create_agent_use_case=create_uc,
+                logger=logger,
+                limits=_pipeline_limits,
+            )
+
+        app.dependency_overrides[get_agent_pipeline_use_case] = _pipeline_factory
+        app.include_router(agent_pipeline_router)
+    else:
+        logger.info(
+            "Agent pipeline disabled — router not registered",
+            enabled=_pipeline_cfg.AGENT_PIPELINE_ENABLED,
+            prompt_composer_ready=_prompt_f is not None,
+        )
 
     # ws-chat-streaming Design §4.4: in-memory ChatStreamCache + reuse GeneralChat factory.
     _chat_stream_cache = InMemoryChatStreamCache(ttl_seconds=300, max_sessions=1000)
