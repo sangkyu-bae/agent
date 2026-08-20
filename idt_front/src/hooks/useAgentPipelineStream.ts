@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { agentPipelineService } from '@/services/agentPipelineService';
 import { PIPELINE_DISABLED_STATUS } from '@/services/agentPipelineService';
+import { PIPELINE_STAGE_STATUS } from '@/types/agentPipeline';
 import type {
   AgentPipelineRequest,
   AgentPipelineResponse,
@@ -104,17 +105,26 @@ export const useAgentPipelineStream = (): UseAgentPipelineStreamResult => {
     setSteps([]);
     setActiveStage(null);
 
+    // 실패 시 "어디서 끊겼는지"를 진행바에 남기기 위한 추적 (FR-F10).
+    // state 가 아니라 지역 변수인 이유: catch 시점에 setState 반영을 기다릴 수
+    // 없고, 이 값 자체는 렌더에 쓰이지 않는다.
+    let inFlightStage: PipelineStage | null = null;
+
     try {
       await agentPipelineService.stream(
         body,
         {
           onStageStarted: (stage) => {
+            inFlightStage = stage as PipelineStage;
             if (!mountedRef.current) return;
             setActiveStage(stage as PipelineStage);
           },
           onStageSettled: (step) => {
-            if (!mountedRef.current) return;
             const record = step as PipelineStepOut;
+            // 종료된 단계는 더 이상 진행 중이 아니다 — 서버가 실어준 사유를
+            // 아래 catch 의 합성 failed 가 덮어쓰지 않게 한다.
+            if (inFlightStage === record.stage) inFlightStage = null;
+            if (!mountedRef.current) return;
             setSteps((prev) => [
               ...prev.filter((s) => s.stage !== record.stage),
               record,
@@ -122,6 +132,7 @@ export const useAgentPipelineStream = (): UseAgentPipelineStreamResult => {
             setActiveStage(null);
           },
           onResult: (payload) => {
+            inFlightStage = null;
             if (!mountedRef.current) return;
             // 최종 payload 의 steps 가 진실이다 — 누적본을 덮어쓴다
             // (백엔드가 미도달 단계를 skipped 로 채워 5개를 보장한다).
@@ -135,6 +146,20 @@ export const useAgentPipelineStream = (): UseAgentPipelineStreamResult => {
     } catch (e) {
       if (controller.signal.aborted || !mountedRef.current) return;
       setActiveStage(null);
+      // 끊긴 단계를 failed 로 남긴다 — 버리면 실패한 행이 '대기중'으로 되돌아가
+      // 사용자가 어느 단계에서 틀렸는지 알 수 없다 (§6.1 / WHY).
+      const brokenStage: PipelineStage | null = inFlightStage;
+      if (brokenStage) {
+        setSteps((prev) => [
+          ...prev.filter((s) => s.stage !== brokenStage),
+          {
+            stage: brokenStage,
+            status: PIPELINE_STAGE_STATUS.FAILED,
+            reason: null,
+            elapsed_ms: 0,
+          },
+        ]);
+      }
       setError(classify(e));
     } finally {
       if (mountedRef.current && !controller.signal.aborted) {

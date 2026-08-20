@@ -184,8 +184,24 @@ export interface AppendPromptVersionResponse {
   source: string;
 }
 
-/** `assembled` 상한 — 서버 CreateAgentRequest.system_prompt 와 동일해야 한다. */
-export const MAX_ASSEMBLED_CHARS = 4000;
+/**
+ * `assembled` 상한 — 서버 CreateAgentRequest.system_prompt 와 동일해야 한다.
+ *
+ * prompt-depth FR-23 — 4000 → 8000. 서버(`PipelinePolicy.PROMPT_MAX_CHARS` /
+ * `MAX_ASSEMBLED_CHARS`)보다 작으면 저장 가능한 프롬프트를 화면이 막고, 크면
+ * 저장에서 422 가 난다.
+ */
+export const MAX_ASSEMBLED_CHARS = 8000;
+
+/**
+ * 되묻기 라운드 상한 — 서버 `SlotLimits.max_rounds`(INTENT_MAX_CLARIFICATION_ROUNDS)
+ * 와 맞춘 값 (FR-24).
+ *
+ * 서버가 상한에 도달하면 질문을 아예 내려주지 않으므로 화면은 자연히 다음
+ * 단계로 넘어간다 — 이 값은 "남은 라운드" 안내 표기용이다. 어긋나면 안내가
+ * 거짓말이 된다.
+ */
+export const MAX_CLARIFY_ROUNDS = 3;
 
 /** 설명 입력 상한 — 서버 `user_request` 와 동일. */
 export const MAX_PIPELINE_USER_REQUEST_CHARS = 1000;

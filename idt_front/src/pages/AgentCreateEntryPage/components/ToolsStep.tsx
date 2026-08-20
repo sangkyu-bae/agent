@@ -12,9 +12,18 @@ interface ToolsStepProps {
   /** 카탈로그에 없거나 비활성이라 반영되지 않은 id (조용히 사라지지 않게 안내). */
   unknownIds: string[];
   isPending: boolean;
+  /**
+   * 프롬프트 단계 진입 후 읽기 전용 이력 표시 (wizard-chat-layout FR-09).
+   * 토글·액션을 모두 잠그고 완료 배지만 보여준다 — [이전]으로 돌아오면 풀린다.
+   */
+  locked?: boolean;
   onToggle: (toolId: string) => void;
   onConfirm: () => void;
-  onBack: () => void;
+  /**
+   * 전체 초기화. 서버가 무상태라 step② 로 되돌아갈 수 없어 `onBack` 이 아니다 —
+   * 라벨("처음부터")과 실제 동작을 일치시킨 이름이다. 확인 절차는 호출자가 건다.
+   */
+  onRestart: () => void;
 }
 
 const describe = (tool: CatalogTool | undefined, toolId: string) => ({
@@ -37,9 +46,10 @@ const ToolsStep = ({
   selectedIds,
   unknownIds,
   isPending,
+  locked = false,
   onToggle,
   onConfirm,
-  onBack,
+  onRestart,
 }: ToolsStepProps) => {
   const [pickerOpen, setPickerOpen] = useState(false);
   const { data: catalogTools, isLoading, isError, refetch } = useToolCatalog();
@@ -54,12 +64,21 @@ const ToolsStep = ({
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-[15px] font-semibold text-zinc-900">
-          이 도구들을 사용할까요?
-        </h2>
-        <p className="mt-1 text-[12.5px] text-zinc-500">
-          요청 내용에 맞춰 골라봤어요. 필요 없는 건 해제하고, 빠진 건 추가하세요.
-        </p>
+        <div className="flex items-center justify-between">
+          <h2 className="text-[15px] font-semibold text-zinc-900">
+            이 도구들을 사용할까요?
+          </h2>
+          {locked && (
+            <span className="text-[12.5px] font-medium text-violet-500">
+              ✓ 선택 완료
+            </span>
+          )}
+        </div>
+        {!locked && (
+          <p className="mt-1 text-[12.5px] text-zinc-500">
+            요청 내용에 맞춰 골라봤어요. 필요 없는 건 해제하고, 빠진 건 추가하세요.
+          </p>
+        )}
       </div>
 
       {unknownIds.length > 0 && (
@@ -92,7 +111,7 @@ const ToolsStep = ({
                   <input
                     type="checkbox"
                     checked={checked}
-                    disabled={isPending}
+                    disabled={isPending || locked}
                     onChange={() => onToggle(toolId)}
                     className="mt-1 h-4 w-4 accent-violet-600"
                   />
@@ -120,15 +139,16 @@ const ToolsStep = ({
         </ul>
       )}
 
+      {!locked && (
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={onBack}
+            onClick={onRestart}
             disabled={isPending}
             className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-[13.5px] font-medium text-zinc-600 transition-all hover:border-zinc-300 hover:bg-zinc-100 disabled:cursor-not-allowed"
           >
-            이전
+            처음부터
           </button>
           <button
             type="button"
@@ -148,6 +168,7 @@ const ToolsStep = ({
           이 도구로 진행
         </LoadingButton>
       </div>
+      )}
 
       <ToolPickerModal
         isOpen={pickerOpen}

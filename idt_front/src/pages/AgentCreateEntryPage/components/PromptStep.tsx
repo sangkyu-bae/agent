@@ -3,7 +3,7 @@ import { MAX_ASSEMBLED_CHARS } from '@/types/agentPipeline';
 
 interface PromptStepProps {
   value: string;
-  /** 서버가 4000자 절단을 했을 때의 사유. null 이면 절단 없음. */
+  /** 서버가 상한 절단을 했을 때의 사유. null 이면 절단 없음. */
   clampReason: string | null;
   /** 프롬프트 단계가 degraded(규칙기반 폴백)로 끝났는지. */
   degraded: boolean;
@@ -20,8 +20,9 @@ interface PromptStepProps {
  * ④ 프롬프트 검토·편집 (Design §5.4 step④ / FR-F08).
  *
  * 여기 보이는 텍스트가 **그대로 저장될 값**이다: 서버가 정지 응답에서 이미
- * 4000자로 잘라서 주기 때문에(Design D3), 화면과 저장값이 어긋나지 않는다.
- * 사용자가 편집해 상한을 넘기면 저장에서 422 가 나므로 여기서 막는다.
+ * `MAX_ASSEMBLED_CHARS` 로 잘라서 주기 때문에(Design D3), 화면과 저장값이
+ * 어긋나지 않는다. 사용자가 편집해 상한을 넘기면 저장에서 422 가 나므로
+ * 여기서 막는다.
  */
 const PromptStep = ({
   value,
@@ -84,13 +85,18 @@ const PromptStep = ({
       )}
 
       <div className="overflow-hidden rounded-2xl border border-zinc-300 bg-white shadow-sm transition-all focus-within:border-violet-400">
+        {/*
+          prompt-depth FR-25 — 7섹션 마크다운은 3000자를 넘길 수 있다. rows 만으로는
+          한 화면에 몇 문단밖에 안 들어와 검토가 사실상 불가능하므로, 높이를 늘리고
+          뷰포트 기준 상한을 둔 뒤 내부 스크롤로 처리한다.
+        */}
         <textarea
           aria-label="시스템 프롬프트"
           value={value}
           onChange={(e) => onChange(e.target.value)}
           disabled={isPending}
-          rows={14}
-          className="block w-full resize-none bg-transparent px-4 py-3 text-[13.5px] leading-relaxed text-zinc-900 outline-none disabled:opacity-60"
+          rows={22}
+          className="block max-h-[60vh] w-full resize-y overflow-y-auto bg-transparent px-4 py-3 text-[13.5px] leading-relaxed text-zinc-900 outline-none disabled:opacity-60"
         />
       </div>
 

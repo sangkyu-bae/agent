@@ -21,7 +21,11 @@ const QuestionOptionItem = ({
   onSelect,
 }: QuestionOptionItemProps) => (
   <label
-    className={`flex w-full items-center gap-3 rounded-xl border bg-white transition-colors ${
+    // relative 필수 — sr-only(absolute) 라디오의 containing block을 이 label로
+    // 고정한다. 없으면 body 기준으로 배치돼 스크롤 컨테이너의 overflow 클리핑을
+    // 탈출하고, 카드가 쌓이면 문서 스크롤바 + 하단 흰 영역을 만든다
+    // (wizard-chat-layout FR-15 실측 원인).
+    className={`relative flex w-full items-center gap-3 rounded-xl border bg-white transition-colors ${
       compact ? 'px-3 py-2.5 text-[13px]' : 'px-4 py-3.5 text-[14px]'
     } ${
       selected

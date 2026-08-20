@@ -19,7 +19,10 @@ import { server } from '@/__tests__/mocks/server';
 import { createWrapper } from '@/__tests__/mocks/wrapper';
 import { API_ENDPOINTS } from '@/constants/api';
 import { useAgentDraftStore } from '@/store/agentDraftStore';
-import { PIPELINE_STAGE_STATUS } from '@/types/agentPipeline';
+import {
+  MAX_ASSEMBLED_CHARS,
+  PIPELINE_STAGE_STATUS,
+} from '@/types/agentPipeline';
 import type {
   AgentPipelineResponse,
   PipelineStage,
@@ -241,18 +244,17 @@ describe('① 설명 입력', () => {
     expect(screen.getByText(/스튜디오에서 \[저장\]/)).toBeInTheDocument();
   });
 
-  it('진행바가 요청 문장과 같은 블록에 놓인다', async () => {
-    // "채팅 바로 아래 붙어 있다"를 DOM 구조로 고정한다 — 사이드바로 되돌아가면
-    // 이 단언이 깨진다.
+  it('전송한 문장이 요청 버블로 트랜스크립트 맨 위에 남는다 (FR-05)', async () => {
     stubStream([sseBody(NEED_INPUT)]);
     renderPage();
     await submitDescription();
 
-    const requestBlock = (await screen.findByText('요청')).closest('p')!;
-    const progressBlock = screen.getByText('의도 파악').closest('div')!;
-    expect(requestBlock.parentElement).toBe(
-      progressBlock.closest('.space-y-3'),
-    );
+    const bubble = await screen.findByText('사내 문서를 찾아주는 에이전트');
+    expect(bubble).toBeInTheDocument();
+    // 트랜스크립트(스크롤 영역) 안에 있다 — 하단 입력창이 아니라 버블이다.
+    expect(
+      bubble.closest('[data-testid="wizard-transcript"]'),
+    ).not.toBeNull();
   });
 
   it('공백만 입력하면 호출하지 않는다', async () => {
@@ -272,6 +274,120 @@ describe('① 설명 입력', () => {
     await waitFor(() => expect(requests).toHaveLength(1));
     expect(requests[0].stop_after).toBe('tools');
     expect(requests[0].user_request).toBe('사내 문서를 찾아주는 에이전트');
+  });
+});
+
+// ── 채팅형 레이아웃 (wizard-chat-layout) ───────────────────────────────────
+
+describe('채팅형 레이아웃 (wizard-chat-layout §5.4)', () => {
+  it('헤더바가 없다 — 타이틀·[취소] 미노출 (FR-01/FR-11)', () => {
+    renderPage();
+    expect(
+      screen.queryByRole('heading', { name: '에이전트 만들기' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: '취소' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('첫 화면은 히어로 + 액션 카드를 보여준다 (FR-02)', () => {
+    renderPage();
+    expect(
+      screen.getByText('생성하려는 에이전트에 대해 알려주세요'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /에이전트 직접 만들기/ }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('에이전트 가져오기')).toBeInTheDocument();
+  });
+
+  it('첫 전송 시 chat 모드 전환 — 히어로·액션 카드가 사라지고 하단 입력창이 잠긴다 (FR-03/04/08)', async () => {
+    stubStream([sseBody(NEED_INPUT)]);
+    renderPage();
+    await submitDescription();
+
+    await screen.findByText('이 에이전트의 핵심 용도는 무엇인가요?');
+    expect(
+      screen.queryByText('생성하려는 에이전트에 대해 알려주세요'),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /에이전트 직접 만들기/ }),
+    ).not.toBeInTheDocument();
+    // 하단 고정 입력창 — 재전송 창구가 아니다
+    expect(screen.getByLabelText('에이전트 설명')).toBeDisabled();
+  });
+
+  it('질문 라운드가 누적된다 — 이전 라운드 카드가 잠긴 채 남는다 (FR-07)', async () => {
+    const ROUND2 = baseResult({
+      status: 'need_input',
+      round: 2,
+      steps: steps({ intent: 'ok' }),
+      questions: [
+        {
+          slot_key: 'audience',
+          question: '누가 사용하나요?',
+          options: ['사내 직원', '고객'],
+          allow_free_text: false,
+        },
+      ],
+      intent: {
+        label: null,
+        filled_slots: { purpose: '문서 Q&A' },
+        missing_slots: ['audience'],
+        degraded: false,
+      },
+    });
+    stubStream([sseBody(NEED_INPUT), sseBody(ROUND2)]);
+    renderPage();
+    const user = await submitDescription();
+
+    await screen.findByText('이 에이전트의 핵심 용도는 무엇인가요?');
+    await user.click(screen.getByText('문서 Q&A'));
+    await user.click(screen.getByRole('button', { name: '제출' }));
+
+    await screen.findByText('누가 사용하나요?');
+    // 라운드 1 카드가 여전히 DOM에 있고 잠김 배지를 단다
+    expect(
+      screen.getByText('이 에이전트의 핵심 용도는 무엇인가요?'),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText('✓ 답변 완료').length).toBeGreaterThan(0);
+  });
+
+  it('첫 요청 실패 시 chat 모드 유지 — 요청 버블 + 실패 카드, 재시도는 같은 문장을 다시 보낸다', async () => {
+    const requests: Record<string, unknown>[] = [];
+    let call = 0;
+    server.use(
+      http.post(
+        `*${API_ENDPOINTS.AGENT_PIPELINE_STREAM}`,
+        async ({ request }) => {
+          requests.push((await request.json()) as Record<string, unknown>);
+          call += 1;
+          if (call === 1) {
+            return HttpResponse.json({ detail: 'boom' }, { status: 500 });
+          }
+          return sseResponse(sseBody(NEED_INPUT));
+        },
+      ),
+    );
+    renderPage();
+    const user = await submitDescription();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      '진행하지 못했습니다',
+    );
+    // centered 로 튕기지 않는다 — 요청 버블이 함께 보인다
+    expect(
+      screen.getByText('사내 문서를 찾아주는 에이전트'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('생성하려는 에이전트에 대해 알려주세요'),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '다시 시도' }));
+
+    await screen.findByText('이 에이전트의 핵심 용도는 무엇인가요?');
+    expect(requests).toHaveLength(2);
+    expect(requests[1].user_request).toBe('사내 문서를 찾아주는 에이전트');
   });
 });
 
@@ -324,8 +440,9 @@ describe('② 의도 수집', () => {
     expect(requests[1].answers).toEqual([]);
   });
 
-  it('다음 응답이 오면 이전 라운드 질문 카드가 사라진다', async () => {
-    // F10 스테일 카드 가드 — 답해도 전송되지 않는 카드가 남으면 오표시다.
+  it('다음 응답이 와도 이전 라운드 카드는 잠긴 채 이력으로 남는다 (FR-07)', async () => {
+    // F10 스테일 카드 가드는 잠금으로 대체됐다 — 답해도 전송되지 않는 카드가
+    // "활성으로" 남으면 오표시지만, 잠긴 이력 카드는 대화 맥락이다.
     stubStream([
       sseBody(NEED_INPUT),
       sseBody(TOOLS_PROPOSED, ['intent', 'tools']),
@@ -337,11 +454,14 @@ describe('② 의도 수집', () => {
     await screen.findByText('이 에이전트의 핵심 용도는 무엇인가요?');
     await user.click(screen.getByRole('button', { name: '건너뛰고 계속하기' }));
 
-    await waitFor(() =>
-      expect(
-        screen.queryByText('이 에이전트의 핵심 용도는 무엇인가요?'),
-      ).not.toBeInTheDocument(),
-    );
+    await screen.findByText('이 도구들을 사용할까요?');
+    expect(
+      screen.getByText('이 에이전트의 핵심 용도는 무엇인가요?'),
+    ).toBeInTheDocument();
+    // 잠긴 카드에는 활성 진행 안내가 남지 않는다
+    expect(
+      screen.queryByRole('button', { name: '건너뛰고 계속하기' }),
+    ).not.toBeInTheDocument();
   });
 });
 
@@ -410,6 +530,29 @@ describe('③ 도구 확인', () => {
     ).toBeInTheDocument();
   });
 
+  it('[처음부터]는 확인을 받은 뒤에만 초기화한다', async () => {
+    // 무상태 위저드라 step②로 되돌아갈 수 없다 — 되돌리기가 아니라 전체
+    // 초기화이므로 라벨과 확인 절차가 동작과 일치해야 한다.
+    const { user } = await goToTools();
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+
+    await user.click(screen.getByRole('button', { name: '처음부터' }));
+
+    expect(confirm).toHaveBeenCalled();
+    expect(screen.getByText('이 도구들을 사용할까요?')).toBeInTheDocument();
+
+    confirm.mockReturnValue(true);
+    await user.click(screen.getByRole('button', { name: '처음부터' }));
+
+    await waitFor(() =>
+      expect(
+        screen.queryByText('이 도구들을 사용할까요?'),
+      ).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole('textbox')).toHaveValue('');
+    confirm.mockRestore();
+  });
+
   it('추천이 0건이면 빈 상태를 안내한다', async () => {
     stubToolCatalog();
     stubStream([
@@ -455,18 +598,39 @@ describe('④ 프롬프트 검토', () => {
     );
   });
 
-  it('글자수 카운터를 보여준다', async () => {
+  it('도구 카드가 잠긴 이력으로 함께 남는다 (FR-09)', async () => {
     await goToPrompt();
-    expect(screen.getByText(/\/ 4000/)).toBeInTheDocument();
+
+    expect(screen.getByText('이 도구들을 사용할까요?')).toBeInTheDocument();
+    expect(screen.getByText(/선택 완료/)).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: '이 도구로 진행' }),
+    ).not.toBeInTheDocument();
+    // [이전]으로 돌아가면 잠금이 풀린다
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: '이전' }));
+    expect(
+      screen.getByRole('button', { name: '이 도구로 진행' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText('시스템 프롬프트'),
+    ).not.toBeInTheDocument();
   });
 
-  it('4000자를 넘기면 진행 버튼을 비활성화한다', async () => {
+  it('글자수 카운터를 보여준다', async () => {
+    await goToPrompt();
+    expect(
+      screen.getByText(new RegExp(`/ ${MAX_ASSEMBLED_CHARS}`)),
+    ).toBeInTheDocument();
+  });
+
+  it('상한을 넘기면 진행 버튼을 비활성화한다', async () => {
     const { user } = await goToPrompt();
     const textarea = screen.getByLabelText('시스템 프롬프트');
     await user.clear(textarea);
-    // fireEvent 수준으로 붙여넣기 — 4001자를 타이핑하지 않는다.
+    // fireEvent 수준으로 붙여넣기 — 상한+1자를 타이핑하지 않는다.
     await user.click(textarea);
-    await user.paste('가'.repeat(4001));
+    await user.paste('가'.repeat(MAX_ASSEMBLED_CHARS + 1));
 
     await waitFor(() =>
       expect(

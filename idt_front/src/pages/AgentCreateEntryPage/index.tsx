@@ -7,7 +7,11 @@ import {
   useAgentPipelineStream,
 } from '@/hooks/useAgentPipelineStream';
 import { useToolCatalog } from '@/hooks/useToolCatalog';
-import { PIPELINE_STOP } from '@/types/agentPipeline';
+import {
+  MAX_CLARIFY_ROUNDS,
+  MAX_PIPELINE_USER_REQUEST_CHARS,
+  PIPELINE_STOP,
+} from '@/types/agentPipeline';
 import type {
   AgentPipelineRequest,
   AgentPipelineResponse,
@@ -16,10 +20,9 @@ import type {
   PipelineQuestion,
 } from '@/types/agentPipeline';
 import EntryHero from './components/EntryHero';
-import DescriptionComposer, {
-  MAX_USER_REQUEST_CHARS,
-} from './components/DescriptionComposer';
+import DescriptionComposer from './components/DescriptionComposer';
 import EntryActionCards from './components/EntryActionCards';
+import WizardShell from './components/WizardShell';
 import WizardProgress from './components/WizardProgress';
 import IntentStep from './components/IntentStep';
 import ToolsStep from './components/ToolsStep';
@@ -27,21 +30,23 @@ import PromptStep from './components/PromptStep';
 import WizardFailureCard from './components/WizardFailureCard';
 import PipelineUnavailableCard from './components/PipelineUnavailableCard';
 
-/**
- * 서버 `SlotLimits.max_rounds` 와 맞춘 값 (FR-F05).
- * 서버가 라운드 상한에 도달하면 질문을 아예 내려주지 않으므로 화면은 자연히
- * 다음 단계로 넘어간다 — 여기 값은 "남은 라운드" 안내 표기용이다.
- */
-const MAX_CLARIFY_ROUNDS = 2;
-
 type WizardStep = 'description' | 'intent' | 'tools' | 'prompt';
+
+/**
+ * 질문 라운드 이력 (wizard-chat-layout FR-07).
+ * 교체가 아니라 누적 — 지난 라운드 카드가 잠긴 채 트랜스크립트에 남는다.
+ */
+interface WizardRound {
+  round: number;
+  questions: PipelineQuestion[];
+  answered: boolean;
+}
 
 interface WizardState {
   userRequest: string;
   round: number;
-  questions: PipelineQuestion[];
+  rounds: WizardRound[];
   answers: PipelineAnswer[];
-  answered: boolean;
   intentEcho: PipelineIntentEcho | null;
   recommendedIds: string[];
   selectedIds: string[];
@@ -58,9 +63,8 @@ interface WizardState {
 const EMPTY: WizardState = {
   userRequest: '',
   round: 0,
-  questions: [],
+  rounds: [],
   answers: [],
-  answered: false,
   intentEcho: null,
   recommendedIds: [],
   selectedIds: [],
@@ -77,12 +81,13 @@ const EMPTY: WizardState = {
 /**
  * 에이전트 생성 위저드 (/agent-builder/new).
  *
- * Design Ref: agent-create-wizard §5.2 — 설명 → 의도 → 도구 → 프롬프트 4단계.
- * 정지 지점 3곳에서 사용자가 개입하고, **저장은 하지 않는다**: DB 반영은
- * 스튜디오의 [저장] 버튼에서만 일어난다(무저장 계약 유지).
+ * Design Ref: wizard-chat-layout §5 — 채팅 트랜스크립트형 2-모드 레이아웃.
+ * centered(첫 화면 세로 중앙) ↔ chat(하단 고정 입력창 + 카드 누적).
+ * 파이프라인 전이 로직은 agent-create-wizard §5.2 원형을 유지하고,
+ * **저장은 하지 않는다**: DB 반영은 스튜디오 [저장]에서만 (무저장 계약).
  *
- * 진행 상태를 영속하지 않는다 (Design A-6, 핸드오프 G1) — 새로고침 시 유실은
- * 버그가 아니라 정의된 동작이다.
+ * 진행 상태를 영속하지 않는다 (agent-create-wizard Design A-6, 핸드오프 G1) —
+ * 새로고침 시 유실은 버그가 아니라 정의된 동작이다.
  */
 const AgentCreateEntryPage = () => {
   const navigate = useNavigate();
@@ -93,33 +98,45 @@ const AgentCreateEntryPage = () => {
   const [input, setInput] = useState('');
   const [state, setState] = useState<WizardState>(EMPTY);
 
+  /**
+   * 모드 파생 (wizard-chat-layout Design §3.2) — 전송 순간 userRequest 를 즉시
+   * 커밋하므로 첫 응답 전에도 chat 으로 전환되고, 첫 요청이 실패해도 centered 로
+   * 튕기지 않아 요청 버블 + 실패 카드가 함께 보인다.
+   */
+  const mode: 'centered' | 'chat' =
+    state.userRequest !== '' ? 'chat' : 'centered';
+
   // 스튜디오에서 뒤로가기로 되돌아온 경우 이전 의도가 남아 있을 수 있다.
   // 진입 시점에 비워야 [직접 만들기]가 유령 초안을 끌고 가지 않는다 (G3).
   useEffect(() => {
     useAgentDraftStore.getState().clearPendingIntent();
   }, []);
 
-  // 진행 중 이탈 경고 (FR-F16). description 단계는 잃을 게 없어 제외한다.
+  // 진행 중 이탈 경고 (FR-F16 / wizard-chat-layout FR-11).
+  // centered 는 잃을 게 없어 제외한다.
   useEffect(() => {
-    if (step === 'description') return undefined;
+    if (mode === 'centered') return undefined;
     const warn = (e: BeforeUnloadEvent) => e.preventDefault();
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
-  }, [step]);
+  }, [mode]);
 
   const goStudio = (intent: AgentCreateIntent) => {
     useAgentDraftStore.getState().setPendingIntent(intent);
     navigate('/agent-builder');
   };
 
-  /** 응답 status → 다음 단계 전이 (Design §5.2). */
+  /** 응답 status → 다음 단계 전이 (agent-create-wizard Design §5.2). */
   const applyResult = (result: AgentPipelineResponse, sent: WizardState) => {
     if (result.status === 'need_input') {
       setState({
         ...sent,
         round: result.round,
-        questions: result.questions,
-        answered: false,
+        // FR-07 — 라운드는 교체가 아니라 push. 지난 카드가 이력으로 남는다.
+        rounds: [
+          ...sent.rounds,
+          { round: result.round, questions: result.questions, answered: false },
+        ],
         intentEcho: result.intent
           ? {
               label: result.intent.label,
@@ -136,8 +153,8 @@ const AgentCreateEntryPage = () => {
       setState({
         ...sent,
         round: result.round,
-        questions: [],
-        answered: true,
+        // 답변 없이 도구가 바로 오면(라운드 상한 등) 남은 활성 카드를 잠근다.
+        rounds: sent.rounds.map((r) => ({ ...r, answered: true })),
         intentEcho: result.intent
           ? {
               label: result.intent.label,
@@ -190,14 +207,26 @@ const AgentCreateEntryPage = () => {
 
   // ── 단계별 액션 ─────────────────────────────────────────────────────
 
-  const handleSubmitDescription = () => {
-    const text = input.trim().slice(0, MAX_USER_REQUEST_CHARS);
-    if (!text || pipeline.isPending) return;
+  /** 요청 전송 공통부 — userRequest 를 즉시 커밋해 chat 모드로 전환한다 (§3.2). */
+  const sendDescription = (text: string) => {
     const next = { ...EMPTY, userRequest: text };
-    dispatch(
-      { user_request: text, stop_after: PIPELINE_STOP.TOOLS },
-      next,
-    );
+    setState(next);
+    dispatch({ user_request: text, stop_after: PIPELINE_STOP.TOOLS }, next);
+  };
+
+  const handleSubmitDescription = () => {
+    const text = input.trim().slice(0, MAX_PIPELINE_USER_REQUEST_CHARS);
+    if (!text || pipeline.isPending) return;
+    // 요청 버블이 원문을 보여주므로 입력창은 비운다 — chat 모드 하단 입력창은
+    // 재전송 창구가 아니다 (FR-08).
+    setInput('');
+    sendDescription(text);
+  };
+
+  /** 첫 요청 실패 후 재시도 — 입력창은 비워졌으므로 커밋된 요청으로 다시 보낸다. */
+  const handleResendDescription = () => {
+    if (!state.userRequest || pipeline.isPending) return;
+    sendDescription(state.userRequest);
   };
 
   const handleAnswers = (answers: PipelineAnswer[]) => {
@@ -209,7 +238,14 @@ const AgentCreateEntryPage = () => {
       ),
       ...answers,
     ];
-    const next = { ...state, answers: merged, answered: true };
+    const next = {
+      ...state,
+      answers: merged,
+      // 활성(마지막) 라운드를 잠근다 — 스테일 카드 가드 (F10).
+      rounds: state.rounds.map((r, i) =>
+        i === state.rounds.length - 1 ? { ...r, answered: true } : r,
+      ),
+    };
     setState(next);
     dispatch(
       {
@@ -289,29 +325,23 @@ const AgentCreateEntryPage = () => {
     if (step === 'tools') handleConfirmTools();
     else if (step === 'prompt') handleRegeneratePrompt();
     else if (step === 'intent') handleSkipQuestions();
-    else handleSubmitDescription();
+    else handleResendDescription();
   };
 
   const handleRestart = () => {
     pipeline.clearError();
     setState(EMPTY);
+    setInput('');
     setStep('description');
   };
 
-  // ── 렌더 ────────────────────────────────────────────────────────────
+  /** ③ [처음부터] — 되돌리기가 아니라 전체 초기화다(무상태 위저드). */
+  const handleRestartWithConfirm = () => {
+    if (!window.confirm('입력한 내용이 사라집니다. 그래도 진행할까요?')) return;
+    handleRestart();
+  };
 
-  if (pipeline.error?.kind === PIPELINE_ERROR.DISABLED) {
-    return (
-      <div className="h-full overflow-y-auto bg-zinc-50/60">
-        <div className="mx-auto flex min-h-full w-full max-w-[760px] flex-col justify-center gap-8 px-6 py-16">
-          <EntryHero />
-          <PipelineUnavailableCard
-            onManualCreate={() => goStudio({ kind: 'blank' })}
-          />
-        </div>
-      </div>
-    );
-  }
+  // ── 렌더 ────────────────────────────────────────────────────────────
 
   const toolNames = state.selectedIds.map(
     (id) => catalogTools?.find((t) => t.tool_id === id)?.name ?? id,
@@ -321,101 +351,134 @@ const AgentCreateEntryPage = () => {
   // 잡음이고, 첫 화면은 "한 문장 쓰세요"에 집중시키는 편이 낫다.
   const showProgress = pipeline.isPending || pipeline.steps.length > 0;
 
+  /** 킬스위치 off — 위저드 자체가 불가능하므로 본문을 안내로 대체한다. */
+  const unavailable = pipeline.error?.kind === PIPELINE_ERROR.DISABLED;
+
+  if (unavailable) {
+    return (
+      <WizardShell mode="centered">
+        <EntryHero />
+        <PipelineUnavailableCard
+          onManualCreate={() => goStudio({ kind: 'blank' })}
+        />
+      </WizardShell>
+    );
+  }
+
+  // 첫 화면 (FR-01/02) — 헤더바 없이 히어로 + 중앙 입력창 + 액션 카드.
+  if (mode === 'centered') {
+    return (
+      <WizardShell mode="centered">
+        <EntryHero />
+        <DescriptionComposer
+          value={input}
+          onChange={setInput}
+          onSubmit={handleSubmitDescription}
+          isPending={pipeline.isPending}
+        />
+        <EntryActionCards onManualCreate={() => goStudio({ kind: 'blank' })} />
+      </WizardShell>
+    );
+  }
+
+  // chat 모드 (FR-03~10) — 트랜스크립트 누적 + 하단 고정 입력창.
   return (
-    <div className="h-full overflow-y-auto bg-zinc-50/60">
-      <div className="mx-auto flex min-h-full w-full max-w-[760px] flex-col justify-center gap-8 px-6 py-16">
-          {step === 'description' && <EntryHero />}
-
-          {/*
-            입력창과 진행 상황을 한 덩어리로 묶는다 — 사용자가 보낸 문장 바로
-            아래에서 단계가 진행되는 것이 보여야 "지금 뭘 하고 있는지"가
-            시선 이동 없이 읽힌다. 전송 전에는 렌더하지 않는다(빈 5단계는 잡음).
-          */}
-          <div className="space-y-3">
-            {step === 'description' ? (
-              <DescriptionComposer
-                value={input}
-                onChange={setInput}
-                onSubmit={handleSubmitDescription}
-                isPending={pipeline.isPending}
-              />
-            ) : (
-              <p className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-[13px] leading-relaxed text-zinc-600">
-                <span className="mr-2 text-[11.5px] font-semibold uppercase tracking-widest text-violet-500">
-                  요청
-                </span>
-                {state.userRequest}
-              </p>
-            )}
-
-            {showProgress && (
-              <>
-                <WizardProgress
-                  steps={pipeline.steps}
-                  activeStage={pipeline.activeStage}
-                />
-                <p className="px-1 text-[11.5px] leading-relaxed text-zinc-400">
-                  마지막 두 단계는 스튜디오에서 [저장]을 누르면 완료됩니다.
-                </p>
-              </>
-            )}
-          </div>
-
-          {step === 'intent' && state.questions.length > 0 && (
-            <IntentStep
-              questions={state.questions}
-              round={state.round}
-              maxRounds={MAX_CLARIFY_ROUNDS}
-              isPending={pipeline.isPending}
-              answered={state.answered}
-              onSubmit={handleAnswers}
-              onSkip={handleSkipQuestions}
-            />
-          )}
-
-          {step === 'tools' && (
-            <ToolsStep
-              recommendedIds={state.recommendedIds}
-              selectedIds={state.selectedIds}
-              unknownIds={state.unknownIds}
-              isPending={pipeline.isPending}
-              onToggle={handleToggleTool}
-              onConfirm={handleConfirmTools}
-              onBack={handleRestart}
-            />
-          )}
-
-          {step === 'prompt' && (
-            <PromptStep
-              value={state.prompt}
-              clampReason={state.promptClampReason}
-              degraded={state.promptDegraded}
-              toolNames={toolNames}
-              isPending={pipeline.isPending}
-              onChange={(next) =>
-                setState((prev) => ({ ...prev, prompt: next }))
-              }
-              onRegenerate={handleRegeneratePrompt}
-              onSubmit={handleSendToStudio}
-              onBack={() => setStep('tools')}
-            />
-          )}
-
-          {pipeline.error && (
-            <WizardFailureCard
-              error={pipeline.error}
-              onRetry={handleRetry}
-              onManualCreate={() => goStudio({ kind: 'blank' })}
-            />
-          )}
-
-          {step === 'description' && (
-            <EntryActionCards
-              onManualCreate={() => goStudio({ kind: 'blank' })}
-            />
-          )}
+    <WizardShell
+      mode="chat"
+      scrollKey={[
+        step,
+        state.rounds.length,
+        pipeline.steps.length,
+        pipeline.error ? 'err' : '',
+        pipeline.isPending ? 'p' : '',
+      ].join(':')}
+      composer={
+        <DescriptionComposer
+          variant="chat"
+          value={input}
+          onChange={setInput}
+          onSubmit={handleSubmitDescription}
+          isPending={pipeline.isPending}
+        />
+      }
+    >
+      {/* 요청 버블 (FR-05) — 유저 메시지 스타일, 우측 정렬 */}
+      <div className="flex justify-end">
+        <div
+          className="max-w-[85%] rounded-2xl rounded-br-sm px-5 py-3.5 text-[15px] leading-[1.65] text-white"
+          style={{
+            background: 'linear-gradient(135deg, #2d2d2d 0%, #1a1a1a 100%)',
+          }}
+        >
+          <p className="whitespace-pre-wrap">{state.userRequest}</p>
+        </div>
       </div>
-    </div>
+
+      {showProgress && (
+        <div className="space-y-3">
+          <WizardProgress
+            steps={pipeline.steps}
+            activeStage={pipeline.activeStage}
+          />
+          <p className="px-1 text-[11.5px] leading-relaxed text-zinc-400">
+            마지막 두 단계는 스튜디오에서 [저장]을 누르면 완료됩니다.
+          </p>
+        </div>
+      )}
+
+      {/* 질문 라운드 이력 (FR-07) — 지난 라운드는 잠긴 채 남는다 */}
+      {state.rounds.map((r, i) => {
+        const isActive = i === state.rounds.length - 1 && !r.answered;
+        return (
+          <IntentStep
+            key={`intent-round-${r.round}`}
+            questions={r.questions}
+            round={r.round}
+            maxRounds={MAX_CLARIFY_ROUNDS}
+            isPending={pipeline.isPending}
+            answered={!isActive}
+            onSubmit={handleAnswers}
+            onSkip={handleSkipQuestions}
+          />
+        );
+      })}
+
+      {/* 도구 카드 — 프롬프트 단계에선 잠긴 이력으로 남는다 (FR-09) */}
+      {(step === 'tools' || step === 'prompt') && (
+        <ToolsStep
+          recommendedIds={state.recommendedIds}
+          selectedIds={state.selectedIds}
+          unknownIds={state.unknownIds}
+          isPending={pipeline.isPending}
+          locked={step === 'prompt'}
+          onToggle={handleToggleTool}
+          onConfirm={handleConfirmTools}
+          onRestart={handleRestartWithConfirm}
+        />
+      )}
+
+      {step === 'prompt' && (
+        <PromptStep
+          value={state.prompt}
+          clampReason={state.promptClampReason}
+          degraded={state.promptDegraded}
+          toolNames={toolNames}
+          isPending={pipeline.isPending}
+          onChange={(next) => setState((prev) => ({ ...prev, prompt: next }))}
+          onRegenerate={handleRegeneratePrompt}
+          onSubmit={handleSendToStudio}
+          onBack={() => setStep('tools')}
+        />
+      )}
+
+      {pipeline.error && (
+        <WizardFailureCard
+          error={pipeline.error}
+          onRetry={handleRetry}
+          onManualCreate={() => goStudio({ kind: 'blank' })}
+        />
+      )}
+    </WizardShell>
   );
 };
 

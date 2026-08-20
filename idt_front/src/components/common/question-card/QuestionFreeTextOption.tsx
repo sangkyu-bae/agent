@@ -32,7 +32,9 @@ const QuestionFreeTextOption = ({
 }: QuestionFreeTextOptionProps) => (
   <div>
     <label
-      className={`flex w-full items-center gap-3 rounded-xl border bg-white transition-colors ${
+      // relative 필수 — sr-only(absolute) 라디오의 클리핑 탈출 방지
+      // (QuestionOptionItem 의 상세 주석 참조).
+      className={`relative flex w-full items-center gap-3 rounded-xl border bg-white transition-colors ${
         compact ? 'px-3 py-2.5 text-[13px]' : 'px-4 py-3.5 text-[14px]'
       } ${
         selected

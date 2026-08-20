@@ -58,11 +58,15 @@ const IntentStep = ({
           options: q.options,
           allowFreeText: q.allow_free_text,
         }))}
+        // 잠긴 라운드(이력 카드)에는 진행 안내를 남기지 않는다 — "남은 라운드"
+        // 표기가 지난 카드에 남으면 거짓 정보가 된다 (wizard-chat-layout FR-07).
         header={
-          <p className="text-[12.5px] leading-relaxed text-zinc-500">
-            에이전트를 정확히 만들기 위해 몇 가지만 확인할게요.
-            {remaining > 0 && ` (남은 질문 라운드 ${remaining}회)`}
-          </p>
+          answered ? undefined : (
+            <p className="text-[12.5px] leading-relaxed text-zinc-500">
+              에이전트를 정확히 만들기 위해 몇 가지만 확인할게요.
+              {remaining > 0 && ` (남은 질문 라운드 ${remaining}회)`}
+            </p>
+          )
         }
         // F10 스테일 카드 가드 — 새 응답이 오기 전까지 잠근다. Flow 내부
         // `done` 과 이중으로 걸어야 이전 라운드 카드가 오표시되지 않는다.
