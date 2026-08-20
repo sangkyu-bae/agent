@@ -25,10 +25,58 @@ import { DOCUMENT_GENERATOR_TOOL_ID } from '@/types/documentGenerator';
 import { buildDocumentTemplateRequest } from '@/utils/documentTemplate';
 import { buildDocumentGenerationTypeRequest } from '@/utils/documentGenerator';
 import { composeDraftToForm } from '@/utils/composeDraftToForm';
+import { wizardResultToForm } from '@/utils/wizardResultToForm';
+import { agentPipelineService } from '@/services/agentPipelineService';
 import { useAgentDraftStore } from '@/store/agentDraftStore';
+import type {
+  AgentCreateIntent,
+  WizardResult,
+} from '@/store/agentDraftStore';
+import type { CatalogTool } from '@/types/toolCatalog';
+import type { LlmModel } from '@/types/llmModel';
 import { mapDetailToForm, RAG_CATALOG_TOOL_ID } from '@/utils/agentDetailMapping';
 
 type ViewMode = 'list' | 'create' | 'edit';
+
+/**
+ * 위저드 결과를 프롬프트 세션에 반영한다 — 저장 **성공 후** 부수 작업.
+ *
+ * Design Ref: agent-create-wizard §2.2 / FR-F13.
+ *
+ * 두 호출 모두 실패를 흡수한다: 이미 `agent_id` 라는 쓸 수 있는 결과가
+ * 존재하므로 백필 실패가 생성 성공을 뒤집으면 안 된다
+ * (degradation-vs-failure-boundary 위키의 판정 기준과 동일).
+ *
+ * @returns 사용자에게 알릴 경고 문구. 문제 없으면 빈 문자열.
+ */
+const linkPromptSession = async (
+  wizard: WizardResult,
+  agentId: string,
+): Promise<string> => {
+  if (!wizard.sessionId) return '';
+
+  const failures: string[] = [];
+  // 편집본만 새 버전으로 쌓는다 — 안 고쳤으면 LLM 원본이 이미 최신 버전이다.
+  if (wizard.promptEdited) {
+    try {
+      await agentPipelineService.appendPromptVersion(wizard.sessionId, {
+        assembled: wizard.systemPrompt,
+        tool_ids: wizard.toolIds,
+      });
+    } catch {
+      failures.push('수정한 프롬프트의 이력 저장');
+    }
+  }
+  try {
+    await agentPipelineService.bindPromptSession(wizard.sessionId, agentId);
+  } catch {
+    failures.push('프롬프트 이력 연결');
+  }
+
+  return failures.length === 0
+    ? ''
+    : ` 다만 ${failures.join('과 ')}에 실패했습니다. 에이전트 자체는 정상 저장되었습니다.`;
+};
 
 const VISIBILITY_STYLES = {
   private: 'bg-zinc-100 text-zinc-500',
@@ -59,6 +107,20 @@ const DEFAULT_FORM: AgentBuilderFormData = {
   excludedBuiltinMiddlewares: [],
   middlewares: [],
   maxIterations: MAX_ITERATIONS.DEFAULT,
+};
+
+/** 핸드오프 의도 → 초기 폼. 종류별 변환은 각각의 순수 함수가 담당한다. */
+const prefillFromIntent = (
+  intent: AgentCreateIntent,
+  deps: { catalogTools?: CatalogTool[]; models?: LlmModel[] },
+): AgentBuilderFormData => {
+  if (intent.kind === 'draft') {
+    return composeDraftToForm(intent.draft, DEFAULT_FORM, deps);
+  }
+  if (intent.kind === 'wizard') {
+    return wizardResultToForm(intent.result, DEFAULT_FORM, deps);
+  }
+  return DEFAULT_FORM;
 };
 
 const AgentBuilderPage = () => {
@@ -114,6 +176,8 @@ const AgentBuilderPage = () => {
   // G5: catalogTools·models가 settled된 뒤에만 소비한다. 로딩 중 변환하면
   //     도구 매핑·모델 역매핑이 조용히 실패해 빈 칩/원시 id가 남는다.
   const consumedIntentRef = useRef(false);
+  /** 위저드에서 넘어온 프롬프트 세션 정보 — 저장 성공 후 1회만 쓰고 비운다. */
+  const wizardRef = useRef<WizardResult | null>(null);
   useEffect(() => {
     if (consumedIntentRef.current) return;
     if (isToolsLoading || isModelsLoading) return;
@@ -122,17 +186,19 @@ const AgentBuilderPage = () => {
     const intent = useAgentDraftStore.getState().consumePendingIntent();
     if (!intent) return;
 
+    // agent-create-wizard §2.2 — 위저드는 프롬프트 세션을 남기고 온다.
+    // 저장 성공 직후 그 세션에 agent_id 를 백필해야 버전 이력이 연결된다.
+    // 폼 상태가 아니라 ref 에 두는 이유: 폼 필드가 아니고, 저장 콜백에서만
+    // 읽으며, 값이 바뀌어도 리렌더가 필요 없다.
+    wizardRef.current = intent.kind === 'wizard' ? intent.result : null;
+
     /* eslint-disable react-hooks/set-state-in-effect --
        라우트 간 핸드오프 소비는 mount 후 1회만 가능하고, ref 가드로 캐스케이드가 없다 */
     setEditingId(null);
     setPromptError(null);
     primedAgentRef.current = null;
     setFromEntry(true);
-    setForm(
-      intent.kind === 'draft'
-        ? composeDraftToForm(intent.draft, DEFAULT_FORM, { catalogTools, models })
-        : DEFAULT_FORM,
-    );
+    setForm(prefillFromIntent(intent, { catalogTools, models }));
     setView('create');
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [isToolsLoading, isModelsLoading, catalogTools, models]);
@@ -299,9 +365,18 @@ const AgentBuilderPage = () => {
                 : failed === 0
                   ? ` 스케줄 ${form.schedules.length}건이 함께 등록되었습니다.`
                   : ` 스케줄 ${form.schedules.length}건 중 ${failed}건 등록에 실패했습니다. 수정 화면의 스케줄 탭에서 다시 등록해주세요.`;
+
+            // agent-create-wizard FR-F13 — 위저드 경유 저장이면 프롬프트 세션에
+            // agent_id 를 백필한다. 실패해도 저장은 성공으로 유지한다.
+            const wizard = wizardRef.current;
+            wizardRef.current = null; // 1회성 — 재저장 시 중복 바인딩(409) 방지
+            const wizardSuffix = wizard
+              ? await linkPromptSession(wizard, response.agent_id)
+              : '';
+
             setSaveResult({
               type: 'success',
-              message: `에이전트가 성공적으로 등록되었습니다.${suffix}`,
+              message: `에이전트가 성공적으로 등록되었습니다.${suffix}${wizardSuffix}`,
             });
           },
           onError: (error) => {

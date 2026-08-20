@@ -5,6 +5,7 @@ import { beforeAll, afterEach, afterAll, describe, it, expect } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { server } from '@/__tests__/mocks/server';
 import { createWrapper } from '@/__tests__/mocks/wrapper';
+import { useAgentDraftStore } from '@/store/agentDraftStore';
 import AgentBuilderPage from './index';
 
 beforeAll(() => server.listen());
@@ -518,5 +519,195 @@ describe('AgentBuilderPage 설정 탭 (agent-settings-tab)', () => {
     await user.click(screen.getByRole('button', { name: '저장' }));
     await waitFor(() => expect(captured).not.toBeNull());
     expect(captured!.max_iterations).toBe(300);
+  });
+});
+
+// ── 위저드 핸드오프 (agent-create-wizard §2.2 / FR-F13) ─────────────────────
+
+describe('AgentBuilderPage 위저드 핸드오프', () => {
+  const WIZARD_RESULT = {
+    systemPrompt: '당신은 사내 문서를 찾아 답하는 에이전트입니다.',
+    promptEdited: false,
+    toolIds: ['internal:tavily_search', 'internal:wiki_read'],
+    suggestedName: '문서 Q&A 봇',
+    sessionId: 'ps1',
+    versionId: 'pv1',
+  };
+
+  const seedWizardIntent = (overrides: Partial<typeof WIZARD_RESULT> = {}) => {
+    useAgentDraftStore.getState().setPendingIntent({
+      kind: 'wizard',
+      result: { ...WIZARD_RESULT, ...overrides },
+    });
+  };
+
+  const stubCreate = () => {
+    const calls: { versions: unknown[]; binds: unknown[] } = {
+      versions: [],
+      binds: [],
+    };
+    server.use(
+      http.post('*/api/v1/agents', () =>
+        HttpResponse.json({
+          agent_id: 'a-w1',
+          name: '문서 Q&A 봇',
+          system_prompt: WIZARD_RESULT.systemPrompt,
+          tool_ids: ['tavily_search'],
+          workers: [],
+          flow_hint: '',
+          llm_model_id: 'model-1',
+          visibility: 'private',
+          visibility_clamped: false,
+          max_visibility: 'public',
+          department_id: null,
+          temperature: 0.7,
+          max_iterations: 25,
+          created_at: '2026-08-20T00:00:00Z',
+          has_sub_agents: false,
+        }),
+      ),
+      http.post('*/api/v1/prompt-composer/sessions/:id/versions', async ({ request }) => {
+        calls.versions.push(await request.json());
+        return HttpResponse.json(
+          { session_id: 'ps1', version_id: 'pv2', version_no: 2, source: 'human' },
+          { status: 201 },
+        );
+      }),
+      http.patch('*/api/v1/prompt-composer/sessions/:id', async ({ request }) => {
+        calls.binds.push(await request.json());
+        return HttpResponse.json({ session_id: 'ps1', agent_id: 'a-w1' });
+      }),
+    );
+    return calls;
+  };
+
+  afterEach(() => useAgentDraftStore.getState().clearPendingIntent());
+
+  it('위저드 결과를 폼에 프리필한다', async () => {
+    useBuilderHandlers();
+    seedWizardIntent();
+    renderPage();
+
+    await waitFor(() =>
+      expect(screen.getByPlaceholderText('새 에이전트')).toHaveValue('문서 Q&A 봇'),
+    );
+    expect(
+      screen.getByPlaceholderText('에이전트의 시스템 프롬프트/지침을 입력하세요...'),
+    ).toHaveValue(WIZARD_RESULT.systemPrompt);
+  });
+
+  it('빌트인 도구는 칩으로 넣지 않는다', async () => {
+    // internal:wiki_read 는 카탈로그상 빌트인이다 — 서버가 주입하므로 중복이다.
+    useBuilderHandlers();
+    seedWizardIntent();
+    renderPage();
+
+    await waitFor(() =>
+      expect(screen.getByPlaceholderText('새 에이전트')).toHaveValue('문서 Q&A 봇'),
+    );
+    expect(screen.getByText('Tavily 웹 검색')).toBeInTheDocument();
+  });
+
+  it('저장 성공 후 프롬프트 세션에 agent_id 를 바인딩한다', async () => {
+    useBuilderHandlers();
+    const calls = stubCreate();
+    seedWizardIntent();
+    renderPage();
+    const user = userEvent.setup();
+
+    await waitFor(() =>
+      expect(screen.getByPlaceholderText('새 에이전트')).toHaveValue('문서 Q&A 봇'),
+    );
+    await user.click(screen.getByRole('button', { name: /저장/ }));
+
+    await waitFor(() => expect(calls.binds).toHaveLength(1));
+    expect(calls.binds[0]).toEqual({ agent_id: 'a-w1' });
+  });
+
+  it('편집하지 않았으면 새 버전을 만들지 않는다', async () => {
+    // 안 고쳤으면 LLM 원본이 이미 최신 버전이다 — 같은 내용을 또 쌓지 않는다.
+    useBuilderHandlers();
+    const calls = stubCreate();
+    seedWizardIntent({ promptEdited: false });
+    renderPage();
+    const user = userEvent.setup();
+
+    await waitFor(() =>
+      expect(screen.getByPlaceholderText('새 에이전트')).toHaveValue('문서 Q&A 봇'),
+    );
+    await user.click(screen.getByRole('button', { name: /저장/ }));
+
+    await waitFor(() => expect(calls.binds).toHaveLength(1));
+    expect(calls.versions).toHaveLength(0);
+  });
+
+  it('편집했으면 human 버전을 먼저 쌓는다', async () => {
+    useBuilderHandlers();
+    const calls = stubCreate();
+    seedWizardIntent({
+      promptEdited: true,
+      systemPrompt: '사람이 고친 지침',
+    });
+    renderPage();
+    const user = userEvent.setup();
+
+    await waitFor(() =>
+      expect(screen.getByPlaceholderText('새 에이전트')).toHaveValue('문서 Q&A 봇'),
+    );
+    await user.click(screen.getByRole('button', { name: /저장/ }));
+
+    await waitFor(() => expect(calls.versions).toHaveLength(1));
+    expect(calls.versions[0]).toMatchObject({ assembled: '사람이 고친 지침' });
+  });
+
+  it('바인딩이 409여도 저장은 성공으로 유지한다', async () => {
+    // FR-F13 — 백필 실패가 생성 성공을 뒤집으면 안 된다.
+    useBuilderHandlers();
+    stubCreate();
+    server.use(
+      http.patch('*/api/v1/prompt-composer/sessions/:id', () =>
+        HttpResponse.json({ detail: 'conflict' }, { status: 409 }),
+      ),
+    );
+    seedWizardIntent();
+    renderPage();
+    const user = userEvent.setup();
+
+    await waitFor(() =>
+      expect(screen.getByPlaceholderText('새 에이전트')).toHaveValue('문서 Q&A 봇'),
+    );
+    await user.click(screen.getByRole('button', { name: /저장/ }));
+
+    expect(
+      await screen.findByText(/에이전트가 성공적으로 등록되었습니다/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/프롬프트 이력 연결에 실패/)).toBeInTheDocument();
+  });
+
+  it('세션이 없으면 부수 호출을 하지 않는다', async () => {
+    useBuilderHandlers();
+    const calls = stubCreate();
+    seedWizardIntent({ sessionId: null, versionId: null });
+    renderPage();
+    const user = userEvent.setup();
+
+    await waitFor(() =>
+      expect(screen.getByPlaceholderText('새 에이전트')).toHaveValue('문서 Q&A 봇'),
+    );
+    await user.click(screen.getByRole('button', { name: /저장/ }));
+
+    await screen.findByText(/에이전트가 성공적으로 등록되었습니다/);
+    expect(calls.binds).toHaveLength(0);
+    expect(calls.versions).toHaveLength(0);
+  });
+
+  it('blank 의도는 빈 폼으로 남는다 (회귀)', async () => {
+    useBuilderHandlers();
+    useAgentDraftStore.getState().setPendingIntent({ kind: 'blank' });
+    renderPage();
+
+    await waitFor(() =>
+      expect(screen.getByPlaceholderText('새 에이전트')).toHaveValue(''),
+    );
   });
 });
