@@ -25,7 +25,9 @@ from src.infrastructure.prompt_composer.models import (
 )
 from src.infrastructure.tool_catalog.models import ToolCatalogModel
 
-_SCHEMA_VERSION = 1
+# prompt-depth FR-12 — 7섹션 구조. V062 가 이 용도로 넣어둔 컬럼이라 마이그레이션이
+# 없다. 기존 `schema_version=1` 행은 그대로 읽힌다 (조회가 `assembled` 만 쓴다).
+_SCHEMA_VERSION = 2
 _BIND_OK = "ok"
 _BIND_CONFLICT = "conflict"
 
@@ -221,9 +223,27 @@ class PromptRepository:
 
 
 def _sections_to_json(sections: PromptSections) -> dict:
-    """VO → JSON. 역방향(`_sections_from_json`)은 조회 API 를 붙이는 module-3 몫."""
+    """VO → JSON (prompt-depth §3.3 — 7섹션).
+
+    역방향 파서는 여전히 없다: 조회 API 는 `assembled` 텍스트만 쓰므로
+    `schema_version` 1/2 분기가 필요 없다 (prompt-depth §1.3 R-07 실측).
+
+    키 순서·집합은 `PromptSections` / `_PromptDraft` 와 같아야 한다 (§3.4).
+    `context` 는 None 이어도 **키를 남긴다** — 집합 비교가 키로 이뤄지고,
+    "없음"을 키 부재로 표현하면 유실과 구분되지 않는다.
+    """
+    context = sections.context
     return {
         "purpose": sections.purpose,
+        "identity": sections.identity,
+        "context": (
+            {
+                "constraints": list(context.constraints),
+                "background": list(context.background),
+            }
+            if context is not None
+            else None
+        ),
         "roles": [
             {"title": r.title, "detail": r.detail} for r in sections.roles
         ],
@@ -237,6 +257,11 @@ def _sections_to_json(sections: PromptSections) -> dict:
             }
             for g in sections.tool_guides
         ],
+        "workflows": [
+            {"situation": w.situation, "steps": list(w.steps)}
+            for w in sections.workflows
+        ],
+        "style": sections.style,
         "principles": list(sections.principles),
     }
 

@@ -249,10 +249,12 @@ async def test_prompt_ready_clamps_prompt_to_storable_length() -> None:
     """화면에 보이는 프롬프트 = 실제 저장될 프롬프트 (D3).
 
     clamp 없이 원본을 보여주면 스튜디오 저장에서 422 가 나 사용자가 마지막
-    단계에서 실패한다 (CreateAgentRequest.system_prompt max_length=4000).
+    단계에서 실패한다 (CreateAgentRequest.system_prompt max_length 와 동일 상한).
     """
     use_case, _ = _pipeline(
-        compose=FakeComposeUC(_compose_result(assembled="가" * 5000))
+        compose=FakeComposeUC(
+            _compose_result(assembled="가" * (PipelinePolicy.PROMPT_MAX_CHARS + 1000))
+        )
     )
     outcome = _outcome(
         await _drain(

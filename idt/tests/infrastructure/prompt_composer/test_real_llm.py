@@ -14,6 +14,7 @@ import os
 import pytest
 from dotenv import load_dotenv
 from src.config import settings
+from src.domain.prompt_composer.policies import PromptAssemblyPolicy
 from src.domain.prompt_composer.schemas import ToolMeta
 from src.infrastructure.logging import StructuredLogger
 from src.infrastructure.prompt_composer.adapter import LLMPromptGeneratorAdapter
@@ -35,6 +36,20 @@ _METAS = (
     ),
 )
 _REQUEST = "사내 규정 문서를 찾아 근거와 함께 답하고 결과를 엑셀로 내보내는 봇"
+
+# prompt-depth FR-19 — 신규 2축이 프롬프트에 도달해 context/principles 의 근거가
+# 되는지를 실 모델에서 확인한다. 대역으로는 "블록이 실렸다"까지만 알 수 있다.
+_INTENT = {
+    "label": "agent_create",
+    "degraded": False,
+    "reason": "에이전트 생성 요청",
+    "filled_slots": {
+        "target_users": "여신 심사 실무자",
+        "tone": "격식체",
+        "constraints": "규정 원문에 없는 내용을 지어내지 않는다",
+        "decision_priority": "정확성 우선",
+    },
+}
 
 
 def _ensure_api_key() -> bool:
@@ -58,10 +73,11 @@ async def test_real_llm_generates_structured_sections():
         logger=StructuredLogger(name="prompt-composer-l3", level=40)
     )
     sections, degraded, reason, elapsed = await adapter.generate(
-        _REQUEST, _METAS, None, [], "l3-real-llm"
+        _REQUEST, _METAS, _INTENT, [], "l3-real-llm"
     )
 
     # degraded=True면 스키마 파싱이 깨진 것이다 — 폴백에 가려지지 않게 여기서 잡는다.
+    # prompt-depth R-01/SC-6: 7섹션 확장 후 strict 400 이 나면 여기서만 드러난다.
     assert degraded is False, f"실 LLM 생성 실패: reason={reason}"
     assert sections.purpose.strip()
     assert sections.roles, "역할이 하나도 생성되지 않았다 (Q1 — 자유 생성)"
@@ -70,5 +86,31 @@ async def test_real_llm_generates_structured_sections():
     assert {g.tool_id for g in sections.tool_guides} <= known, "후보 밖 도구 환각"
     assert elapsed > 0
 
-    print(f"\n[L3] elapsed={elapsed}ms roles={len(sections.roles)} "
-          f"guides={len(sections.tool_guides)} principles={len(sections.principles)}")
+    _report(sections, elapsed)
+
+
+def _report(sections, elapsed: int) -> None:
+    """prompt-depth §8.3 — 7섹션 충족률·지연·길이 실측 보고.
+
+    O-1(타임아웃 상향) / O-2(지침 조정) / R-03(토큰 비용) 판단의 유일한 근거다.
+    단언은 §8.3-2 의 6섹션에만 건다 — `context` 는 요청에 제약이 없으면 LLM 이
+    비우는 것이 정상이므로 실패로 칠 수 없다.
+    """
+    assembled = PromptAssemblyPolicy.assemble(sections)
+    filled = {
+        "purpose": bool(sections.purpose.strip()),
+        "identity": bool(sections.identity.strip()),
+        "context": sections.context is not None,
+        "roles": bool(sections.roles),
+        "tool_guides": bool(sections.tool_guides),
+        "workflows": bool(sections.workflows),
+        "style": bool(sections.style.strip()),
+        "principles": bool(sections.principles),
+    }
+    # 콘솔 인코딩이 cp949 인 환경이 있다 — 보고 출력에 비ASCII 기호를 쓰지 않는다.
+    print(f"\n[L3] elapsed={elapsed}ms assembled_chars={len(assembled)}")
+    print(f"[L3] filled={sum(filled.values())}/8 {filled}")
+    print(f"[L3] ---- assembled ----\n{assembled}\n[L3] --------------------")
+
+    for name in ("purpose", "identity", "roles", "workflows", "style", "principles"):
+        assert filled[name], f"'{name}' 섹션이 비었다 (Plan R-02 — 지침 조정 필요)"

@@ -101,7 +101,11 @@ class CreateAgentRequest(BaseModel):
     document_generation_type: DocumentGenerationTypeRequest | None = None
     # agent-instruction-required: 지침 필수. None/빈 값이면 생성 시 에러(자동생성 제거).
     # 자동 구성은 Fix 에이전트(agent_composer)가 초안을 프리필하는 방식으로만 제공.
-    system_prompt: str | None = Field(None, max_length=4000)
+    #
+    # prompt-depth FR-20 — 4000 → 8000. 7섹션 마크다운 프롬프트가 4000자를 넘어
+    # 저장 자체가 실패했다. DB 컬럼은 Text 라 마이그레이션이 없다.
+    # 상한 정합은 `tests/domain/agent_create_pipeline/test_spec.py` 가 강제한다.
+    system_prompt: str | None = Field(None, max_length=8000)
     # builtin-tools D5: 빌트인 도구 수동 opt-out (생성 폼 전용 — Fix 채팅 경로는
     # 이 필드를 만들 수 없어 빌트인이 항상 포함된다). 카탈로그/저장 형식 모두 수용.
     exclude_builtin_tool_ids: list[str] | None = None
@@ -129,7 +133,8 @@ class CreateAgentResponse(BaseModel):
 
 
 class UpdateAgentRequest(BaseModel):
-    system_prompt: str | None = Field(None, max_length=4000)
+    # prompt-depth FR-20 — CreateAgentRequest 와 같은 상한이어야 한다.
+    system_prompt: str | None = Field(None, max_length=8000)
     name: str | None = Field(None, max_length=200)
     visibility: str | None = Field(None, pattern="^(private|department|public)$")
     department_id: str | None = None

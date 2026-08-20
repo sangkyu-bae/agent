@@ -34,11 +34,13 @@ from src.interfaces.schemas.prompt_composer import (
     BindAgentRequest,
     ComposePromptRequest,
     ComposePromptResponse,
+    ContextOut,
     PromptSessionResponse,
     RoleOut,
     SectionsOut,
     ToolGuideOut,
     VersionSummaryOut,
+    WorkflowOut,
 )
 
 router = APIRouter(prefix="/api/v1/prompt-composer", tags=["prompt-composer"])
@@ -197,6 +199,8 @@ def _to_response(result: ComposeResult) -> ComposePromptResponse:
 def _to_sections_out(sections) -> SectionsOut:
     return SectionsOut(
         purpose=sections.purpose,
+        identity=sections.identity,
+        context=_to_context_out(sections.context),
         roles=[RoleOut(title=r.title, detail=r.detail) for r in sections.roles],
         tool_guides=[
             ToolGuideOut(
@@ -208,7 +212,22 @@ def _to_sections_out(sections) -> SectionsOut:
             )
             for g in sections.tool_guides
         ],
+        workflows=[
+            WorkflowOut(situation=w.situation, steps=list(w.steps))
+            for w in sections.workflows
+        ],
+        style=sections.style,
         principles=list(sections.principles),
+    )
+
+
+def _to_context_out(context) -> ContextOut | None:
+    """prompt-depth §4.2 — None 은 None 으로 남긴다 ("없음" ≠ "비어 있음")."""
+    if context is None:
+        return None
+    return ContextOut(
+        constraints=list(context.constraints),
+        background=list(context.background),
     )
 
 

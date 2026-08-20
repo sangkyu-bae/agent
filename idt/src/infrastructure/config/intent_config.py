@@ -23,7 +23,14 @@ class IntentConfig(BaseSettings):
     INTENT_ANALYZER_TIMEOUT_SEC: float = 10.0
     INTENT_ANALYZER_HISTORY_LIMIT: int = 6
     # Design §4.4 — 되묻기 상한. 라운드 상한이 곧 LLM 호출 상한이다.
-    INTENT_MAX_CLARIFICATION_ROUNDS: int = 2
+    #
+    # prompt-depth FR-17 — 2 → 3. 에이전트 생성 스펙의 축이 6개가 됐고 회당 질문
+    # 상한이 3이라(FR-18) 2라운드로는 물을 수 있는 축을 다 못 묻는다.
+    # 이 값이 단일 출처다: `api/main.py` 가 `slot_limits()` 를 어댑터와 파이프라인
+    # 양쪽에 주입하므로, 프롬프트의 "남은 라운드" 안내와 `clamp_round` 가 같은
+    # 값을 본다. domain 의 `SlotLimits` 기본값(2)은 config 미주입 시 폴백이며
+    # agent_composer `PlannerPolicy` 와 맞춰 둔 별개 값이라 건드리지 않는다.
+    INTENT_MAX_CLARIFICATION_ROUNDS: int = 3
     INTENT_MAX_QUESTIONS_PER_ROUND: int = 3
     INTENT_MAX_OPTIONS_PER_SLOT: int = 4
 

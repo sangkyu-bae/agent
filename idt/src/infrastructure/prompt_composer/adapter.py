@@ -25,10 +25,12 @@ from pydantic import BaseModel, Field
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.domain.prompt_composer.policies import PromptAssemblyPolicy
 from src.domain.prompt_composer.schemas import (
+    ContextSection,
     PromptSections,
     RoleSection,
     ToolGuide,
     ToolMeta,
+    WorkflowSection,
 )
 from src.infrastructure.config.prompt_composer_config import PromptComposerConfig
 from src.infrastructure.prompt_composer import prompts
@@ -56,16 +58,54 @@ class _GuideDraft(BaseModel):
     caution: str = Field(default="", description="주의사항")
 
 
+class _ContextDraft(BaseModel):
+    """prompt-depth §3.2 / FR-02."""
+
+    constraints: list[str] = Field(
+        default_factory=list,
+        description="반드시 지켜야 할 것과 하지 말아야 할 것",
+    )
+    background: list[str] = Field(
+        default_factory=list, description="이 에이전트가 알아야 할 배경·전제"
+    )
+
+
+class _WorkflowDraft(BaseModel):
+    """prompt-depth §3.2 / FR-03."""
+
+    situation: str = Field(description="이 절차가 적용되는 상황")
+    steps: list[str] = Field(
+        default_factory=list, description="순서대로 수행할 단계"
+    )
+
+
 class _PromptDraft(BaseModel):
-    """LLM 이 채우는 값만 담은 초안.
+    """LLM 이 채우는 값만 담은 초안 (prompt-depth §3.2 — 7섹션).
 
     시스템이 계산하는 degraded / dropped_tool_ids / unknown_tool_ids /
     elapsed_ms 는 여기 없다 (P2).
+
+    **strict 불변식** (FR-05 / Plan R-01): 이 스키마의 재귀 전개에 자유 키
+    dict(`dict[str, X]`)가 0건이어야 한다. 하나라도 있으면 OpenAI structured
+    outputs 가 매 호출 400 을 돌려 판정이 **항상** degraded 로 떨어지고, 폴백이
+    그 사실을 가린다 (intent 모듈에서 3개월 은폐된 실사례).
+    `tests/infrastructure/prompt_composer/test_adapter.py` 의 재귀 탐색 테스트가
+    이를 정적으로 차단한다.
+
+    필드 이름은 `PromptSections` 와 1:1 이다 — 매핑(`_to_sections`)이 기계적이고,
+    어긋나면 필드 집합 동등성 테스트가 잡는다 (§3.4).
     """
 
     purpose: str = Field(description="이 에이전트가 무엇을 하는지 1~2문장")
+    identity: str = Field(
+        default="",
+        description="어떤 성격·전문성을 가진 존재인지, 누구를 위해 일하는지",
+    )
+    context: _ContextDraft | None = None
     roles: list[_RoleDraft] = Field(default_factory=list)
     tool_guides: list[_GuideDraft] = Field(default_factory=list)
+    workflows: list[_WorkflowDraft] = Field(default_factory=list)
+    style: str = Field(default="", description="응답 말투·형식·구조")
     principles: list[str] = Field(
         default_factory=list, description="동작 원칙 (응답 언어·거절 조건 등)"
     )
@@ -172,7 +212,12 @@ class LLMPromptGeneratorAdapter:
     def _log_success(
         self, sections: PromptSections, request_id: str, elapsed: int
     ) -> None:
-        """프롬프트 본문은 남기지 않는다 — 사용자 입력이 섞여 PII 위험이 있다."""
+        """프롬프트 본문은 남기지 않는다 — 사용자 입력이 섞여 PII 위험이 있다.
+
+        prompt-depth §6.2 — 섹션별 카운트를 남긴다. 어떤 섹션이 상습적으로
+        비는지(R-02) 와 실제 생성 길이(R-03 토큰 비용)는 실측 없이 판단할 수 없다.
+        """
+        context = sections.context
         self._logger.info(
             "prompt composed",
             request_id=request_id,
@@ -181,6 +226,12 @@ class LLMPromptGeneratorAdapter:
             role_count=len(sections.roles),
             guide_count=len(sections.tool_guides),
             principle_count=len(sections.principles),
+            identity_len=len(sections.identity),
+            constraint_count=len(context.constraints) if context else 0,
+            background_count=len(context.background) if context else 0,
+            workflow_count=len(sections.workflows),
+            style_len=len(sections.style),
+            assembled_chars=len(PromptAssemblyPolicy.assemble(sections)),
         )
 
     def _degrade(
@@ -219,6 +270,8 @@ def _to_sections(
     by_id = {meta.tool_id: meta for meta in metas}
     sections = PromptSections(
         purpose=draft.purpose.strip(),
+        identity=draft.identity.strip(),
+        context=_to_context(draft.context),
         roles=tuple(
             RoleSection(title=r.title, detail=r.detail) for r in draft.roles
         ),
@@ -232,9 +285,27 @@ def _to_sections(
             )
             for g in draft.tool_guides
         ),
+        workflows=tuple(
+            WorkflowSection(
+                situation=w.situation.strip(),
+                steps=tuple(s for s in w.steps if s.strip()),
+            )
+            for w in draft.workflows
+        ),
+        style=draft.style.strip(),
         principles=tuple(p for p in draft.principles if p.strip()),
     )
     return PromptAssemblyPolicy.clamp_sections(sections)
+
+
+def _to_context(draft: _ContextDraft | None) -> ContextSection | None:
+    """LLM 이 생략한 `context` 는 None 으로 남긴다 — "없음"과 "비었음"을 구분한다."""
+    if draft is None:
+        return None
+    return ContextSection(
+        constraints=tuple(c for c in draft.constraints if c.strip()),
+        background=tuple(b for b in draft.background if b.strip()),
+    )
 
 
 def _display_name(tool_id: str, by_id: dict[str, ToolMeta]) -> str:

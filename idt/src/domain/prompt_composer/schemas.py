@@ -60,15 +60,50 @@ class ToolGuide:
 
 
 @dataclass(frozen=True)
+class ContextSection:
+    """prompt-depth Design Ref: §3.1 / FR-02 — 제약과 배경.
+
+    `constraints` 는 intent 의 `constraints` 축과 이름이 같지만 같은 값이 아니다.
+    LLM 이 목적·도구로부터 도출한 제약도 함께 들어온다.
+    """
+
+    constraints: tuple[str, ...] = ()
+    background: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class WorkflowSection:
+    """prompt-depth Design Ref: §3.1 / FR-03 — 상황 1건에 대한 처리 절차.
+
+    구조를 두는 이유: 조립이 `### {situation}` + 번호 목록으로 실제 소비한다.
+    평문이면 "일반 요청일 때 / 모호할 때"의 경계가 사라진다 (Design §2.0 Option C).
+    """
+
+    situation: str
+    steps: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class PromptSections:
-    """LLM 이 생성하는 4개 섹션.
+    """LLM 이 생성하는 7개 섹션 (prompt-depth Design Ref: §3.1).
 
     Design §2.4 P2 — 계산 필드(degraded 등)를 두지 않는다.
+
+    **필드 순서 = 조립 순서**다 (`PromptAssemblyPolicy.assemble`). 읽는 사람이
+    VO 만 보고 출력 순서를 알 수 있게 유지한다.
+
+    신규 4필드는 전부 기본값을 가진다 — 기존 생성자 호출부가 깨지지 않는다.
+    `context` 가 `| None` 인 이유: 빈 `ContextSection()` 과 "없음"을 구분해야
+    폴백·생략 규칙이 명확해진다.
     """
 
     purpose: str
+    identity: str = ""
+    context: ContextSection | None = None
     roles: tuple[RoleSection, ...] = ()
     tool_guides: tuple[ToolGuide, ...] = ()
+    workflows: tuple[WorkflowSection, ...] = ()
+    style: str = ""
     principles: tuple[str, ...] = ()
 
 

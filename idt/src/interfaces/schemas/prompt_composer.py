@@ -19,7 +19,9 @@ MAX_HISTORY_TURNS = 20
 # agent-create-wizard Design Ref: §4.5 — CreateAgentRequest.system_prompt 및
 # PipelinePolicy.PROMPT_MAX_CHARS 와 **같은 상한**이다. 여기서 더 받아주면
 # 저장 단계에서 422 가 나 사용자가 마지막에 실패한다.
-MAX_ASSEMBLED_CHARS = 4000
+#
+# prompt-depth FR-22 — 4000 → 8000. 프론트의 `MAX_ASSEMBLED_CHARS` 도 같은 값이다.
+MAX_ASSEMBLED_CHARS = 8000
 
 
 class HistoryTurn(BaseModel):
@@ -61,10 +63,31 @@ class ToolGuideOut(BaseModel):
     caution: str
 
 
+class ContextOut(BaseModel):
+    constraints: list[str] = Field(default_factory=list)
+    background: list[str] = Field(default_factory=list)
+
+
+class WorkflowOut(BaseModel):
+    situation: str
+    steps: list[str] = Field(default_factory=list)
+
+
 class SectionsOut(BaseModel):
+    """prompt-depth §4.2 — 7섹션. 신규 4필드는 전부 기본값을 가진다(additive).
+
+    구형 소비자는 모르는 필드를 무시하면 되고, 신규 필드를 채우지 않는 생산자도
+    응답을 만들 수 있다. 필드 집합은 `PromptSections` / `_PromptDraft` /
+    `_sections_to_json` 과 동일해야 한다 (§3.4 — 테스트가 강제).
+    """
+
     purpose: str
+    identity: str = ""
+    context: ContextOut | None = None
     roles: list[RoleOut]
     tool_guides: list[ToolGuideOut]
+    workflows: list[WorkflowOut] = Field(default_factory=list)
+    style: str = ""
     principles: list[str]
 
 

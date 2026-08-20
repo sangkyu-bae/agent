@@ -16,6 +16,7 @@ from src.application.agent_create_pipeline.use_case import (
 )
 from src.application.prompt_composer.compose_prompt_use_case import ComposeResult
 from src.domain.agent_create_pipeline.interfaces import ToolCandidateReaderPort
+from src.domain.agent_create_pipeline.policies import PipelinePolicy
 from src.domain.agent_create_pipeline.stages import StageStatus
 from src.domain.intent.schemas import IntentResult, SlotAnswer, SlotQuestion
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
@@ -322,13 +323,15 @@ async def test_round_is_reclamped_before_intent_call() -> None:
 
 
 async def test_oversized_prompt_is_clamped_for_create() -> None:
-    compose = FakeComposeUC(_compose_result(assembled="a" * 4500))
+    compose = FakeComposeUC(
+        _compose_result(assembled="a" * (PipelinePolicy.PROMPT_MAX_CHARS + 500))
+    )
     use_case, fakes = _pipeline(compose=compose)
 
     events = await _drain(use_case)
 
     request = fakes["create"].calls[0]
-    assert len(request.system_prompt) == 4000
+    assert len(request.system_prompt) == PipelinePolicy.PROMPT_MAX_CHARS
     outcome = _outcome(events)
     assert outcome.steps[3].status is StageStatus.OK
     assert "절단" in (outcome.steps[3].reason or "")

@@ -6,6 +6,7 @@
 
 SQLite 는 MySQL 의 ON DELETE CASCADE 를 기본 비활성으로 두므로 PRAGMA 로 켠다.
 """
+from dataclasses import replace
 from datetime import UTC, datetime
 
 import pytest
@@ -16,9 +17,11 @@ from src.domain.prompt_composer.schemas import (
     PROMPT_SOURCE_HUMAN,
     PROMPT_SOURCE_LLM,
     ComposedPrompt,
+    ContextSection,
     PromptSections,
     RoleSection,
     ToolGuide,
+    WorkflowSection,
 )
 from src.infrastructure.mcp_registry.models import MCPServerModel
 from src.infrastructure.persistence.models.base import Base
@@ -142,10 +145,8 @@ def _placeholder_for(column):
     return "x"
 
 
-def _prompt(
-    assembled: str = "조립된 프롬프트", degraded: bool = False
-) -> ComposedPrompt:
-    sections = PromptSections(
+def _base_sections() -> PromptSections:
+    return PromptSections(
         purpose="목적",
         roles=(RoleSection(title="검색", detail="찾는다"),),
         tool_guides=(
@@ -153,8 +154,30 @@ def _prompt(
         ),
         principles=("한국어로 답한다",),
     )
+
+
+def _full_sections() -> PromptSections:
+    """prompt-depth — 신규 3필드까지 채운 섹션."""
+    return replace(
+        _base_sections(),
+        identity="규정 전문가입니다.",
+        context=ContextSection(
+            constraints=("추측하지 않는다",), background=("2026 개정판 기준",)
+        ),
+        workflows=(
+            WorkflowSection(situation="일반 요청", steps=("찾는다", "답한다")),
+        ),
+        style="격식체로 답한다.",
+    )
+
+
+def _prompt(
+    assembled: str = "조립된 프롬프트",
+    degraded: bool = False,
+    sections: PromptSections | None = None,
+) -> ComposedPrompt:
     return ComposedPrompt(
-        sections=sections,
+        sections=sections or _base_sections(),
         assembled=assembled,
         degraded=degraded,
         reason="timeout" if degraded else None,
@@ -290,7 +313,38 @@ async def test_append_version_persists_sections_as_json(session):
     assert row.sections["purpose"] == "목적"
     assert row.sections["tool_guides"][0]["tool_id"] == "t1"
     assert row.tool_ids == ["t1"]
-    assert row.schema_version == 1
+    # prompt-depth FR-12 — 7섹션 구조는 schema_version 2 다.
+    assert row.schema_version == 2
+
+
+async def test_append_version_persists_new_sections(session):
+    """prompt-depth §3.3 — 신규 섹션이 직렬화에서 빠지면 조용히 유실된다."""
+    repo = PromptRepository(session)
+    sid = await repo.create_session(_USER, "요청", None)
+    version_id, _ = await repo.append_version(
+        sid, _prompt(sections=_full_sections()), None, ("t1",)
+    )
+    row = await session.scalar(
+        select(PromptVersionModel).where(PromptVersionModel.id == version_id)
+    )
+    assert row.sections["identity"] == "규정 전문가입니다."
+    assert row.sections["context"]["constraints"] == ["추측하지 않는다"]
+    assert row.sections["context"]["background"] == ["2026 개정판 기준"]
+    assert row.sections["workflows"][0]["situation"] == "일반 요청"
+    assert row.sections["workflows"][0]["steps"] == ["찾는다", "답한다"]
+    assert row.sections["style"] == "격식체로 답한다."
+
+
+async def test_append_version_serializes_absent_context_as_null(session):
+    """`context` 키 자체는 항상 존재한다 — 필드 집합 비교가 키로 이뤄지므로."""
+    repo = PromptRepository(session)
+    sid = await repo.create_session(_USER, "요청", None)
+    version_id, _ = await repo.append_version(sid, _prompt(), None, ("t1",))
+    row = await session.scalar(
+        select(PromptVersionModel).where(PromptVersionModel.id == version_id)
+    )
+    assert "context" in row.sections
+    assert row.sections["context"] is None
 
 
 async def test_append_version_records_degraded_fields(session):

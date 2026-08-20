@@ -37,6 +37,76 @@ def test_degraded_incomplete_proceeds_without_asking() -> None:
     assert PipelinePolicy.decide_after_intent(result) == "proceed"
 
 
+# --- prompt-depth Act-1 / G-01: optional 축 되묻기 -------------------------
+#
+# 문제(Analysis G-01): required 는 purpose 하나뿐이라 round 1 에서 purpose 가
+# 채워지는 순간 `complete=True` 가 되어 되묻기가 끝났다. 그 결과 신규 2축
+# (constraints/decision_priority)은 **한 번도 물어지지 않았고**, 라운드 상한을
+# 3으로 올린 FR-17 도 무력했다 (round 2 가 발생할 수 없으므로).
+#
+# 실측(Analysis §3 G-01 probe):
+#   round 0 상세 요청  → complete=True, questions=[data_sources, tone, constraints]
+#   round 1 purpose 답 → complete=True, questions=[tone, constraints, decision_priority]
+#
+# 두 상황 모두 complete + questions 다. 구분 기준은 **이미 물어본 적이 있는가**:
+#   · round 0 은 아직 아무것도 안 물었다 → 사용자의 한 문장을 존중해 진행 (SC-4)
+#   · round ≥ 1 은 이미 대화를 시작했다 → 남은 선언 축을 마저 묻는다 (SC-3)
+
+
+def test_complete_at_round_zero_proceeds_without_asking() -> None:
+    """SC-4 — 상세히 쓴 1문장은 되묻기 없이 도구 단계로 간다.
+
+    round 0 에서도 optional 축 질문은 생성된다(실측). 여기서 ask 로 돌면
+    "상세히 써도 심문당한다"가 되어 단일 엔드포인트의 가치가 사라진다.
+    """
+    result = IntentResult(complete=True, questions=[_question()])
+    assert (
+        PipelinePolicy.decide_after_intent(result, round_=0, max_rounds=3)
+        == "proceed"
+    )
+
+
+def test_complete_after_first_round_asks_remaining_optional_axes() -> None:
+    """SC-3 — 이미 되묻기를 시작했다면 남은 축을 마저 묻는다."""
+    result = IntentResult(complete=True, questions=[_question()])
+    assert (
+        PipelinePolicy.decide_after_intent(result, round_=1, max_rounds=3) == "ask"
+    )
+
+
+def test_complete_at_round_cap_proceeds() -> None:
+    """라운드 상한에 닿으면 더 묻지 않는다 (무한 되묻기 차단)."""
+    result = IntentResult(complete=True, questions=[_question()])
+    assert (
+        PipelinePolicy.decide_after_intent(result, round_=3, max_rounds=3)
+        == "proceed"
+    )
+
+
+def test_complete_without_questions_proceeds_at_any_round() -> None:
+    """물을 것이 없으면 라운드가 남아도 진행한다 — 빈 왕복은 이탈만 만든다."""
+    result = IntentResult(complete=True, questions=[])
+    assert (
+        PipelinePolicy.decide_after_intent(result, round_=1, max_rounds=3)
+        == "proceed"
+    )
+
+
+def test_degraded_proceeds_even_with_rounds_left() -> None:
+    """degraded 는 여전히 무조건 진행 — 오염된 판정으로 되묻지 않는다."""
+    result = IntentResult(complete=True, degraded=True, questions=[_question()])
+    assert (
+        PipelinePolicy.decide_after_intent(result, round_=1, max_rounds=3)
+        == "proceed"
+    )
+
+
+def test_decide_after_intent_defaults_preserve_legacy_behavior() -> None:
+    """round/max_rounds 미지정 호출은 기존 의미(complete → proceed)를 유지한다."""
+    result = IntentResult(complete=True, questions=[_question()])
+    assert PipelinePolicy.decide_after_intent(result) == "proceed"
+
+
 def test_incomplete_without_questions_proceeds() -> None:
     """물을 것이 없는 미충족은 진행 — 빈 되묻기 왕복은 무한 루프다."""
     result = IntentResult(complete=False, questions=[])
@@ -126,9 +196,10 @@ def test_prompt_at_or_below_limit_is_untouched() -> None:
 
 
 def test_prompt_over_limit_is_truncated_with_reason() -> None:
-    clamped, reason = PipelinePolicy.clamp_prompt("a" * 4001)
-    assert len(clamped) == 4000
-    assert reason is not None and "4001" in reason
+    over = PipelinePolicy.PROMPT_MAX_CHARS + 1
+    clamped, reason = PipelinePolicy.clamp_prompt("a" * over)
+    assert len(clamped) == PipelinePolicy.PROMPT_MAX_CHARS
+    assert reason is not None and str(over) in reason
 
 
 # --- finalize_steps ---------------------------------------------------------
@@ -295,6 +366,40 @@ def test_reuse_intent_accepts_valid_echo() -> None:
     reused = PipelinePolicy.reuse_intent(echo, _spec())
     assert reused is not None
     assert reused.filled_slots == {"purpose": "문서 Q&A", "tone": "격식체"}
+
+
+def test_purpose_alone_completes_the_six_axis_spec() -> None:
+    """prompt-depth SC-4 — 신규 2축이 optional 이므로 왕복을 강요하지 않는다.
+
+    축이 6개가 됐어도 required 는 purpose 하나뿐이다. 이 성질이 깨지면
+    "상세히 쓴 1문장"이 되묻기 없이 도구 단계로 넘어가지 못한다.
+    """
+    echo = IntentResult(filled_slots={"purpose": "사내 규정 문서 Q&A 봇"})
+    reused = PipelinePolicy.reuse_intent(echo, _spec())
+    assert reused is not None
+    assert reused.complete is True
+    assert set(reused.missing_slots) == {
+        "target_users",
+        "data_sources",
+        "tone",
+        "constraints",
+        "decision_priority",
+    }
+
+
+def test_reuse_intent_keeps_new_axes_from_echo() -> None:
+    """신규 2축이 스펙 화이트리스트에 들어야 에코백에서 살아남는다 (§6.2)."""
+    echo = IntentResult(
+        filled_slots={
+            "purpose": "문서 Q&A",
+            "constraints": "추측 금지",
+            "decision_priority": "정확성 우선",
+        }
+    )
+    reused = PipelinePolicy.reuse_intent(echo, _spec())
+    assert reused is not None
+    assert reused.filled_slots["constraints"] == "추측 금지"
+    assert reused.filled_slots["decision_priority"] == "정확성 우선"
 
 
 def test_reuse_intent_returns_none_for_missing_echo() -> None:

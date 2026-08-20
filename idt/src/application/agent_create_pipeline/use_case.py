@@ -148,7 +148,13 @@ class AgentCreatePipelineUseCase:
         assert ctx.intent is not None  # _run_intent 가 항상 채운다
         # 되묻기가 정지 지점보다 우선한다 — 물을 것이 남았는데 도구를
         # 추천하면 근거 없는 추천이 된다.
-        if PipelinePolicy.decide_after_intent(ctx.intent) == "ask":
+        # prompt-depth G-01 — round/max_rounds 를 넘겨야 "required 는 찼지만
+        # optional 축이 남은" 상태에서 한 번 더 물을 수 있다. 상한은 IntentConfig
+        # 단일 출처(FR-17)를 그대로 쓴다.
+        decision = PipelinePolicy.decide_after_intent(
+            ctx.intent, round_=ctx.round, max_rounds=self._limits.max_rounds
+        )
+        if decision == "ask":
             yield self._need_input_outcome(ctx)
             return
         # 실행 단계 목록은 domain Policy 가 계산한다 — 분기가 흐름 코드에

@@ -153,7 +153,8 @@ async def test_compose_assembles_prompt_string():
     uc = _use_case(reader=_FakeReader(metas=(_meta("t1"),)))
     result = await uc.compose(user_id=_USER, user_request="요청", request_id="r1")
     assert result.prompt.assembled.startswith("목적입니다.")
-    assert "[도구 지침]" in result.prompt.assembled
+    # prompt-depth §4.3 — 조립 표기가 대괄호에서 마크다운 헤딩으로 바뀌었다.
+    assert "## Tool Guidelines" in result.prompt.assembled
 
 
 async def test_compose_passes_tool_ids_to_reader():

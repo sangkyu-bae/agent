@@ -27,11 +27,17 @@ from src.application.prompt_composer.errors import (
 from src.domain.auth.entities import User, UserRole, UserStatus
 from src.domain.prompt_composer.schemas import (
     ComposedPrompt,
+    ContextSection,
     PromptSections,
     RoleSection,
     ToolGuide,
+    WorkflowSection,
 )
 from src.interfaces.dependencies.auth import get_current_user
+from src.interfaces.schemas.prompt_composer import (
+    MAX_ASSEMBLED_CHARS,
+    SectionsOut,
+)
 
 
 def _user(uid: int = 7) -> User:
@@ -58,11 +64,21 @@ def _prompt(degraded: bool = False, reason: str | None = None) -> ComposedPrompt
             ),
         ),
         principles=("한국어로 답한다",),
+        # prompt-depth §4.2 — 신규 3섹션이 응답에 실리는지 확인하기 위한 재료.
+        identity="규정 전문가입니다.",
+        context=ContextSection(
+            constraints=("추측하지 않는다",), background=("2026 개정판 기준",)
+        ),
+        workflows=(
+            WorkflowSection(situation="일반 요청", steps=("찾는다", "답한다")),
+        ),
+        style="격식체로 답한다.",
     )
     return ComposedPrompt(
         sections=sections,
         assembled=(
-            "사내 문서를 검색해 답하는 에이전트입니다.\n\n[역할]\n- 검색: 규정을 찾는다"
+            "사내 문서를 검색해 답하는 에이전트입니다.\n\n"
+            "## Core Responsibilities\n- 검색: 규정을 찾는다"
         ),
         degraded=degraded,
         reason=reason,
@@ -171,6 +187,29 @@ def test_compose_returns_200_with_sections_and_assembled():
     assert data["version_no"] == 1
     assert data["sections"]["purpose"].startswith("사내 문서를")
     assert data["assembled"] != ""
+
+
+def test_compose_response_carries_every_new_section():
+    """prompt-depth §4.2 — 응답만 신규 섹션을 빠뜨리면 화면이 알 방법이 없다."""
+    client = _client(StubUseCase())
+    sections = client.post(
+        "/api/v1/prompt-composer/compose", json=_body()
+    ).json()["sections"]
+    assert sections["identity"] == "규정 전문가입니다."
+    assert sections["context"]["constraints"] == ["추측하지 않는다"]
+    assert sections["context"]["background"] == ["2026 개정판 기준"]
+    assert sections["workflows"][0]["situation"] == "일반 요청"
+    assert sections["workflows"][0]["steps"] == ["찾는다", "답한다"]
+    assert sections["style"] == "격식체로 답한다."
+
+
+def test_sections_out_is_additive_for_old_producers():
+    """신규 필드는 전부 기본값 — 구형 4섹션만 채워도 응답이 성립한다."""
+    out = SectionsOut(purpose="목적", roles=[], tool_guides=[], principles=[])
+    assert out.identity == ""
+    assert out.context is None
+    assert out.workflows == []
+    assert out.style == ""
 
 
 def test_compose_exposes_observability_fields():
@@ -428,7 +467,9 @@ def test_append_human_version_storage_failure_propagates_500():
         client.post(_versions_url(), json={"assembled": "본문"})
 
 
-@pytest.mark.parametrize("assembled", ["", "x" * 4001])
+@pytest.mark.parametrize(
+    "assembled", ["", "x" * (MAX_ASSEMBLED_CHARS + 1)], ids=["empty", "over-limit"]
+)
 def test_append_human_version_invalid_assembled_returns_422(assembled):
     client = _client(StubUseCase())
     res = client.post(_versions_url(), json={"assembled": assembled})
@@ -436,10 +477,24 @@ def test_append_human_version_invalid_assembled_returns_422(assembled):
 
 
 def test_append_human_version_at_length_limit_is_accepted():
-    """상한 4000자는 CreateAgentRequest.system_prompt 와 동일해야 한다."""
+    """상한은 CreateAgentRequest.system_prompt 와 동일해야 한다.
+
+    prompt-depth FR-22 — 4000 → 8000. 여기가 더 받아주면 저장 단계에서 422 가
+    나 사용자가 마지막에 실패하고, 덜 받아주면 생성된 프롬프트를 저장할 수 없다.
+    """
     client = _client(StubUseCase())
-    res = client.post(_versions_url(), json={"assembled": "x" * 4000})
+    res = client.post(_versions_url(), json={"assembled": "x" * MAX_ASSEMBLED_CHARS})
     assert res.status_code == 201
+    assert MAX_ASSEMBLED_CHARS == 8000
+
+
+def test_append_human_version_one_over_limit_is_rejected():
+    """8000/8001 경계 (Plan R-08)."""
+    client = _client(StubUseCase())
+    res = client.post(
+        _versions_url(), json={"assembled": "x" * (MAX_ASSEMBLED_CHARS + 1)}
+    )
+    assert res.status_code == 422
 
 
 def test_append_human_version_too_many_tool_ids_returns_422():

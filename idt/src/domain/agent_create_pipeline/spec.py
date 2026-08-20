@@ -41,5 +41,22 @@ def build_agent_create_spec() -> IntentSpec:
                 description="응답 말투와 형식",
                 options=["격식체", "간결한 요약", "상세한 설명"],
             ),
+            # prompt-depth §3.5 — 신규 2축. "LLM 이 목적만 알면 추론할 수 있는
+            # 것"은 묻지 않는다(책임·절차·예시). 반대로 아래 둘은 사용자만 알며,
+            # LLM 이 추측하면 위험한 축이라 프롬프트의 context/principles 섹션의
+            # 근거가 된다 (FR-19).
+            #
+            # 둘 다 optional 이다 (FR-16): required 로 올리면 "간단한 봇 하나"에도
+            # 되묻기를 강요해 단일 엔드포인트의 가치가 줄어든다.
+            SlotSpec(
+                key="constraints",
+                description="반드시 지켜야 할 규칙이나 하지 말아야 할 것",
+                options=["출처 명시 필수", "추측 금지", "개인정보 미출력"],
+            ),
+            SlotSpec(
+                key="decision_priority",
+                description="판단이 충돌할 때 무엇을 우선할지",
+                options=["정확성 우선", "속도 우선", "안전성 우선"],
+            ),
         ],
     )
