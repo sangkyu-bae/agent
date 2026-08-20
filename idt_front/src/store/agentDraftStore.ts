@@ -5,9 +5,28 @@ import type { ComposeAgentDraftResponse } from '@/types/agentComposer';
 // 서로 다른 라우트에 있어 폼 상태를 직접 넘길 수 없다. 이 스토어가 그 경계를 잇되,
 // 값의 수명은 "적재 → 1회 소비 → 소멸"로 한정한다.
 
+/**
+ * 위저드가 확정한 결과 (agent-create-wizard §2.2).
+ *
+ * `session_id`/`version_id` 를 함께 넘기는 이유: 스튜디오가 저장에 성공한 뒤
+ * 프롬프트 세션에 `agent_id` 를 백필해야 버전 이력이 에이전트에 연결된다.
+ * 새로고침하면 유실되지만 그건 정의된 동작이다 — 바인딩 실패가 저장을
+ * 뒤집지 않으므로 고아 세션이 남을 뿐이다 (Design A-7).
+ */
+export interface WizardResult {
+  systemPrompt: string;
+  /** 사용자가 프롬프트를 편집했는지 — 편집본만 새 버전으로 저장한다. */
+  promptEdited: boolean;
+  toolIds: string[];
+  suggestedName: string;
+  sessionId: string | null;
+  versionId: string | null;
+}
+
 /** 진입 화면이 스튜디오에 넘기는 1회성 의도. */
 export type AgentCreateIntent =
   | { kind: 'draft'; draft: ComposeAgentDraftResponse }
+  | { kind: 'wizard'; result: WizardResult }
   | { kind: 'blank' };
 
 interface AgentDraftState {

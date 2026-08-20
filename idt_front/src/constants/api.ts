@@ -204,6 +204,16 @@ export const API_ENDPOINTS = {
   // fix-agent-composer: 자연어 → 에이전트 초안 조합 (무저장)
   AGENT_COMPOSE: '/api/v1/agents/compose',
 
+  // agent-create-wizard: 의도→도구→프롬프트 파이프라인 (정지 지점 포함)
+  // ⚠️ 서버에서 AGENT_PIPELINE_ENABLED 가 꺼져 있으면 404 다 (킬스위치).
+  AGENT_PIPELINE: '/api/v1/agents/pipeline',
+  AGENT_PIPELINE_STREAM: '/api/v1/agents/pipeline/stream',
+  // 프롬프트 세션 — 사람 편집본 버전 저장 / 에이전트 바인딩
+  PROMPT_SESSION_VERSIONS: (sessionId: string) =>
+    `/api/v1/prompt-composer/sessions/${sessionId}/versions`,
+  PROMPT_SESSION_BIND: (sessionId: string) =>
+    `/api/v1/prompt-composer/sessions/${sessionId}`,
+
   // Document Extractor (document-template-extractor)
   DOCUMENT_EXTRACTOR_EXTRACT: '/api/v1/document-extractor/extract',
   DOCUMENT_EXTRACTOR_REFINE: '/api/v1/document-extractor/refine',
