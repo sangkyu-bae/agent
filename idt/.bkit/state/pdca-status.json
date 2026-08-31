@@ -1,6 +1,6 @@
 {
   "version": "3.0",
-  "lastUpdated": "2026-08-20T16:40:00.000Z",
+  "lastUpdated": "2026-08-31T09:00:02.000Z",
   "activeFeatures": [
     "websocket-common-module",
     "agent-chat-multiturn",
@@ -173,7 +173,9 @@
     "JobsPage",
     "background-jobs",
     "agent-create-entry",
-    "intent-slot-elicitation"
+    "intent-slot-elicitation",
+    "pptx-font-fidelity",
+    "excel-generator-node"
   ],
   "primaryFeature": null,
   "archivedFeatures": {
@@ -552,6 +554,51 @@
       "startedAt": "2026-08-20T13:10:00.000Z",
       "archivedAt": "2026-08-20T16:40:00.000Z",
       "archivedTo": "docs/archive/2026-08/wizard-chat-layout/"
+    },
+    "multimodal-extractor": {
+      "archivedAt": "2026-08-21T17:00:00.000Z",
+      "archivedTo": "docs/archive/2026-08/multimodal-extractor/",
+      "matchRate": 96
+    },
+    "golden-sample-blueprint": {
+      "phase": "archived",
+      "matchRate": 98,
+      "iterationCount": 1,
+      "qaStatus": "SKIP",
+      "startedAt": "2026-08-22T06:58:51.060459Z",
+      "archivedAt": "2026-08-22T10:21:47.180428Z",
+      "archivedTo": "docs/archive/2026-08/golden-sample-blueprint/"
+    },
+    "deep-search-pipeline": {
+      "phase": "archived",
+      "matchRate": 97,
+      "iterationCount": 1,
+      "startedAt": "2026-08-25T12:00:00.000000Z",
+      "archivedAt": "2026-08-26T13:00:00.000000Z",
+      "archivedTo": "docs/archive/2026-08/deep-search-pipeline/"
+    },
+    "admin-default-llm-routing": {
+      "phase": "archived",
+      "matchRate": 100,
+      "iterationCount": 0,
+      "startedAt": "2026-08-29T07:01:38.000Z",
+      "archivedAt": "2026-08-31T09:00:02.000Z",
+      "archivedTo": "docs/archive/2026-08/admin-default-llm-routing/",
+      "pendingVerification": [
+        "NPU vLLM tool-calling (Step 0)",
+        "live restart-free swap on real MySQL+NPU"
+      ],
+      "openGaps": {
+        "code": 0,
+        "user_action": [
+          "G-5 .env.example (bkit hook blocked)"
+        ],
+        "environment": [
+          "V-1 vLLM tool-calling",
+          "V-2 live restart-free swap",
+          "V-3 pattern-C from_openai eager ChatOpenAI"
+        ]
+      }
     }
   },
   "features": {
@@ -6448,6 +6495,179 @@
       "startedAt": "2026-08-20T13:10:00.000Z",
       "archivedAt": "2026-08-20T16:40:00.000Z",
       "archivedTo": "docs/archive/2026-08/wizard-chat-layout/"
+    },
+    "multimodal-extractor": {
+      "phase": "archived",
+      "matchRate": 96,
+      "iterationCount": 1,
+      "qaStatus": "SKIP",
+      "startedAt": "2026-08-21T00:00:00.000Z",
+      "archivedAt": "2026-08-21T17:00:00.000Z",
+      "archivedTo": "docs/archive/2026-08/multimodal-extractor/"
+    },
+    "blueprint-style-fidelity": {
+      "phase": "archived",
+      "startedAt": "2026-08-23T00:00:00.000Z",
+      "updatedAt": "2026-08-23T15:30:00.000Z",
+      "documents": {
+        "plan": "docs/archive/2026-08/blueprint-style-fidelity/blueprint-style-fidelity.plan.md",
+        "design": "docs/archive/2026-08/blueprint-style-fidelity/blueprint-style-fidelity.design.md",
+        "analysis": "docs/archive/2026-08/blueprint-style-fidelity/blueprint-style-fidelity.analysis.md",
+        "report": "docs/archive/2026-08/blueprint-style-fidelity/blueprint-style-fidelity.report.md"
+      },
+      "matchRate": 97,
+      "iterationCount": 1,
+      "modules": {
+        "schema": "done",
+        "extract": "done",
+        "render": "done",
+        "migrate": "done"
+      },
+      "archivedAt": "2026-08-23T15:40:00.000Z",
+      "archivedTo": "docs/archive/2026-08/blueprint-style-fidelity/"
+    },
+    "pptx-font-fidelity": {
+      "phase": "check",
+      "startedAt": "2026-08-24T12:04:56.000Z",
+      "updatedAt": "2026-08-24T13:08:35.000Z",
+      "documents": {
+        "plan": "docs/01-plan/features/pptx-font-fidelity.plan.md",
+        "design": "docs/02-design/features/pptx-font-fidelity.design.md",
+        "analysis": "docs/03-analysis/pptx-font-fidelity.analysis.md"
+      },
+      "matchRate": 99
+    },
+    "excel-generator-node": {
+      "phase": "archived",
+      "startedAt": "2026-08-24T00:00:00.000Z",
+      "updatedAt": "2026-08-25T03:00:00.000Z",
+      "documents": {
+        "plan": "docs/archive/2026-08/excel-generator-node/excel-generator-node.plan.md",
+        "design": "docs/archive/2026-08/excel-generator-node/excel-generator-node.design.md",
+        "analysis": "docs/archive/2026-08/excel-generator-node/excel-generator-node.analysis.md",
+        "report": "docs/archive/2026-08/excel-generator-node/excel-generator-node.report.md"
+      },
+      "matchRate": 98,
+      "iterationCount": 1,
+      "completedAt": "2026-08-25T02:00:00.000Z",
+      "archivedAt": "2026-08-25T03:00:00.000Z",
+      "archivedTo": "docs/archive/2026-08/excel-generator-node/"
+    },
+    "blueprint-font-mapping-migration": {
+      "phase": "completed",
+      "matchRate": 99,
+      "iterationCount": 0,
+      "startedAt": "2026-08-25T10:04:20.352446Z",
+      "lastActivity": "2026-08-25T10:48:15.108542Z",
+      "documents": {
+        "plan": "docs/01-plan/features/blueprint-font-mapping-migration.plan.md",
+        "design": "docs/02-design/features/blueprint-font-mapping-migration.design.md",
+        "analysis": "docs/03-analysis/blueprint-font-mapping-migration.analysis.md",
+        "report": "docs/04-report/blueprint-font-mapping-migration.report.md"
+      }
+    },
+    "runtime-datetime-context": {
+      "phase": "archived",
+      "matchRate": 98,
+      "iterationCount": 1,
+      "startedAt": "2026-08-25T00:00:00.000Z",
+      "documents": {
+        "plan": "docs/archive/2026-08/runtime-datetime-context/runtime-datetime-context.plan.md",
+        "design": "docs/archive/2026-08/runtime-datetime-context/runtime-datetime-context.design.md",
+        "analysis": "docs/archive/2026-08/runtime-datetime-context/runtime-datetime-context.analysis.md",
+        "report": "docs/archive/2026-08/runtime-datetime-context/runtime-datetime-context.report.md"
+      },
+      "phaseNumber": 9,
+      "previousPhase": "completed",
+      "autoAdvanced": false,
+      "timestamps": {
+        "lastUpdated": "2026-08-25T05:30:00.000Z"
+      },
+      "stateMachine": {
+        "currentState": "archived",
+        "previousState": "completed",
+        "stateHistory": [],
+        "retryCount": 0,
+        "maxRetries": 5,
+        "circuitBreakerOpen": false
+      },
+      "metrics": {
+        "qualityScore": null,
+        "conventionCompliance": null,
+        "apiCompliance": null,
+        "cycleTimeMs": null,
+        "iterationEfficiency": null
+      },
+      "phaseTimestamps": {
+        "plan": "2026-08-25T00:00:00.000Z",
+        "design": "2026-08-25T00:30:00.000Z",
+        "do": "2026-08-25T01:30:00.000Z",
+        "check": "2026-08-25T03:30:00.000Z",
+        "act": "2026-08-25T04:00:00.000Z",
+        "report": "2026-08-25T05:00:00.000Z",
+        "archive": "2026-08-25T05:30:00.000Z"
+      },
+      "automationLevel": 2,
+      "doScope": {
+        "completed": [
+          "module-1",
+          "module-2",
+          "module-3",
+          "module-4"
+        ],
+        "remaining": []
+      },
+      "archivedAt": "2026-08-25T05:30:00.000Z",
+      "archivedTo": "docs/archive/2026-08/runtime-datetime-context/"
+    },
+    "blueprint-slot-box-snap": {
+      "phase": "completed",
+      "matchRate": 98,
+      "iterationCount": 0,
+      "startedAt": "2026-08-25T11:06:47.432935Z",
+      "lastActivity": "2026-08-25T12:05:11.668855Z",
+      "documents": {
+        "plan": "docs/01-plan/features/blueprint-slot-box-snap.plan.md",
+        "design": "docs/02-design/features/blueprint-slot-box-snap.design.md",
+        "analysis": "docs/03-analysis/blueprint-slot-box-snap.analysis.md",
+        "report": "docs/04-report/blueprint-slot-box-snap.report.md"
+      }
+    },
+    "deep-search-pipeline": {
+      "phase": "archived",
+      "matchRate": 97,
+      "iterationCount": 1,
+      "startedAt": "2026-08-25T12:00:00.000000Z",
+      "archivedAt": "2026-08-26T13:00:00.000000Z",
+      "archivedTo": "docs/archive/2026-08/deep-search-pipeline/"
+    },
+    "blueprint-slot-content-fill": {
+      "phase": "completed",
+      "matchRate": 100,
+      "iterationCount": 1,
+      "startedAt": "2026-08-25T12:21:35.576238Z",
+      "lastActivity": "2026-08-26T10:56:06.188165Z",
+      "documents": {
+        "plan": "docs/01-plan/features/blueprint-slot-content-fill.plan.md",
+        "design": "docs/02-design/features/blueprint-slot-content-fill.design.md",
+        "analysis": "docs/03-analysis/blueprint-slot-content-fill.analysis.md",
+        "report": "docs/04-report/blueprint-slot-content-fill.report.md"
+      }
+    },
+    "blueprint-render-style-fidelity": {
+      "phase": "archived",
+      "matchRate": 100,
+      "iterationCount": 0,
+      "startedAt": "2026-08-26T11:02:42.379813Z",
+      "lastActivity": "2026-08-29T06:53:44.787668Z",
+      "documents": {
+        "plan": "docs/01-plan/features/blueprint-render-style-fidelity.plan.md",
+        "design": "docs/02-design/features/blueprint-render-style-fidelity.design.md",
+        "analysis": "docs/03-analysis/blueprint-render-style-fidelity.analysis.md",
+        "report": "docs/04-report/blueprint-render-style-fidelity.report.md"
+      },
+      "archivedAt": "2026-08-29T06:53:44.787668Z",
+      "archivedTo": "docs/archive/2026-08/blueprint-render-style-fidelity/"
     }
   },
   "pipeline": {
@@ -6458,261 +6678,9 @@
   "session": {
     "startedAt": "2026-03-04T10:49:14.367Z",
     "onboardingCompleted": false,
-    "lastActivity": "2026-08-20T12:52:45.966Z"
+    "lastActivity": "2026-08-29T07:02:00.718Z"
   },
   "history": [
-    {
-      "timestamp": "2026-08-11T12:12:02.745Z",
-      "feature": "chat",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-11T12:26:42.245Z",
-      "feature": "background-jobs",
-      "phase": "act",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:00:44.354Z",
-      "feature": "background_job",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:00:45.807Z",
-      "feature": "background_job",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:00:53.203Z",
-      "feature": "background_job",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:00:58.608Z",
-      "feature": "background_job",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:01:05.011Z",
-      "feature": "background_job",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:01:07.135Z",
-      "feature": "background_job",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:01:10.754Z",
-      "feature": "agent_schedule",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:01:18.544Z",
-      "feature": "agent_schedule",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:01:26.016Z",
-      "feature": "agent_schedule",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:01:29.479Z",
-      "feature": "background_job",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:01:41.787Z",
-      "feature": "background_job",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:01:44.617Z",
-      "feature": "background_job",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:01:46.836Z",
-      "feature": "background_job",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:01:49.398Z",
-      "feature": "background_job",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:02:01.232Z",
-      "feature": "api",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:02:23.942Z",
-      "feature": "background_job",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:02:29.573Z",
-      "feature": "background_job",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:02:34.057Z",
-      "feature": "background_job",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:02:46.420Z",
-      "feature": "background_job",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:03:05.690Z",
-      "feature": "agent_schedule",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:03:12.305Z",
-      "feature": "background_job",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:03:25.543Z",
-      "feature": "background_job",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:03:52.468Z",
-      "feature": "idt_front",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:03:54.583Z",
-      "feature": "idt_front",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:03:58.824Z",
-      "feature": "idt_front",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:04:01.411Z",
-      "feature": "idt_front",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:04:14.173Z",
-      "feature": "JobsPage",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:04:17.230Z",
-      "feature": "JobsPage",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:04:19.922Z",
-      "feature": "JobsPage",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:04:21.922Z",
-      "feature": "JobsPage",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:04:23.584Z",
-      "feature": "JobsPage",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:04:29.308Z",
-      "feature": "layout",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:04:31.545Z",
-      "feature": "layout",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:04:34.951Z",
-      "feature": "layout",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:04:37.810Z",
-      "feature": "layout",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:04:40.513Z",
-      "feature": "layout",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:04:48.729Z",
-      "feature": "layout",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:04:54.158Z",
-      "feature": "layout",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:04:57.816Z",
-      "feature": "layout",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:05:04.913Z",
-      "feature": "ChatPage",
-      "phase": "do",
-      "action": "updated"
-    },
     {
       "timestamp": "2026-08-12T03:05:07.733Z",
       "feature": "ChatPage",
@@ -7160,6 +7128,383 @@
       "to": "archived",
       "archivedTo": "docs/archive/2026-08/prompt-depth/",
       "timestamp": "2026-08-20T15:50:00.000Z"
+    },
+    {
+      "feature": "multimodal-extractor",
+      "phase": "plan",
+      "timestamp": "2026-08-21T00:00:00.000Z",
+      "action": "plan_created"
+    },
+    {
+      "timestamp": "2026-08-21T03:02:40.807Z",
+      "feature": "multimodal-extractor",
+      "event": "PLAN_DONE",
+      "from": "plan",
+      "to": "design",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "feature": "multimodal-extractor",
+      "phase": "design",
+      "timestamp": "2026-08-21T01:00:00.000Z",
+      "action": "design_created"
+    },
+    {
+      "timestamp": "2026-08-21T04:29:40.115Z",
+      "feature": "multimodal-extractor",
+      "event": "DESIGN_DONE",
+      "from": "design",
+      "to": "do",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "feature": "multimodal-extractor",
+      "phase": "completed",
+      "timestamp": "2026-08-21T16:00:00.000Z",
+      "action": "report_created",
+      "matchRate": 96
+    },
+    {
+      "feature": "multimodal-extractor",
+      "phase": "archived",
+      "timestamp": "2026-08-21T17:00:00.000Z",
+      "action": "archived"
+    },
+    {
+      "timestamp": "2026-08-22T06:59:05.251Z",
+      "feature": "golden-sample-blueprint",
+      "event": "PLAN_DONE",
+      "from": "plan",
+      "to": "design",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "timestamp": "2026-08-22T07:14:34.219Z",
+      "feature": "golden-sample-blueprint",
+      "event": "DESIGN_DONE",
+      "from": "design",
+      "to": "do",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "timestamp": "2026-08-22T10:12:01.081Z",
+      "feature": "golden-sample-blueprint",
+      "event": "ANALYZE_DONE",
+      "from": "act",
+      "to": "check",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "timestamp": "2026-08-24T12:05:15.066Z",
+      "feature": "pptx-font-fidelity",
+      "event": "PLAN_DONE",
+      "from": "plan",
+      "to": "design",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "timestamp": "2026-08-24T12:06:22.465Z",
+      "feature": "excel-generator-node",
+      "event": "PLAN_DONE",
+      "from": "plan",
+      "to": "design",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "timestamp": "2026-08-24T12:13:47.460Z",
+      "feature": "excel-generator-node",
+      "event": "PLAN_DONE",
+      "from": "plan",
+      "to": "design",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "timestamp": "2026-08-24T12:22:11.072Z",
+      "feature": "excel-generator-node",
+      "event": "DESIGN_DONE",
+      "from": "design",
+      "to": "do",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "feature": "runtime-datetime-context",
+      "phase": "plan",
+      "timestamp": "2026-08-25T00:00:00.000Z",
+      "action": "plan_created"
+    },
+    {
+      "timestamp": "2026-08-25T10:41:16.797Z",
+      "feature": "runtime-datetime-context",
+      "event": "PLAN_DONE",
+      "from": "plan",
+      "to": "design",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "timestamp": "2026-08-25T10:44:17.830Z",
+      "feature": "runtime-datetime-context",
+      "event": "PLAN_DONE",
+      "from": "plan",
+      "to": "design",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "timestamp": "2026-08-25T10:48:40.781Z",
+      "feature": "runtime-datetime-context",
+      "event": "PLAN_DONE",
+      "from": "plan",
+      "to": "design",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "feature": "runtime-datetime-context",
+      "phase": "design",
+      "timestamp": "2026-08-25T00:30:00.000Z",
+      "action": "design_created"
+    },
+    {
+      "timestamp": "2026-08-25T10:56:04.005Z",
+      "feature": "runtime-datetime-context",
+      "event": "DESIGN_DONE",
+      "from": "design",
+      "to": "do",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "timestamp": "2026-08-25T11:01:14.102Z",
+      "feature": "runtime-datetime-context",
+      "event": "DESIGN_DONE",
+      "from": "design",
+      "to": "do",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "timestamp": "2026-08-25T11:07:08.021Z",
+      "feature": "runtime-datetime-context",
+      "event": "DESIGN_DONE",
+      "from": "design",
+      "to": "do",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "timestamp": "2026-08-25T11:11:56.005Z",
+      "feature": "deep-search-pipeline",
+      "event": "PLAN_DONE",
+      "from": "plan",
+      "to": "design",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "feature": "runtime-datetime-context",
+      "phase": "do",
+      "timestamp": "2026-08-25T01:30:00.000Z",
+      "action": "do_scope_module-1,module-2_completed"
+    },
+    {
+      "timestamp": "2026-08-25T11:12:22.138Z",
+      "feature": "deep-search-pipeline",
+      "event": "PLAN_DONE",
+      "from": "plan",
+      "to": "design",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "timestamp": "2026-08-25T11:19:44.154Z",
+      "feature": "deep-search-pipeline",
+      "event": "PLAN_DONE",
+      "from": "plan",
+      "to": "design",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "timestamp": "2026-08-25T11:21:33.875Z",
+      "feature": "deep-search-pipeline",
+      "event": "DESIGN_DONE",
+      "from": "design",
+      "to": "do",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "feature": "runtime-datetime-context",
+      "phase": "do",
+      "timestamp": "2026-08-25T02:30:00.000Z",
+      "action": "do_scope_module-3,module-4_completed"
+    },
+    {
+      "timestamp": "2026-08-25T11:23:47.249Z",
+      "feature": "deep-search-pipeline",
+      "event": "DESIGN_DONE",
+      "from": "design",
+      "to": "do",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "timestamp": "2026-08-25T11:24:44.161Z",
+      "feature": "deep-search-pipeline",
+      "event": "DESIGN_DONE",
+      "from": "design",
+      "to": "do",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "timestamp": "2026-08-25T11:25:23.949Z",
+      "feature": "deep-search-pipeline",
+      "event": "DESIGN_DONE",
+      "from": "design",
+      "to": "do",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "feature": "runtime-datetime-context",
+      "phase": "check",
+      "timestamp": "2026-08-25T03:30:00.000Z",
+      "action": "analysis_created",
+      "matchRate": 96
+    },
+    {
+      "feature": "runtime-datetime-context",
+      "phase": "act",
+      "timestamp": "2026-08-25T04:00:00.000Z",
+      "action": "act-1_fixes_applied",
+      "matchRate": 98
+    },
+    {
+      "feature": "runtime-datetime-context",
+      "phase": "report",
+      "timestamp": "2026-08-25T05:00:00.000Z",
+      "action": "report_created",
+      "matchRate": 98
+    },
+    {
+      "feature": "runtime-datetime-context",
+      "phase": "archived",
+      "timestamp": "2026-08-25T05:30:00.000Z",
+      "action": "archived",
+      "archivedTo": "docs/archive/2026-08/runtime-datetime-context/"
+    },
+    {
+      "timestamp": "2026-08-26T10:14:06.278Z",
+      "feature": "deep-search-pipeline",
+      "event": "ANALYZE_DONE",
+      "from": "act",
+      "to": "check",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "timestamp": "2026-08-26T10:16:44.375Z",
+      "feature": "deep-search-pipeline",
+      "event": "ANALYZE_DONE",
+      "from": "act",
+      "to": "check",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "feature": "admin-default-llm-routing",
+      "phase": "design",
+      "timestamp": "2026-08-29T07:01:38.000Z",
+      "event": "phase_transition"
+    },
+    {
+      "timestamp": "2026-08-29T07:02:00.718Z",
+      "feature": "admin-default-llm-routing",
+      "event": "DESIGN_DONE",
+      "from": "design",
+      "to": "do",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "feature": "admin-default-llm-routing",
+      "phase": "do",
+      "timestamp": "2026-08-30T03:17:34.000Z",
+      "event": "phase_transition",
+      "scope": "module-1"
+    },
+    {
+      "feature": "admin-default-llm-routing",
+      "phase": "do",
+      "timestamp": "2026-08-30T03:28:29.000Z",
+      "event": "scope_completed",
+      "scope": "module-2"
+    },
+    {
+      "feature": "admin-default-llm-routing",
+      "phase": "do",
+      "timestamp": "2026-08-30T03:34:51.000Z",
+      "event": "scope_completed",
+      "scope": "module-3"
+    },
+    {
+      "feature": "admin-default-llm-routing",
+      "phase": "do",
+      "timestamp": "2026-08-30T04:04:27.000Z",
+      "event": "scope_completed",
+      "scope": "module-4"
+    },
+    {
+      "feature": "admin-default-llm-routing",
+      "phase": "do",
+      "timestamp": "2026-08-30T04:16:07.000Z",
+      "event": "scope_completed",
+      "scope": "module-5"
+    },
+    {
+      "feature": "admin-default-llm-routing",
+      "phase": "check",
+      "timestamp": "2026-08-30T04:19:34.000Z",
+      "event": "phase_transition",
+      "matchRate": 99
+    },
+    {
+      "feature": "admin-default-llm-routing",
+      "phase": "check",
+      "timestamp": "2026-08-30T04:32:42.000Z",
+      "event": "design_doc_synced",
+      "matchRate": 100
+    },
+    {
+      "feature": "admin-default-llm-routing",
+      "phase": "check",
+      "timestamp": "2026-08-31T08:47:36.000Z",
+      "event": "gap_resolved",
+      "gap": "G-7"
+    },
+    {
+      "feature": "admin-default-llm-routing",
+      "phase": "completed",
+      "timestamp": "2026-08-31T08:51:06.000Z",
+      "event": "phase_transition"
+    },
+    {
+      "feature": "admin-default-llm-routing",
+      "phase": "archived",
+      "timestamp": "2026-08-31T09:00:02.000Z",
+      "event": "phase_transition",
+      "archivedTo": "docs/archive/2026-08/admin-default-llm-routing/"
     }
   ],
   "featurePhases": {
@@ -7198,7 +7543,11 @@
     "tool-recommender": "report",
     "intent-slot-elicitation": "completed",
     "agent-create-wizard": "archived",
-    "prompt-depth": "archived"
+    "prompt-depth": "archived",
+    "multimodal-extractor": "archived",
+    "pptx-font-fidelity": "check",
+    "runtime-datetime-context": "archived",
+    "deep-search-pipeline": "archived"
   },
   "matchRates": {
     "supervisor-overblock-fix": 100,
@@ -7210,7 +7559,10 @@
     "builtin-tools": 100,
     "tool-recommender": 97.38,
     "intent-slot-elicitation": 99,
-    "prompt-depth": 99
+    "prompt-depth": 99,
+    "multimodal-extractor": 96,
+    "pptx-font-fidelity": 99,
+    "deep-search-pipeline": 97
   },
   "archivedTo": {
     "self-hosted-qwen-endpoint": "docs/archive/2026-06/self-hosted-qwen-endpoint/",
@@ -7222,9 +7574,10 @@
     "builtin-tools": "docs/archive/2026-08/builtin-tools/",
     "intent-analyzer": "docs/archive/2026-08/intent-analyzer/",
     "agent-create-wizard": "docs/archive/2026-08/agent-create-wizard/",
-    "prompt-depth": "docs/archive/2026-08/prompt-depth/"
+    "prompt-depth": "docs/archive/2026-08/prompt-depth/",
+    "multimodal-extractor": "docs/archive/2026-08/multimodal-extractor/"
   },
-  "currentFeature": null,
+  "currentFeature": "blueprint-render-style-fidelity",
   "stateMachine": {
     "defaultWorkflow": "default",
     "activeWorkflows": {},
@@ -7410,5 +7763,6 @@
       "feature": "prompt-composer (module-3)",
       "createdAt": "2026-08-17T11:37:23.967Z"
     }
-  ]
+  ],
+  "updatedAt": "2026-08-26T13:00:00.000000Z"
 }

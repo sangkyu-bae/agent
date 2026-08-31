@@ -3,13 +3,24 @@
 POST /api/v1/preview/parse          → PDF → Markdown preview (no storage)
 POST /api/v1/preview/table-flatten  → Markdown table → semantic sentences preview
 POST /api/v1/preview/ingest         → Full pipeline with intermediate results
+POST /api/v1/preview/multimodal     → 그림·차트·표 추출 + 비전 해석 미리보기 (multimodal-extractor §4.2)
 """
 import uuid
 
-from fastapi import APIRouter, Depends, File, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel
 
+from src.application.multimodal.use_case import MultimodalExtractionUseCase
+
 from src.application.unified_upload.use_case import UnifiedUploadUseCase
+from src.domain.auth.entities import User
+from src.domain.multimodal.errors import (
+    ExtractionError,
+    MultimodalDisabledError,
+    MultimodalNotConfiguredError,
+    UnsupportedFormatError,
+    UnsupportedVisionProviderError,
+)
 from src.domain.parser.interfaces import PDFParserInterface
 from src.domain.parser.value_objects import ParserConfig
 from src.infrastructure.chunking.chunking_factory import ChunkingStrategyFactory
@@ -19,6 +30,9 @@ from src.infrastructure.chunking.table_flattening.preprocessor import (
 from src.infrastructure.chunking.table_flattening.rule_based_generator import (
     RuleBasedTableContentGenerator,
 )
+from src.interfaces.dependencies.auth import get_current_user
+from src.interfaces.schemas.multimodal import MultimodalPreviewResponse
+from collections.abc import Callable
 
 router = APIRouter(prefix="/api/v1/preview", tags=["preview"])
 
@@ -127,6 +141,15 @@ def get_preview_parser() -> PDFParserInterface:
 
 
 def get_preview_upload_use_case() -> UnifiedUploadUseCase:
+    raise NotImplementedError("Configure via dependency_overrides")
+
+
+def get_multimodal_extraction_use_case() -> MultimodalExtractionUseCase:
+    raise NotImplementedError("Configure via dependency_overrides")
+
+
+def get_multimodal_thumbnailer() -> Callable[[bytes], str | None]:
+    """이미지 바이트 → base64 PNG 썸네일(≤256px). 구현은 infrastructure, 배선은 main.py."""
     raise NotImplementedError("Configure via dependency_overrides")
 
 
@@ -330,3 +353,54 @@ async def preview_ingest(
             table_flattening=True,
         ),
     )
+
+
+# ---------------------------------------------------------------------------
+# 4. POST /preview/multimodal  (multimodal-extractor Design §4.2, FR-15)
+# ---------------------------------------------------------------------------
+
+_MULTIMODAL_MAX_BYTES = 30 * 1024 * 1024
+
+
+def _mm_error(code: str, message: str, http_status: int) -> HTTPException:
+    return HTTPException(status_code=http_status, detail={"code": code, "message": message})
+
+
+@router.post(
+    "/multimodal",
+    response_model=MultimodalPreviewResponse,
+    response_model_exclude_unset=True,
+)
+async def preview_multimodal(
+    file: UploadFile = File(..., description="PDF"),
+    debug: bool = Query(False, description="필터 제외 목록 포함"),
+    current_user: User = Depends(get_current_user),
+    use_case: MultimodalExtractionUseCase = Depends(get_multimodal_extraction_use_case),
+    thumbnailer: Callable[[bytes], str | None] = Depends(get_multimodal_thumbnailer),
+) -> MultimodalPreviewResponse:
+    """그림·차트·이미지형 표를 추출해 비전 모델 해석과 썸네일로 돌려준다. 원본 바이트는 미노출."""
+    file_bytes = await file.read()
+    if len(file_bytes) > _MULTIMODAL_MAX_BYTES:
+        raise _mm_error(
+            "PAYLOAD_TOO_LARGE", "file exceeds 30MB", status.HTTP_413_CONTENT_TOO_LARGE
+        )
+    filename = file.filename or "unknown"
+    request_id = f"preview-mm-{uuid.uuid4().hex[:12]}"
+    try:
+        result = await use_case.run(file_bytes, filename, request_id, analysis=None)
+    except (UnsupportedFormatError, ExtractionError) as e:
+        # Design §7: 확장자 미등록·손상 PDF(fitz.open 실패) 모두 415 — 입력 자체가 무효
+        raise _mm_error(
+            "UNSUPPORTED_FORMAT", str(e), status.HTTP_415_UNSUPPORTED_MEDIA_TYPE
+        ) from e
+    except UnsupportedVisionProviderError as e:
+        # Design §6.1: 설정 데이터(provider)와 레지스트리 불일치 — 관리자 조치 필요
+        raise _mm_error(
+            "UNSUPPORTED_VISION_PROVIDER", str(e), status.HTTP_500_INTERNAL_SERVER_ERROR
+        ) from e
+    except MultimodalDisabledError as e:
+        raise _mm_error("MULTIMODAL_DISABLED", str(e), status.HTTP_409_CONFLICT) from e
+    except MultimodalNotConfiguredError as e:
+        raise _mm_error("MULTIMODAL_NOT_CONFIGURED", str(e), status.HTTP_409_CONFLICT) from e
+    return MultimodalPreviewResponse.from_result(result, thumbnailer, debug)
+

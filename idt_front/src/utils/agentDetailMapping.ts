@@ -12,6 +12,7 @@ import { DEFAULT_RAG_CONFIG } from '@/types/ragToolConfig';
 import { MAX_ITERATIONS } from '@/constants/agentSettings';
 import { mapDraftToolIdsToCatalog } from './draftToolMapping';
 import { draftFromGenerationTypeInfo } from './documentGenerator';
+import { draftFromWorkerToolConfig } from '@/utils/presentationGenerator';
 
 /** RAG 도구의 저장 형식 tool_id (worker.tool_id) */
 const RAG_WORKER_TOOL_ID = 'internal_document_search';
@@ -76,6 +77,10 @@ export function mapDetailToForm(
     documentGeneratorDraft: detail.document_generation_type
       ? draftFromGenerationTypeInfo(detail.document_generation_type)
       : null,
+    // golden-sample-blueprint D7: presentation_generator 워커 tool_config 프리필
+    presentationGeneratorDraft: draftFromWorkerToolConfig(
+      detail.workers.find((w) => w.tool_id === 'presentation_generator')?.tool_config,
+    ),
     // agent-settings-tab D5: 서버는 항상 값을 반환 — 폴백은 방어용
     maxIterations: detail.max_iterations ?? MAX_ITERATIONS.DEFAULT,
   };

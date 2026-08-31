@@ -6,6 +6,7 @@
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from src.application.wiki.interfaces import FolderSummaryDistillerInterface
+from src.domain.llm.interfaces import UtilityLLMProviderPort
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.infrastructure.wiki.wiki_distiller import _coerce_text
 
@@ -24,15 +25,43 @@ _SYSTEM_PROMPT = (
 class FolderSummaryDistiller(FolderSummaryDistillerInterface):
     """LLM으로 폴더 안내 설명을 생성한다."""
 
-    def __init__(self, llm, logger: LoggerInterface) -> None:
+    def __init__(
+        self,
+        llm,
+        logger: LoggerInterface,
+        llm_provider: UtilityLLMProviderPort | None = None,
+    ) -> None:
         self._llm = llm
         self._logger = logger
+        self._llm_provider = llm_provider
+
+    async def _resolve_llm(self):
+        """호출 시점의 유효 LLM. admin-default-llm-routing AD-2.
+
+        provider 미주입이거나 해석 실패면 생성자 주입 LLM 으로 낙하한다.
+        """
+        if self._llm_provider is not None:
+            resolved = await self._llm_provider.get(0.0)
+            if resolved is not None:
+                return resolved
+        return self._llm
 
     @classmethod
-    def from_openai(cls, model_name: str, api_key: str, logger: LoggerInterface):
+    def from_openai(
+        cls,
+        model_name: str,
+        api_key: str,
+        logger: LoggerInterface,
+        llm_provider: UtilityLLMProviderPort | None = None,
+    ):
+        """레거시 ChatOpenAI 를 폴백으로 두고, provider 가 있으면 그쪽을 우선한다."""
         from langchain_openai import ChatOpenAI
 
-        return cls(ChatOpenAI(model=model_name, api_key=api_key, temperature=0), logger)
+        return cls(
+            ChatOpenAI(model=model_name, api_key=api_key, temperature=0),
+            logger,
+            llm_provider=llm_provider,
+        )
 
     async def summarize_folder(
         self,
@@ -55,7 +84,8 @@ class FolderSummaryDistiller(FolderSummaryDistillerInterface):
             HumanMessage(content=source_text),
         ]
         try:
-            response = await self._llm.ainvoke(messages)
+            llm = await self._resolve_llm()
+            response = await llm.ainvoke(messages)
         except Exception as e:
             self._logger.error(
                 "FolderSummaryDistiller failed", exception=e,

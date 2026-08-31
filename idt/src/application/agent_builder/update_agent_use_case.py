@@ -9,9 +9,13 @@ from src.application.agent_builder.document_template_binding import (
     ensure_template_wiring,
     persist_document_template,
 )
-from src.domain.document_generator.policies import DEFAULT_MAX_SECTIONS
-from src.application.agent_builder.schemas import UpdateAgentRequest, UpdateAgentResponse
-from src.domain.document_extractor.policies import DEFAULT_MAX_SLOTS
+from src.application.agent_builder.presentation_generator_binding import (
+    apply_presentation_generator_config,
+)
+from src.application.agent_builder.schemas import (
+    UpdateAgentRequest,
+    UpdateAgentResponse,
+)
 from src.application.agent_builder.sub_agent_worker_builder import SubAgentWorkerBuilder
 from src.application.agent_skill.sync_agent_skills_use_case import (
     SyncAgentSkillsUseCase,
@@ -25,8 +29,12 @@ from src.domain.agent_builder.policies import (
 )
 from src.domain.agent_builder.schemas import WorkerDefinition
 from src.domain.auth.entities import UserRole
-from src.domain.collection.permission_interfaces import CollectionPermissionRepositoryInterface
+from src.domain.collection.permission_interfaces import (
+    CollectionPermissionRepositoryInterface,
+)
 from src.domain.department.interfaces import DepartmentRepositoryInterface
+from src.domain.document_extractor.policies import DEFAULT_MAX_SLOTS
+from src.domain.document_generator.policies import DEFAULT_MAX_SECTIONS
 from src.domain.knowledge_base.interfaces import KnowledgeBaseRepositoryInterface
 from src.domain.knowledge_base.policy import KnowledgeBasePolicy
 from src.domain.llm_model.interfaces import LlmModelRepositoryInterface
@@ -157,6 +165,12 @@ class UpdateAgentUseCase:
             if request.document_generation_type is not None:
                 await self._replace_document_generation_type(
                     agent, request, request_id
+                )
+
+            # 발표자료 설정 교체 (golden-sample-blueprint D7): None = 변경 안 함.
+            if request.presentation_generator is not None:
+                apply_presentation_generator_config(
+                    request.presentation_generator, agent.workers
                 )
 
             updated = await self._repository.update(agent, request_id)

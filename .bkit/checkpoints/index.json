@@ -6,5 +6,13 @@
     "phase": "design",
     "feature": "prompt-composer",
     "description": "design → do"
+  },
+  {
+    "id": "cp-1787234532497",
+    "createdAt": "2026-08-20T14:02:12.497Z",
+    "type": "phase_transition",
+    "phase": "plan",
+    "feature": "prompt-depth",
+    "description": "plan → design"
   }
 ]

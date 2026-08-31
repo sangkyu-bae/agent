@@ -42,6 +42,18 @@ class DocumentGenerationTypeRequest(BaseModel):
     mcp_html_to_doc_tool_id: str = ""           # 빈 값 = settings 폴백 (D5)
 
 
+class PresentationGeneratorConfigRequest(BaseModel):
+    """golden-sample-blueprint D7: presentation_generator 워커 설정 (영속 엔티티 없음).
+
+    상세 검증은 PresentationGeneratorToolConfig(도메인) — 위반 시 400.
+    """
+
+    blueprint_id: str = ""
+    output_format: str = "pptx"
+    mcp_pptx_to_pdf_tool_id: str = ""
+    max_slides: int = 15
+
+
 class RagToolConfigRequest(BaseModel):
     """RAG 도구 설정 요청 스키마."""
     collection_name: str | None = None
@@ -99,6 +111,8 @@ class CreateAgentRequest(BaseModel):
     document_template: DocumentTemplateRequest | None = None
     # doc-generator §4-3: 문서 유형 (document_generator 도구 필요)
     document_generation_type: DocumentGenerationTypeRequest | None = None
+    # golden-sample-blueprint D7: 발표자료 설정 (presentation_generator 도구 필요)
+    presentation_generator: PresentationGeneratorConfigRequest | None = None
     # agent-instruction-required: 지침 필수. None/빈 값이면 생성 시 에러(자동생성 제거).
     # 자동 구성은 Fix 에이전트(agent_composer)가 초안을 프리필하는 방식으로만 제공.
     #
@@ -149,6 +163,7 @@ class UpdateAgentRequest(BaseModel):
     document_template: DocumentTemplateRequest | None = None
     # doc-generator: None = 문서 유형 변경 안 함, 값 = 교체(기존 soft-delete)
     document_generation_type: DocumentGenerationTypeRequest | None = None
+    presentation_generator: PresentationGeneratorConfigRequest | None = None
     # agent-builder-edit-mapping FR-5: None = 모델 변경 안 함
     llm_model_id: str | None = None
     # builtin-middleware D5: None = 미들웨어 변경 안 함, 값 = 전체 교체

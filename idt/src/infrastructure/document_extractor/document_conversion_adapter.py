@@ -9,6 +9,7 @@ html_to_pdf/html_to_docx). tool_id(mcp_{서버id})는 서버를 가리키므로,
         "filename":<opt>}, "output": {"mode":"base64"}}})
 - 결과: JSON 문자열 → {"format","output_mode","content"(=base64),"output_path","metadata"}
 """
+
 import base64
 import binascii
 import json
@@ -79,7 +80,19 @@ class DocumentConversionAdapter:
         )
         payload = self._build_payload(
             base64.b64encode(html.encode("utf-8")).decode("ascii"),
-            filename=f"filled.html",
+            filename="filled.html",
+        )
+        result = await self._invoke(tool, payload, mcp_tool_id, request_id)
+        self._log_warnings(result, mcp_tool_id, request_id)
+        return self._normalize_file(result, mcp_tool_id)
+
+    async def to_pdf_from_pptx(
+        self, pptx_bytes: bytes, mcp_tool_id: str, request_id: str
+    ) -> bytes:
+        """PPTX → PDF 바이트. `pptx_to_pdf` 도구 선택 (golden-sample-blueprint)."""
+        tool = await self._select_tool(mcp_tool_id, "pptx_to_pdf", request_id)
+        payload = self._build_payload(
+            base64.b64encode(pptx_bytes).decode("ascii"), filename="deck.pptx"
         )
         result = await self._invoke(tool, payload, mcp_tool_id, request_id)
         self._log_warnings(result, mcp_tool_id, request_id)
@@ -90,7 +103,9 @@ class DocumentConversionAdapter:
         self, mcp_tool_id: str, direction_suffix: str, request_id: str
     ):
         tools = await self._load_tools(mcp_tool_id, request_id)
-        matched = [t for t in tools if getattr(t, "name", "").endswith(direction_suffix)]
+        matched = [
+            t for t in tools if getattr(t, "name", "").endswith(direction_suffix)
+        ]
         if matched:
             return matched[0]
         # 단일 도구 서버(멀티플렉싱 아님)면 그대로 사용.
@@ -128,9 +143,7 @@ class DocumentConversionAdapter:
 
     # ── 호출/페이로드 ────────────────────────────────────────────────────
     @staticmethod
-    def _build_payload(
-        b64: str, filename: str, options: dict | None = None
-    ) -> dict:
+    def _build_payload(b64: str, filename: str, options: dict | None = None) -> dict:
         """실측 계약: arguments 래퍼 + source(base64)/output(base64)[/options]."""
         arguments: dict = {
             "source": {"kind": "base64", "value": b64, "filename": filename},

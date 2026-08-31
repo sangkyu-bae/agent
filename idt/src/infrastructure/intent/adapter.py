@@ -29,6 +29,7 @@ from src.domain.intent.schemas import (
     SlotSpec,
     Turn,
 )
+from src.domain.llm.interfaces import UtilityLLMProviderPort
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.infrastructure.config.intent_config import IntentConfig
 
@@ -102,21 +103,55 @@ class LLMIntentAnalyzerAdapter(IntentAnalyzerInterface):
         logger: LoggerInterface,
         config: IntentConfig | None = None,
         chain: IntentChain | None = None,
+        llm_provider: UtilityLLMProviderPort | None = None,
     ) -> None:
         self._logger = logger
         self._config = config or IntentConfig()
-        self._chain: IntentChain = chain if chain is not None else self._build_chain()
+        # DR-9 우선순위: 명시 chain > llm_provider > ChatOpenAI.
+        # 명시 chain 은 호출자의 의도(테스트 격리 등)이므로 항상 이긴다.
+        self._explicit_chain = chain
+        self._llm_provider = llm_provider
+        # A7: provider 주입 시 ChatOpenAI 지연 생성 (키 없는 배포 대비).
+        if chain is not None:
+            self._chain: IntentChain | None = chain
+        elif llm_provider is not None:
+            self._chain = None
+        else:
+            self._chain = self._build_chain()
+        self._cached_llm: object | None = None
+        self._cached_chain: IntentChain | None = None
 
-    def _build_chain(self) -> IntentChain:
-        llm = ChatOpenAI(
-            model=self._config.INTENT_ANALYZER_MODEL,
-            temperature=self._config.INTENT_ANALYZER_TEMPERATURE,
-        )
+    def _build_chain_from(self, llm) -> IntentChain:
         prompt = ChatPromptTemplate.from_messages(
             [("system", _SYSTEM), ("human", _HUMAN)]
         )
         chain: IntentChain = prompt | llm.with_structured_output(IntentDraft)
         return chain
+
+    def _build_chain(self) -> IntentChain:
+        return self._build_chain_from(
+            ChatOpenAI(
+                model=self._config.INTENT_ANALYZER_MODEL,
+                temperature=self._config.INTENT_ANALYZER_TEMPERATURE,
+            )
+        )
+
+    async def _resolve_chain(self) -> IntentChain:
+        """호출 시점에 유효한 chain (DR-9)."""
+        if self._explicit_chain is not None:
+            return self._explicit_chain
+        if self._llm_provider is not None:
+            llm = await self._llm_provider.get(
+                self._config.INTENT_ANALYZER_TEMPERATURE
+            )
+            if llm is not None:
+                if llm is not self._cached_llm:
+                    self._cached_llm = llm
+                    self._cached_chain = self._build_chain_from(llm)
+                return self._cached_chain
+        if self._chain is None:
+            self._chain = self._build_chain()
+        return self._chain
 
     async def analyze(
         self,
@@ -130,8 +165,11 @@ class LLMIntentAnalyzerAdapter(IntentAnalyzerInterface):
         payload = self._build_payload(message, spec, history, answers, round_)
         started = time.perf_counter()
         try:
+            # 해석은 timeout 밖에 둔다 — 타임아웃은 LLM 호출에 대한 예산이다.
+            # 해석 실패는 아래 generic except 가 잡아 degrade 로 흡수한다.
+            chain = await self._resolve_chain()
             raw = await asyncio.wait_for(
-                self._chain.ainvoke(payload),
+                chain.ainvoke(payload),
                 timeout=self._config.INTENT_ANALYZER_TIMEOUT_SEC,
             )
             draft = _coerce(raw)

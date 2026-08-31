@@ -10,10 +10,59 @@ supervisor-overblock-fix D1/D2:
   권한 검증·필터링은 도구 3단 방어(USE_RAG_SEARCH 차단 + visibility 필터)가 담당.
 - 심사 위임 가드 문구로 교체: 거부·차단 금지 + 미검색 정보는 '확인되지 않습니다'.
 """
+from datetime import UTC, datetime
+
 from src.application.wiki.schemas import WikiTreeItem
 from src.domain.agent_run.auth_context import AuthContext
+from src.domain.agent_run.clock import to_local, weekday_ko
+from src.domain.logging.interfaces.logger_interface import LoggerInterface
 
 _ANONYMOUS_BLOCK = ""  # 미인증 시 prepend 생략
+
+# runtime-datetime-context D1 §4.2: 사실(날짜+요일) + 해석 지침 3줄.
+# 시각(HH:MM) 미포함 — 하루 단위로만 변해 프롬프트 캐시 프리픽스가 안정적이다.
+# 게이트 어휘(거부/차단/권한) 금지 — supervisor-overblock-fix 교훈.
+_DATETIME_GUIDE = (
+    "'오늘', '최근', '최신', '이번 주/이번 달' 같은 표현은 "
+    "위 날짜를 기준으로 해석하세요.\n"
+    "웹 검색이 필요하면 검색어에 위 날짜(연-월-일)를 포함하세요.\n"
+    "검색 결과나 문서의 날짜가 위 날짜와 다르면 그 날짜를 답변에 함께 밝히세요.\n"
+)
+
+
+def render_datetime_block(
+    tz: str | None,
+    now_utc: datetime | None = None,
+    logger: LoggerInterface | None = None,
+) -> str:
+    """`[현재 날짜]` 블록 렌더링 — 런타임 시스템 프롬프트 prepend용.
+
+    Design Ref: runtime-datetime-context §D1.
+
+    Args:
+        tz: IANA 타임존. None이면 미배선(opt-out)으로 보고 '' 반환 (로그 없음).
+        now_utc: 기준 시각(테스트 결정성). None이면 현재 UTC.
+        logger: 렌더 실패 시 warning 기록. None이면 조용히 '' 반환.
+
+    Returns:
+        블록 텍스트(끝에 '\\n---\\n\\n' 구분자) 또는 ''. 잘못된 tz 등 실패는
+        degraded('' + warning) — 날짜 없이도 답변은 가능하므로 실행을
+        중단하지 않는다 (FR-11).
+    """
+    if tz is None:
+        return ""
+    try:
+        local = to_local(now_utc or datetime.now(UTC), tz)
+    except Exception as e:  # ZoneInfoNotFoundError 등
+        if logger is not None:
+            logger.warning("datetime block render failed", tz=tz, exception=e)
+        return ""
+    return (
+        "[현재 날짜]\n"
+        f"- {local.strftime('%Y-%m-%d')} ({weekday_ko(local.date())})\n\n"
+        f"{_DATETIME_GUIDE}"
+        "\n---\n\n"
+    )
 
 
 def render_user_context_block(ctx: AuthContext | None) -> str:

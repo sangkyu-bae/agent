@@ -19,7 +19,10 @@ from src.application.visualization.chart_builder_node import (
 )
 from src.application.visualization.analysis_prompt import ANALYSIS_OUTPUT_GUIDE
 from src.application.agent_run.auth_context import get_current_auth_context
-from src.application.agent_run.prompt_rendering import render_user_context_block
+from src.application.agent_run.prompt_rendering import (
+    render_datetime_block,
+    render_user_context_block,
+)
 from src.application.visualization.chart_router import (
     create_chart_router_node,
     route_after_chart_router,
@@ -87,7 +90,11 @@ class ExcelAnalysisWorkflow:
         quality_threshold: AnalysisQualityThreshold,
         chart_builder: ChartBuilderInterface | None = None,
         enable_visualization: bool = True,
+        *,
+        agent_timezone: str | None = None,
     ) -> None:
+        # runtime-datetime-context D3/D10: None이면 [현재 날짜] 블록 생략 — 무회귀.
+        self._agent_timezone = agent_timezone
         self._excel_parser = excel_parser
         self._claude = claude_client
         self._search = tavily_search
@@ -200,11 +207,16 @@ class ExcelAnalysisWorkflow:
         user_block = state.get("user_context_block") or render_user_context_block(
             get_current_auth_context()
         )
+        # Design Ref: runtime-datetime-context §D10 — state 키 추가 없이 노드에서
+        # 렌더해 날짜 → 사용자 순으로 prepend (두 진입점 무수정).
+        datetime_block = render_datetime_block(
+            self._agent_timezone, logger=self._logger
+        )
         prompt = self._build_analysis_prompt(
             state["user_query"],
             state["excel_data"],
             web_results,
-            user_block=user_block,
+            user_block=datetime_block + user_block,
         )
 
         claude_request = ClaudeRequest(

@@ -292,3 +292,56 @@ class TestSupervisorAnalysisUserBlock:
 
         assert captured["system"].startswith("[현재 사용자 정보]")
         assert "배상규" in captured["system"]
+
+
+
+# ── runtime-datetime-context D10 (FR-09) ─────────────────────────────
+
+
+def _make_workflow_with_tz(mock_claude: Mock, tz: str | None) -> ExcelAnalysisWorkflow:
+    search_decision = Mock()
+    search_decision.decide = AsyncMock(
+        return_value=WebSearchDecision(needs_web_search=False)
+    )
+    return ExcelAnalysisWorkflow(
+        excel_parser=Mock(),
+        claude_client=mock_claude,
+        tavily_search=Mock(),
+        hallucination_evaluator=Mock(),
+        search_decision=search_decision,
+        logger=Mock(),
+        retry_policy=AnalysisRetryPolicy(max_retries=3),
+        quality_threshold=AnalysisQualityThreshold(
+            min_confidence_score=0.7, max_hallucination_score=0.3
+        ),
+        agent_timezone=tz,
+    )
+
+
+class TestAnalyzeNodeDatetimeBlock:
+    _MARK = "[현재 날짜]"
+
+    @pytest.mark.asyncio
+    async def test_prompt_starts_with_datetime_then_user_block(self):
+        """state 키 추가 없이 analysis 노드에서 날짜 → 사용자 순으로 prepend."""
+        mock_claude = Mock()
+        mock_claude.complete = AsyncMock(return_value=_claude_response("분석"))
+        wf = _make_workflow_with_tz(mock_claude, "Asia/Seoul")
+
+        await wf._analyze_node(
+            _base_state(user_context_block="[현재 사용자 정보]\nBLOCK_S\n---\n\n")
+        )
+
+        prompt = _captured_prompt(mock_claude)
+        assert prompt.startswith(self._MARK)
+        assert prompt.index(self._MARK) < prompt.index("BLOCK_S")
+
+    @pytest.mark.asyncio
+    async def test_no_tz_keeps_prompt_without_datetime(self):
+        mock_claude = Mock()
+        mock_claude.complete = AsyncMock(return_value=_claude_response("분석"))
+        wf = _make_workflow_with_tz(mock_claude, None)
+
+        await wf._analyze_node(_base_state())
+
+        assert self._MARK not in _captured_prompt(mock_claude)

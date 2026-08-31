@@ -59,6 +59,10 @@ dependencies = [
     "cryptography>=42.0.0",
     # Cron 표현식 파싱/다음 발화 계산 (agent-schedule)
     "croniter>=2.0",
+    # IANA tz DB (runtime-datetime-context D11) — Windows/슬림 컨테이너엔 OS tz DB가 없어
+    # ZoneInfo("Asia/Seoul")가 ZoneInfoNotFoundError. 전이 의존에 기대지 않고 명시.
+    "tzdata>=2024.1",
+    "python-pptx>=1.0.2",
 ]
 
 [project.optional-dependencies]

@@ -92,6 +92,22 @@ export const queryKeys = {
     detail: (id: string) => [...queryKeys.llmModels.all, 'detail', id] as const,
   },
 
+  // ── Multimodal extraction (admin) ─────────────────────
+  multimodal: {
+    all: ['multimodal'] as const,
+    settings: () => [...queryKeys.multimodal.all, 'settings'] as const,
+  },
+
+  // ── Blueprints (golden-sample-blueprint) ──────────────
+  blueprints: {
+    all: ['blueprints'] as const,
+    list: (includeInactive: boolean) =>
+      [...queryKeys.blueprints.all, 'list', { includeInactive }] as const,
+    detail: (id: string) => [...queryKeys.blueprints.all, 'detail', id] as const,
+    fonts: () => [...queryKeys.blueprints.all, 'fonts'] as const,
+    options: () => [...queryKeys.blueprints.all, 'options'] as const,
+  },
+
   // ── Chunking Profiles (admin) ──────────────────────────
   chunkingProfiles: {
     all: ['chunkingProfiles'] as const,

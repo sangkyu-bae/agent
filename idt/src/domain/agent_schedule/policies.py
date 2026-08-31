@@ -10,13 +10,17 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from croniter import croniter
 
+from src.domain.agent_run.clock import WEEKDAY_KO, to_local
 from src.domain.agent_schedule.value_objects import ScheduleSpec
 
-_WEEKDAY_KO = "월화수목금토일"
+# runtime-datetime-context D13: 요일·로컬 변환은 domain 공용 clock 으로 위임.
+# (DEFAULT_TIMEZONE 의 config 단일화는 후속 — domain 은 config 를 볼 수 없다.)
+_WEEKDAY_KO = WEEKDAY_KO
 
 
 def _to_local(after_utc: datetime, tz: str) -> datetime:
-    return after_utc.replace(tzinfo=timezone.utc).astimezone(ZoneInfo(tz))
+    # 입력은 UTC naive(DB 규격) — clock.to_local 이 naive 를 UTC 로 간주한다.
+    return to_local(after_utc, tz)
 
 
 def _to_utc_naive(local: datetime) -> datetime:

@@ -13,6 +13,8 @@ export interface LlmModel {
   input_price_per_1k_usd?: string | null;
   output_price_per_1k_usd?: string | null;
   pricing_updated_at?: string | null;
+  // multimodal-extractor: 비전(이미지 입력) 지원 여부 — additive, 구버전 응답은 undefined
+  supports_vision?: boolean;
 }
 
 export interface LlmModelListResponse {
@@ -30,6 +32,7 @@ export interface CreateLlmModelRequest {
   is_active?: boolean;
   is_default?: boolean;
   base_url?: string | null;
+  supports_vision?: boolean;
 }
 
 /** PATCH /api/v1/llm-models/{id} — provider/model_name/api_key_env는 수정 불가(식별자 성격) */
@@ -40,6 +43,7 @@ export interface UpdateLlmModelRequest {
   is_active?: boolean;
   is_default?: boolean;
   base_url?: string | null;
+  supports_vision?: boolean;
 }
 
 /** PATCH /api/v1/llm-models/{id}/pricing — 전송은 number(≥0), 수신은 string */

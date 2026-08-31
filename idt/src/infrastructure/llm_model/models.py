@@ -44,3 +44,8 @@ class LlmModelModel(Base):
     pricing_updated_at: Mapped[datetime | None] = mapped_column(DateTime)
     # LLM-MODEL-REG-002 §2-2: self-host 엔드포인트(vLLM/OpenAI 호환). V035 매핑.
     base_url: Mapped[str | None] = mapped_column(String(500))
+    # multimodal-extractor Design §3.3: V064 매핑. 비전(이미지 입력) 지원 여부.
+    supports_vision: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False,
+        comment="이미지 입력(비전) 지원 여부 — 1이면 멀티모달 추출 모델로 선택 가능",
+    )

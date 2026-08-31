@@ -308,3 +308,45 @@ class TestRAGAgentUseCase:
                 await uc.execute(RAGAgentRequest(query="q", user_id="u-1"), "req-4")
 
         mock_logger.error.assert_called_once()
+
+
+
+# ──────────────────────────────────────────────────────────
+# runtime-datetime-context D9 (FR-08): system 메시지 prefix
+# ──────────────────────────────────────────────────────────
+
+
+class TestRAGAgentDatetimeBlock:
+    @staticmethod
+    async def _system_content(agent_timezone):
+        from langchain_core.messages import AIMessage, HumanMessage
+        from src.application.rag_agent.use_case import RAGAgentUseCase
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke.return_value = {
+            "messages": [HumanMessage(content="질문"), AIMessage(content="답")]
+        }
+        with patch(
+            "src.application.rag_agent.use_case.create_react_agent",
+            return_value=mock_agent,
+        ):
+            uc = RAGAgentUseCase(
+                hybrid_search_use_case=AsyncMock(),
+                llm_factory=_make_mock_factory(),
+                llm_model=_make_llm_model(),
+                logger=MagicMock(),
+                agent_timezone=agent_timezone,
+            )
+            await uc.execute(RAGAgentRequest(query="질문", user_id="u-1"), "req-1")
+        return mock_agent.ainvoke.call_args.args[0]["messages"][0]["content"], uc
+
+    @pytest.mark.asyncio
+    async def test_system_message_starts_with_datetime_block(self):
+        system, uc = await self._system_content("Asia/Seoul")
+        assert system.startswith("[현재 날짜]")
+        assert system.endswith(uc._SYSTEM_PROMPT)
+
+    @pytest.mark.asyncio
+    async def test_no_tz_keeps_static_prompt(self):
+        system, uc = await self._system_content(None)
+        assert system == uc._SYSTEM_PROMPT

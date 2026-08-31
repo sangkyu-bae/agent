@@ -3,9 +3,8 @@ from __future__ import annotations
 
 import os
 import tempfile
-import uuid
-from datetime import datetime, timezone
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 import pytest
@@ -14,7 +13,6 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
-
 from src.domain.llm_model.entity import LlmModel
 from src.infrastructure.llm_model.llm_model_repository import (
     LlmModelRepository,
@@ -46,7 +44,7 @@ async def session() -> AsyncGenerator[AsyncSession, None]:
 
 
 def _make_model(model_id: str = "m1", provider: str = "openai", model_name: str = "gpt-4o") -> LlmModel:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return LlmModel(
         id=model_id,
         provider=provider,
@@ -181,3 +179,39 @@ async def test_seed_is_idempotent(session: AsyncSession) -> None:
 
     models = await repo.list_all("req-2")
     assert len(models) == 3  # 중복 삽입 없음
+
+
+# ── multimodal-extractor Design §3.3 (V064): supports_vision 관통 ──────────────
+
+@pytest.mark.asyncio
+async def test_supports_vision_defaults_false_and_round_trips(session: AsyncSession) -> None:
+    repo = LlmModelRepository(session, MagicMock())
+    plain = _make_model("mv0")
+    assert plain.supports_vision is False
+    await repo.save(plain, "req")
+    vision = _make_model("mv1", model_name="gpt-4o-vision")
+    vision = LlmModel(**{**vision.__dict__, "supports_vision": True})
+    await repo.save(vision, "req")
+
+    assert (await repo.find_by_id("mv0", "req")).supports_vision is False
+    assert (await repo.find_by_id("mv1", "req")).supports_vision is True
+
+
+@pytest.mark.asyncio
+async def test_update_persists_supports_vision(session: AsyncSession) -> None:
+    repo = LlmModelRepository(session, MagicMock())
+    m = _make_model("mv2")
+    await repo.save(m, "req")
+    updated = LlmModel(**{**m.__dict__, "supports_vision": True})
+    await repo.update(updated, "req")
+    assert (await repo.find_by_id("mv2", "req")).supports_vision is True
+
+
+@pytest.mark.asyncio
+async def test_seed_marks_vision_capable_defaults(session: AsyncSession) -> None:
+    repo = LlmModelRepository(session, MagicMock())
+    await seed_default_models(repo, MagicMock(), "req")
+    gpt4o = await repo.find_by_provider_and_name("openai", "gpt-4o", "req")
+    claude = await repo.find_by_provider_and_name("anthropic", "claude-sonnet-4-6", "req")
+    assert gpt4o is not None and gpt4o.supports_vision is True
+    assert claude is not None and claude.supports_vision is True

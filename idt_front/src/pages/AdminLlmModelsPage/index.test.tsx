@@ -85,6 +85,50 @@ describe('AdminLlmModelsPage', () => {
     );
   });
 
+  it('P3b: 등록 폼 "비전 지원" 체크 시 supports_vision=true 가 POST 바디에 실리고, 목록에 Vision 배지가 붙는다 (multimodal-extractor §8.3 #7)', async () => {
+    let captured: Record<string, unknown> | null = null;
+    server.use(
+      http.post('*/api/v1/llm-models', async ({ request }) => {
+        captured = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json(
+          {
+            id: 'uuid-new',
+            provider: captured.provider,
+            model_name: captured.model_name,
+            display_name: captured.display_name,
+            description: null,
+            max_tokens: null,
+            is_active: true,
+            is_default: false,
+            base_url: null,
+            supports_vision: captured.supports_vision,
+            input_price_per_1k_usd: null,
+            output_price_per_1k_usd: null,
+            pricing_updated_at: null,
+          },
+          { status: 201 },
+        );
+      }),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('GPT-4o');
+    // mock 목록: gpt-4o·claude 는 supports_vision=true → Vision 배지 2개
+    expect(screen.getAllByText('Vision')).toHaveLength(2);
+
+    await user.click(screen.getByRole('button', { name: '모델 등록' }));
+    await user.type(screen.getByPlaceholderText('예: gpt-4o'), 'gpt-4.1');
+    await user.type(screen.getByPlaceholderText('예: GPT-4o'), 'GPT-4.1');
+    await user.type(screen.getByPlaceholderText('예: OPENAI_API_KEY'), 'OPENAI_API_KEY');
+    const vision = screen.getByRole('checkbox', { name: '비전 지원' });
+    expect(vision).not.toBeChecked(); // 기본 false
+    await user.click(vision);
+    await user.click(screen.getByRole('button', { name: '등록' }));
+
+    await waitFor(() => expect(captured).not.toBeNull());
+    expect(captured).toMatchObject({ model_name: 'gpt-4.1', supports_vision: true });
+  });
+
   it('P4: 필수값 누락 시 인라인 에러를 표시하고 전송하지 않는다', async () => {
     let posted = false;
     server.use(

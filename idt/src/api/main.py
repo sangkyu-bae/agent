@@ -605,6 +605,9 @@ from src.application.llm_model.list_llm_models_use_case import ListLlmModelsUseC
 from src.application.llm_model.update_llm_model_pricing_use_case import (
     UpdateLlmModelPricingUseCase,
 )
+from src.application.llm_model.utility_llm_provider import UtilityLLMProvider
+from src.domain.llm.interfaces import UtilityLLMProviderPort
+from src.infrastructure.cache.in_memory_cache import InMemoryCache
 from src.application.agent_run.use_cases.get_run_detail_use_case import (
     GetRunDetailUseCase,
 )
@@ -735,6 +738,39 @@ _auto_build_session_repository: Optional[AutoBuildSessionRepository] = None
 # Global LLM factory and default model (initialized on startup)
 _llm_factory: LLMFactory = LLMFactory()
 _default_llm_model: Optional[LlmModel] = None
+
+# admin-default-llm-routing: 보조 LLM 공급자 (앱 수명 싱글톤, lazy).
+# 관리자가 지정한 기본/보조 모델을 요청 시점마다 해석해 어댑터에 공급한다.
+# _default_llm_model 과 달리 부팅 시 고정되지 않는다 — 재시작 없는 교체가 목적.
+_utility_llm_provider: Optional[UtilityLLMProvider] = None
+
+
+def get_utility_llm_provider() -> UtilityLLMProvider:
+    """보조 LLM 공급자 lazy 싱글톤 (admin-default-llm-routing §2.1).
+
+    세션은 보유하지 않는다 — 캐시 미스 시에만 session_factory 로 단기 읽기
+    세션을 연다 (Design §9.4).
+    """
+    global _utility_llm_provider
+    if _utility_llm_provider is None:
+        app_logger = get_app_logger()
+        cache = InMemoryCache(
+            default_ttl_seconds=settings.llm_model_cache_ttl_seconds,
+            max_entries=64,
+        )
+        _utility_llm_provider = UtilityLLMProvider(
+            cache=cache,
+            llm_factory=_llm_factory,
+            session_factory=get_session_factory(),
+            repo_builder=lambda session: LlmModelRepository(
+                session=session, logger=app_logger
+            ),
+            logger=app_logger,
+            utility_model_name=settings.utility_llm_model_name,
+            ttl_seconds=settings.llm_model_cache_ttl_seconds,
+            max_instances=settings.llm_instance_cache_max_entries,
+        )
+    return _utility_llm_provider
 
 # Global logger instance
 _app_logger: Optional[StructuredLogger] = None
@@ -958,12 +994,17 @@ def create_analyze_excel_use_case() -> AnalyzeExcelUseCase:
 
     tavily_search = TavilySearchTool()
 
-    hallucination_adapter = HallucinationEvaluatorAdapter()
+    # admin-default-llm-routing AD-2: 관리자 설정 모델을 런타임에 따라간다.
+    hallucination_adapter = HallucinationEvaluatorAdapter(
+        llm_provider=get_utility_llm_provider()
+    )
     hallucination_evaluator = HallucinationEvaluatorUseCase(
         evaluator_adapter=hallucination_adapter,
     )
 
-    search_decision = LLMSearchDecisionAdapter(logger=app_logger)
+    search_decision = LLMSearchDecisionAdapter(
+        logger=app_logger, llm_provider=get_utility_llm_provider()
+    )
 
     # supervisor-chart-builder-node: 엑셀 분석 결과 시각화용 chart_builder.
     # _default_llm_model 미로드(None) 시 빌더 비활성 → chart_router→END 하위호환.
@@ -989,6 +1030,8 @@ def create_analyze_excel_use_case() -> AnalyzeExcelUseCase:
         quality_threshold=quality_threshold,
         chart_builder=excel_chart_builder,
         enable_visualization=True,
+        # ★ runtime-datetime-context D3: [현재 날짜] 블록 기준 타임존
+        agent_timezone=settings.agent_timezone,
     )
 
     # excel-chart-routing-dedup: Supervisor 재사용 경로 — 차트 OFF.
@@ -1004,6 +1047,7 @@ def create_analyze_excel_use_case() -> AnalyzeExcelUseCase:
         quality_threshold=quality_threshold,
         chart_builder=None,
         enable_visualization=False,
+        agent_timezone=settings.agent_timezone,
     )
 
     return AnalyzeExcelUseCase(
@@ -1195,6 +1239,8 @@ def create_rag_agent_use_case() -> RAGAgentUseCase:
         llm_factory=_llm_factory,
         llm_model=_default_llm_model,
         logger=app_logger,
+        # ★ runtime-datetime-context D3: [현재 날짜] 블록 기준 타임존
+        agent_timezone=settings.agent_timezone,
     )
 
 
@@ -1812,11 +1858,16 @@ def create_admin_user_mgmt_factories():
     return admin_create_user_factory, list_users_factory
 
 
-def create_llm_model_factories(cost_calculator: CostCalculator | None = None):
+def create_llm_model_factories(
+    cost_calculator: CostCalculator | None = None,
+    llm_provider: UtilityLLMProviderPort | None = None,
+):
     """Return per-request DI factories for LLM Model registry (LLM-MODEL-REG-001 + M4).
 
     DB-001 §10.2: session 은 Depends(get_session) 으로 주입. repo 는 동일 세션 공유.
     M4: cost_calculator 주입 시 update_pricing_factory도 함께 반환 (★ M1 G1).
+    admin-default-llm-routing AD-3: llm_provider 주입 시 모델 변경 4경로가
+    보조 LLM 해석 캐시를 무효화한다 (미주입이면 기존 동작 — FR-9).
     """
     app_logger = get_app_logger()
 
@@ -1824,13 +1875,25 @@ def create_llm_model_factories(cost_calculator: CostCalculator | None = None):
         return LlmModelRepository(session=session, logger=app_logger)
 
     def create_factory(session: AsyncSession = Depends(get_session)) -> CreateLlmModelUseCase:
-        return CreateLlmModelUseCase(repository=_make_repo(session), logger=app_logger)
+        return CreateLlmModelUseCase(
+            repository=_make_repo(session),
+            logger=app_logger,
+            llm_provider=llm_provider,
+        )
 
     def update_factory(session: AsyncSession = Depends(get_session)) -> UpdateLlmModelUseCase:
-        return UpdateLlmModelUseCase(repository=_make_repo(session), logger=app_logger)
+        return UpdateLlmModelUseCase(
+            repository=_make_repo(session),
+            logger=app_logger,
+            llm_provider=llm_provider,
+        )
 
     def deactivate_factory(session: AsyncSession = Depends(get_session)) -> DeactivateLlmModelUseCase:
-        return DeactivateLlmModelUseCase(repository=_make_repo(session), logger=app_logger)
+        return DeactivateLlmModelUseCase(
+            repository=_make_repo(session),
+            logger=app_logger,
+            llm_provider=llm_provider,
+        )
 
     def get_factory(session: AsyncSession = Depends(get_session)) -> GetLlmModelUseCase:
         return GetLlmModelUseCase(repository=_make_repo(session), logger=app_logger)
@@ -1850,6 +1913,7 @@ def create_llm_model_factories(cost_calculator: CostCalculator | None = None):
             repository=_make_repo(session),
             cost_calculator=cost_calculator,
             logger=app_logger,
+            llm_provider=llm_provider,
         )
 
     return (
@@ -2237,6 +2301,7 @@ def get_memory_extraction_service() -> MemoryExtractionService:
             model_name=settings.memory_extraction_model_name,
             api_key=settings.openai_api_key,
             logger=app_logger,
+            llm_provider=get_utility_llm_provider(),
         )
         _memory_extraction_singleton = MemoryExtractionService(
             session_factory=get_session_factory(),
@@ -2263,6 +2328,7 @@ def get_feedback_wiki_service() -> FeedbackWikiService:
             model_name=settings.openai_llm_model,
             api_key=settings.openai_api_key,
             logger=app_logger,
+            llm_provider=get_utility_llm_provider(),
         )
         _feedback_wiki_singleton = FeedbackWikiService(
             session_factory=get_session_factory(),
@@ -2406,6 +2472,8 @@ def create_general_chat_use_case_factory():
             middleware_provider=get_middleware_provider(),
             # tool-recommender module-4: 킬스위치 off면 None → 선별 비활성
             tool_filter=_build_tool_filter(),
+            # ★ runtime-datetime-context D3: [현재 날짜] 블록 기준 타임존
+            agent_timezone=settings.agent_timezone,
         )
 
     return _factory
@@ -2654,6 +2722,38 @@ def create_agent_builder_factories():
         llm_input_max_chars=settings.document_generator_llm_input_max_chars,
     )
 
+    # excel-generator-node §2.1: 엑셀 생성 노드 의존 (문서생성기와 저장소 공유).
+    from src.infrastructure.excel.pandas_excel_parser import PandasExcelParser
+    from src.infrastructure.excel_export.pandas_excel_exporter import (
+        PandasExcelExporter as _EgExporter,
+    )
+    from src.infrastructure.excel_generator.generator import ExcelGenerator
+
+    _eg_generator = ExcelGenerator(
+        exporter=_EgExporter(),
+        attachment_store=_attachment_store or create_attachment_store(),
+        logger=app_logger,
+        excel_parser=PandasExcelParser(),
+        # excel-generator-node Act-1 (D-5): 문서생성기와 동일 상한 설정 공유
+        llm_input_max_chars=settings.document_generator_llm_input_max_chars,
+    )
+
+    # golden-sample-blueprint §2.1: 발표자료 생성 노드 의존 (문서생성기와 어댑터·저장소 공유)
+    from src.api.blueprint_di import build_presentation_generation_use_case
+    from src.infrastructure.blueprint.repository import (
+        SessionScopedBlueprintRepository,
+    )
+
+    _bp_runtime_repo = SessionScopedBlueprintRepository(
+        session_factory=get_session_factory(), logger=app_logger,
+    )
+    _bp_presentation_generator = build_presentation_generation_use_case(
+        conversion_adapter=_dt_conversion_adapter,
+        attachment_store=_attachment_store or create_attachment_store(),
+        logger=app_logger,
+        input_max_chars=settings.document_generator_llm_input_max_chars,
+    )
+
     workflow_compiler = WorkflowCompiler(
         tool_factory=tool_factory, llm_factory=_llm_factory, logger=app_logger,
         hooks=DefaultHooks(),
@@ -2661,15 +2761,24 @@ def create_agent_builder_factories():
         chart_max_count=settings.chart_max_count,
         pipeline_llm_model=_build_search_pipeline_llm_model(),
         search_compress_threshold=settings.search_compress_threshold,
+        # deep-search-pipeline FR-13: 기본 legacy — 배포 시 동작 무변화.
+        search_pipeline_mode=settings.search_pipeline_mode,
         document_template_repository=_dt_runtime_template_repo,
         document_composer=_dt_composer,
         # ★ doc-generator §4-4: 생성 노드 의존
         document_generation_type_repository=_dg_runtime_type_repo,
         document_generator=_dg_generator,
+        # ★ golden-sample-blueprint: 발표자료 생성 노드 의존
+        presentation_generator=_bp_presentation_generator,
+        blueprint_repository=_bp_runtime_repo,
+        # ★ excel-generator-node §2.1: 엑셀 생성 노드 의존
+        excel_generator=_eg_generator,
         # ★ wiki-agentic-navigation D1: wiki_read 에이전트 목차 블록 주입
         wiki_toc_provider=_wiki_toc_provider,
         # ★ builtin-middleware D6: 스냅샷 ∪ enforced 미들웨어 조립
         middleware_provider=get_middleware_provider(),
+        # ★ runtime-datetime-context D3: [현재 날짜] 블록 기준 타임존
+        agent_timezone=settings.agent_timezone,
     )
 
     # DB-001 §10.2: session 은 Depends(get_session) 으로 주입.
@@ -3289,7 +3398,10 @@ def create_ragas_factories(build_run_agent_uc=None):
 
     generate_uc = TestsetGenerateUseCase(
         text_extractor=extract_document_text,
-        qa_generator=OpenAIQAGenerator(model_name=settings.eval_qa_gen_model),
+        qa_generator=OpenAIQAGenerator(
+            model_name=settings.eval_qa_gen_model,
+            llm_provider=get_utility_llm_provider(),
+        ),
         logger=app_logger,
         max_input_chars=settings.eval_qa_gen_max_input_chars,
         max_pairs=settings.eval_qa_gen_max_pairs,
@@ -4039,7 +4151,11 @@ def create_prompt_composer_factory():
         app_logger.info("Prompt composer disabled — router not registered")
         return None
     try:
-        generator = LLMPromptGeneratorAdapter(logger=app_logger, config=config)
+        generator = LLMPromptGeneratorAdapter(
+            logger=app_logger,
+            config=config,
+            llm_provider=get_utility_llm_provider(),
+        )
     except Exception as e:
         app_logger.error("Prompt composer build failed — disabling", exception=e)
         return None
@@ -4180,6 +4296,7 @@ def get_wiki_folder_summary_service():
                 model_name=settings.openai_llm_model,
                 api_key=settings.openai_api_key,
                 logger=app_logger,
+                llm_provider=get_utility_llm_provider(),
             ),
             logger=app_logger,
             enabled=settings.wiki_folder_summaries_enabled,
@@ -4218,6 +4335,7 @@ def create_wiki_factories():
             model_name=settings.openai_llm_model,
             api_key=settings.openai_api_key,
             logger=app_logger,
+            llm_provider=get_utility_llm_provider(),
         )
 
     def distill_factory(session: AsyncSession = Depends(get_session)):
@@ -4822,7 +4940,9 @@ def create_app() -> FastAPI:
     # intent-analyzer Design §2.1 — 독립 모듈. 기존 그래프에는 배선하지 않는다(Plan D8).
     # 어댑터 1개를 앱 수명 동안 재사용한다 (위키 app-lifetime-client-singleton).
     _intent_use_case = AnalyzeIntentUseCase(
-        analyzer=LLMIntentAnalyzerAdapter(logger=logger)
+        analyzer=LLMIntentAnalyzerAdapter(
+            logger=logger, llm_provider=get_utility_llm_provider()
+        )
     )
     app.dependency_overrides[get_analyze_intent_use_case] = lambda: _intent_use_case
 
@@ -4895,7 +5015,12 @@ def create_app() -> FastAPI:
         _llm_get_f,
         _llm_list_f,
         _llm_pricing_f,
-    ) = create_llm_model_factories(cost_calculator=_cost_calculator_singleton)
+    ) = create_llm_model_factories(
+        cost_calculator=_cost_calculator_singleton,
+        # admin-default-llm-routing AD-3: 관리자 모델 변경 4경로가 보조 LLM
+        # 해석 캐시를 무효화한다 → 재시작 없이 다음 요청부터 반영된다.
+        llm_provider=get_utility_llm_provider(),
+    )
     app.dependency_overrides[get_create_llm_model_use_case] = _llm_create_f
     app.dependency_overrides[get_update_llm_model_use_case] = _llm_update_f
     app.dependency_overrides[get_deactivate_llm_model_use_case] = _llm_deactivate_f
@@ -5267,6 +5392,22 @@ def create_app() -> FastAPI:
     app.include_router(collection_search_router)
     app.include_router(ragas_router)
     app.include_router(preview_router)
+    # multimodal-extractor: DI + /api/v1/admin/multimodal 라우터 (preview 라우터 선등록 후)
+    from src.api.multimodal_di import wire_multimodal
+
+    wire_multimodal(
+        app, get_session=get_session, llm_factory=_llm_factory, logger=get_app_logger()
+    )
+    # golden-sample-blueprint: DI + /api/v1/admin/blueprints 라우터 (multimodal 레지스트리 재사용)
+    from src.api.blueprint_di import wire_blueprint
+
+    wire_blueprint(
+        app,
+        get_session=get_session,
+        llm_factory=_llm_factory,
+        logger=get_app_logger(),
+        settings=settings,
+    )
     app.include_router(advanced_ingest_router)
     app.include_router(ws_router)
     app.include_router(agent_run_router)  # M4 — observability read APIs

@@ -423,3 +423,55 @@ async def test_bind_agent_raises_not_found_for_other_user():
     created = await uc.compose(user_id=_USER, user_request="요청", request_id="r1")
     with pytest.raises(PromptSessionNotFoundError):
         await uc.bind_agent(created.session_id, "intruder", "agent-1")
+
+
+
+# ── runtime-datetime-context D12 (FR-10): 빌드타임 산출물은 날짜를 모른다 ──
+
+
+def test_assembled_prompt_has_no_datetime_marker():
+    """`assemble()` 은 시간·UUID·랜덤을 쓰지 않는다 — 날짜 블록은 런타임 전용."""
+    from src.domain.prompt_composer.policies import PromptAssemblyPolicy
+    from src.domain.prompt_composer.schemas import PromptSections
+
+    out = PromptAssemblyPolicy.assemble(
+        PromptSections(purpose="오늘 날씨를 알려주는 에이전트", identity="기상 안내자")
+    )
+    assert "[현재 날짜]" not in out
+
+
+def test_buildtime_packages_do_not_import_runtime_datetime_helpers():
+    """composer/planner(빌드타임)는 prompt_rendering·clock 을 import 하지 않는다.
+
+    AST 로 본다 — 독스트링·주석에 모듈명이 등장해도 오탐하지 않게.
+    """
+    import ast
+    from pathlib import Path
+
+    src = Path(__file__).resolve().parents[3] / "src"
+    packages = (
+        src / "domain" / "prompt_composer",
+        src / "application" / "prompt_composer",
+        src / "application" / "agent_composer",
+        # planner 3층도 빌드타임(에이전트 스펙 생성) — Plan §2.2 적용 금지 영역
+        src / "domain" / "planner",
+        src / "application" / "planner",
+        src / "infrastructure" / "planner",
+    )
+    forbidden = (
+        "src.application.agent_run.prompt_rendering",
+        "src.domain.agent_run.clock",
+    )
+    offenders: list[str] = []
+    for pkg in packages:
+        for py in pkg.rglob("*.py"):
+            tree = ast.parse(py.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                names: list[str] = []
+                if isinstance(node, ast.Import):
+                    names = [a.name for a in node.names]
+                elif isinstance(node, ast.ImportFrom) and node.module:
+                    names = [node.module]
+                if any(n.startswith(forbidden) for n in names):
+                    offenders.append(str(py.relative_to(src)))
+    assert offenders == []

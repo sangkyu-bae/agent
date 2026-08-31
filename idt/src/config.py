@@ -26,6 +26,16 @@ class Settings(BaseSettings):
     openai_embedding_model: str = "text-embedding-3-small"
     openai_llm_model: str = "gpt-4o-mini"
 
+    # Utility LLM Routing (admin-default-llm-routing Design §10.3)
+    # 보조 LLM(의도 판정·환각 검사·요약 등)이 사용할 모델명.
+    # 미설정(None)이면 관리자가 지정한 기본 모델(is_default=True)을 따라간다
+    # — NPU 등 self-host 전면 테스트 시 비워둘 것.
+    utility_llm_model_name: str | None = None
+    # L1 값 캐시 TTL(초). 다중 워커 전환 시 무효화 미전파 구간의 안전장치.
+    llm_model_cache_ttl_seconds: float = 60.0
+    # L2 인스턴스 캐시 상한. (model_id, updated_at, temperature) 키 기준.
+    llm_instance_cache_max_entries: int = 32
+
     # Agent Composer (nl-agent-composer)
     # compose LLM에 주입하는 후보 도구 상한. 초과분은 절단 + 경고 로그.
     composer_max_candidates: int = 100
@@ -77,6 +87,14 @@ class Settings(BaseSettings):
     # Tavily
     tavily_api_key: str = ""
 
+    # Agent Runtime (runtime-datetime-context D11)
+    # 런타임 시스템 프롬프트 `[현재 날짜]` 블록의 기준 타임존 (IANA 이름).
+    # 소비 지점: src/api/main.py 가 아래 생성자에 agent_timezone= 으로 주입 →
+    #   WorkflowCompiler / GeneralChatUseCase / RAGAgentUseCase / ExcelAnalysisWorkflow
+    #   → src/application/agent_run/prompt_rendering.py:render_datetime_block(tz)
+    # application 레이어는 이 설정을 직접 import하지 않는다 (kwarg 주입만).
+    agent_timezone: str = "Asia/Seoul"
+
     # Analysis
     analysis_max_retries: int = 3
     analysis_retry_on_hallucination: bool = True
@@ -114,6 +132,12 @@ class Settings(BaseSettings):
     # search 노드 rewrite/validate/compress용 경량 LLM. 빈 값이면 per-run 에이전트 LLM 사용.
     search_pipeline_provider: str = "openai"
     search_pipeline_model_name: str = "gpt-4o-mini"
+
+    # deep-search-pipeline FR-13/AD-2: search 노드 파이프라인 선택.
+    # "legacy"=rewrite→search→validate→compress (기본, 무영향)
+    # "deep"=요구 분해→병렬 검색→근거 누적→커버리지 검증→선택적 재검색 (웹검색 한정)
+    # 알 수 없는 값은 경고와 함께 legacy로 폴백한다.
+    search_pipeline_mode: str = "legacy"
     # 검색결과 압축 발동 임계 길이(자). 이하면 원문 그대로 전달.
     search_compress_threshold: int = 4000
 
@@ -153,6 +177,10 @@ class Settings(BaseSettings):
     document_generator_llm_input_max_chars: int = 20000
     # 기본 MCP 변환 도구 id — 빈 값이면 extractor 키로 폴백 (D5 체인)
     document_generator_html_to_doc_tool_id: str = ""
+
+    # golden-sample-blueprint (Design §8.3) — 선택 env. 비전 모델·동시성은 multimodal_setting
+    blueprint_font_dir: str = ""                      # 서버 설치 폰트 디렉토리(빈 값 = 기본 폰트만)
+    blueprint_default_font: str = "NanumGothic"       # 미매핑 폰트 대체 기본 폰트명
 
     # MCP Registry
     # transport별 인증/서버 config(auth_config/server_config)를 DB 저장 시

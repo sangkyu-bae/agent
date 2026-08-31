@@ -178,3 +178,21 @@ class TestFileDownload:
         client = TestClient(_make_app(store=store))
         res = client.get(f"/api/v1/document-extractor/files/{'b' * 32}")
         assert res.status_code == 403
+
+    def test_xlsx_downloads_with_spreadsheet_media_type(self, tmp_path):
+        # excel-generator-node §4.2: 엑셀 생성 노드 산출물 다운로드
+        path = tmp_path / "out.xlsx"
+        path.write_bytes(b"PK-xlsx-fake")
+        store = MagicMock()
+        store.load.return_value = StoredAttachment(
+            file_id="d" * 32, type=AttachmentType.EXCEL,
+            filename="수집결과.xlsx", size=12, owner_user_id="7",
+            file_path=str(path),
+        )
+        client = TestClient(_make_app(store=store))
+        res = client.get(f"/api/v1/document-extractor/files/{'d' * 32}")
+        assert res.status_code == 200
+        assert res.content == b"PK-xlsx-fake"
+        assert res.headers["content-type"] == (
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )

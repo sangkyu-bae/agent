@@ -8,6 +8,10 @@ import type {
   DocumentGeneratorDraft,
 } from './documentGenerator';
 import type { StagedSchedule } from './agentSchedule';
+import type {
+  PresentationGeneratorConfigRequest,
+  PresentationGeneratorDraft,
+} from './presentationGenerator';
 
 // ── Sub-Agent ──────────────────────────────────
 
@@ -64,6 +68,8 @@ export interface CreateBuilderAgentRequest {
   document_template?: DocumentTemplateRequest;
   // doc-generator: 문서 유형 (document_generator 도구 필요)
   document_generation_type?: DocumentGenerationTypeRequest;
+  // golden-sample-blueprint D7: 발표자료 설정 (presentation_generator 도구 필요)
+  presentation_generator?: PresentationGeneratorConfigRequest;
   // agent-settings-tab D5: supervisor 반복 한도 (백엔드 기본 25, 범위 10~1000)
   max_iterations?: number;
 }
@@ -106,6 +112,8 @@ export interface UpdateBuilderAgentRequest {
   document_template?: DocumentTemplateRequest;
   // doc-generator: undefined = 변경 안 함, 값 = 문서 유형 교체
   document_generation_type?: DocumentGenerationTypeRequest;
+  // golden-sample-blueprint D7: 발표자료 설정 (presentation_generator 도구 필요)
+  presentation_generator?: PresentationGeneratorConfigRequest;
   // agent-builder-edit-mapping FR-5: undefined = 모델 변경 안 함
   llm_model_id?: string;
   // builtin-middleware D5: undefined = 변경 안 함, [] = 전부 해제, [...] = 전체 교체
@@ -138,6 +146,8 @@ export interface AgentBuilderFormData {
   documentExtractorDraft?: DocumentExtractorDraft | null;
   // doc-generator: 문서 유형 드래프트 (저장 시 document_generation_type으로 전송)
   documentGeneratorDraft?: DocumentGeneratorDraft | null;
+  // golden-sample-blueprint: 발표자료 설정 드래프트 (저장 시 presentation_generator로 전송)
+  presentationGeneratorDraft?: PresentationGeneratorDraft | null;
   // agent-schedule: 생성 모드 전용 staged 스케줄 (생성 성공 후 순차 POST, edit에선 미사용)
   schedules: StagedSchedule[];
   // builtin-tools D8: 수동 해제된 빌트인 도구(카탈로그 형식) — ToolPickerModal에서만

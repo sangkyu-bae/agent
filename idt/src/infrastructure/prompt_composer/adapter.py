@@ -22,6 +22,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
+from src.domain.llm.interfaces import UtilityLLMProviderPort
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.domain.prompt_composer.policies import PromptAssemblyPolicy
 from src.domain.prompt_composer.schemas import (
@@ -125,23 +126,54 @@ class LLMPromptGeneratorAdapter:
         logger: LoggerInterface,
         config: PromptComposerConfig | None = None,
         chain: PromptChain | None = None,
+        llm_provider: UtilityLLMProviderPort | None = None,
     ) -> None:
         self._logger = logger
         self._config = config or PromptComposerConfig()
-        self._chain: PromptChain = (
-            chain if chain is not None else self._build_chain()
-        )
+        # DR-9 우선순위: 명시 chain > llm_provider > ChatOpenAI.
+        self._explicit_chain = chain
+        self._llm_provider = llm_provider
+        # A7: provider 주입 시 ChatOpenAI 지연 생성 (키 없는 배포 대비).
+        if chain is not None:
+            self._chain: PromptChain | None = chain
+        elif llm_provider is not None:
+            self._chain = None
+        else:
+            self._chain = self._build_chain()
+        self._cached_llm: object | None = None
+        self._cached_chain: PromptChain | None = None
 
-    def _build_chain(self) -> PromptChain:
-        llm = ChatOpenAI(
-            model=self._config.PROMPT_COMPOSER_MODEL,
-            temperature=self._config.PROMPT_COMPOSER_TEMPERATURE,
-        )
+    def _build_chain_from(self, llm) -> PromptChain:
         prompt = ChatPromptTemplate.from_messages(
             [("system", prompts.SYSTEM), ("human", prompts.HUMAN)]
         )
         chain: PromptChain = prompt | llm.with_structured_output(_PromptDraft)
         return chain
+
+    def _build_chain(self) -> PromptChain:
+        return self._build_chain_from(
+            ChatOpenAI(
+                model=self._config.PROMPT_COMPOSER_MODEL,
+                temperature=self._config.PROMPT_COMPOSER_TEMPERATURE,
+            )
+        )
+
+    async def _resolve_chain(self) -> PromptChain:
+        """호출 시점에 유효한 chain (DR-9)."""
+        if self._explicit_chain is not None:
+            return self._explicit_chain
+        if self._llm_provider is not None:
+            llm = await self._llm_provider.get(
+                self._config.PROMPT_COMPOSER_TEMPERATURE
+            )
+            if llm is not None:
+                if llm is not self._cached_llm:
+                    self._cached_llm = llm
+                    self._cached_chain = self._build_chain_from(llm)
+                return self._cached_chain
+        if self._chain is None:
+            self._chain = self._build_chain()
+        return self._chain
 
     async def generate(
         self,
@@ -156,8 +188,10 @@ class LLMPromptGeneratorAdapter:
         payload = self._build_payload(user_request, selected, intent, history)
         started = time.perf_counter()
         try:
+            # 해석은 timeout 밖 — 타임아웃은 LLM 호출에 대한 예산이다.
+            chain = await self._resolve_chain()
             raw = await asyncio.wait_for(
-                self._chain.ainvoke(payload),
+                chain.ainvoke(payload),
                 timeout=self._config.PROMPT_COMPOSER_TIMEOUT_SEC,
             )
             draft = _coerce(raw)

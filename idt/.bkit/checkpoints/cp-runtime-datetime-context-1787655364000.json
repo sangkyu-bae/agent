@@ -1,0 +1,9 @@
+{
+  "feature": "runtime-datetime-context",
+  "state": "do",
+  "timestamp": "2026-08-25T10:56:04.000Z",
+  "context": {
+    "matchRate": 0,
+    "iterationCount": 0
+  }
+}

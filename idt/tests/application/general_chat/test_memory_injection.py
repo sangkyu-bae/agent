@@ -214,3 +214,61 @@ class TestStreamIntegration:
 
         assert captured["memory_block"] == ""
         assert len(events) >= 2  # CHAT_STARTED + ANSWER/DONE 계열
+
+
+# ── runtime-datetime-context D8 (FR-07) ─────────────────────────────
+
+
+class TestDatetimeBlockGeneralChat:
+    """프롬프트 순서: 날짜 → 사용자 → 메모리 → 규칙. tz 미주입이면 기존과 동일."""
+
+    _MARK = "[현재 날짜]"
+
+    @staticmethod
+    def _uc_with_tz(tz="Asia/Seoul") -> GeneralChatUseCase:
+        mock_llm_factory = MagicMock(spec=LLMFactoryInterface)
+        mock_llm_factory.create.return_value = MagicMock()
+        return GeneralChatUseCase(
+            chat_tool_builder=AsyncMock(),
+            message_repo=AsyncMock(),
+            summary_repo=AsyncMock(),
+            summarizer=AsyncMock(),
+            summarization_policy=MagicMock(),
+            logger=MagicMock(),
+            llm_factory=mock_llm_factory,
+            llm_model=_make_llm_model(),
+            agent_timezone=tz,
+        )
+
+    def test_datetime_before_user_before_memory_before_system(self):
+        uc = self._uc_with_tz()
+        ctx = _auth_ctx()
+        with patch(
+            "src.application.general_chat.use_case.create_agent"
+        ) as mock_create:
+            uc._create_agent(tools=[], auth_ctx=ctx, memory_block=_MEMORY_BLOCK)
+
+        prompt = mock_create.call_args.kwargs["system_prompt"]
+        assert prompt.startswith(self._MARK)
+        assert prompt.endswith(
+            render_user_context_block(ctx) + _MEMORY_BLOCK + _SYSTEM_PROMPT
+        )
+
+    def test_datetime_without_auth_ctx_still_present(self):
+        uc = self._uc_with_tz()
+        with patch(
+            "src.application.general_chat.use_case.create_agent"
+        ) as mock_create:
+            uc._create_agent(tools=[])
+
+        prompt = mock_create.call_args.kwargs["system_prompt"]
+        assert prompt.startswith(self._MARK) and prompt.endswith(_SYSTEM_PROMPT)
+
+    def test_no_tz_keeps_prompt_unchanged(self):
+        uc = _make_uc()
+        with patch(
+            "src.application.general_chat.use_case.create_agent"
+        ) as mock_create:
+            uc._create_agent(tools=[])
+
+        assert mock_create.call_args.kwargs["system_prompt"] == _SYSTEM_PROMPT

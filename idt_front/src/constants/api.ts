@@ -134,6 +134,19 @@ export const API_ENDPOINTS = {
   LLM_MODEL_DETAIL: (id: string) => `/api/v1/llm-models/${id}`,
   LLM_MODEL_PRICING: (id: string) => `/api/v1/llm-models/${id}/pricing`,
 
+  // Admin — Multimodal extraction (multimodal-extractor Design §4.1)
+  ADMIN_MULTIMODAL_SETTINGS: '/api/v1/admin/multimodal/settings',
+  ADMIN_MULTIMODAL_TEST: '/api/v1/admin/multimodal/test',
+  PREVIEW_MULTIMODAL: '/api/v1/preview/multimodal',
+  // golden-sample-blueprint (Design §4.1)
+  ADMIN_BLUEPRINTS: '/api/v1/admin/blueprints',
+  ADMIN_BLUEPRINTS_EXTRACT: '/api/v1/admin/blueprints/extract',
+  ADMIN_BLUEPRINTS_FONTS: '/api/v1/admin/blueprints/fonts',
+  ADMIN_BLUEPRINT_DETAIL: (id: string) => `/api/v1/admin/blueprints/${id}`,
+  ADMIN_BLUEPRINT_ASSET: (id: string, assetId: string) =>
+    `/api/v1/admin/blueprints/${id}/assets/${assetId}`,
+  BLUEPRINT_OPTIONS: '/api/v1/blueprints/options',
+
   // Admin — Chunking Profiles (chunking-profile-admin-ui)
   ADMIN_CHUNKING_PROFILES: '/api/v1/admin/chunking/profiles',
   ADMIN_CHUNKING_PROFILE_DETAIL: (id: string) =>

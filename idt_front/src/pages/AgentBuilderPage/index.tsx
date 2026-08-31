@@ -22,6 +22,8 @@ import { MAX_ATTACHED_SKILLS } from '@/constants/agentSkill';
 import { MAX_ITERATIONS } from '@/constants/agentSettings';
 import { DOCUMENT_EXTRACTOR_TOOL_ID } from '@/types/documentExtractor';
 import { DOCUMENT_GENERATOR_TOOL_ID } from '@/types/documentGenerator';
+import { PRESENTATION_GENERATOR_TOOL_ID } from '@/types/presentationGenerator';
+import { buildPresentationGeneratorRequest } from '@/utils/presentationGenerator';
 import { buildDocumentTemplateRequest } from '@/utils/documentTemplate';
 import { buildDocumentGenerationTypeRequest } from '@/utils/documentGenerator';
 import { composeDraftToForm } from '@/utils/composeDraftToForm';
@@ -280,6 +282,10 @@ const AgentBuilderPage = () => {
               form.documentGeneratorDraft,
               form.name,
             ),
+            // golden-sample-blueprint: undefined = 변경 안 함, 값 = 교체
+            presentation_generator: buildPresentationGeneratorRequest(
+              form.presentationGeneratorDraft,
+            ),
           },
         },
         {
@@ -335,6 +341,9 @@ const AgentBuilderPage = () => {
           document_generation_type: buildDocumentGenerationTypeRequest(
             form.documentGeneratorDraft,
             form.name,
+          ),
+          presentation_generator: buildPresentationGeneratorRequest(
+            form.presentationGeneratorDraft,
           ),
           // agent-settings-tab D5: 설정 탭 반복 한도 (기본 25)
           max_iterations: form.maxIterations,
@@ -411,6 +420,10 @@ const AgentBuilderPage = () => {
       // 문서생성기 해제 시 문서 유형 드래프트 정리 (doc-generator)
       if (toolId === DOCUMENT_GENERATOR_TOOL_ID && isRemoving) {
         next.documentGeneratorDraft = null;
+      }
+      // 발표자료생성기 해제 시 드래프트 정리 (golden-sample-blueprint)
+      if (toolId === PRESENTATION_GENERATOR_TOOL_ID && isRemoving) {
+        next.presentationGeneratorDraft = null;
       }
       return next;
     });

@@ -38,7 +38,199 @@ export const mockSchedule = (
   ...overrides,
 });
 
+// ── multimodal-extractor mock 데이터 ─────────────────────────────────────────
+const mockMultimodalSettings = {
+  id: 'b0000000-0000-4000-8000-000000000001',
+  enabled: true,
+  vision_model_id: 'uuid-1',
+  vision_model: {
+    id: 'uuid-1', provider: 'openai', model_name: 'gpt-4o', display_name: 'GPT-4o',
+    is_active: true, supports_vision: true,
+  },
+  warnings: [] as string[],
+  max_images_per_doc: 50,
+  min_image_px: 100,
+  min_area_ratio: 0.02,
+  concurrency: 4,
+  timeout_sec: 60,
+  output_language: 'ko',
+  detail_level: 'detailed',
+  updated_at: '2026-08-21T09:00:00',
+};
+
+const mockMultimodalPreview: import('@/types/multimodal').MultimodalPreviewResponse = {
+  vision_model_id: 'uuid-1',
+  provider: 'openai',
+  model_name: 'gpt-4o',
+  total_candidates: 4,
+  dropped_by_filter: 1,
+  skipped_by_limit: 1,
+  succeeded: 1,
+  failed: 1,
+  timings_ms: { extract: 812, describe: 3400 },
+  elements: [
+    {
+      element_id: 'e1', page: 12, bbox: { x0: 72, y0: 100, x1: 520, y1: 390 },
+      element_type: 'chart', status: 'succeeded', reason: null,
+      description: '2024년 분기별 여신 한도 추이', keywords: ['여신 한도', '분기'],
+      markdown_table: null,
+      chart: {
+        chart_type: 'bar', x_axis: '분기', y_axis: '억원', series: ['한도'],
+        data_points: [{ label: '1Q', value: '120' }, { label: '2Q', value: '150' }], trend: '증가',
+      },
+      page_text: null, mime: 'image/png', width: 896, height: 580, sha256: 'a'.repeat(64),
+      model_id: 'uuid-1', elapsed_ms: 1980, degraded_output_mode: false,
+      thumbnail_b64: 'iVBORw0KGgo=',
+    },
+    {
+      element_id: 'e2', page: 3, bbox: { x0: 0, y0: 0, x1: 10, y1: 10 },
+      element_type: 'figure', status: 'failed', reason: 'timeout (1 retry)',
+      description: null, keywords: [], markdown_table: null, chart: null, page_text: null,
+      mime: 'image/png', width: 300, height: 200, sha256: 'b'.repeat(64),
+      model_id: 'uuid-1', elapsed_ms: 60000, degraded_output_mode: false, thumbnail_b64: null,
+    },
+    {
+      element_id: 'e3', page: 40, bbox: { x0: 0, y0: 0, x1: 10, y1: 10 },
+      element_type: 'table_image', status: 'skipped', reason: 'limit:max_images_per_doc=50',
+      description: null, keywords: [], markdown_table: null, chart: null, page_text: null,
+      mime: 'image/png', width: 300, height: 200, sha256: 'c'.repeat(64),
+      model_id: 'uuid-1', elapsed_ms: null, degraded_output_mode: false, thumbnail_b64: null,
+    },
+  ],
+};
+
+// ── golden-sample-blueprint mock 데이터 ─────────────────────────────────────
+const mockBlueprintDraft: import('@/types/blueprint').BlueprintResponse = {
+  id: 'bp-1',
+  name: 'golden',
+  description: '',
+  source_kind: 'pdf',
+  page_count: 2,
+  schema_version: 1,
+  style: {
+    slide_size: [13.333, 7.5],
+    fonts: { heading: 'HY헤드라인M', body: '맑은 고딕' },
+    sizes: { h1: 28, h2: 20, body: 14, caption: 10 },
+    palette: { primary: '#1F3A5F', accent1: '#E07A1F', text: '#222222', bg: '#FFFFFF' },
+    table_style: { header_bg: '#1F3A5F', header_text: '#FFFFFF', border: '#CCCCCC', zebra: false },
+    header_footer: { logo_asset_id: 'a1', page_number_format: '{n} / {total}', footer_text: '' },
+  },
+  patterns: [
+    {
+      id: 'p1', kind: 'cover', sample_page: 1, background: null, notes: '',
+      slots: [{ id: 'title', kind: 'title', box: { x: 0.1, y: 0.4, w: 0.8, h: 0.15 }, role: '제목', max_chars: 40, max_rows: null, asset_id: null }],
+    },
+    {
+      id: 'p2', kind: 'unknown', sample_page: 2, background: null, notes: '',
+      slots: [{ id: 'title', kind: 'title', box: { x: 0.05, y: 0.05, w: 0.9, h: 0.12 }, role: '제목', max_chars: 60, max_rows: null, asset_id: null }],
+    },
+  ],
+  narrative: { sections: [{ role: '표지', pattern_ids: ['p1'], guidance: '주제·부서' }], tone: '보고체', language: 'ko' },
+  assets: [{ id: 'a1', kind: 'logo', mime: 'image/png', width: 120, height: 40, sha256: 'f'.repeat(64), box: { x: 0.85, y: 0.03, w: 0.12, h: 0.07 }, adopted: true }],
+  font_mapping: { 'HY헤드라인M': 'NanumGothicBold', '맑은 고딕': 'NanumGothic' },
+  warnings: ["page 2: 패턴 분류 실패 (timeout)"],
+  status: 'active',
+  created_at: '2026-08-22T10:00:00',
+  updated_at: '2026-08-22T10:00:00',
+};
+
 export const handlers = [
+
+  // ── golden-sample-blueprint (Design §4.1) ───────────────────────────────────
+  http.post(`*${API_ENDPOINTS.ADMIN_BLUEPRINTS_EXTRACT}`, ({ request }) => {
+    if (!(request.headers.get('content-type') ?? '').includes('multipart/form-data')) {
+      return HttpResponse.json({ detail: { code: 'UNSUPPORTED_MEDIA', message: 'bad' } }, { status: 415 });
+    }
+    return HttpResponse.json({
+      draft: mockBlueprintDraft,
+      assets: [{ ...mockBlueprintDraft.assets[0], thumbnail_b64: 'dGh1bWI=', data_b64: 'iVBORw0KGgo=' }],
+      page_thumbnails: ['dGh1bWI=', null],
+      classification: { succeeded: 1, failed: 1 },
+      timings_ms: { extract: 10, classify: 20, synthesize: 30 },
+    });
+  }),
+  http.get(`*${API_ENDPOINTS.ADMIN_BLUEPRINTS_FONTS}`, () =>
+    HttpResponse.json({ installed: ['NanumGothic', 'NanumGothicBold'], default: 'NanumGothic' })
+  ),
+  http.get(`*${API_ENDPOINTS.ADMIN_BLUEPRINTS}`, ({ request }) => {
+    if (new URL(request.url).pathname.endsWith('/fonts')) return undefined;
+    return HttpResponse.json([
+      { id: 'bp-1', name: 'golden', source_kind: 'pdf', page_count: 2, pattern_count: 2, status: 'active', updated_at: '2026-08-22T10:00:00' },
+      { id: 'bp-2', name: 'old', source_kind: 'pptx', page_count: 5, pattern_count: 5, status: 'inactive', updated_at: '2026-08-20T10:00:00' },
+    ]);
+  }),
+  http.get(`*${API_ENDPOINTS.ADMIN_BLUEPRINTS}/:id`, ({ params }) =>
+    params.id === 'bp-1'
+      ? HttpResponse.json(mockBlueprintDraft)
+      : HttpResponse.json({ detail: { code: 'BLUEPRINT_NOT_FOUND', message: 'not found' } }, { status: 404 })
+  ),
+  http.post(`*${API_ENDPOINTS.ADMIN_BLUEPRINTS}`, async ({ request }) => {
+    const body = (await request.json()) as { draft: { name: string } };
+    if (!body.draft.name) {
+      return HttpResponse.json({ detail: { code: 'VALIDATION_ERROR', message: 'name required' } }, { status: 400 });
+    }
+    return HttpResponse.json({ ...mockBlueprintDraft, ...body.draft }, { status: 201 });
+  }),
+  http.put(`*${API_ENDPOINTS.ADMIN_BLUEPRINTS}/:id`, async ({ request }) => {
+    const body = (await request.json()) as { draft: Record<string, unknown> };
+    return HttpResponse.json({ ...mockBlueprintDraft, ...body.draft, updated_at: '2026-08-22T11:00:00' });
+  }),
+  http.delete(`*${API_ENDPOINTS.ADMIN_BLUEPRINTS}/:id`, () =>
+    HttpResponse.json({ ...mockBlueprintDraft, status: 'inactive' })
+  ),
+  http.get(`*${API_ENDPOINTS.BLUEPRINT_OPTIONS}`, () =>
+    HttpResponse.json({ items: [{ id: 'bp-1', name: 'golden' }] })
+  ),
+  // ── multimodal-extractor (Design §4.2) ─────────────────────────────────────
+  http.get(`*${API_ENDPOINTS.ADMIN_MULTIMODAL_SETTINGS}`, () =>
+    HttpResponse.json(mockMultimodalSettings)
+  ),
+  http.put(`*${API_ENDPOINTS.ADMIN_MULTIMODAL_SETTINGS}`, async ({ request }) => {
+    const body = (await request.json()) as Record<string, unknown>;
+    if (body.vision_model_id === 'uuid-3') {
+      return HttpResponse.json(
+        { detail: { code: 'VISION_MODEL_NOT_CAPABLE', message: '비전 미지원 모델' } },
+        { status: 409 }
+      );
+    }
+    return HttpResponse.json({
+      ...mockMultimodalSettings,
+      ...body,
+      vision_model:
+        body.vision_model_id === 'uuid-1' ? mockMultimodalSettings.vision_model : null,
+      warnings: [],
+      updated_at: '2026-08-21T10:00:00',
+    });
+  }),
+  http.post(`*${API_ENDPOINTS.ADMIN_MULTIMODAL_TEST}`, () =>
+    HttpResponse.json({
+      ok: true,
+      provider: 'openai',
+      model_name: 'gpt-4o',
+      elapsed_ms: 1234,
+      degraded_output_mode: false,
+      draft: {
+        detected_type: 'chart',
+        description: '분기별 여신 한도 막대 차트',
+        keywords: ['여신 한도', '분기'],
+        markdown_table: null,
+        chart: {
+          chart_type: 'bar', x_axis: '분기', y_axis: '억원', series: ['한도'],
+          data_points: [{ label: '1Q', value: '120' }], trend: '증가',
+        },
+        page_text: null,
+      },
+      error: null,
+    })
+  ),
+  http.post(`*${API_ENDPOINTS.PREVIEW_MULTIMODAL}`, ({ request }) => {
+    const debug = new URL(request.url).searchParams.get('debug') === 'true';
+    return HttpResponse.json({
+      ...mockMultimodalPreview,
+      ...(debug ? { dropped: [{ page: 1, reason: 'min_image_px', width: 48, height: 48 }] } : {}),
+    });
+  }),
+
   http.post(`*${API_ENDPOINTS.GENERAL_CHAT}`, () =>
     HttpResponse.json({
       user_id: 'user-001',
@@ -278,6 +470,7 @@ export const handlers = [
         is_active: true,
         is_default: true,
         base_url: null,
+        supports_vision: true,
         input_price_per_1k_usd: '0.0025',
         output_price_per_1k_usd: '0.0100',
         pricing_updated_at: '2026-07-01T00:00:00',
@@ -292,6 +485,7 @@ export const handlers = [
         is_active: true,
         is_default: false,
         base_url: null,
+        supports_vision: true,
         input_price_per_1k_usd: null,
         output_price_per_1k_usd: null,
         pricing_updated_at: null,
@@ -308,6 +502,7 @@ export const handlers = [
         is_active: false,
         is_default: false,
         base_url: 'http://vllm.internal:8000/v1',
+        supports_vision: false,
         input_price_per_1k_usd: null,
         output_price_per_1k_usd: null,
         pricing_updated_at: null,

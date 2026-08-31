@@ -10,6 +10,7 @@
 import { DEFAULT_RAG_CONFIG } from '@/types/ragToolConfig';
 import { DOCUMENT_EXTRACTOR_TOOL_ID } from '@/types/documentExtractor';
 import { DOCUMENT_GENERATOR_TOOL_ID } from '@/types/documentGenerator';
+import { PRESENTATION_GENERATOR_TOOL_ID } from '@/types/presentationGenerator';
 import { RAG_CATALOG_TOOL_ID } from './agentDetailMapping';
 import type { AgentBuilderFormData } from '@/types/agentBuilder';
 import type { CatalogTool } from '@/types/toolCatalog';
@@ -17,7 +18,11 @@ import type { CatalogTool } from '@/types/toolCatalog';
 /** 폼에서 도구에 영향받는 필드만 추린 조각. */
 export type ToolPrefillSlice = Pick<
   AgentBuilderFormData,
-  'tools' | 'toolConfigs' | 'documentExtractorDraft' | 'documentGeneratorDraft'
+  | 'tools'
+  | 'toolConfigs'
+  | 'documentExtractorDraft'
+  | 'documentGeneratorDraft'
+  | 'presentationGeneratorDraft'
 >;
 
 /**
@@ -59,6 +64,9 @@ export const applyToolsToForm = (
       : null,
     documentGeneratorDraft: tools.includes(DOCUMENT_GENERATOR_TOOL_ID)
       ? prev.documentGeneratorDraft
+      : null,
+    presentationGeneratorDraft: tools.includes(PRESENTATION_GENERATOR_TOOL_ID)
+      ? prev.presentationGeneratorDraft
       : null,
   };
 };
