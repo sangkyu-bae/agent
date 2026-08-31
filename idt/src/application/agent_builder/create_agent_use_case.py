@@ -12,11 +12,15 @@ from src.application.agent_builder.document_template_binding import (
     ensure_template_wiring,
     persist_document_template,
 )
-from src.domain.document_generator.policies import DEFAULT_MAX_SECTIONS
-from src.application.agent_builder.schemas import (
-    CreateAgentRequest, CreateAgentResponse, RagToolConfigRequest, WorkerInfo,
+from src.application.agent_builder.presentation_generator_binding import (
+    apply_presentation_generator_config,
 )
-from src.domain.document_extractor.policies import DEFAULT_MAX_SLOTS
+from src.application.agent_builder.schemas import (
+    CreateAgentRequest,
+    CreateAgentResponse,
+    RagToolConfigRequest,
+    WorkerInfo,
+)
 from src.application.agent_builder.sub_agent_worker_builder import SubAgentWorkerBuilder
 from src.application.agent_skill.sync_agent_skills_use_case import (
     SyncAgentSkillsUseCase,
@@ -30,12 +34,18 @@ from src.domain.agent_builder.policies import (
     VisibilityPolicy,
 )
 from src.domain.agent_builder.schemas import (
-    AgentDefinition, WorkerDefinition, WorkflowSkeleton,
+    AgentDefinition,
+    WorkerDefinition,
+    WorkflowSkeleton,
 )
 from src.domain.agent_builder.tool_registry import get_tool_meta
 from src.domain.auth.entities import UserRole
-from src.domain.collection.permission_interfaces import CollectionPermissionRepositoryInterface
+from src.domain.collection.permission_interfaces import (
+    CollectionPermissionRepositoryInterface,
+)
 from src.domain.department.interfaces import DepartmentRepositoryInterface
+from src.domain.document_extractor.policies import DEFAULT_MAX_SLOTS
+from src.domain.document_generator.policies import DEFAULT_MAX_SECTIONS
 from src.domain.knowledge_base.entities import KnowledgeBase
 from src.domain.knowledge_base.interfaces import KnowledgeBaseRepositoryInterface
 from src.domain.knowledge_base.policy import KnowledgeBasePolicy
@@ -156,6 +166,12 @@ class CreateAgentUseCase:
                     request.document_generation_type,
                     skeleton.workers,
                     self._max_generation_sections,
+                )
+
+            # Step 1.9 (golden-sample-blueprint D7): 발표자료 워커 tool_config 주입.
+            if request.presentation_generator is not None:
+                apply_presentation_generator_config(
+                    request.presentation_generator, skeleton.workers
                 )
 
             # Step 2: Policy 검증

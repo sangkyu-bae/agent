@@ -29,7 +29,7 @@ describe('adminNav 상수 — 그룹 구조', () => {
     }
   });
 
-  it('G4: 기존 12개 페이지 path가 전부 포함된다', () => {
+  it('G4: 등록된 관리자 페이지 path가 전부 포함된다', () => {
     const paths = ADMIN_NAV_ITEMS.map((item) => item.path);
     const expected = [
       '/admin/dashboard',
@@ -39,6 +39,10 @@ describe('adminNav 상수 — 그룹 구조', () => {
       '/admin/agent-runs',
       '/admin/llm-models',
       '/admin/chunking-profiles',
+      // multimodal-extractor: 멀티모달 추출 (docs-quality)
+      '/admin/multimodal',
+      // golden-sample-blueprint: 발표자료 양식 (docs-quality)
+      '/admin/blueprints',
       '/admin/mcp-servers',
       '/admin/tools',
       // builtin-middleware D10: 미들웨어 관리
@@ -60,6 +64,8 @@ describe('adminNav 상수 — 그룹 구조', () => {
   it('G6: findAdminGroupByPath는 하위 상세 경로도 소속 그룹을 찾는다', () => {
     expect(findAdminGroupByPath('/admin/agent-runs/run-1')?.key).toBe('observability');
     expect(findAdminGroupByPath('/admin/users')?.key).toBe('org');
+    expect(findAdminGroupByPath('/admin/multimodal')?.key).toBe('docs-quality');
+    expect(findAdminGroupByPath('/admin/blueprints')?.key).toBe('docs-quality');
     expect(findAdminGroupByPath('/admin/ragas')?.key).toBe('docs-quality');
     expect(findAdminGroupByPath('/admin/wiki')?.key).toBe('agent-resources');
   });

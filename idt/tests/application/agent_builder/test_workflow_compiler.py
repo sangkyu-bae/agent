@@ -338,8 +338,10 @@ class TestCompileWithCategory:
                 description="검색2", sort_order=1,
             ),
             WorkerDefinition(
-                tool_id="excel_export", worker_id="a1",
-                description="엑셀", sort_order=2,
+                # excel-generator-node: excel_export는 전용 합성 노드로 이동 —
+                # react 경로 action 도구 표본은 python_code_executor 사용.
+                tool_id="python_code_executor", worker_id="a1",
+                description="코드 실행", sort_order=2,
             ),
         ]
         workflow = WorkflowDefinition(
@@ -920,3 +922,178 @@ class TestPrefillSafety:
 
         sent = mock_llm.ainvoke.call_args.args[0]
         assert self._role(sent[-1]) in ("user", "human")
+
+
+class TestDatetimeContext:
+    """runtime-datetime-context D5/D6/D7 (FR-04/05a/05b/06): 날짜 블록 배포."""
+
+    _MARK = "[현재 날짜]"
+
+    @staticmethod
+    def _compiler_with_tz(tz="Asia/Seoul", **extra) -> WorkflowCompiler:
+        tool_factory = MagicMock()
+        tool_factory.create = MagicMock(return_value=MagicMock())
+        llm_factory = MagicMock(spec=LLMFactoryInterface)
+        llm_factory.create.return_value = MagicMock()
+        return WorkflowCompiler(
+            tool_factory=tool_factory, llm_factory=llm_factory,
+            logger=MagicMock(), agent_timezone=tz, **extra,
+        )
+
+    @staticmethod
+    async def _noop(state):
+        return {}
+
+    @pytest.mark.asyncio
+    async def test_supervisor_prompt_starts_with_datetime_block(self):
+        """FR-04 (D6): effective_supervisor_prompt = 날짜 + 사용자 + wiki + 본문."""
+        compiler = self._compiler_with_tz()
+        user_block = "[현재 사용자 정보]\n- 이름: 배상규\n\n---\n\n"
+        with patch("src.application.agent_builder.workflow_compiler.create_agent",
+                   return_value=MagicMock()), \
+             patch("src.application.agent_builder.workflow_compiler.render_user_context_block",
+                   return_value=user_block), \
+             patch("src.application.agent_builder.workflow_compiler.create_supervisor_node",
+                   MagicMock(return_value=self._noop)) as mock_sup:
+            await compiler.compile(_make_workflow(), _make_llm_model(), "req-1")
+
+        prompt = mock_sup.call_args.kwargs["supervisor_prompt"]
+        assert prompt.startswith(self._MARK)
+        assert prompt.index(self._MARK) < prompt.index("[현재 사용자 정보]")
+        assert prompt.endswith("당신은 AI 에이전트입니다.")
+
+    @pytest.mark.asyncio
+    async def test_no_tz_keeps_supervisor_prompt_unchanged(self):
+        """kwarg 기본값(None) → 블록 생략 — 기존 동작·테스트 무회귀."""
+        compiler, _ = _make_compiler()
+        with patch("src.application.agent_builder.workflow_compiler.create_agent",
+                   return_value=MagicMock()), \
+             patch("src.application.agent_builder.workflow_compiler.create_supervisor_node",
+                   MagicMock(return_value=self._noop)) as mock_sup:
+            await compiler.compile(_make_workflow(), _make_llm_model(), "req-1")
+        assert self._MARK not in mock_sup.call_args.kwargs["supervisor_prompt"]
+
+    @pytest.mark.asyncio
+    async def test_generic_worker_gets_datetime_system_prompt(self):
+        """FR-05b (D5): system_prompt 없던 일반 워커에 날짜 블록 부여."""
+        compiler = self._compiler_with_tz()
+        with patch("src.application.agent_builder.workflow_compiler.create_agent",
+                   return_value=MagicMock()) as mock_create:
+            await compiler.compile(_make_workflow(), _make_llm_model(), "req-1")
+        assert mock_create.call_args.kwargs["system_prompt"].startswith(self._MARK)
+
+    @pytest.mark.asyncio
+    async def test_generic_worker_without_tz_has_no_system_prompt(self):
+        """빈 문자열을 system_prompt로 넘기지 않는다(기존 호출 형태 보존)."""
+        compiler, _ = _make_compiler()
+        with patch("src.application.agent_builder.workflow_compiler.create_agent",
+                   return_value=MagicMock()) as mock_create:
+            await compiler.compile(_make_workflow(), _make_llm_model(), "req-1")
+        assert "system_prompt" not in mock_create.call_args.kwargs
+
+    @pytest.mark.asyncio
+    async def test_search_worker_receives_datetime_block(self):
+        """FR-05a (D4): search 파이프라인 노드에 datetime_block 전달."""
+        compiler = self._compiler_with_tz()
+        workflow = WorkflowDefinition(
+            supervisor_prompt="프롬프트", flow_hint="test",
+            workers=[WorkerDefinition(
+                tool_id="tavily_search", worker_id="web", description="웹",
+                sort_order=0, category="search",
+            )],
+        )
+        target = (
+            "src.application.agent_builder.workflow_compiler"
+            ".create_search_pipeline_node"
+        )
+        with patch(target, MagicMock(return_value=self._noop)) as mock_node:
+            await compiler.compile(workflow, _make_llm_model(), "req-1")
+        assert mock_node.call_args.kwargs["datetime_block"].startswith(self._MARK)
+
+    @pytest.mark.asyncio
+    async def test_wiki_worker_prefix_order_datetime_then_toc(self):
+        """FR-06 (D5): wiki 워커 = 날짜 + 목차 + 지시."""
+        toc = "[에이전트 지식 위키 목차]\n- (id: 1) 문서\n---\n\n"
+        provider = MagicMock()
+        provider.render_block = AsyncMock(return_value=toc)
+        compiler = self._compiler_with_tz(wiki_toc_provider=provider)
+        workflow = WorkflowDefinition(
+            supervisor_prompt="프롬프트", flow_hint="test",
+            workers=[WorkerDefinition(
+                tool_id="wiki_read", worker_id="wiki", description="위키", sort_order=0,
+            )],
+        )
+        with patch("src.application.agent_builder.workflow_compiler.create_agent",
+                   return_value=MagicMock()) as mock_create:
+            await compiler.compile(
+                workflow, _make_llm_model(), "req-1", agent_id="agent-1",
+            )
+        sp = mock_create.call_args.kwargs["system_prompt"]
+        assert sp.startswith(self._MARK)
+        assert sp.index(self._MARK) < sp.index("[에이전트 지식 위키 목차]")
+
+    @pytest.mark.asyncio
+    async def test_sub_agent_with_include_user_context_false_still_has_datetime(self):
+        """FR-06 (D7): 서브에이전트 재귀 + include_user_context=False도 날짜 수신."""
+        sub_agent = MagicMock()
+        sub_agent.status = "active"
+        sub_agent.llm_model_id = "model-1"
+        sub_agent.temperature = 0.0
+        sub_agent.include_user_context = False
+        sub_agent.to_workflow_definition.return_value = _make_workflow(1)
+        repo = MagicMock()
+        repo.find_by_id = AsyncMock(return_value=sub_agent)
+        compiler = self._compiler_with_tz(agent_repository=repo)
+        workflow = WorkflowDefinition(
+            supervisor_prompt="부모", flow_hint="test",
+            workers=[WorkerDefinition(
+                tool_id="sub_agent", worker_id="child", description="서브",
+                sort_order=0, worker_type="sub_agent", ref_agent_id="agent-child",
+            )],
+        )
+        with patch("src.application.agent_builder.workflow_compiler.create_agent",
+                   return_value=MagicMock()) as mock_create, \
+             patch("src.application.agent_builder.workflow_compiler.create_supervisor_node",
+                   MagicMock(return_value=self._noop)) as mock_sup:
+            await compiler.compile(
+                workflow, _make_llm_model(), "req-1", include_user_context=False,
+            )
+        # 자식 워커(create_agent) + 자식/부모 수퍼바이저 모두 날짜 블록 보유
+        assert mock_create.call_args.kwargs["system_prompt"].startswith(self._MARK)
+        for call in mock_sup.call_args_list:
+            assert call.kwargs["supervisor_prompt"].startswith(self._MARK)
+
+    @pytest.mark.asyncio
+    async def test_analyze_context_prefix(self):
+        """FR-04 (D6): analysis 노드 system prompt = 날짜 + 사용자 + 본문."""
+        from langchain_core.messages import HumanMessage
+
+        compiler = self._compiler_with_tz()
+        llm = MagicMock()
+        llm.ainvoke = AsyncMock(return_value=MagicMock(content="분석"))
+        await compiler._analyze_context(
+            llm, "SYS", "질문", [HumanMessage(content="질문")]
+        )
+        system_content = llm.ainvoke.call_args[0][0][0]["content"]
+        assert system_content.startswith(self._MARK)
+        assert "SYS" in system_content
+
+    @pytest.mark.asyncio
+    async def test_final_answer_node_receives_datetime_prompt(self):
+        """FR-04 (D6): final_answer 노드도 날짜 prefix 프롬프트를 직접 받는다.
+
+        Check Gap 6 — 수퍼바이저와 프롬프트를 공유한다는 사실을 리팩터 후에도 고정.
+        """
+        compiler = self._compiler_with_tz()
+        captured: dict = {}
+
+        def _fake_final(llm, system_prompt):
+            captured["prompt"] = system_prompt
+            return self._noop
+
+        compiler._create_final_answer_node = _fake_final
+        with patch("src.application.agent_builder.workflow_compiler.create_agent",
+                   return_value=MagicMock()):
+            await compiler.compile(_make_workflow(), _make_llm_model(), "req-1")
+        assert captured["prompt"].startswith(self._MARK)
+        assert captured["prompt"].endswith("당신은 AI 에이전트입니다.")

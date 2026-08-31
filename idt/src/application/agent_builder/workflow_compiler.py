@@ -12,6 +12,8 @@ from src.application.agent_builder.search_pipeline import (
     is_worker_output as _is_worker_output,
     latest_user_question,
 )
+from src.application.deep_search.workflow import create_deep_search_node
+from src.domain.deep_search.policies import DeepSearchBudgetPolicy
 from src.application.agent_builder.supervisor_hooks import (
     AttachmentRoutingHooks,
     DefaultHooks,
@@ -29,6 +31,7 @@ from src.application.agent_builder.supervisor_state import SupervisorState
 from src.application.agent_run.auth_context import get_current_auth_context
 from src.application.agent_run.prompt_rendering import (
     WIKI_FOLDER_HEADER_TAG,
+    render_datetime_block,
     render_user_context_block,
 )
 from src.application.visualization.analysis_prompt import (
@@ -125,6 +128,14 @@ def _summarize_charts(charts: list[dict]) -> str:
     return "\n".join(lines)
 
 
+# ── deep-search-pipeline 배선 상수 (FR-13/D9) ────────────────────
+LEGACY_SEARCH_MODE = "legacy"
+DEEP_SEARCH_MODE = "deep"
+# AD-3: 1단계 적용 대상은 웹검색뿐. 내부 문서검색은 플래그와 무관하게 legacy.
+DEEP_SEARCH_TOOL_ID = "tavily_search"
+_SEARCH_MODES = frozenset({LEGACY_SEARCH_MODE, DEEP_SEARCH_MODE})
+
+
 class WorkflowCompiler:
     """WorkflowDefinition → Custom StateGraph CompiledGraph 동적 컴파일."""
 
@@ -140,12 +151,18 @@ class WorkflowCompiler:
         chart_max_count: int = 0,
         pipeline_llm_model: LlmModel | None = None,
         search_compress_threshold: int | None = None,
+        search_pipeline_mode: str | None = None,
         document_template_repository=None,
         document_composer=None,
         document_generation_type_repository=None,
         document_generator=None,
         wiki_toc_provider=None,
         middleware_provider=None,
+        presentation_generator=None,
+        blueprint_repository=None,
+        excel_generator=None,
+        *,
+        agent_timezone: str | None = None,
     ) -> None:
         self._tool_factory = tool_factory
         self._llm_factory = llm_factory
@@ -163,6 +180,9 @@ class WorkflowCompiler:
         # None이면 per-run 에이전트 LLM 사용 (하위호환).
         self._pipeline_llm_model = pipeline_llm_model
         self._search_compress_threshold = search_compress_threshold
+        # deep-search-pipeline FR-13: 미주입(None)은 하위호환 legacy — 경고 없음.
+        # 알 수 없는 값은 생성 시점에 1회 경고하고 legacy로 폴백한다.
+        self._search_pipeline_mode = self._normalize_search_mode(search_pipeline_mode)
         self._pipeline_llm_cache = None
         # document-template-extractor Design §4-1: 합성 노드 의존 (미주입 시 안내 노옵).
         self._document_template_repository = document_template_repository
@@ -174,6 +194,14 @@ class WorkflowCompiler:
         self._wiki_toc_provider = wiki_toc_provider
         # builtin-middleware D6: 미들웨어 공급자 (미주입 시 미들웨어 0 — 무회귀).
         self._middleware_provider = middleware_provider
+        # golden-sample-blueprint §2.1: 발표자료 생성 노드 의존 (미주입 시 안내 노옵).
+        self._presentation_generator = presentation_generator
+        self._blueprint_repository = blueprint_repository
+        # excel-generator-node §2.1: 엑셀 생성 노드 의존 (미주입 시 안내 노옵).
+        self._excel_generator = excel_generator
+        # runtime-datetime-context D3: [현재 날짜] 블록 기준 타임존 (main.py가
+        # settings.agent_timezone 주입). None이면 블록 생략 — 기존 동작·테스트 무회귀.
+        self._agent_timezone = agent_timezone
 
     async def compile(
         self,
@@ -215,6 +243,12 @@ class WorkflowCompiler:
             user_context_block = (
                 render_user_context_block(auth_ctx) if include_user_context else ""
             )
+            # Design Ref: runtime-datetime-context §D6/§D7 — 요청당 1회 렌더 후
+            # 수퍼바이저·워커·서브에이전트에 배포. include_user_context와 무관
+            # (시스템 봇도 날짜는 받는다). 자정 경계에서 한 요청 내 날짜 불일치 방지.
+            datetime_block = render_datetime_block(
+                self._agent_timezone, logger=self._logger
+            )
             # wiki-agentic-navigation D1/D2: wiki_read 워커 선택 + provider 주입 +
             # agent_id 전달(최상위 컴파일만 — sub_agent 재귀 미전달)일 때만 목차 조회.
             # 목차는 supervisor prepend + wiki_read 워커 prompt 이중 주입.
@@ -224,8 +258,10 @@ class WorkflowCompiler:
                 wiki_toc_block = await self._wiki_toc_provider.render_block(
                     agent_id, request_id
                 )
+            # 블록 순서: 날짜 → 사용자 → wiki 목차 → 본문 (§D6)
             effective_supervisor_prompt = (
-                user_context_block + wiki_toc_block + workflow.supervisor_prompt
+                datetime_block + user_context_block + wiki_toc_block
+                + workflow.supervisor_prompt
             )
 
             # ToolFactory가 bind_auth_ctx를 지원하면 현재 auth_ctx 주입.
@@ -292,6 +328,30 @@ class WorkflowCompiler:
                     function_node_ids.add(worker_def.worker_id)
                     continue
 
+                # golden-sample-blueprint §2.2: 발표자료 생성 노드 (문서생성기 동형).
+                if worker_def.tool_id == "presentation_generator":
+                    worker_map[worker_def.worker_id] = (
+                        self._create_presentation_generator_node(
+                            llm, worker_def,
+                            auth_ctx=auth_ctx, request_id=request_id,
+                            callback=callback,
+                        )
+                    )
+                    function_node_ids.add(worker_def.worker_id)
+                    continue
+
+                # excel-generator-node §2.1: 엑셀 생성 전용 노드 (문서생성기 동형).
+                # ToolFactory 미경유 — 소싱·저장·링크까지 노드가 완결.
+                if worker_def.tool_id == "excel_export":
+                    worker_map[worker_def.worker_id] = (
+                        self._create_excel_generator_node(
+                            llm, worker_def,
+                            auth_ctx=auth_ctx, request_id=request_id,
+                        )
+                    )
+                    function_node_ids.add(worker_def.worker_id)
+                    continue
+
                 category = self._resolve_category(worker_def)
 
                 # analysis 노드는 도구를 직접 쓰지 않으므로 tool 생성을 생략한다.
@@ -315,14 +375,14 @@ class WorkflowCompiler:
                     )
 
                 if category == "search":
-                    # search-node-query-pipeline: rewrite → search → validate → compress
-                    worker_map[worker_def.worker_id] = create_search_pipeline_node(
+                    # deep-search-pipeline FR-13: 모드에 따라 legacy/deep 팩토리 선택.
+                    worker_map[worker_def.worker_id] = self._create_search_node(
                         worker_id=worker_def.worker_id,
+                        tool_id=worker_def.tool_id,
                         tool=tool,
-                        pipeline_llm=self._resolve_pipeline_llm(llm),
-                        policy=SearchPipelinePolicy(self._search_compress_threshold),
-                        logger=self._logger,
+                        llm=llm,
                         user_context_block=user_context_block,
+                        datetime_block=datetime_block,  # §D4 (FR-05a)
                     )
                     function_node_ids.add(worker_def.worker_id)
                 else:
@@ -352,13 +412,20 @@ class WorkflowCompiler:
                         worker_agent = create_agent(
                             model=llm, tools=wiki_tools,
                             name=worker_def.worker_id,
-                            system_prompt=wiki_toc_block + instruction,
+                            # §D5: 날짜 → 목차 → 지시
+                            system_prompt=datetime_block + wiki_toc_block + instruction,
                             middleware=_instantiate(middleware_plan),
                         )
                     else:
+                        # §D5 (FR-05b): 시스템 프롬프트가 없던 일반 워커에 날짜 블록.
+                        # 빈 문자열은 넘기지 않는다 — 미배선 시 기존 호출 형태 보존.
+                        worker_kwargs = (
+                            {"system_prompt": datetime_block} if datetime_block else {}
+                        )
                         worker_agent = create_agent(
                             model=llm, tools=[tool], name=worker_def.worker_id,
                             middleware=_instantiate(middleware_plan),
+                            **worker_kwargs,
                         )
                     worker_map[worker_def.worker_id] = worker_agent
 
@@ -732,6 +799,69 @@ class WorkflowCompiler:
 
         return final_answer_node
 
+    def _normalize_search_mode(self, mode: str | None) -> str:
+        """search 파이프라인 모드 정규화 (deep-search-pipeline FR-13).
+
+        미주입(None)은 하위호환 legacy — 경고하지 않는다.
+        알 수 없는 값은 여기서 1회 경고하고 legacy로 폴백한다(조용한 폴백 금지).
+        """
+        if mode is None:
+            return LEGACY_SEARCH_MODE
+        normalized = mode.strip().lower()
+        if normalized in _SEARCH_MODES:
+            return normalized
+        self._logger.warning(
+            "unknown search_pipeline_mode, falling back to legacy",
+            search_pipeline_mode=mode, allowed=sorted(_SEARCH_MODES),
+        )
+        return LEGACY_SEARCH_MODE
+
+    def _resolve_search_mode(self, tool_id: str) -> str:
+        """이 도구에 적용할 파이프라인 결정 (D9).
+
+        AD-3을 코드가 강제한다 — deep은 웹검색 도구에만 적용되며, 내부 문서검색은
+        플래그와 무관하게 legacy를 탄다.
+        """
+        if self._search_pipeline_mode == DEEP_SEARCH_MODE and tool_id == DEEP_SEARCH_TOOL_ID:
+            return DEEP_SEARCH_MODE
+        return LEGACY_SEARCH_MODE
+
+    def _deep_search_policy(self) -> DeepSearchBudgetPolicy:
+        """deep 파이프라인 예산 정책 — 상수는 도메인에 있다."""
+        return DeepSearchBudgetPolicy()
+
+    def _create_search_node(
+        self,
+        worker_id: str,
+        tool_id: str,
+        tool,
+        llm,
+        user_context_block: str = "",
+        datetime_block: str = "",
+    ):
+        """search 워커 노드 생성. 두 팩토리는 시그니처·반환 계약이 동일하다 (AD-1)."""
+        pipeline_llm = self._resolve_pipeline_llm(llm)
+        if self._resolve_search_mode(tool_id) == DEEP_SEARCH_MODE:
+            return create_deep_search_node(
+                worker_id=worker_id,
+                tool=tool,
+                pipeline_llm=pipeline_llm,
+                policy=self._deep_search_policy(),
+                logger=self._logger,
+                user_context_block=user_context_block,
+                datetime_block=datetime_block,
+            )
+        # search-node-query-pipeline: rewrite → search → validate → compress
+        return create_search_pipeline_node(
+            worker_id=worker_id,
+            tool=tool,
+            pipeline_llm=pipeline_llm,
+            policy=SearchPipelinePolicy(self._search_compress_threshold),
+            logger=self._logger,
+            user_context_block=user_context_block,
+            datetime_block=datetime_block,
+        )
+
     def _resolve_pipeline_llm(self, run_llm):
         """search 파이프라인용 경량 LLM 해석 (search-node-query-pipeline D3).
 
@@ -954,6 +1084,196 @@ class WorkflowCompiler:
             )
         return "\n".join(lines)
 
+    def _create_excel_generator_node(
+        self, llm, worker_def: WorkerDefinition, *, auth_ctx, request_id: str,
+    ):
+        """엑셀 생성 전용 노드 (excel-generator-node §2.1, 문서생성기 D9 동형).
+
+        소스 수집(analysis_source·첨부·누적 컨텍스트) → ExcelGenerator
+        (시트 계획 LLM 1회 + raw 무손실 복사/llm 상한 절단 + 저장) →
+        다운로드 링크 AIMessage. 실패는 안내 노옵 — 그래프 비중단 (§6.1).
+        """
+        logger = self._logger
+        generator = self._excel_generator
+        worker_id = worker_def.worker_id
+        owner_user_id = str(auth_ctx.user_id) if auth_ctx is not None else ""
+
+        def _reply(state: SupervisorState, content: str) -> dict:
+            from langchain_core.messages import AIMessage
+
+            return {
+                "messages": [AIMessage(content=content, name=worker_id)],
+                "last_worker_id": worker_id,
+                "token_usage": state["token_usage"] + len(content) // 4,
+            }
+
+        async def excel_generator_node(state: SupervisorState) -> dict:
+            from src.domain.excel_generator.exceptions import (
+                ExcelGenerateError,
+                NoExcelDataError,
+            )
+
+            if generator is None:
+                return _reply(state, (
+                    "엑셀 생성기가 아직 구성되지 않았습니다 "
+                    "(excel_generator 미배선)."
+                ))
+
+            evidence_block, conversation_block = self._split_fill_context(
+                state["messages"]
+            )
+            logger.info(
+                "excel_generator_node start",
+                request_id=request_id,
+                worker_id=worker_id,
+                analysis_source_count=len(state.get("analysis_source", [])),
+                attachment_count=len(state.get("attachments", [])),
+            )
+            try:
+                result = await generator.generate(
+                    llm=llm,
+                    analysis_source=state.get("analysis_source", []),
+                    attachments=state.get("attachments", []),
+                    evidence_block=evidence_block,
+                    conversation_block=conversation_block,
+                    owner_user_id=owner_user_id,
+                    request_id=request_id,
+                )
+            except NoExcelDataError:
+                return _reply(state, (
+                    "엑셀로 정리할 데이터를 찾지 못했습니다. "
+                    "먼저 데이터를 수집하거나 첨부해주세요."
+                ))
+            except (ExcelGenerateError, ValueError) as e:
+                logger.error(
+                    "excel_generator_node generate failed",
+                    exception=e,
+                    request_id=request_id,
+                    worker_id=worker_id,
+                )
+                return _reply(state, f"엑셀 생성 실패: {e}")
+
+            logger.info(
+                "excel_generator_node done",
+                request_id=request_id,
+                worker_id=worker_id,
+                file_id=result.file_id,
+                sheet_count=result.sheet_count,
+                total_rows=result.total_rows,
+                truncated=result.truncated,
+            )
+            return _reply(state, self._render_excel_summary(result))
+
+        return excel_generator_node
+
+    @staticmethod
+    def _render_excel_summary(result) -> str:
+        """엑셀 생성 결과 AIMessage 본문 (excel-generator-node §4.3)."""
+        from src.domain.excel_generator.policies import MAX_LLM_STRUCTURED_ROWS
+
+        lines = [
+            (
+                f"엑셀 「{result.filename}」 생성 완료 "
+                f"(시트 {result.sheet_count}개, {result.total_rows}행)"
+            ),
+            (
+                f"다운로드: [{result.filename}]"
+                f"(/api/v1/document-extractor/files/{result.file_id})"
+            ),
+        ]
+        if result.truncated:
+            lines.append(
+                f"⚠️ 일부 데이터가 행 상한({MAX_LLM_STRUCTURED_ROWS}행)으로 "
+                "축약되었습니다."
+            )
+        return "\n".join(lines)
+
+    def _create_presentation_generator_node(
+        self, llm, worker_def: WorkerDefinition, *, auth_ctx, request_id: str,
+        callback=None,
+    ):
+        """발표자료 생성 노드 (golden-sample-blueprint §2.2, 문서생성기 D9 동형).
+
+        blueprint 로드(inactive → 안내) → 누적 컨텍스트(근거/대화) →
+        PresentationGenerationUseCase(계획·작성·렌더·저장·PDF) → 다운로드 참조 AIMessage.
+        가드 실패는 안내 노옵 — 그래프 비중단.
+        """
+        logger = self._logger
+        repo = self._blueprint_repository
+        generator = self._presentation_generator
+        worker_id = worker_def.worker_id
+        tool_config = worker_def.tool_config or {}
+        owner_user_id = str(auth_ctx.user_id) if auth_ctx is not None else ""
+
+        def _reply(state: SupervisorState, content: str) -> dict:
+            from langchain_core.messages import AIMessage
+
+            return {
+                "messages": [AIMessage(content=content, name=worker_id)],
+                "last_worker_id": worker_id,
+                "token_usage": state["token_usage"] + len(content) // 4,
+            }
+
+        async def presentation_generator_node(state: SupervisorState) -> dict:
+            from src.domain.blueprint.errors import PresentationGenerateError
+            from src.domain.blueprint.tool_config import (
+                PresentationGeneratorToolConfig,
+            )
+
+            if repo is None or generator is None:
+                return _reply(state, (
+                    "발표자료생성기가 아직 구성되지 않았습니다 "
+                    "(blueprint_repository/presentation_generator 미배선)."
+                ))
+            blueprint_id = tool_config.get("blueprint_id", "")
+            if not blueprint_id:
+                return _reply(state, (
+                    "선택된 양식(blueprint)이 없습니다. "
+                    "에이전트 편집에서 발표자료 양식을 선택해주세요."
+                ))
+            blueprint = await repo.find_by_id(blueprint_id)
+            if blueprint is None or blueprint.status != "active":
+                return _reply(state, (
+                    "양식(blueprint)을 찾을 수 없거나 비활성 상태입니다. "
+                    "에이전트 편집에서 양식을 다시 선택해주세요."
+                ))
+            evidence_block, conversation_block = self._split_fill_context(
+                state["messages"]
+            )
+            try:
+                result = await generator.generate(
+                    llm=llm,
+                    blueprint=blueprint,
+                    assets=await repo.load_assets(blueprint_id),
+                    tool_config=PresentationGeneratorToolConfig(**tool_config),
+                    evidence_block=evidence_block,
+                    conversation_block=conversation_block,
+                    user_instruction=_last_human_text(state["messages"]),
+                    owner_user_id=owner_user_id,
+                    request_id=request_id,
+                    # Plan FR-17: UsageCallback 전달 → ai_llm_call 사용량 영속(관측 활성 시)
+                    callbacks=[callback] if callback is not None else None,
+                )
+            except (PresentationGenerateError, ValueError) as e:
+                logger.error(
+                    "presentation_generator_node generate failed",
+                    exception=e,
+                    request_id=request_id,
+                    blueprint_id=blueprint_id,
+                )
+                return _reply(state, f"발표자료 생성 실패: {e}")
+            logger.info(
+                "presentation_generator_node done",
+                request_id=request_id,
+                blueprint_id=blueprint_id,
+                file_id=result.file_id,
+                slide_count=result.slide_count,
+                warnings=len(result.warnings),
+            )
+            return _reply(state, _render_presentation_summary(blueprint, result))
+
+        return presentation_generator_node
+
     def _render_docgen_guidance_block(
         self, workers: list[WorkerDefinition]
     ) -> str:
@@ -963,7 +1283,8 @@ class WorkflowCompiler:
         """
         generator_ids = [
             w.worker_id for w in workers
-            if w.worker_type == "tool" and w.tool_id == "document_generator"
+            if w.worker_type == "tool"
+            and w.tool_id in ("document_generator", "presentation_generator")
         ]
         others = [w for w in workers if w.worker_id not in generator_ids]
         if not generator_ids or not others:
@@ -1165,10 +1486,14 @@ class WorkflowCompiler:
         # analyze-user-context: ContextVar 기반 사용자 블록을 system prompt 앞에 prepend.
         # 미인증이면 ""라 기존 동작과 동일.
         user_block = render_user_context_block(get_current_auth_context())
+        # Design Ref: runtime-datetime-context §D6 — 별도 호출 시점이라 재렌더.
+        datetime_block = render_datetime_block(
+            self._agent_timezone, logger=self._logger
+        )
         # 분석 노드는 자연어 텍스트만 생성. 차트 생성은 chart_builder가 전담하므로
         # 공용 가이드로 출력 형식/범위를 못박는다(excel 분석 노드와 일원화).
         analysis_prompt = (
-            f"{user_block}{system_prompt}\n\n"
+            f"{datetime_block}{user_block}{system_prompt}\n\n"
             f"당신은 데이터 분석가입니다. {source_hint} 사용자의 질문에 답합니다.\n\n"
             f"{ANALYSIS_OUTPUT_GUIDE}\n\n{DATA_GAP_GUIDE}\n\n"
             f"[분석 대상 데이터]\n{context}\n\n[질문]\n{question}"
@@ -1267,3 +1592,32 @@ class WorkflowCompiler:
             }
 
         return wrapped
+
+
+def _last_human_text(messages: list) -> str:
+    """사용자 지시 = 마지막 HumanMessage 본문 (없으면 빈 문자열)."""
+    for m in reversed(messages):
+        if getattr(m, "type", "") == "human":
+            content = getattr(m, "content", "")
+            return content if isinstance(content, str) else str(content)
+    return ""
+
+
+def _render_presentation_summary(blueprint, result) -> str:
+    """발표자료 생성 결과 AIMessage 본문 — 다운로드 링크 + 경고."""
+    lines = [
+        f"발표자료 「{blueprint.name}」 생성 완료 ({result.filename}, "
+        f"{result.slide_count}장, 차트 {result.chart_count}개)",
+        (
+            f"다운로드: [{result.filename}]"
+            f"(/api/v1/document-extractor/files/{result.file_id})"
+        ),
+    ]
+    if result.pdf_file_id:
+        lines.append(
+            f"PDF: [{blueprint.name}.pdf]"
+            f"(/api/v1/document-extractor/files/{result.pdf_file_id})"
+        )
+    if result.warnings:
+        lines.append("[주의] " + " / ".join(result.warnings[:5]))
+    return "\n".join(lines)
