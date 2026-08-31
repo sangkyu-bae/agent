@@ -33,6 +33,13 @@ _PDF = _ROOT / "samples" / "golden_sample_report.pdf"
 _V1 = _ROOT / "tests" / "fixtures" / "blueprint" / "golden_v1.json"
 _MALGUN = {"Malgun Gothic Bold", "Malgun Gothic Regular", "Malgun Gothic"}
 
+# samples/ 는 .gitignore 대상(사내 원본 문서). 파일이 없는 환경에서는
+# 이 모듈 전체를 skip 한다 — 회귀 검증은 원본을 가진 로컬에서만 성립한다.
+pytestmark = pytest.mark.skipif(
+    not _PDF.exists(),
+    reason=f"골든 샘플 원본 없음: {_PDF} (samples/ 는 커밋되지 않는다)",
+)
+
 
 def _sc(i, pid, *slots):
     return SlideContent(SlidePlan(i, pid, "t", "", ""), tuple(slots), ())
