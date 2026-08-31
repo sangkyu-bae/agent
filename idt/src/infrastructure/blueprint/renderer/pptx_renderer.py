@@ -36,6 +36,7 @@ from src.domain.blueprint.value_objects import (
 from src.infrastructure.blueprint.renderer.chart_builder import add_chart, rgb
 from src.infrastructure.blueprint.renderer.run_fonts import set_run_font
 from src.infrastructure.blueprint.renderer.shapes import add_rect
+from src.infrastructure.blueprint.renderer.table_borders import apply_borders
 
 _EMU_PER_INCH = 914400
 _WHITE = "#FFFFFF"
@@ -261,7 +262,7 @@ def _render_slot(
     elif slot.kind is SlotKind.TABLE and content.table is not None:
         _table(ctx, slide, slot.box, content.table.header, content.table.rows)
     elif slot.kind is SlotKind.CHART and content.chart is not None:
-        add_chart(slide, ctx.emu(slot.box), content.chart, ctx.style.palette)
+        add_chart(slide, ctx.emu(slot.box), content.chart, ctx.style)
 
 
 def _title(ctx, slide, pattern: PagePattern, slot: Slot, text: str, on_image) -> None:
@@ -303,8 +304,11 @@ def _bullets(
         spacing = _TOC_LINE_SPACING
     else:
         body = ctx.style.size("body")
-        lines = [_Line(f"• {b}", "body", body, False, None) for b in bullets]
-        spacing = 1.0
+        # Design Ref: blueprint-render-style-fidelity D-4 / DR-7 — 비-TOC 불릿에만
+        # 토큰 줄간격·문단 여백을 적용한다. 기본값(1.0 / 0)이면 현행과 동일하다.
+        gap = ctx.style.body_space_after_pt
+        lines = [_Line(f"• {b}", "body", body, False, None, gap) for b in bullets]
+        spacing = ctx.style.body_line_spacing
         if heading:
             lines.insert(0, _heading_line(ctx, heading))
     _styled_textbox(ctx, slide, slot.box, lines, slot.align, spacing)
@@ -385,8 +389,10 @@ def _table(ctx: _Ctx, slide, box: RelBox, header, rows) -> None:
             cell.text = text
             if ts.zebra and r % 2 == 0:
                 cell.fill.solid()
-                cell.fill.fore_color.rgb = rgb("#F3F4F6")
+                cell.fill.fore_color.rgb = rgb(ts.zebra_bg)  # D-3: 상수 제거
             _style_cell(ctx, cell, ctx.style.palette["text"], bold=False)
+    # Design Ref: blueprint-render-style-fidelity D-3 / DR-3 — oxml 은 전용 모듈에서
+    apply_borders(table, ts.border, ts.border_width_pt)
 
 
 def _style_cell(ctx: _Ctx, cell, color: str, bold: bool) -> None:

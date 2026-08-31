@@ -390,7 +390,7 @@ def test_sc1_every_text_slot_matches_measured_span_origin(rendered):
                 f"{pattern.id}/{slot.id}: Δx={dx:.3f}in Δy={dy:.3f}in"
             )
             checked += 1
-    assert checked == 13, checked
+    assert checked == 15, checked  # p6 bullets 분할로 13 → 15 (C-1)
 
 
 def _partial_overlaps(bp, pattern) -> list[str]:
@@ -419,20 +419,14 @@ def _partial_overlaps(bp, pattern) -> list[str]:
     return out
 
 
-def test_sc2_single_card_patterns_have_no_partial_overlap(rendered):
-    """SC-2 (v0.3 조정) — 슬롯이 장식 하나에 대응하는 패턴은 겹침 0건.
+def test_sc2_no_partial_overlap_in_any_pattern(rendered):
+    """SC-2 — 전 패턴에서 장식-텍스트 슬롯 부분 겹침 0건.
 
-    p6(카드 3장)는 제외한다. 비전 모델이 카드 3개를 bullets 슬롯 **하나**로 뭉쳐
-    준 구조 문제라 좌표 스냅으로 풀 수 없다 — 결함 C(슬롯 분할)로 이월.
+    blueprint-slot-content-fill C-1(슬롯 분할)이 p6 예외를 제거했다.
+    직전 사이클에서는 p6(카드 3장)만 3건 남아 있었다.
     """
     bp, _ = rendered
-    multi_card = {"p6"}
-    offenders = [
-        o
-        for p in bp.patterns
-        if p.id not in multi_card
-        for o in _partial_overlaps(bp, p)
-    ]
+    offenders = [o for p in bp.patterns for o in _partial_overlaps(bp, p)]
     assert offenders == [], offenders
 
 
@@ -443,11 +437,28 @@ def test_reported_page3_overlap_is_resolved(rendered):
     assert _partial_overlaps(bp, p3) == []
 
 
-def test_known_limitation_multi_card_pattern_still_overlaps(rendered):
-    """결함 C 이월 근거를 고정 — 해소되면 실패해 이월 항목을 정리하게 된다."""
+def test_multi_card_pattern_is_split_into_one_slot_per_card(rendered):
+    """SC-3·SC-4 — 카드 3장이 슬롯 3개로 쪼개지고 겹침이 사라졌다.
+
+    직전 사이클(blueprint-slot-box-snap)이 이월한 한계의 해소를 고정한다.
+    """
     bp, _ = rendered
     p6 = next(p for p in bp.patterns if p.id == "p6")
-    assert len(_partial_overlaps(bp, p6)) == 3
+
+    bullets = [s for s in p6.slots if s.kind.value == "bullets"]
+    assert [s.id for s in bullets] == ["bullets", "bullets2", "bullets3"]
+    assert _partial_overlaps(bp, p6) == []
+
+    decos = (*bp.style.common_decorations, *p6.decorations)
+    for slot in bullets:  # 각 슬롯이 장식 하나에 완전히 포함
+        b = slot.box
+        assert any(
+            d.box.x <= b.x
+            and d.box.y <= b.y
+            and d.box.x + d.box.w >= b.x + b.w
+            and d.box.y + d.box.h >= b.y + b.h
+            for d in decos
+        ), slot
 
 
 def test_sc3_cover_title_x_is_snapped_from_vision_estimate(rendered):
@@ -509,3 +520,198 @@ def test_snap_does_not_change_shape_count(rendered):
     """좌표 외 렌더 결과는 변하지 않는다 (설계 시나리오 30) — 실측 기준선."""
     _, prs = rendered
     assert [len(s.shapes) for s in prs.slides] == [4, 6, 9, 6, 6, 12]
+
+
+# ── blueprint-slot-content-fill §8.4·8.5 — 분할·목차·길이 폴백 ───────────────
+
+
+def test_split_does_not_affect_other_patterns(rendered):
+    """시나리오 38 — p1~p5 의 텍스트 슬롯 개수는 변하지 않는다 (과분할 0건)."""
+    bp, _ = rendered
+    counts = {
+        p.id: sum(1 for s in p.slots if s.kind.value in _SNAP_TEXT_KINDS)
+        for p in bp.patterns
+    }
+    assert counts == {"p1": 2, "p2": 2, "p3": 3, "p4": 2, "p5": 2, "p6": 4}
+
+
+def test_toc_bullets_are_filled_from_other_slide_titles():
+    """SC-1 / 시나리오 40 — 목차에 실제 슬라이드 제목이 채워진다."""
+    from src.domain.blueprint.policies import TocContentPolicy
+
+    bp = asyncio_run_extract()
+    toc = next(p for p in bp.patterns if p.kind is PatternKind.TOC)
+    plans = [
+        SlidePlan(i, p.id, f"{i}. 섹션 {i}", "", "")
+        for i, p in enumerate(bp.patterns, start=1)
+    ]
+    kinds = {p.id: p.kind for p in bp.patterns}
+    toc_plan = next(pl for pl in plans if pl.pattern_id == toc.id)
+
+    content, warnings = TocContentPolicy.apply(toc_plan, plans, kinds, toc)
+
+    assert content is not None and warnings == ()
+    bullets = next(c.bullets for c in content.slots if c.bullets)
+    assert len(bullets) == 4  # 표지·목차 자신 제외한 4장
+    # DR-6: 정책은 계획 제목을 **그대로** 담는다 — 접두 번호를 덧붙이지 않는다
+    expected = tuple(
+        pl.title for pl in plans if kinds[pl.pattern_id] not in
+        (PatternKind.COVER, PatternKind.TOC)
+    )
+    assert bullets == expected
+
+
+def asyncio_run_extract():
+    import asyncio
+
+    async def go():
+        out = await _uc(GoldenAdapter()).run(
+            _PDF.read_bytes(), _PDF.name, 20, "content-fill"
+        )
+        return out.blueprint
+
+    return asyncio.run(go())
+
+
+def test_toc_rendered_numbers_are_not_duplicated(rendered):
+    """시나리오 41 (DR-6) — 렌더러가 번호를 붙이므로 '1. 1.' 이 없다."""
+    _, prs = rendered
+    for slide in prs.slides:
+        for _, _, run in _runs(slide):
+            assert not run.text.startswith(("1. 1.", "2. 2.", "3. 3.", "4. 4."))
+
+
+def test_cards_each_have_their_own_slot(rendered):
+    """SC-2 / 시나리오 42 — 카드 3장이 각자 슬롯을 갖는다 (빈 카드 0개 전제)."""
+    bp, _ = rendered
+    p6 = next(p for p in bp.patterns if p.id == "p6")
+    bullets = [s for s in p6.slots if s.kind.value == "bullets"]
+
+    assert len(bullets) == 3
+    tops = [s.box.y for s in bullets]
+    assert tops == sorted(tops) and len(set(tops)) == 3  # 서로 다른 위치
+
+
+def test_over_max_chars_content_survives_to_render():
+    """SC-5 / 시나리오 43 — max_chars 를 넘긴 내용이 렌더 결과에 살아남는다."""
+    from src.domain.blueprint.policies import SlotContentPolicy
+
+    bp = asyncio_run_extract()
+    pattern = next(
+        p for p in bp.patterns if any(s.kind.value == "bullets" for s in p.slots)
+    )
+    slot = next(s for s in pattern.slots if s.kind.value == "bullets")
+    long_bullet = "가" * ((slot.max_chars or 10) + 50)
+
+    outcome = SlotContentPolicy.apply(
+        [SlotContent(slot.id, None, (long_bullet,), None, None)], pattern
+    )
+    assert len(outcome.kept) == 1 and outcome.warnings  # 유지 + 경고
+
+    slides = [_sc(1, pattern.id, *outcome.kept)]
+    data = PptxSlideRenderer().render(bp, slides, {}, bp.font_mapping)
+    prs = Presentation(io.BytesIO(data))
+
+    rendered = "".join(r.text for s in prs.slides for _, _, r in _runs(s))
+    assert long_bullet in rendered
+
+
+# ── blueprint-render-style-fidelity §8.4 시나리오 26~32 — 렌더 스타일 ───────
+
+_GOLDEN_STYLE = dict(
+    body_line_spacing=1.45,
+    body_space_after_pt=33.2,
+    chart_label_size_pt=9.0,
+)
+_GOLDEN_TABLE = dict(zebra=True, border_width_pt=0.75)
+
+
+def _render_with_golden_style(bp):
+    from dataclasses import replace
+
+    style = replace(
+        bp.style,
+        table_style=replace(bp.style.table_style, **_GOLDEN_TABLE),
+        **_GOLDEN_STYLE,
+    )
+    styled = replace(bp, style=style)
+    data = PptxSlideRenderer().render(styled, _slides(), {}, styled.font_mapping)
+    return styled, Presentation(io.BytesIO(data))
+
+
+def test_golden_style_applies_chart_labels_and_unit(rendered):
+    """SC-1·SC-2 / 시나리오 26~27."""
+    bp, _ = rendered
+    styled, prs = _render_with_golden_style(bp)
+
+    charts = [
+        sh.chart for s in prs.slides for sh in s.shapes if getattr(sh, "has_chart", 0)
+    ]
+    assert charts
+    xml = charts[0]._chartSpace.xml
+    assert "<c:dLbls" in xml
+    assert '<c:numFmt formatCode="0.00&quot;%&quot;"' in xml  # _slides() 의 unit="%"
+
+
+def test_golden_style_applies_table_borders_and_zebra(rendered):
+    """SC-3·SC-4 / 시나리오 28~29."""
+    from pptx.oxml.ns import qn
+
+    bp, _ = rendered
+    styled, prs = _render_with_golden_style(bp)
+
+    tables = [
+        sh.table for s in prs.slides for sh in s.shapes if getattr(sh, "has_table", 0)
+    ]
+    assert tables
+    table = tables[0]
+    tc_pr = table.cell(0, 0)._tc.find(qn("a:tcPr"))
+    srgb = tc_pr.find(qn("a:lnL")).find(qn("a:solidFill")).find(qn("a:srgbClr"))
+    assert srgb.get("val") == styled.style.table_style.border.lstrip("#").upper()
+    assert str(table.cell(2, 0).fill.fore_color.rgb) == "F3F4F6"  # 데이터 2행
+
+
+def test_golden_style_applies_paragraph_spacing(rendered):
+    """SC-5 / 시나리오 30."""
+    bp, _ = rendered
+    _, prs = _render_with_golden_style(bp)
+
+    spaced = [
+        p
+        for s in prs.slides
+        for sh in s.shapes
+        if sh.has_text_frame
+        for p in sh.text_frame.paragraphs
+        if p.runs and p.runs[0].text.startswith("•")
+    ]
+    assert spaced
+    assert all(p.line_spacing == 1.45 for p in spaced)
+    assert all(round(p.space_after.pt, 1) == 33.2 for p in spaced)
+
+
+def test_style_tokens_do_not_change_shape_counts(rendered):
+    """시나리오 31 — 스타일만 바뀌고 도형 구성은 동일하다.
+
+    에셋을 양쪽 모두 비워 **스타일 차이만** 비교한다.
+    """
+    bp, _ = rendered
+    base_data = PptxSlideRenderer().render(bp, _slides(), {}, bp.font_mapping)
+    base = Presentation(io.BytesIO(base_data))
+    _, styled = _render_with_golden_style(bp)
+
+    assert [len(s.shapes) for s in styled.slides] == [
+        len(s.shapes) for s in base.slides
+    ]
+
+
+def test_v1_snapshot_renders_with_default_style(rendered):
+    """SC-6 / 시나리오 32 — v1 은 신규 필드가 없어도 예외 없이 렌더된다."""
+    raw = json.loads(_V1.read_text(encoding="utf-8"))
+    bp = normalize_blueprint_fonts(blueprint_from_dict(raw))
+
+    assert bp.style.chart_label_size_pt == 0.0
+    assert bp.style.table_style.border_width_pt == 0.0
+
+    data = PptxSlideRenderer().render(bp, _slides(), {}, bp.font_mapping)
+    prs = Presentation(io.BytesIO(data))
+    assert len(prs.slides) == 6

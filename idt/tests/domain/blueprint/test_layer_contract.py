@@ -102,3 +102,28 @@ def test_every_blueprint_loader_call_site_normalizes_fonts():
 
 def test_font_normalization_module_exists_in_domain():
     assert (DOMAIN / "font_normalization.py").exists()
+
+
+# ── blueprint-render-style-fidelity §8.5 시나리오 33~34 — oxml 격리 (DR-3) ──
+
+_OXML_ALLOWED = {"run_fonts.py", "table_borders.py"}
+
+
+def test_oxml_manipulation_is_confined_to_dedicated_modules():
+    """시나리오 33 — src/ 에서 pptx.oxml 을 쓰는 파일은 전용 모듈 둘뿐이다."""
+    offenders = [
+        str(f.relative_to(SRC))
+        for f in SRC.rglob("*.py")
+        if f.name not in _OXML_ALLOWED
+        and any(m.startswith("pptx.oxml") for m in _imports(f))
+    ]
+    allowed = sorted(_OXML_ALLOWED)
+    assert offenders == [], f"oxml 은 {allowed} 에만 허용된다: {offenders}"
+
+
+def test_chart_builder_does_not_reach_outside_its_layer():
+    """시나리오 34 — chart_builder 는 domain VO 와 pptx 만 참조한다."""
+    path = SRC / "infrastructure" / "blueprint" / "renderer" / "chart_builder.py"
+    forbidden = ("src.application", "src.api", "src.interfaces")
+    for module in _imports(path):
+        assert not module.startswith(forbidden), module

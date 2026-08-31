@@ -339,3 +339,56 @@ def test_style_tokens_size_role_fallbacks():
     assert with_h3.size("h3") == 16.0 and with_h3.size("subtitle") == 18.0
     with pytest.raises(KeyError):
         base.size("h9")
+
+
+# ── blueprint-render-style-fidelity §8.2 시나리오 1~3 — 신규 스타일 필드 ─────
+
+
+def test_table_style_new_fields_default_to_current_behavior():
+    """시나리오 1 (DR-2) — 기본값이 곧 현행 동작이다."""
+    ts = TableStyle("#1F3A5F", "#FFFFFF", "#CCCCCC", False)
+
+    assert ts.zebra_bg == "#F3F4F6"  # 렌더러 상수와 동일
+    assert ts.border_width_pt == 0.0  # 0 → 테두리 없음 = 현행
+
+
+def test_style_tokens_new_fields_default_to_current_behavior():
+    """시나리오 2 (DR-2)."""
+    style = _style_tokens()
+
+    assert style.body_line_spacing == 1.0  # 1.0 → 줄간격 미설정 = 현행
+    assert style.body_space_after_pt == 0.0  # 0 → 여백 없음 = 현행
+    assert style.chart_label_size_pt == 0.0  # 0 → 레이블 없음 = 현행
+    assert style.chart_label_bold is True
+
+
+def test_invalid_zebra_bg_is_rejected():
+    """시나리오 3 — 색상 검증이 신규 필드에도 적용된다."""
+    with pytest.raises(ValueError):
+        TableStyle("#1F3A5F", "#FFFFFF", "#CCCCCC", False, zebra_bg="파랑")
+
+
+def test_negative_style_numbers_are_rejected():
+    with pytest.raises(ValueError):
+        TableStyle("#1F3A5F", "#FFFFFF", "#CCCCCC", False, border_width_pt=-1.0)
+    with pytest.raises(ValueError):
+        _style_tokens(body_line_spacing=0.0)
+    with pytest.raises(ValueError):
+        _style_tokens(chart_label_size_pt=-1.0)
+
+
+def _style_tokens(**overrides) -> StyleTokens:
+    return StyleTokens(
+        slide_size=(13.333, 7.5),
+        fonts={"heading": "H", "body": "B"},
+        sizes={"h1": 34.0, "h2": 24.0, "body": 13.0, "caption": 9.0},
+        palette={
+            "primary": "#1F3A5F",
+            "accent1": "#E07A1F",
+            "text": "#222222",
+            "bg": "#FFFFFF",
+        },
+        table_style=TableStyle("#1F3A5F", "#FFFFFF", "#CCCCCC", False),
+        header_footer=HeaderFooter(None, "{n}", ""),
+        **overrides,
+    )

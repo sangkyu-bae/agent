@@ -71,6 +71,9 @@ class TableStyleSchema(_Strict):
     header_text: str
     border: str
     zebra: bool
+    # blueprint-render-style-fidelity — 선택 필드 (기본값 = 현행 동작)
+    zebra_bg: str = "#F3F4F6"
+    border_width_pt: float = 0.0
 
 
 class HeaderFooterSchema(_Strict):
@@ -90,6 +93,11 @@ class StyleSchema(_Strict):
     table_style: TableStyleSchema
     header_footer: HeaderFooterSchema
     common_decorations: list[DecorationSchema] = []  # schema v2
+    # blueprint-render-style-fidelity — 선택 필드 (기본값 = 현행 동작)
+    body_line_spacing: float = 1.0
+    body_space_after_pt: float = 0.0
+    chart_label_size_pt: float = 0.0
+    chart_label_bold: bool = True
 
 
 class NarrativeSectionSchema(_Strict):

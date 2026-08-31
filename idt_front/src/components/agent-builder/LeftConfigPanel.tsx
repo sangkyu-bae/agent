@@ -11,6 +11,7 @@ import SkillPickerModal from './SkillPickerModal';
 import RagConfigModal from './RagConfigModal';
 import DocumentExtractorConfigModal from './DocumentExtractorConfigModal';
 import DocumentGeneratorConfigModal from './DocumentGeneratorConfigModal';
+import PresentationGeneratorConfigModal from './PresentationGeneratorConfigModal';
 import SubAgentManagerModal from './SubAgentManagerModal';
 import { useSkills } from '@/hooks/useSkills';
 import { useMiddlewareCatalog } from '@/hooks/useMiddlewareCatalog';
@@ -22,6 +23,8 @@ import { DOCUMENT_EXTRACTOR_TOOL_ID } from '@/types/documentExtractor';
 import type { DocumentExtractorDraft } from '@/types/documentExtractor';
 import { DOCUMENT_GENERATOR_TOOL_ID } from '@/types/documentGenerator';
 import type { DocumentGeneratorDraft } from '@/types/documentGenerator';
+import type { PresentationGeneratorDraft } from '@/types/presentationGenerator';
+import { PRESENTATION_GENERATOR_TOOL_ID } from '@/types/presentationGenerator';
 import {
   loadDraftFromSession,
   saveDraftToSession,
@@ -37,6 +40,7 @@ const CONFIGURABLE_TOOL_IDS: readonly string[] = [
   RAG_TOOL_ID,
   DOCUMENT_EXTRACTOR_TOOL_ID,
   DOCUMENT_GENERATOR_TOOL_ID,
+  PRESENTATION_GENERATOR_TOOL_ID,
 ];
 
 interface LeftConfigPanelProps {
@@ -95,6 +99,7 @@ const LeftConfigPanel = ({
   const [isRagConfigOpen, setRagConfigOpen] = useState(false);
   const [isExtractorConfigOpen, setExtractorConfigOpen] = useState(false);
   const [isGeneratorConfigOpen, setGeneratorConfigOpen] = useState(false);
+  const [isPresentationConfigOpen, setPresentationConfigOpen] = useState(false);
 
   const subAgents = form.subAgents ?? [];
   const { data: skillList } = useSkills({ scope: 'all', size: 100 });
@@ -131,6 +136,7 @@ const LeftConfigPanel = ({
       setToolModalOpen(false);
       if (toolId === RAG_TOOL_ID) setRagConfigOpen(true);
       else if (toolId === DOCUMENT_GENERATOR_TOOL_ID) setGeneratorConfigOpen(true);
+      else if (toolId === PRESENTATION_GENERATOR_TOOL_ID) setPresentationConfigOpen(true);
       else setExtractorConfigOpen(true);
     }
   };
@@ -139,6 +145,7 @@ const LeftConfigPanel = ({
     if (toolId === RAG_TOOL_ID) setRagConfigOpen(true);
     else if (toolId === DOCUMENT_EXTRACTOR_TOOL_ID) setExtractorConfigOpen(true);
     else if (toolId === DOCUMENT_GENERATOR_TOOL_ID) setGeneratorConfigOpen(true);
+    else if (toolId === PRESENTATION_GENERATOR_TOOL_ID) setPresentationConfigOpen(true);
   };
 
   const handleAddSubAgent = (candidate: SubAgentCandidate) => {
@@ -420,6 +427,9 @@ const LeftConfigPanel = ({
                     {tool.tool_id === DOCUMENT_GENERATOR_TOOL_ID && (
                       <GeneratorSummaryBadge draft={form.documentGeneratorDraft ?? null} />
                     )}
+                    {tool.tool_id === PRESENTATION_GENERATOR_TOOL_ID && (
+                      <PresentationSummaryBadge draft={form.presentationGeneratorDraft ?? null} />
+                    )}
                   </li>
                 );
               })}
@@ -530,6 +540,12 @@ const LeftConfigPanel = ({
         draft={form.documentGeneratorDraft ?? null}
         onChange={(draft) => onChange({ ...form, documentGeneratorDraft: draft })}
         onClose={() => setGeneratorConfigOpen(false)}
+      />
+      <PresentationGeneratorConfigModal
+        isOpen={isPresentationConfigOpen}
+        draft={form.presentationGeneratorDraft ?? null}
+        onChange={(draft) => onChange({ ...form, presentationGeneratorDraft: draft })}
+        onClose={() => setPresentationConfigOpen(false)}
       />
       <SkillPickerModal
         isOpen={isSkillModalOpen}
@@ -735,6 +751,27 @@ const GeneratorSummaryBadge = ({ draft }: GeneratorSummaryBadgeProps) => {
     <p className="mt-1.5 inline-block rounded bg-emerald-50 px-1.5 py-0.5 text-[11.5px] font-medium text-emerald-700">
       ✓ {draft.name || '문서 유형'} · 섹션 {draft.sections.length} ·{' '}
       {draft.outputFormat.toUpperCase()}
+    </p>
+  );
+};
+
+// ── 발표자료생성기 요약 배지 (golden-sample-blueprint §5.4) ─────────────
+
+interface PresentationSummaryBadgeProps {
+  draft: PresentationGeneratorDraft | null;
+}
+
+const PresentationSummaryBadge = ({ draft }: PresentationSummaryBadgeProps) => {
+  if (!draft || !draft.blueprintId) {
+    return (
+      <p className="mt-1.5 inline-block rounded bg-amber-50 px-1.5 py-0.5 text-[11.5px] font-medium text-amber-600">
+        ⚠ 양식 미선택
+      </p>
+    );
+  }
+  return (
+    <p className="mt-1.5 inline-block rounded bg-emerald-50 px-1.5 py-0.5 text-[11.5px] font-medium text-emerald-700">
+      ✓ 양식 선택됨 · 최대 {draft.maxSlides}장 · {draft.outputFormat.toUpperCase()}
     </p>
   );
 };

@@ -534,3 +534,78 @@ async def test_slide_with_only_plan_title_is_kept_for_header_fallback():
     out = await _run(_uc(planner, NoSlotWriter()))
     assert out.slide_count == 1
     assert not any("내용 없음" in w for w in out.warnings)
+
+
+# ── blueprint-slot-content-fill §8.3 시나리오 32~34 — 목차 결정론 결선 ──────
+
+from dataclasses import replace as _replace  # noqa: E402
+
+
+def _bp_with_toc() -> DocumentBlueprint:
+    bp = _bp()
+    toc = PagePattern(
+        "toc",
+        PatternKind.TOC,
+        (
+            Slot("title", SlotKind.TITLE, RelBox(0.05, 0.05, 0.9, 0.1), "제목",
+                 40, None, None),
+            Slot("bullets", SlotKind.BULLETS, RelBox(0.1, 0.2, 0.8, 0.6), "항목",
+                 400, None, None),
+        ),
+        None,
+        2,
+        "",
+    )
+    return _replace(bp, patterns=(*bp.patterns, toc))
+
+
+async def _run_with_toc(uc, cfg=None):
+    return await uc.generate(
+        llm=MagicMock(),
+        blueprint=_bp_with_toc(),
+        assets={},
+        tool_config=cfg or _cfg(),
+        evidence_block="근거",
+        conversation_block="대화",
+        user_instruction="",
+        owner_user_id="u1",
+        request_id="r1",
+    )
+
+
+@pytest.mark.asyncio
+async def test_toc_slide_skips_writer_and_uses_planned_titles():
+    """시나리오 32 (SC-6) — 목차는 writer 를 거치지 않는다."""
+    planner = FakePlanner(
+        [_plan(("cover", "표지"), ("toc", "목차"), ("chart", "연체율 추이"))]
+    )
+    writer = FakeWriter()
+
+    out = await _run_with_toc(_uc(planner, writer))
+
+    assert out.slide_count == 3
+    called_patterns = [c[2] for c in writer.calls]
+    assert "toc" not in called_patterns  # 목차는 LLM 미경유
+    assert called_patterns == ["cover", "chart"]
+
+
+@pytest.mark.asyncio
+async def test_non_toc_slides_still_call_writer():
+    """시나리오 33 — 나머지 슬라이드는 기존 경로 유지."""
+    planner = FakePlanner([_plan(("cover", "표지"), ("chart", "차트"))])
+    writer = FakeWriter()
+
+    await _run_with_toc(_uc(planner, writer))
+
+    assert [c[2] for c in writer.calls] == ["cover", "chart"]
+
+
+@pytest.mark.asyncio
+async def test_toc_falls_back_to_writer_when_no_items():
+    """시나리오 34 — 목차 외 슬라이드가 없으면 writer 로 폴백."""
+    planner = FakePlanner([_plan(("toc", "목차"))])
+    writer = FakeWriter()
+
+    await _run_with_toc(_uc(planner, writer))
+
+    assert [c[2] for c in writer.calls] == ["toc"]

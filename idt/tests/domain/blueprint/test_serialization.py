@@ -227,3 +227,68 @@ def test_from_dict_does_not_normalize_fonts():
 
     assert bp.style.fonts["heading"] == "Malgun Gothic Bold"  # 그대로 통과
     assert bp.font_mapping == {"Malgun Gothic Bold": "Malgun Gothic Bold"}
+
+
+# ── blueprint-render-style-fidelity §8.2 시나리오 4~6 — 하위호환 ─────────────
+
+
+def test_roundtrip_includes_new_style_fields():
+    """시나리오 4 — 신규 필드가 왕복에서 보존된다."""
+    bp = _bp()
+    style = replace(
+        bp.style,
+        table_style=replace(bp.style.table_style, zebra_bg="#EEEEEE",
+                            border_width_pt=1.5),
+        body_line_spacing=1.45,
+        body_space_after_pt=33.2,
+        chart_label_size_pt=9.0,
+        chart_label_bold=False,
+    )
+    styled = replace(bp, style=style)
+
+    assert blueprint_from_dict(blueprint_to_dict(styled)) == styled
+
+
+def test_dict_without_new_fields_loads_with_defaults():
+    """시나리오 5 (SC-6 핵심) — 신규 필드가 없는 dict 도 로드된다."""
+    data = blueprint_to_dict(_bp())
+    for key in ("body_line_spacing", "body_space_after_pt",
+                "chart_label_size_pt", "chart_label_bold"):
+        data["style"].pop(key, None)
+    for key in ("zebra_bg", "border_width_pt"):
+        data["style"]["table_style"].pop(key, None)
+
+    bp = blueprint_from_dict(data)
+
+    assert bp.style.body_line_spacing == 1.0
+    assert bp.style.body_space_after_pt == 0.0
+    assert bp.style.chart_label_size_pt == 0.0
+    assert bp.style.chart_label_bold is True
+    assert bp.style.table_style.zebra_bg == "#F3F4F6"
+    assert bp.style.table_style.border_width_pt == 0.0
+
+
+def test_v1_snapshot_loads_with_new_field_defaults():
+    """시나리오 5 (SC-6) — 실제 v1 스냅샷이 수정 없이 로드된다."""
+    data = json.loads(_V1_FIXTURE.read_text(encoding="utf-8"))
+
+    bp = blueprint_from_dict(data)
+
+    assert bp.schema_version == 1
+    assert bp.style.body_line_spacing == 1.0
+    assert bp.style.chart_label_size_pt == 0.0
+    assert bp.style.table_style.border_width_pt == 0.0
+
+
+def test_new_fields_in_dict_are_honoured():
+    """시나리오 6 — 값이 담겨 있으면 그대로 반영된다."""
+    data = blueprint_to_dict(_bp())
+    data["style"]["body_line_spacing"] = 1.45
+    data["style"]["chart_label_size_pt"] = 9.0
+    data["style"]["table_style"]["border_width_pt"] = 0.75
+
+    bp = blueprint_from_dict(data)
+
+    assert bp.style.body_line_spacing == 1.45
+    assert bp.style.chart_label_size_pt == 9.0
+    assert bp.style.table_style.border_width_pt == 0.75

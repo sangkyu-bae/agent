@@ -674,3 +674,144 @@ def test_cover_title_is_not_fabricated_from_plan_when_absent():
     slides = [SlideContent(SlidePlan(1, "cover", "표지 제목", "", ""), (), ())]
     prs = Presentation(io.BytesIO(PptxSlideRenderer().render(bp, slides, {}, {})))
     assert "표지 제목" not in [r.text for _, r in _runs(prs.slides[0])]
+
+
+# ── blueprint-render-style-fidelity §8.3 시나리오 17~25 — 표·문단 스타일 ────
+
+
+def _render_styled(slides, **style_overrides):
+    bp = _bp()
+    bp = replace(bp, style=replace(bp.style, **style_overrides))
+    data = PptxSlideRenderer().render(
+        bp, slides, {"logo": LOGO_PNG, "cover": COVER_PNG}, bp.font_mapping
+    )
+    return Presentation(io.BytesIO(data))
+
+
+def _bullet_paragraphs(slide):
+    for shape in slide.shapes:
+        if not shape.has_text_frame:
+            continue
+        for paragraph in shape.text_frame.paragraphs:
+            if paragraph.runs and paragraph.runs[0].text.startswith("•"):
+                yield paragraph
+
+
+def test_bullet_line_spacing_comes_from_style_token():
+    """시나리오 20 (D-4)."""
+    prs = _render_styled(_slides_with_heading("핵심"), body_line_spacing=1.45)
+
+    paragraphs = list(_bullet_paragraphs(prs.slides[0]))
+    assert paragraphs and all(p.line_spacing == 1.45 for p in paragraphs)
+
+
+def test_bullet_space_after_comes_from_style_token():
+    """시나리오 21 (D-4)."""
+    prs = _render_styled(_slides_with_heading("핵심"), body_space_after_pt=33.2)
+
+    paragraphs = list(_bullet_paragraphs(prs.slides[0]))
+    assert paragraphs
+    assert all(round(p.space_after.pt, 1) == 33.2 for p in paragraphs)
+
+
+def test_default_style_leaves_paragraph_spacing_unset():
+    """시나리오 22 (FR-07) — 기본값이면 현행 동작."""
+    prs = _render_styled(_slides_with_heading("핵심"))
+
+    for paragraph in _bullet_paragraphs(prs.slides[0]):
+        assert paragraph.line_spacing is None
+        assert paragraph.space_after is None
+
+
+def test_heading_paragraph_keeps_its_own_space_after():
+    """시나리오 24 — 소제목의 6pt(FR-03)는 본문 토큰에 덮이지 않는다."""
+    prs = _render_styled(_slides_with_heading("핵심"), body_space_after_pt=33.2)
+
+    slide = prs.slides[0]
+    box = next(sh for sh, r in _runs(slide) if r.text == "핵심")
+    heading_para = box.text_frame.paragraphs[0]
+    assert round(heading_para.space_after.pt, 1) == 6.0
+
+
+def _table_slide():
+    return [
+        SlideContent(
+            SlidePlan(1, "table", "포트폴리오", "", ""),
+            (
+                SlotContent("title", "포트폴리오", None, None, None),
+                SlotContent(
+                    "tbl",
+                    None,
+                    None,
+                    TableSpec(
+                        ("구분", "잔액"),
+                        (("가계", "1"), ("중소", "2"), ("대기업", "3"), ("기타", "4")),
+                    ),
+                    None,
+                ),
+            ),
+            (),
+        )
+    ]
+
+
+def _rendered_table(**table_overrides):
+    bp = _bp()
+    table_style = replace(bp.style.table_style, **table_overrides)
+    style = replace(bp.style, table_style=table_style)
+    data = PptxSlideRenderer().render(
+        replace(bp, style=style),
+        _table_slide(),
+        {"logo": LOGO_PNG, "cover": COVER_PNG},
+        bp.font_mapping,
+    )
+    prs = Presentation(io.BytesIO(data))
+    return next(
+        sh.table for sh in prs.slides[0].shapes if getattr(sh, "has_table", False)
+    )
+
+
+def _fill_color(cell) -> str | None:
+    try:
+        return str(cell.fill.fore_color.rgb)
+    except (AttributeError, TypeError):
+        return None
+
+
+def test_zebra_paints_second_and_fourth_data_rows_from_token():
+    """시나리오 17·19 (D-3) — 골든과 같은 행에, 상수가 아닌 토큰 색으로."""
+    table = _rendered_table(zebra=True, zebra_bg="#EEEEEE")
+
+    assert _fill_color(table.cell(2, 0)) == "EEEEEE"  # 데이터 2행
+    assert _fill_color(table.cell(4, 0)) == "EEEEEE"  # 데이터 4행
+    assert _fill_color(table.cell(1, 0)) != "EEEEEE"  # 데이터 1행은 아님
+
+
+def test_zebra_disabled_paints_nothing():
+    """시나리오 18 (FR-07)."""
+    table = _rendered_table(zebra=False, zebra_bg="#EEEEEE")
+
+    assert all(_fill_color(table.cell(r, 0)) != "EEEEEE" for r in range(1, 5))
+
+
+def test_table_borders_are_drawn_with_token_color():
+    """시나리오 15 결선 (D-3 / FR-03)."""
+    from pptx.oxml.ns import qn
+
+    table = _rendered_table(border="#1F3A5F", border_width_pt=0.75)
+
+    tc_pr = table.cell(0, 0)._tc.find(qn("a:tcPr"))
+    line = tc_pr.find(qn("a:lnL"))
+    assert line is not None
+    srgb = line.find(qn("a:solidFill")).find(qn("a:srgbClr"))
+    assert srgb.get("val") == "1F3A5F"
+
+
+def test_table_without_border_width_has_no_border_elements():
+    """시나리오 16 (FR-07) — 기본값 0 이면 현행 동작."""
+    from pptx.oxml.ns import qn
+
+    table = _rendered_table(border_width_pt=0.0)
+
+    tc_pr = table.cell(0, 0)._tc.find(qn("a:tcPr"))
+    assert tc_pr is None or tc_pr.find(qn("a:lnL")) is None

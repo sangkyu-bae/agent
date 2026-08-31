@@ -109,7 +109,13 @@ def _style(d: dict[str, Any]) -> StyleTokens:
         sizes={k: float(v) for k, v in d["sizes"].items()},
         palette=dict(d["palette"]),
         table_style=TableStyle(
-            ts["header_bg"], ts["header_text"], ts["border"], bool(ts["zebra"])
+            ts["header_bg"],
+            ts["header_text"],
+            ts["border"],
+            bool(ts["zebra"]),
+            # blueprint-render-style-fidelity DR-1: 기존 v2 추가와 같은 .get(default)
+            zebra_bg=ts.get("zebra_bg", "#F3F4F6"),
+            border_width_pt=float(ts.get("border_width_pt", 0.0)),
         ),
         header_footer=HeaderFooter(
             hf.get("logo_asset_id"),
@@ -120,6 +126,10 @@ def _style(d: dict[str, Any]) -> StyleTokens:
             footer_color=hf.get("footer_color"),
         ),
         common_decorations=_decorations(d.get("common_decorations")),
+        body_line_spacing=float(d.get("body_line_spacing", 1.0)),
+        body_space_after_pt=float(d.get("body_space_after_pt", 0.0)),
+        chart_label_size_pt=float(d.get("chart_label_size_pt", 0.0)),
+        chart_label_bold=bool(d.get("chart_label_bold", True)),
     )
 
 

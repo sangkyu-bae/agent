@@ -361,3 +361,53 @@ def test_payload_to_domain_keeps_protected_family():
     bp = BlueprintPayload.model_validate(d).to_domain()
 
     assert bp.style.fonts == {"heading": "Times New Roman", "body": "Arial Black"}
+
+
+# ── blueprint-render-style-fidelity §8.2 시나리오 7 — StyleSchema 선택 필드 ──
+
+
+def test_style_schema_roundtrips_new_optional_fields():
+    """신규 스타일 필드가 API 응답에 포함되고 왕복에서 보존된다."""
+    from dataclasses import replace as _replace
+
+    from src.interfaces.schemas.blueprint import BlueprintPayload
+
+    bp = _bp()
+    bp = _replace(
+        bp,
+        style=_replace(
+            bp.style,
+            table_style=_replace(
+                bp.style.table_style, zebra_bg="#EEEEEE", border_width_pt=0.75
+            ),
+            body_line_spacing=1.45,
+            body_space_after_pt=33.2,
+            chart_label_size_pt=9.0,
+        ),
+    )
+
+    payload = _payload(bp)
+    assert payload["style"]["body_line_spacing"] == 1.45
+    assert payload["style"]["table_style"]["zebra_bg"] == "#EEEEEE"
+
+    restored = BlueprintPayload.model_validate(payload).to_domain()
+    assert restored.style.body_line_spacing == 1.45
+    assert restored.style.chart_label_size_pt == 9.0
+    assert restored.style.table_style.border_width_pt == 0.75
+
+
+def test_style_schema_accepts_payload_without_new_fields():
+    """기존 클라이언트가 신규 필드 없이 보내도 기본값으로 받는다."""
+    from src.interfaces.schemas.blueprint import BlueprintPayload
+
+    payload = _payload(_bp())
+    for key in ("body_line_spacing", "body_space_after_pt",
+                "chart_label_size_pt", "chart_label_bold"):
+        payload["style"].pop(key, None)
+    for key in ("zebra_bg", "border_width_pt"):
+        payload["style"]["table_style"].pop(key, None)
+
+    restored = BlueprintPayload.model_validate(payload).to_domain()
+
+    assert restored.style.body_line_spacing == 1.0
+    assert restored.style.table_style.zebra_bg == "#F3F4F6"

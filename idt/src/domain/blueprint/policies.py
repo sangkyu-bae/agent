@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter, defaultdict
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from math import sqrt
 
@@ -26,8 +26,10 @@ from src.domain.blueprint.value_objects import (
     ImageRef,
     PagePattern,
     PageStats,
+    PatternKind,
     RelBox,
     SampleStats,
+    SlideContent,
     SlidePlan,
     Slot,
     SlotContent,
@@ -605,15 +607,18 @@ class SlotContentPolicy:
             slot = pattern.slot(c.slot_id)
             if slot is not None and slot.kind is SlotKind.FOOTER:
                 continue  # DR-2: 푸터는 렌더러가 스타일로 그림 — LLM 내용 무시
-            problem = (
-                f"slot '{c.slot_id}' not in pattern '{pattern.id}'"
-                if slot is None
-                else SlotContentPolicy._violation(c, slot)
-            )
-            if problem:
-                warnings.append(problem)
-            else:
-                kept.append(c)
+            if slot is None:
+                warnings.append(f"slot '{c.slot_id}' not in pattern '{pattern.id}'")
+                continue
+            fatal = SlotContentPolicy._violation(c, slot)
+            if fatal:
+                warnings.append(fatal)
+                continue
+            # blueprint-slot-content-fill FR-05: 길이 초과는 권고 — 내용은 살린다.
+            advisory = _advisory(c, slot)
+            if advisory:
+                warnings.append(advisory)
+            kept.append(c)
         return ContentOutcome(kept=tuple(kept), warnings=tuple(warnings))
 
     @staticmethod
@@ -630,20 +635,38 @@ class SlotContentPolicy:
 
 
 def _check_text(c: SlotContent, slot: Slot) -> str | None:
+    """모양 검사만 — 길이는 _advisory 로 옮겼다 (FR-05)."""
     if c.text is None or c.bullets is not None:
         return f"slot '{slot.id}': expected text"
-    if slot.max_chars and len(c.text) > slot.max_chars:
-        return f"slot '{slot.id}': text {len(c.text)} > max_chars {slot.max_chars}"
     return None
 
 
 def _check_bullets(c: SlotContent, slot: Slot) -> str | None:
     if c.bullets is None:
         return f"slot '{slot.id}': expected bullets"
-    total = sum(len(b) for b in c.bullets)
-    if slot.max_chars and total > slot.max_chars:
-        return f"slot '{slot.id}': bullets {total} > max_chars {slot.max_chars}"
     return None
+
+
+def _advisory(c: SlotContent, slot: Slot) -> str | None:
+    """권고 위반 — 경고만 남기고 내용은 유지한다 (FR-05, DR-9).
+
+    max_chars 는 비전 LLM 추정값이라 기준 자체가 불확실하고, 슬롯 높이는
+    blueprint-slot-box-snap 에서 이미 경계까지 확장됐다. 반면 max_rows 는
+    행 수만큼 실제 도형이 생성돼 슬롯 밖으로 넘치므로 치명으로 남긴다.
+    """
+    if not slot.max_chars:
+        return None
+    if slot.kind in _TEXT_KINDS and c.text is not None:
+        size = len(c.text)
+        label = "text"
+    elif slot.kind is SlotKind.BULLETS and c.bullets is not None:
+        size = sum(len(b) for b in c.bullets)
+        label = "bullets"
+    else:
+        return None
+    if size <= slot.max_chars:
+        return None
+    return f"slot '{slot.id}': {label} {size} > max_chars {slot.max_chars} (유지)"
 
 
 class FontFamilyPolicy:
@@ -860,3 +883,151 @@ def _snap_clamped(x: float, y: float, w: float, h: float) -> RelBox:
         w=max(min(w, 1.0 - x), _SNAP_MIN_SIDE),
         h=max(min(h, 1.0 - y), _SNAP_MIN_SIDE),
     )
+
+
+# ── blueprint-slot-content-fill C-1 — 장식 경계 슬롯 분할 ────────────────────
+
+_SPLIT_MIN_GROUPS = 2  # 이 미만이면 분할하지 않는다 (FR-06)
+
+
+class SlotSplitPolicy:
+    """뭉쳐진 텍스트 슬롯을 장식 경계로 쪼갠다 (slot-content-fill FR-01·02·06).
+
+    Design Ref: §3.2 / DR-3 — 비전 모델이 카드 N장을 슬롯 하나로 주는 경우가 있다.
+    장식 경계는 이미 실측으로 확정돼 있으므로(DecorationPolicy), "슬롯에 배정된
+    span 이 서로 다른 장식 N개에 **완전히 포함**되고 미소속이 0" 일 때만 분할한다.
+    애매하면 원본을 유지한다 — 개선 시도이지 필수 경로가 아니다 (DR-10).
+    """
+
+    @staticmethod
+    def apply(
+        page: PageStats,
+        pattern: PagePattern,
+        decorations: Sequence[Decoration],
+        caption_size: float,
+    ) -> tuple[PagePattern, tuple[str, ...]]:
+        targets = [s for s in pattern.slots if s.kind in _SNAP_TEXT_KINDS]
+        spans = _snappable_spans(page, caption_size)
+        if not targets or not spans or not decorations:
+            return pattern, ()
+        assigned = _assign(spans, targets)
+        replacements = {
+            s.id: _split_slots(s, assigned[s.id], decorations)
+            for s in targets
+            if assigned[s.id]
+        }
+        if not any(len(v) > 1 for v in replacements.values()):
+            return pattern, ()
+        slots = tuple(
+            new for s in pattern.slots for new in replacements.get(s.id, (s,))
+        )
+        return replace(pattern, slots=slots), ()
+
+
+def _split_slots(
+    slot: Slot, spans: Sequence[TextSpan], decorations: Sequence[Decoration]
+) -> tuple[Slot, ...]:
+    """장식 그룹별 슬롯 목록. 분할 조건을 못 채우면 원본 하나를 돌려준다."""
+    groups = _decoration_groups(spans, decorations)
+    if groups is None or len(groups) < _SPLIT_MIN_GROUPS:
+        return (slot,)
+    ordered = sorted(groups.values(), key=lambda qs: min(q.box.y for q in qs))
+    return tuple(
+        replace(slot, id=_split_id(slot.id, i), box=_union(qs))
+        for i, qs in enumerate(ordered, start=1)
+    )
+
+
+def _decoration_groups(
+    spans: Sequence[TextSpan], decorations: Sequence[Decoration]
+) -> dict[str, list[TextSpan]] | None:
+    """span → 소유 장식. 미소속이 하나라도 있으면 None (분할 불가, FR-06)."""
+    groups: dict[str, list[TextSpan]] = {}
+    for span in spans:
+        owner = next(
+            (d for d in decorations if _contains(d.box, span.box)), None
+        )  # DR-3: 등장 순서로 결정론 — 중첩 장식은 먼저 나온 쪽이 소유
+        if owner is None:
+            return None
+        groups.setdefault(owner.id, []).append(span)
+    return groups
+
+
+def _contains(outer: RelBox, inner: RelBox) -> bool:
+    return (
+        outer.x <= inner.x
+        and outer.y <= inner.y
+        and outer.x + outer.w >= inner.x + inner.w
+        and outer.y + outer.h >= inner.y + inner.h
+    )
+
+
+def _split_id(base: str, index: int) -> str:
+    """DR-4 — _pattern_from_draft 와 같은 suffix 규칙 (bullets, bullets2, …)."""
+    return base if index == 1 else f"{base}{index}"
+
+
+# ── blueprint-slot-content-fill C-2 — 목차 결정론적 생성 ─────────────────────
+
+_TOC_MAX_ITEMS = 12  # 초과분은 버리지 않고 경고 (DR-8)
+_TOC_EXCLUDED_KINDS = (PatternKind.COVER, PatternKind.TOC)  # DR-7
+
+
+class TocContentPolicy:
+    """목차 슬라이드 내용을 계획된 제목에서 만든다 (blueprint-slot-content-fill FR-04).
+
+    Design Ref: §3.2 / DR-6·DR-7 — writer 는 슬라이드를 한 장씩 독립 호출하므로
+    목차를 쓸 때 다른 슬라이드 제목을 모른다. 계획 단계에 이미 답이 있으니
+    LLM 을 경유하지 않는다. 항목에 번호를 넣지 않는다 — 렌더러가 붙인다.
+
+    만들 수 없으면 None 을 돌려 호출부가 기존 writer 경로로 폴백하게 한다 (DR-10).
+    """
+
+    @staticmethod
+    def apply(
+        plan: SlidePlan,
+        plans: Sequence[SlidePlan],
+        pattern_kinds: Mapping[str, PatternKind],
+        pattern: PagePattern,
+    ) -> tuple[SlideContent | None, tuple[str, ...]]:
+        bullets_slot = next(
+            (s for s in pattern.slots if s.kind is SlotKind.BULLETS), None
+        )
+        if bullets_slot is None:
+            return None, (f"slide {plan.index}: 목차 패턴에 bullets 슬롯 없음",)
+        items, warnings = _toc_items(plan, plans, pattern_kinds)
+        if not items:
+            return None, (f"slide {plan.index}: 목차 항목 없음 — writer 로 폴백",)
+        contents = [SlotContent(bullets_slot.id, None, items, None, None)]
+        title_slot = next(
+            (s for s in pattern.slots if s.kind is SlotKind.TITLE), None
+        )
+        if title_slot is not None and plan.title.strip():
+            contents.insert(0, SlotContent(title_slot.id, plan.title, None, None, None))
+        return SlideContent(plan, tuple(contents), warnings), warnings
+
+
+def _toc_items(
+    plan: SlidePlan,
+    plans: Sequence[SlidePlan],
+    pattern_kinds: Mapping[str, PatternKind],
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """표지·목차 자신을 뺀 슬라이드 제목 (DR-7).
+
+    번호는 렌더러가 붙이므로 여기서 붙이지 않는다 (DR-6).
+    """
+    titles = [
+        p.title.strip()
+        for p in plans
+        if p.index != plan.index
+        and pattern_kinds.get(p.pattern_id) not in _TOC_EXCLUDED_KINDS
+        and p.title.strip()
+    ]
+    if len(titles) <= _TOC_MAX_ITEMS:
+        return tuple(titles), ()
+    dropped = len(titles) - _TOC_MAX_ITEMS
+    warning = (
+        f"slide {plan.index}: 목차 항목 {len(titles)}개 중 "
+        f"{_TOC_MAX_ITEMS}개만 표시 ({dropped}개 생략)"
+    )
+    return tuple(titles[:_TOC_MAX_ITEMS]), (warning,)

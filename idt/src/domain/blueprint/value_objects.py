@@ -230,10 +230,15 @@ class TableStyle:
     header_text: str
     border: str
     zebra: bool
+    # blueprint-render-style-fidelity DR-2: 기본값이 곧 현행 동작이다.
+    zebra_bg: str = "#F3F4F6"  # 렌더러 상수를 토큰으로 이동 (D-3)
+    border_width_pt: float = 0.0  # 0 이면 테두리를 그리지 않는다 (D-3)
 
     def __post_init__(self) -> None:
-        for name in ("header_bg", "header_text", "border"):
+        for name in ("header_bg", "header_text", "border", "zebra_bg"):
             _check_hex(f"TableStyle.{name}", getattr(self, name))
+        if self.border_width_pt < 0:
+            raise ValueError("TableStyle.border_width_pt must be >= 0")
 
 
 @dataclass(frozen=True)
@@ -259,8 +264,17 @@ class StyleTokens:
     table_style: TableStyle
     header_footer: HeaderFooter
     common_decorations: tuple[Decoration, ...] = ()  # 비표지 전 슬라이드 공통
+    # blueprint-render-style-fidelity DR-2: 기본값 = 현행 동작 (미설정)
+    body_line_spacing: float = 1.0  # 1.0 이면 줄간격을 설정하지 않는다 (D-4)
+    body_space_after_pt: float = 0.0  # 0 이면 문단 여백 없음 (D-4)
+    chart_label_size_pt: float = 0.0  # 0 이면 데이터 레이블 없음 (D-1)
+    chart_label_bold: bool = True  # 레이블 굵기 (D-1)
 
     def __post_init__(self) -> None:
+        if self.body_line_spacing <= 0:
+            raise ValueError("StyleTokens.body_line_spacing must be > 0")
+        if self.body_space_after_pt < 0 or self.chart_label_size_pt < 0:
+            raise ValueError("StyleTokens spacing/label sizes must be >= 0")
         if len(self.slide_size) != 2 or any(v <= 0 for v in self.slide_size):
             raise ValueError("StyleTokens.slide_size must be positive (w, h)")
         _check_unique_ids("StyleTokens", self.common_decorations, "decoration")

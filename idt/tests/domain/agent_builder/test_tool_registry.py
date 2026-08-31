@@ -1,12 +1,10 @@
 """TOOL_REGISTRY 단위 테스트 — mock 금지."""
 import pytest
-
 from src.domain.agent_builder.tool_registry import (
     TOOL_REGISTRY,
     get_all_tools,
     get_tool_meta,
 )
-
 
 EXPECTED_TOOL_IDS = {
     "internal_document_search",
@@ -16,6 +14,7 @@ EXPECTED_TOOL_IDS = {
     "data_analysis",
     "document_extractor",
     "document_generator",
+    "presentation_generator",
     "wiki_read",
     "wiki_list",
 }
@@ -62,6 +61,12 @@ class TestToolRegistry:
     def test_excel_export_requires_no_env(self):
         meta = get_tool_meta("excel_export")
         assert meta.requires_env == []
+
+    def test_excel_export_description_guides_supervisor_routing(self):
+        # excel-generator-node FR-10 / Plan Risk #3: 슈퍼바이저 라우팅 문구 회귀 방지
+        desc = get_tool_meta("excel_export").description
+        assert "다운로드" in desc
+        assert "수집" in desc
 
 
 class TestToolRegistryCategory:

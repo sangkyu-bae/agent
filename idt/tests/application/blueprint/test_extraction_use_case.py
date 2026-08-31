@@ -447,3 +447,57 @@ async def test_snap_warnings_are_collected_into_blueprint(tmp_path):
 
     # 골든 샘플은 전 슬롯이 매칭되므로 스냅 경고가 없어야 한다
     assert [w for w in out.blueprint.warnings if "매칭 span 없음" in w] == []
+
+
+# ── blueprint-slot-content-fill §8.3 시나리오 30 — 장식 판정 불변 ────────────
+
+
+@pytest.mark.asyncio
+async def test_decoration_output_is_unaffected_by_slot_split(tmp_path):
+    """설계 §2.3 — 분할은 텍스트 슬롯만 건드리므로 DecorationPolicy 출력이 같다.
+
+    _CONTENT_SLOT_KINDS 에 텍스트 종류가 추가되면 이 단언이 깨져 알려 준다.
+    """
+    from src.domain.blueprint.policies import DecorationPolicy, PaletteClusterPolicy
+    from src.infrastructure.blueprint.extractors.pdf_style_extractor import (
+        PdfStyleExtractor,
+    )
+
+    from tests.integration.blueprint.test_golden_sample_fidelity import _PDF
+
+    out = await _uc(GoldenAdapter(), tmp_path=tmp_path).run(
+        _PDF.read_bytes(), "golden.pdf", 20, "deco-invariance"
+    )
+    bp = out.blueprint
+    stats = PdfStyleExtractor(render_dpi=36).extract(_PDF.read_bytes(), "g.pdf", 20)
+    palette = PaletteClusterPolicy.apply(stats)
+
+    # 분할된(=최종) 패턴으로 장식을 다시 계산해도 저장된 장식과 동일해야 한다
+    common, per_pattern, _ = DecorationPolicy.apply(stats, bp.patterns, palette)
+
+    assert common == bp.style.common_decorations
+    for pattern in bp.patterns:
+        assert per_pattern.get(pattern.id, ()) == pattern.decorations
+
+
+# ── blueprint-render-style-fidelity §5.1 — 추출 기본값이 스타일을 켠다 ───────
+
+
+@pytest.mark.asyncio
+async def test_extraction_enables_render_style_with_golden_defaults(tmp_path):
+    """DR-10(v2) — 신규 추출은 골든 실측값을 넣어 기본 산출물이 원본을 닮는다.
+
+    VO 기본값(꺼짐)은 하위호환용이고, 추출은 켠 값을 쓴다.
+    """
+    from tests.integration.blueprint.test_golden_sample_fidelity import _PDF
+
+    out = await _uc(GoldenAdapter(), tmp_path=tmp_path).run(
+        _PDF.read_bytes(), "golden.pdf", 20, "style-defaults"
+    )
+    style = out.blueprint.style
+
+    assert style.table_style.zebra is True
+    assert style.table_style.border_width_pt == 0.75
+    assert style.body_line_spacing == 1.45
+    assert style.body_space_after_pt == 33.2
+    assert style.chart_label_size_pt == style.sizes["caption"]

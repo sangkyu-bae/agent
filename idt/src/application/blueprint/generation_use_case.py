@@ -23,7 +23,11 @@ from src.domain.agent_attachment.interfaces import AttachmentStoreInterface
 from src.domain.agent_attachment.value_objects import AttachmentType
 from src.domain.blueprint.errors import PresentationGenerateError
 from src.domain.blueprint.interfaces import SlideRendererPort
-from src.domain.blueprint.policies import SlidePlanValidationPolicy, SlotContentPolicy
+from src.domain.blueprint.policies import (
+    SlidePlanValidationPolicy,
+    SlotContentPolicy,
+    TocContentPolicy,
+)
 from src.domain.blueprint.schemas import SlideContentDraft, SlidePlanDraft
 from src.domain.blueprint.tool_config import PresentationGeneratorToolConfig
 from src.domain.blueprint.value_objects import (
@@ -224,9 +228,24 @@ class PresentationGenerationUseCase:
         sem = asyncio.Semaphore(self._concurrency)
         total = len(plans)
 
+        kinds = {p.id: p.kind for p in blueprint.patterns}
+
         async def one(plan: SlidePlan) -> SlideContent:
             pattern = blueprint.pattern(plan.pattern_id)
             assert pattern is not None  # 계획 검증 통과
+            # Design Ref: blueprint-slot-content-fill FR-04 — 목차는 계획 제목에서
+            # 결정론적으로 만든다. LLM 을 경유하지 않는다.
+            if pattern.kind is PatternKind.TOC:
+                content, toc_warnings = TocContentPolicy.apply(
+                    plan, plans, kinds, pattern
+                )
+                if content is not None:
+                    return content
+                self._logger.warning(
+                    "blueprint.toc deterministic fill failed — writer fallback",
+                    slide=plan.index,
+                    reasons=list(toc_warnings),
+                )
             async with sem:
                 return await self._write_one(
                     writer, blueprint, pattern, plan, evidence, conversation, total

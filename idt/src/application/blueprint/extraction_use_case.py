@@ -35,6 +35,7 @@ from src.domain.blueprint.policies import (
     RepeatAssetPolicy,
     SizeHierarchyPolicy,
     SlotBoxPolicy,
+    SlotSplitPolicy,
 )
 from src.domain.blueprint.schemas import NarrativeDraft, PagePatternDraft
 from src.domain.blueprint.value_objects import (
@@ -57,6 +58,13 @@ from src.domain.blueprint.value_objects import (
 )
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.domain.multimodal.value_objects import MultimodalSettings
+
+# blueprint-render-style-fidelity DR-10(v2) — 골든 샘플 실측 기본값.
+# 값 출처: 줄간격 18.8pt/13pt=1.45, 문단 간 33.2pt, 표 외곽선·zebra 존재.
+_DEFAULT_ZEBRA = True
+_DEFAULT_BORDER_WIDTH_PT = 0.75
+_DEFAULT_LINE_SPACING = 1.45
+_DEFAULT_SPACE_AFTER_PT = 33.2
 
 _TITLE_BAND = RelBox(0.05, 0.05, 0.9, 0.12)
 _BODY_BAND = RelBox(0.05, 0.22, 0.9, 0.7)
@@ -283,29 +291,35 @@ def _style_and_patterns(
             header_bg=palette["primary"],
             header_text="#FFFFFF",
             border="#CCCCCC",
-            zebra=False,
+            # blueprint-render-style-fidelity DR-10(v2): 추출이 스타일을 **켠다**.
+            # VO 기본값(꺼짐)은 하위호환용이고, 신규 추출은 골든 실측값을 쓴다.
+            zebra=_DEFAULT_ZEBRA,
+            border_width_pt=_DEFAULT_BORDER_WIDTH_PT,
         ),
         header_footer=_header_footer(stats, assets, hierarchy.sizes["caption"]),
         common_decorations=common,
+        body_line_spacing=_DEFAULT_LINE_SPACING,
+        body_space_after_pt=_DEFAULT_SPACE_AFTER_PT,
+        chart_label_size_pt=hierarchy.sizes["caption"],
     )
     decorated = tuple(
         replace(p, decorations=per_pattern.get(p.id, ())) for p in patterns
     )
     # Design Ref: blueprint-slot-box-snap DR-7 — 장식 확정 후 슬롯 좌표를 실측 스냅.
     # 장식 판정은 텍스트 슬롯을 보지 않으므로(_CONTENT_SLOT_KINDS) 순환이 없다.
-    snapped, snap_warnings = _snap_slot_boxes(
+    snapped, snap_warnings = _split_and_snap_slots(
         stats, decorated, common, hierarchy.sizes["caption"]
     )
     return style, snapped, warnings + snap_warnings
 
 
-def _snap_slot_boxes(
+def _split_and_snap_slots(
     stats: SampleStats,
     patterns: Sequence[PagePattern],
     common: Sequence[Decoration],
     caption: float,
 ) -> tuple[tuple[PagePattern, ...], list[str]]:
-    """페이지별 실측 span 으로 텍스트 슬롯 좌표를 보정한다 (blueprint-slot-box-snap)."""
+    """페이지별로 텍스트 슬롯을 장식 경계로 쪼개고(C-1) 실측 좌표로 스냅한다."""
     by_page = {p.number: p for p in stats.pages}
     out: list[PagePattern] = []
     warnings: list[str] = []
@@ -315,11 +329,14 @@ def _snap_slot_boxes(
             out.append(pattern)
             continue
         decorations = (*common, *pattern.decorations)
-        snapped, page_warnings = SlotBoxPolicy.apply(
+        # Design Ref: blueprint-slot-content-fill DR-5 — 분할이 스냅보다 먼저다.
+        # 분할은 원본 비전 박스로 span 을 배정해야 하고, 스냅은 쪼갠 슬롯별로 맞춘다.
+        split, split_warnings = SlotSplitPolicy.apply(
             page, pattern, decorations, caption
         )
+        snapped, page_warnings = SlotBoxPolicy.apply(page, split, decorations, caption)
         out.append(snapped)
-        warnings.extend(page_warnings)
+        warnings.extend((*split_warnings, *page_warnings))
     return tuple(out), warnings
 
 

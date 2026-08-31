@@ -6,8 +6,9 @@ TOOL_REGISTRY: dict[str, ToolMeta] = {
         tool_id="excel_export",
         name="Excel 파일 생성",
         description=(
-            "pandas로 데이터를 Excel(.xlsx) 파일로 저장합니다. "
-            "수집된 데이터를 표 형태로 저장하거나 보고서가 필요할 때 사용하세요."
+            "이전 워커들이 수집한 데이터·분석 결과·첨부 엑셀을 표로 정리해 "
+            "Excel(.xlsx) 파일을 생성하고 다운로드 링크를 제공합니다. "
+            "수집·분석된 데이터를 엑셀로 정리해 전달할 때 사용하세요."
         ),
         requires_env=[],
     ),
@@ -59,6 +60,17 @@ TOOL_REGISTRY: dict[str, ToolMeta] = {
             "PDF/Word 파일로 생성합니다. 이전 워커들이 수집한 근거와 대화 내용을 "
             "재료로 사용합니다. 양식 빈칸 채우기는 문서추출기, 내용 자체를 "
             "조사·작성하는 문서는 이 도구를 사용하세요."
+        ),
+        requires_env=[],
+    ),
+    "presentation_generator": ToolMeta(
+        tool_id="presentation_generator",
+        name="발표자료생성기",
+        description=(
+            "관리자가 등록한 양식 blueprint(Golden Sample)에 맞춰 발표자료(PPTX)를 "
+            "작성합니다. 이전 워커들이 수집한 근거·첨부 데이터와 대화 내용을 재료로 "
+            "슬라이드를 계획·작성하고 네이티브 차트를 포함합니다. 문서(PDF/Word)는 "
+            "문서생성기, 발표자료(PPT)는 이 도구를 사용하세요."
         ),
         requires_env=[],
     ),

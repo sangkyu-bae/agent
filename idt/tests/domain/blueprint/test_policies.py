@@ -255,7 +255,9 @@ def test_slot_content_policy_checks_kind_match_length_rows_and_series():
         ),  # kind 불일치 (title 에 bullets)
     ]
     out = SlotContentPolicy.apply(contents, pattern)
-    assert [c.slot_id for c in out.kept] == []  # 전부 위반
+    # blueprint-slot-content-fill FR-05: 길이 초과(title)는 권고 — 유지된다.
+    # 나머지 4건(series/rows/없는 슬롯/kind 불일치)은 치명 — 폐기.
+    assert [c.slot_id for c in out.kept] == ["title"]
     assert len(out.warnings) == 5
 
 
@@ -544,3 +546,107 @@ def test_decoration_policy_common_cap_emits_warning():
     )
     assert len(common) == 4 and per_pattern == {}
     assert any("common" in w for w in warnings)
+
+
+# ── blueprint-slot-content-fill §8.2 시나리오 21~27 — 치명/권고 분리 (FR-05) ──
+
+
+def _len_pattern(kind: SlotKind, max_chars: int) -> PagePattern:
+    return PagePattern(
+        id="p",
+        kind=PatternKind.TEXT,
+        slots=(
+            Slot("s", kind, RelBox(0.1, 0.1, 0.8, 0.8), "역할", max_chars, None, None),
+        ),
+        background=None,
+        sample_page=1,
+        notes="",
+    )
+
+
+def test_bullets_over_max_chars_is_advisory_and_kept():
+    """시나리오 21 — 길이 초과 bullets 가 살아남는다."""
+    pattern = _len_pattern(SlotKind.BULLETS, 10)
+    content = SlotContent("s", None, ("아주 긴 불릿 내용입니다",), None, None)
+
+    out = SlotContentPolicy.apply([content], pattern)
+
+    assert [c.slot_id for c in out.kept] == ["s"]
+    assert len(out.warnings) == 1 and "max_chars" in out.warnings[0]
+
+
+def test_text_over_max_chars_is_advisory_and_kept():
+    """시나리오 22 — 길이 초과 text 가 살아남는다."""
+    pattern = _len_pattern(SlotKind.TEXT, 5)
+    content = SlotContent("s", "열 글자가 넘는 본문입니다", None, None, None)
+
+    out = SlotContentPolicy.apply([content], pattern)
+
+    assert [c.slot_id for c in out.kept] == ["s"]
+    assert len(out.warnings) == 1
+
+
+def test_shape_mismatch_stays_fatal():
+    """시나리오 23·24 — 모양 불일치는 여전히 폐기된다."""
+    text_slot = _len_pattern(SlotKind.TEXT, 100)
+    bullets_slot = _len_pattern(SlotKind.BULLETS, 100)
+
+    a = SlotContentPolicy.apply([SlotContent("s", None, ("x",), None, None)], text_slot)
+    b = SlotContentPolicy.apply([SlotContent("s", "x", None, None, None)], bullets_slot)
+
+    assert a.kept == () and len(a.warnings) == 1
+    assert b.kept == () and len(b.warnings) == 1
+
+
+def test_table_over_max_rows_stays_fatal():
+    """시나리오 25 (DR-9) — 표 행 초과는 실제 도형이 넘치므로 치명 유지."""
+    pattern = PagePattern(
+        id="p",
+        kind=PatternKind.TABLE,
+        slots=(
+            Slot("t", SlotKind.TABLE, RelBox(0.1, 0.1, 0.8, 0.8), "표", None, 2, None),
+        ),
+        background=None,
+        sample_page=1,
+        notes="",
+    )
+    table = TableSpec(("h",), (("1",), ("2",), ("3",)))
+
+    out = SlotContentPolicy.apply([SlotContent("t", None, None, table, None)], pattern)
+
+    assert out.kept == () and len(out.warnings) == 1
+
+
+def test_unknown_slot_id_stays_fatal():
+    """시나리오 26 — 패턴에 없는 슬롯은 폐기."""
+    out = SlotContentPolicy.apply(
+        [SlotContent("ghost", "x", None, None, None)], _len_pattern(SlotKind.TEXT, 100)
+    )
+    assert out.kept == () and len(out.warnings) == 1
+
+
+def test_valid_content_has_no_warning():
+    """시나리오 27 — 정상 내용은 경고 0건."""
+    out = SlotContentPolicy.apply(
+        [SlotContent("s", "짧다", None, None, None)], _len_pattern(SlotKind.TEXT, 100)
+    )
+    assert len(out.kept) == 1 and out.warnings == ()
+
+
+def test_advisory_ignores_non_text_slots_with_max_chars():
+    """방어 분기 — 표·차트 슬롯에 max_chars 가 설정돼도 권고 대상이 아니다."""
+    pattern = PagePattern(
+        id="p",
+        kind=PatternKind.TABLE,
+        slots=(
+            Slot("t", SlotKind.TABLE, RelBox(0.1, 0.1, 0.8, 0.8), "표", 5, None, None),
+        ),
+        background=None,
+        sample_page=1,
+        notes="",
+    )
+    table = TableSpec(("헤더가 아주 길다",), (("행 내용도 길다",),))
+
+    out = SlotContentPolicy.apply([SlotContent("t", None, None, table, None)], pattern)
+
+    assert len(out.kept) == 1 and out.warnings == ()
