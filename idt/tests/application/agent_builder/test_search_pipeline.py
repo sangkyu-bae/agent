@@ -359,3 +359,51 @@ class TestUserContextInjection:
         assert "'나', '내', '본인'" in REWRITE_SYSTEM_PROMPT
         assert "사용자 이름" in REWRITE_SYSTEM_PROMPT
         assert "배상규" in REWRITE_SYSTEM_PROMPT  # 휴가 질문 치환 예시
+
+
+class TestDatetimeBlockInjection:
+    """runtime-datetime-context D4 (FR-05a): 날짜 블록 → rewrite/validate/compress."""
+
+    _DT = "[현재 날짜]\n- 2026-08-25 (화)\n\n지침\n\n---\n\n"
+    _USER = "[현재 사용자 정보]\n- 이름: 배상규\n\n---\n\n"
+
+    def _node(self, llm, tool, **kw):
+        return create_search_pipeline_node(
+            worker_id="w1", tool=tool, pipeline_llm=llm,
+            policy=SearchPipelinePolicy(compress_threshold=10),
+            logger=MagicMock(), **kw,
+        )
+
+    @pytest.mark.asyncio
+    async def test_datetime_block_prepended_to_all_llm_stages(self):
+        llm = FakeLLM(structured=[_RQ, _OK], invokes=["압축 결과"])
+        tool = FakeTool(["긴 검색 결과 본문입니다. 압축 임계 초과."])
+        await self._node(llm, tool, datetime_block=self._DT)(
+            _make_state("천안 오늘 날씨 알려줘")
+        )
+        for _, messages in llm.structured_calls:  # rewrite + validate
+            assert messages[0]["content"].startswith(self._DT)
+        assert llm.invoke_calls[0][0]["content"].startswith(self._DT)  # compress
+
+    @pytest.mark.asyncio
+    async def test_datetime_precedes_user_context(self):
+        """블록 순서: 날짜 → 사용자 → 본문 (Design 결정)."""
+        llm = FakeLLM(structured=[_RQ, _OK], invokes=["압축"])
+        tool = FakeTool(["긴 검색 결과 본문입니다. 압축 임계 초과."])
+        await self._node(
+            llm, tool, datetime_block=self._DT, user_context_block=self._USER,
+        )(_make_state("내 휴가 오늘 기준으로"))
+        _, rewrite_messages = llm.structured_calls[0]
+        assert rewrite_messages[0]["content"].startswith(self._DT + self._USER)
+
+    @pytest.mark.asyncio
+    async def test_default_empty_keeps_prompts_identical(self):
+        from src.application.agent_builder.search_pipeline import (
+            REWRITE_SYSTEM_PROMPT,
+        )
+
+        llm = FakeLLM(structured=[_RQ, _OK])
+        tool = FakeTool(["짧은 결과"])
+        await self._node(llm, tool)(_make_state("q"))
+        _, rewrite_messages = llm.structured_calls[0]
+        assert rewrite_messages[0]["content"] == REWRITE_SYSTEM_PROMPT

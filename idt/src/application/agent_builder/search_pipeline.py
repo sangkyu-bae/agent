@@ -300,12 +300,17 @@ def create_search_pipeline_node(
     policy: SearchPipelinePolicy,
     logger: LoggerInterface,
     user_context_block: str = "",
+    datetime_block: str = "",
 ):
     """rewrite → search → validate(루프) → compress 파이프라인 search 노드 생성.
 
     rag-auth-filter-fix D5: user_context_block(include_user_context 게이팅된
     사용자 컨텍스트)이 주어지면 3단계 LLM system prompt 모두에 prepend된다.
+    runtime-datetime-context D4: datetime_block([현재 날짜])은 사용자 블록보다
+    앞에 prepend — 검색어를 실제로 작성하는 rewrite LLM이 날짜를 알아야 한다 (FR-05a).
     """
+    # Design Ref: runtime-datetime-context §D4 — 순서: 날짜 → 사용자 → 본문
+    context_block = datetime_block + user_context_block
 
     async def search_node(state: SupervisorState) -> dict:
         messages = state["messages"]
@@ -314,11 +319,11 @@ def create_search_pipeline_node(
 
         query, llm_chars = await _rewrite_query(
             pipeline_llm, question, context, logger,
-            user_context=user_context_block,
+            user_context=context_block,
         )
         loop = await _search_with_validation(
             tool, pipeline_llm, policy, question, query, logger,
-            user_context=user_context_block,
+            user_context=context_block,
         )
         llm_chars += loop.llm_chars
 
@@ -326,7 +331,7 @@ def create_search_pipeline_node(
         if loop.ok and policy.needs_compression(result_str):
             result_str, chars = await _compress_result(
                 pipeline_llm, question, result_str, logger,
-                user_context=user_context_block,
+                user_context=context_block,
             )
             llm_chars += chars
             compressed = True
