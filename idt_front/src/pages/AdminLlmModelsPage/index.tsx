@@ -38,6 +38,7 @@ interface FormState {
   base_url: string;
   is_active: boolean;
   is_default: boolean;
+  supports_vision: boolean; // multimodal-extractor: 비전(이미지 입력) 지원
 }
 
 const emptyForm: FormState = {
@@ -50,6 +51,7 @@ const emptyForm: FormState = {
   base_url: '',
   is_active: true,
   is_default: false,
+  supports_vision: false,
 };
 
 const fromModel = (m: LlmModel): FormState => ({
@@ -62,6 +64,7 @@ const fromModel = (m: LlmModel): FormState => ({
   base_url: m.base_url ?? '',
   is_active: m.is_active,
   is_default: m.is_default,
+  supports_vision: m.supports_vision ?? false,
 });
 
 interface FormModalProps {
@@ -130,6 +133,7 @@ const LlmModelFormModal = ({
         base_url: baseUrl,
         is_active: form.is_active,
         is_default: form.is_default,
+        supports_vision: form.supports_vision,
       });
     } else {
       onSubmitCreate({
@@ -142,6 +146,7 @@ const LlmModelFormModal = ({
         base_url: baseUrl,
         is_active: form.is_active,
         is_default: form.is_default,
+        supports_vision: form.supports_vision,
       });
     }
   };
@@ -286,6 +291,15 @@ const LlmModelFormModal = ({
               className="h-4 w-4 rounded border-zinc-300 text-violet-600"
             />
             기본 모델
+          </label>
+          <label className="flex items-center gap-2 text-[13px] text-zinc-700">
+            <input
+              type="checkbox"
+              checked={form.supports_vision}
+              onChange={(e) => set('supports_vision', e.target.checked)}
+              className="h-4 w-4 rounded border-zinc-300 text-violet-600"
+            />
+            비전 지원
           </label>
           <span className="text-[12px] text-zinc-400">
             기본 모델 지정 시 기존 기본 모델은 자동 해제됩니다.
@@ -615,6 +629,14 @@ const AdminLlmModelsPage = () => {
                       {m.is_default && (
                         <span className="rounded-md bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-600">
                           기본
+                        </span>
+                      )}
+                      {m.supports_vision && (
+                        <span
+                          className="rounded-md bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-600"
+                          title="이미지 입력(비전) 지원 — 멀티모달 추출 모델로 선택 가능"
+                        >
+                          Vision
                         </span>
                       )}
                     </div>

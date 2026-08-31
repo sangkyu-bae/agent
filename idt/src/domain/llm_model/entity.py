@@ -28,6 +28,7 @@ class LlmModel:
         output_price_per_1k_usd: 출력 토큰 1000개당 USD
         pricing_updated_at: 가격 최종 갱신 시각
         base_url: self-host 엔드포인트(vLLM/OpenAI 호환 등). None이면 provider 기본값 (LLM-MODEL-REG-002)
+        supports_vision: 이미지 입력(비전) 지원 여부. multimodal-extractor 의 선택 후보 조건 (V064)
     """
 
     id: str
@@ -45,3 +46,5 @@ class LlmModel:
     output_price_per_1k_usd: Decimal | None = None
     pricing_updated_at: datetime | None = None
     base_url: str | None = None
+    # multimodal-extractor Design §3.3 (V064): 비전 모델 선택 후보 조건. additive(기본 False).
+    supports_vision: bool = False

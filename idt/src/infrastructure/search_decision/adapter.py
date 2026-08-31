@@ -8,6 +8,7 @@ LLM `with_structured_output(WebSearchDecision)`으로 구조화 판단을 받는
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 
+from src.domain.llm.interfaces import UtilityLLMProviderPort
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.domain.search_decision.interfaces import SearchDecisionInterface
 from src.domain.search_decision.schemas import WebSearchDecision
@@ -29,19 +30,49 @@ class LLMSearchDecisionAdapter(SearchDecisionInterface):
         logger: LoggerInterface,
         model_name: str = "gpt-4o-mini",
         temperature: float = 0.0,
+        llm_provider: UtilityLLMProviderPort | None = None,
     ) -> None:
         self._logger = logger
-        llm = ChatOpenAI(model=model_name, temperature=temperature)
+        self._model_name = model_name
+        self._temperature = temperature
+        # admin-default-llm-routing AD-2 / A7: provider 주입 시 ChatOpenAI 를
+        # 즉시 만들지 않는다 — OPENAI_API_KEY 가 없는 self-host 전용 배포에서
+        # 생성자가 OpenAIError 로 죽기 때문이다. 폴백 시점에 지연 생성한다.
+        self._llm_provider = llm_provider
+        self._chain = None if llm_provider is not None else self._build_legacy_chain()
+        self._cached_llm: object | None = None
+        self._cached_chain = None
+
+    def _build_chain_from(self, llm):
         prompt = ChatPromptTemplate.from_messages(
             [("system", _SYSTEM), ("human", _HUMAN)]
         )
-        self._chain = prompt | llm.with_structured_output(WebSearchDecision)
+        return prompt | llm.with_structured_output(WebSearchDecision)
+
+    def _build_legacy_chain(self):
+        return self._build_chain_from(
+            ChatOpenAI(model=self._model_name, temperature=self._temperature)
+        )
+
+    async def _resolve_chain(self):
+        """호출 시점에 유효한 chain. DR-9 우선순위: llm_provider > ChatOpenAI."""
+        if self._llm_provider is not None:
+            llm = await self._llm_provider.get(self._temperature)
+            if llm is not None:
+                if llm is not self._cached_llm:
+                    self._cached_llm = llm
+                    self._cached_chain = self._build_chain_from(llm)
+                return self._cached_chain
+        if self._chain is None:
+            self._chain = self._build_legacy_chain()
+        return self._chain
 
     async def decide(
         self, question: str, analysis_text: str, request_id: str
     ) -> WebSearchDecision:
         try:
-            return await self._chain.ainvoke(
+            chain = await self._resolve_chain()
+            return await chain.ainvoke(
                 {"question": question, "analysis_text": analysis_text}
             )
         except Exception as e:

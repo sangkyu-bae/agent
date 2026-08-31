@@ -21,6 +21,8 @@ class CreateLlmModelRequest(BaseModel):
     is_default: bool = False
     # LLM-MODEL-REG-002: self-host 엔드포인트(vLLM/OpenAI 호환). None이면 provider 기본값.
     base_url: str | None = Field(None, max_length=500)
+    # multimodal-extractor Design §3.3 (V064): 비전(이미지 입력) 지원 여부.
+    supports_vision: bool = False
 
 
 class UpdateLlmModelRequest(BaseModel):
@@ -30,6 +32,7 @@ class UpdateLlmModelRequest(BaseModel):
     is_active: bool | None = None
     is_default: bool | None = None
     base_url: str | None = Field(None, max_length=500)
+    supports_vision: bool | None = None
 
 
 class UpdatePricingRequest(BaseModel):
@@ -53,6 +56,8 @@ class LlmModelResponse(BaseModel):
     output_price_per_1k_usd: Decimal | None = None
     pricing_updated_at: datetime | None = None
     base_url: str | None = None
+    # multimodal-extractor: additive 옵셔널 (기존 frontend 영향 0)
+    supports_vision: bool = False
 
     @classmethod
     def from_domain(cls, model: LlmModel) -> "LlmModelResponse":
@@ -69,6 +74,7 @@ class LlmModelResponse(BaseModel):
             output_price_per_1k_usd=model.output_price_per_1k_usd,
             pricing_updated_at=model.pricing_updated_at,
             base_url=model.base_url,
+            supports_vision=model.supports_vision,
         )
 
 

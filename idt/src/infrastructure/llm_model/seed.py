@@ -19,6 +19,7 @@ DEFAULT_MODELS: list[dict] = [
         "api_key_env": "OPENAI_API_KEY",
         "max_tokens": 128000,
         "is_default": True,
+        "supports_vision": True,
     },
     {
         "provider": "openai",
@@ -28,6 +29,7 @@ DEFAULT_MODELS: list[dict] = [
         "api_key_env": "OPENAI_API_KEY",
         "max_tokens": 128000,
         "is_default": False,
+        "supports_vision": True,
     },
     {
         "provider": "anthropic",
@@ -37,6 +39,7 @@ DEFAULT_MODELS: list[dict] = [
         "api_key_env": "ANTHROPIC_API_KEY",
         "max_tokens": 200000,
         "is_default": False,
+        "supports_vision": True,
     },
 ]
 
@@ -68,6 +71,8 @@ async def seed_default_models(
                 is_default=spec["is_default"],
                 created_at=now,
                 updated_at=now,
+                # multimodal-extractor V064: 비전 지원 모델 표기 (기본 False)
+                supports_vision=spec.get("supports_vision", False),
             )
             await repository.save(model, request_id)
             logger.info(

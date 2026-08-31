@@ -12,6 +12,10 @@ from src.application.llm_model.schemas import (
     LlmModelResponse,
     UpdatePricingRequest,
 )
+from src.application.llm_model.cache_invalidation import (
+    invalidate_llm_model_cache,
+)
+from src.domain.llm.interfaces import UtilityLLMProviderPort
 from src.domain.llm_model.interfaces import LlmModelRepositoryInterface
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 
@@ -24,10 +28,13 @@ class UpdateLlmModelPricingUseCase:
         repository: LlmModelRepositoryInterface,
         cost_calculator: CostCalculator,
         logger: LoggerInterface,
+        llm_provider: UtilityLLMProviderPort | None = None,
     ) -> None:
         self._repo = repository
         self._cost_calc = cost_calculator
         self._logger = logger
+        # 가격 변경도 updated_at 을 바꾼다 → 모델 해석 캐시도 함께 무효화한다.
+        self._llm_provider = llm_provider
 
     async def execute(
         self,
@@ -55,6 +62,11 @@ class UpdateLlmModelPricingUseCase:
 
         # ★ M1 G1 의무 — 캡슐화로 빼먹기 불가
         self._cost_calc.invalidate(model_id)
+
+        # ★ AD-3 의무 — 모델 해석 캐시(L1)도 함께 무효화
+        await invalidate_llm_model_cache(
+            self._llm_provider, self._logger, request_id, model_id
+        )
 
         self._logger.info(
             "LLM pricing updated and cache invalidated",

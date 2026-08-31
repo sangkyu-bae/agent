@@ -2,6 +2,10 @@
 from datetime import datetime, timezone
 
 from src.application.llm_model.schemas import LlmModelResponse
+from src.application.llm_model.cache_invalidation import (
+    invalidate_llm_model_cache,
+)
+from src.domain.llm.interfaces import UtilityLLMProviderPort
 from src.domain.llm_model.interfaces import LlmModelRepositoryInterface
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 
@@ -11,9 +15,11 @@ class DeactivateLlmModelUseCase:
         self,
         repository: LlmModelRepositoryInterface,
         logger: LoggerInterface,
+        llm_provider: UtilityLLMProviderPort | None = None,
     ) -> None:
         self._repository = repository
         self._logger = logger
+        self._llm_provider = llm_provider
 
     async def execute(self, model_id: str, request_id: str) -> LlmModelResponse:
         self._logger.info(
@@ -30,6 +36,11 @@ class DeactivateLlmModelUseCase:
             model.is_default = False
             model.updated_at = datetime.now(timezone.utc)
             updated = await self._repository.update(model, request_id)
+
+            # ★ AD-3 의무 — 비활성 모델이 캐시에 남아 계속 쓰이면 안 된다.
+            await invalidate_llm_model_cache(
+                self._llm_provider, self._logger, request_id, model_id
+            )
 
             self._logger.info(
                 "DeactivateLlmModelUseCase done",

@@ -6,6 +6,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
+from src.domain.llm.interfaces import UtilityLLMProviderPort
 from src.infrastructure.logging import get_logger
 
 _SYSTEM_PROMPT = (
@@ -31,14 +32,45 @@ class _QADraft(BaseModel):
 
 
 class OpenAIQAGenerator:
-    def __init__(self, model_name: str = "gpt-4o-mini", temperature: float = 0.2) -> None:
+    def __init__(
+        self,
+        model_name: str = "gpt-4o-mini",
+        temperature: float = 0.2,
+        llm_provider: UtilityLLMProviderPort | None = None,
+    ) -> None:
         self._logger = get_logger(__name__)
-        llm = ChatOpenAI(model=model_name, temperature=temperature)
+        self._model_name = model_name
+        self._temperature = temperature
+        # A7: provider 주입 시 ChatOpenAI 지연 생성 (키 없는 배포 대비).
+        self._llm_provider = llm_provider
+        self._chain = None if llm_provider is not None else self._build_legacy_chain()
+        self._cached_llm: object | None = None
+        self._cached_chain = None
+
+    def _build_chain_from(self, llm):
         prompt = ChatPromptTemplate.from_messages([
             ("system", _SYSTEM_PROMPT),
             ("human", _HUMAN_TEMPLATE),
         ])
-        self._chain = prompt | llm.with_structured_output(_QADraft)
+        return prompt | llm.with_structured_output(_QADraft)
+
+    def _build_legacy_chain(self):
+        return self._build_chain_from(
+            ChatOpenAI(model=self._model_name, temperature=self._temperature)
+        )
+
+    async def _resolve_chain(self):
+        """호출 시점에 유효한 chain (DR-9)."""
+        if self._llm_provider is not None:
+            llm = await self._llm_provider.get(self._temperature)
+            if llm is not None:
+                if llm is not self._cached_llm:
+                    self._cached_llm = llm
+                    self._cached_chain = self._build_chain_from(llm)
+                return self._cached_chain
+        if self._chain is None:
+            self._chain = self._build_legacy_chain()
+        return self._chain
 
     async def generate(
         self, text: str, max_pairs: int, request_id: str
@@ -50,7 +82,8 @@ class OpenAIQAGenerator:
             max_pairs=max_pairs,
         )
         try:
-            draft: _QADraft = await self._chain.ainvoke(
+            chain = await self._resolve_chain()
+            draft: _QADraft = await chain.ainvoke(
                 {"text": text, "max_pairs": max_pairs}
             )
         except Exception:
