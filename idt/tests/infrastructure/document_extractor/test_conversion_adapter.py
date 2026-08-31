@@ -5,12 +5,12 @@
 - 호출: {"arguments": {"source": {kind,value,filename}, "output": {mode}}}
 - 결과: JSON 문자열 {"format","output_mode":"base64","content":<base64>} 또는 dict/str.
 """
+
 import base64
 import json
 from unittest.mock import MagicMock
 
 import pytest
-
 from src.domain.document_extractor.exceptions import McpConversionError
 from src.infrastructure.document_extractor.document_conversion_adapter import (
     DocumentConversionAdapter,
@@ -67,12 +67,10 @@ def _json_content(fmt, content_bytes_or_text):
     if isinstance(content_bytes_or_text, bytes):
         content = base64.b64encode(content_bytes_or_text).decode("ascii")
     else:
-        content = base64.b64encode(
-            content_bytes_or_text.encode("utf-8")
-        ).decode("ascii")
-    return json.dumps(
-        {"format": fmt, "output_mode": "base64", "content": content}
-    )
+        content = base64.b64encode(content_bytes_or_text.encode("utf-8")).decode(
+            "ascii"
+        )
+    return json.dumps({"format": fmt, "output_mode": "base64", "content": content})
 
 
 class TestToolSelection:
@@ -158,7 +156,8 @@ class TestOptionsAndWarnings:
         )
         tool = next(t for t in tools if t.name.endswith("pdf_to_html"))
         assert tool.last_payload["arguments"]["options"] == {
-            "mode": "layout", "dpi": 120,
+            "mode": "layout",
+            "dpi": 120,
         }
 
     @pytest.mark.asyncio
@@ -192,19 +191,19 @@ class TestOptionsAndWarnings:
 
     @pytest.mark.asyncio
     async def test_metadata_warnings_logged(self):
-        result = json.dumps({
-            "format": "html",
-            "output_mode": "base64",
-            "content": base64.b64encode("<p>ok</p>".encode()).decode("ascii"),
-            "metadata": {"engine": "pymupdf-text", "warnings": ["lossy 변환"]},
-        })
+        result = json.dumps(
+            {
+                "format": "html",
+                "output_mode": "base64",
+                "content": base64.b64encode(b"<p>ok</p>").decode("ascii"),
+                "metadata": {"engine": "pymupdf-text", "warnings": ["lossy 변환"]},
+            }
+        )
         tools = _multiplex_tools(html_result=result)
         adapter, _ = _adapter(tools)
         await adapter.to_html(b"pdf", "pdf", SRV, "r")
         logger = adapter._logger
-        assert any(
-            "lossy 변환" in str(c) for c in logger.warning.call_args_list
-        )
+        assert any("lossy 변환" in str(c) for c in logger.warning.call_args_list)
 
     @pytest.mark.asyncio
     async def test_no_warnings_no_log(self):
@@ -268,3 +267,28 @@ class TestErrors:
         adapter, _ = _adapter(tools)
         with pytest.raises(McpConversionError):
             await adapter.to_document("<p>x</p>", "pdf", SRV, "r")
+
+
+class TestPptxToPdf:
+    """golden-sample-blueprint FR-15: pptx_to_pdf 도구 선택 (기존 메서드 불변)."""
+
+    @pytest.mark.asyncio
+    async def test_selects_pptx_to_pdf_and_sends_pptx_payload(self):
+        raw = b"%PDF-1.7 from pptx"
+        deck = b"PKdeck"
+        tools = _multiplex_tools(file_result="x") + [
+            FakeTool(f"{SRV}_pptx_to_pdf", result=_json_content("pdf", raw))
+        ]
+        adapter, _ = _adapter(tools)
+        out = await adapter.to_pdf_from_pptx(deck, SRV, "r")
+        assert out == raw
+        tool = next(t for t in tools if t.name.endswith("pptx_to_pdf"))
+        src = tool.last_payload["arguments"]["source"]
+        assert src["kind"] == "base64" and src["filename"] == "deck.pptx"
+        assert base64.b64decode(src["value"]) == deck
+
+    @pytest.mark.asyncio
+    async def test_missing_direction_raises(self):
+        adapter, _ = _adapter(_multiplex_tools(file_result="x"))
+        with pytest.raises(McpConversionError):
+            await adapter.to_pdf_from_pptx(b"PK", SRV, "r")

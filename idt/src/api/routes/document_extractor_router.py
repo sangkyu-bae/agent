@@ -124,6 +124,10 @@ _MEDIA_TYPES = {
     ".docx": (
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     ),
+    # excel-generator-node §4.2: 엑셀 생성 노드 산출물 다운로드
+    ".xlsx": (
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    ),
 }
 
 
