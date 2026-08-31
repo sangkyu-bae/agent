@@ -726,3 +726,5 @@
 {"event":"PostToolUse","tool":"Bash","source":null,"agent":null,"at":"2026-08-20T13:51:59.265Z"}
 {"event":"Stop","tool":null,"source":null,"agent":null,"at":"2026-08-20T13:52:13.608Z"}
 {"event":"Notification","tool":null,"source":null,"agent":null,"at":"2026-08-20T13:53:18.279Z"}
+{"event":"SessionEnd","tool":null,"source":null,"agent":null,"at":"2026-08-20T14:03:56.451Z"}
+{"event":"SessionEnd","tool":null,"source":null,"agent":null,"at":"2026-08-20T14:03:56.466Z"}

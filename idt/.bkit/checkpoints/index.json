@@ -462,5 +462,629 @@
     "phase": "do",
     "feature": "wizard-chat-layout",
     "description": "do → check"
+  },
+  {
+    "id": "cp-1787281360779",
+    "createdAt": "2026-08-21T03:02:40.779Z",
+    "type": "phase_transition",
+    "phase": "plan",
+    "feature": "multimodal-extractor",
+    "description": "plan → design"
+  },
+  {
+    "id": "cp-1787286580027",
+    "createdAt": "2026-08-21T04:29:40.027Z",
+    "type": "phase_transition",
+    "phase": "design",
+    "feature": "multimodal-extractor",
+    "description": "design → do"
+  },
+  {
+    "id": "cp-1787288846897",
+    "createdAt": "2026-08-21T05:07:26.897Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "multimodal-extractor",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787289666272",
+    "createdAt": "2026-08-21T05:21:06.272Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "multimodal-extractor",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787291700935",
+    "createdAt": "2026-08-21T05:55:00.935Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "multimodal-extractor",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787292858268",
+    "createdAt": "2026-08-21T06:14:18.268Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "multimodal-extractor",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787294588327",
+    "createdAt": "2026-08-21T06:43:08.327Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "multimodal-extractor",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787295497879",
+    "createdAt": "2026-08-21T06:58:17.879Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "multimodal-extractor",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787295842387",
+    "createdAt": "2026-08-21T07:04:02.387Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "multimodal-extractor",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787299714933",
+    "createdAt": "2026-08-21T08:08:34.933Z",
+    "type": "phase_transition",
+    "phase": "check",
+    "feature": "multimodal-extractor",
+    "description": "check → act"
+  },
+  {
+    "id": "cp-1787381945152",
+    "createdAt": "2026-08-22T06:59:05.152Z",
+    "type": "phase_transition",
+    "phase": "plan",
+    "feature": "golden-sample-blueprint",
+    "description": "plan → design"
+  },
+  {
+    "id": "cp-1787382874121",
+    "createdAt": "2026-08-22T07:14:34.121Z",
+    "type": "phase_transition",
+    "phase": "design",
+    "feature": "golden-sample-blueprint",
+    "description": "design → do"
+  },
+  {
+    "id": "cp-1787384647053",
+    "createdAt": "2026-08-22T07:44:07.053Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "golden-sample-blueprint",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787385541163",
+    "createdAt": "2026-08-22T07:59:01.163Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "golden-sample-blueprint",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787386589070",
+    "createdAt": "2026-08-22T08:16:29.070Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "golden-sample-blueprint",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787388566434",
+    "createdAt": "2026-08-22T08:49:26.434Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "golden-sample-blueprint",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787390779984",
+    "createdAt": "2026-08-22T09:26:19.984Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "golden-sample-blueprint",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787392064284",
+    "createdAt": "2026-08-22T09:47:44.284Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "golden-sample-blueprint",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787392175367",
+    "createdAt": "2026-08-22T09:49:35.367Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "golden-sample-blueprint",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787392300776",
+    "createdAt": "2026-08-22T09:51:40.776Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "golden-sample-blueprint",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787393521057",
+    "createdAt": "2026-08-22T10:12:01.057Z",
+    "type": "phase_transition",
+    "phase": "act",
+    "feature": "golden-sample-blueprint",
+    "description": "act → qa"
+  },
+  {
+    "id": "cp-1787573114979",
+    "createdAt": "2026-08-24T12:05:14.979Z",
+    "type": "phase_transition",
+    "phase": "plan",
+    "feature": "pptx-font-fidelity",
+    "description": "plan → design"
+  },
+  {
+    "id": "cp-1787573182386",
+    "createdAt": "2026-08-24T12:06:22.386Z",
+    "type": "phase_transition",
+    "phase": "plan",
+    "feature": "excel-generator-node",
+    "description": "plan → design"
+  },
+  {
+    "id": "cp-1787573627390",
+    "createdAt": "2026-08-24T12:13:47.390Z",
+    "type": "phase_transition",
+    "phase": "plan",
+    "feature": "excel-generator-node",
+    "description": "plan → design"
+  },
+  {
+    "id": "cp-1787574131042",
+    "createdAt": "2026-08-24T12:22:11.042Z",
+    "type": "phase_transition",
+    "phase": "design",
+    "feature": "excel-generator-node",
+    "description": "design → do"
+  },
+  {
+    "id": "cp-1787576110782",
+    "createdAt": "2026-08-24T12:55:10.782Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "excel-generator-node",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787576166020",
+    "createdAt": "2026-08-24T12:56:06.020Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "excel-generator-node",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787576523004",
+    "createdAt": "2026-08-24T13:02:03.004Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "excel-generator-node",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787576628980",
+    "createdAt": "2026-08-24T13:03:48.980Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "excel-generator-node",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787576674205",
+    "createdAt": "2026-08-24T13:04:34.205Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "excel-generator-node",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787576716589",
+    "createdAt": "2026-08-24T13:05:16.589Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "excel-generator-node",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787577030404",
+    "createdAt": "2026-08-24T13:10:30.404Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "excel-generator-node",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787577049517",
+    "createdAt": "2026-08-24T13:10:49.517Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "excel-generator-node",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787625567199",
+    "createdAt": "2026-08-25T02:39:27.199Z",
+    "type": "phase_transition",
+    "phase": "check",
+    "feature": "excel-generator-node",
+    "description": "check → act"
+  },
+  {
+    "id": "cp-1787654476753",
+    "createdAt": "2026-08-25T10:41:16.753Z",
+    "type": "phase_transition",
+    "phase": "plan",
+    "feature": "runtime-datetime-context",
+    "description": "plan → design"
+  },
+  {
+    "id": "cp-1787654657777",
+    "createdAt": "2026-08-25T10:44:17.777Z",
+    "type": "phase_transition",
+    "phase": "plan",
+    "feature": "runtime-datetime-context",
+    "description": "plan → design"
+  },
+  {
+    "id": "cp-1787654920746",
+    "createdAt": "2026-08-25T10:48:40.746Z",
+    "type": "phase_transition",
+    "phase": "plan",
+    "feature": "runtime-datetime-context",
+    "description": "plan → design"
+  },
+  {
+    "id": "cp-1787655363967",
+    "createdAt": "2026-08-25T10:56:03.967Z",
+    "type": "phase_transition",
+    "phase": "design",
+    "feature": "runtime-datetime-context",
+    "description": "design → do"
+  },
+  {
+    "id": "cp-1787655674072",
+    "createdAt": "2026-08-25T11:01:14.072Z",
+    "type": "phase_transition",
+    "phase": "design",
+    "feature": "runtime-datetime-context",
+    "description": "design → do"
+  },
+  {
+    "id": "cp-1787656027975",
+    "createdAt": "2026-08-25T11:07:07.975Z",
+    "type": "phase_transition",
+    "phase": "design",
+    "feature": "runtime-datetime-context",
+    "description": "design → do"
+  },
+  {
+    "id": "cp-1787656315984",
+    "createdAt": "2026-08-25T11:11:55.984Z",
+    "type": "phase_transition",
+    "phase": "plan",
+    "feature": "deep-search-pipeline",
+    "description": "plan → design"
+  },
+  {
+    "id": "cp-1787656342122",
+    "createdAt": "2026-08-25T11:12:22.122Z",
+    "type": "phase_transition",
+    "phase": "plan",
+    "feature": "deep-search-pipeline",
+    "description": "plan → design"
+  },
+  {
+    "id": "cp-1787656784117",
+    "createdAt": "2026-08-25T11:19:44.117Z",
+    "type": "phase_transition",
+    "phase": "plan",
+    "feature": "deep-search-pipeline",
+    "description": "plan → design"
+  },
+  {
+    "id": "cp-1787656893852",
+    "createdAt": "2026-08-25T11:21:33.852Z",
+    "type": "phase_transition",
+    "phase": "design",
+    "feature": "deep-search-pipeline",
+    "description": "design → do"
+  },
+  {
+    "id": "cp-1787657027229",
+    "createdAt": "2026-08-25T11:23:47.229Z",
+    "type": "phase_transition",
+    "phase": "design",
+    "feature": "deep-search-pipeline",
+    "description": "design → do"
+  },
+  {
+    "id": "cp-1787657084142",
+    "createdAt": "2026-08-25T11:24:44.142Z",
+    "type": "phase_transition",
+    "phase": "design",
+    "feature": "deep-search-pipeline",
+    "description": "design → do"
+  },
+  {
+    "id": "cp-1787657123931",
+    "createdAt": "2026-08-25T11:25:23.931Z",
+    "type": "phase_transition",
+    "phase": "design",
+    "feature": "deep-search-pipeline",
+    "description": "design → do"
+  },
+  {
+    "id": "cp-1787657326159",
+    "createdAt": "2026-08-25T11:28:46.159Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "deep-search-pipeline",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787657508406",
+    "createdAt": "2026-08-25T11:31:48.406Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "deep-search-pipeline",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787658960565",
+    "createdAt": "2026-08-25T11:56:00.565Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "deep-search-pipeline",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787659013696",
+    "createdAt": "2026-08-25T11:56:53.696Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "deep-search-pipeline",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787659025043",
+    "createdAt": "2026-08-25T11:57:05.043Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "deep-search-pipeline",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787659160041",
+    "createdAt": "2026-08-25T11:59:20.041Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "deep-search-pipeline",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787659373693",
+    "createdAt": "2026-08-25T12:02:53.693Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "deep-search-pipeline",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787659418004",
+    "createdAt": "2026-08-25T12:03:38.004Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "deep-search-pipeline",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787659534796",
+    "createdAt": "2026-08-25T12:05:34.796Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "deep-search-pipeline",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787659545946",
+    "createdAt": "2026-08-25T12:05:45.946Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "deep-search-pipeline",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787659580732",
+    "createdAt": "2026-08-25T12:06:20.732Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "deep-search-pipeline",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787659908712",
+    "createdAt": "2026-08-25T12:11:48.712Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "deep-search-pipeline",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787660516085",
+    "createdAt": "2026-08-25T12:21:56.085Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "deep-search-pipeline",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787660561567",
+    "createdAt": "2026-08-25T12:22:41.567Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "deep-search-pipeline",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787736776178",
+    "createdAt": "2026-08-26T09:32:56.178Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "deep-search-pipeline",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787737498846",
+    "createdAt": "2026-08-26T09:44:58.846Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "deep-search-pipeline",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787737563093",
+    "createdAt": "2026-08-26T09:46:03.093Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "deep-search-pipeline",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787738014616",
+    "createdAt": "2026-08-26T09:53:34.616Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "deep-search-pipeline",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787738315332",
+    "createdAt": "2026-08-26T09:58:35.332Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "deep-search-pipeline",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1787738718273",
+    "createdAt": "2026-08-26T10:05:18.273Z",
+    "type": "phase_transition",
+    "phase": "check",
+    "feature": "deep-search-pipeline",
+    "description": "check → act"
+  },
+  {
+    "id": "cp-1787739246261",
+    "createdAt": "2026-08-26T10:14:06.261Z",
+    "type": "phase_transition",
+    "phase": "act",
+    "feature": "deep-search-pipeline",
+    "description": "act → qa"
+  },
+  {
+    "id": "cp-1787739404353",
+    "createdAt": "2026-08-26T10:16:44.353Z",
+    "type": "phase_transition",
+    "phase": "act",
+    "feature": "deep-search-pipeline",
+    "description": "act → qa"
+  },
+  {
+    "id": "cp-1787986920637",
+    "createdAt": "2026-08-29T07:02:00.637Z",
+    "type": "phase_transition",
+    "phase": "design",
+    "feature": "admin-default-llm-routing",
+    "description": "design → do"
+  },
+  {
+    "id": "cp-1788059882027",
+    "createdAt": "2026-08-30T03:18:02.027Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "admin-default-llm-routing",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1788060534015",
+    "createdAt": "2026-08-30T03:28:54.015Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "admin-default-llm-routing",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1788060913801",
+    "createdAt": "2026-08-30T03:35:13.801Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "admin-default-llm-routing",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1788062691690",
+    "createdAt": "2026-08-30T04:04:51.690Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "admin-default-llm-routing",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1788063393926",
+    "createdAt": "2026-08-30T04:16:33.926Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "admin-default-llm-routing",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1788063597840",
+    "createdAt": "2026-08-30T04:19:57.840Z",
+    "type": "phase_transition",
+    "phase": "check",
+    "feature": "admin-default-llm-routing",
+    "description": "check → act"
+  },
+  {
+    "id": "cp-1788064423715",
+    "createdAt": "2026-08-30T04:33:43.715Z",
+    "type": "phase_transition",
+    "phase": "check",
+    "feature": "admin-default-llm-routing",
+    "description": "check → act"
+  },
+  {
+    "id": "cp-1788166079359",
+    "createdAt": "2026-08-31T08:47:59.359Z",
+    "type": "phase_transition",
+    "phase": "check",
+    "feature": "admin-default-llm-routing",
+    "description": "check → act"
   }
 ]

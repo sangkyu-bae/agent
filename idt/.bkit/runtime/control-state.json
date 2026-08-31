@@ -10,9 +10,9 @@
     "rejections": 0,
     "modifications": 0,
     "destructiveBlocked": 0,
-    "checkpointsCreated": 26,
+    "checkpointsCreated": 9,
     "rollbacksPerformed": 0,
-    "phaseComplete": 24
+    "phaseComplete": 6
   },
   "emergencyStop": false,
   "cooldownUntil": null,
@@ -20,6 +20,6 @@
   "lastDowngrade": null,
   "level": "manual",
   "levelCode": 0,
-  "lastAutoTransition": "2026-08-18T08:10:51.307Z",
+  "lastAutoTransition": "2026-08-29T07:02:00.744Z",
   "lastAutoTransitionReason": "trust-downgrade"
 }

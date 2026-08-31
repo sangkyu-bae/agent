@@ -1,0 +1,9 @@
+{
+  "feature": "golden-sample-blueprint",
+  "state": "do",
+  "timestamp": "2026-08-22T07:14:34.214Z",
+  "context": {
+    "matchRate": 0,
+    "iterationCount": 0
+  }
+}

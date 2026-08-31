@@ -1,36 +1,12 @@
 [
   {
-    "timestamp": "2026-08-20T08:01:07.254Z",
-    "errorType": "unknown",
-    "category": "unknown",
-    "severity": "low",
-    "agentId": "ab84655a22045a44a",
-    "agentType": null,
-    "sessionId": "165f8fbd-eb5a-4fb7-a753-27c65c156b59",
-    "message": "",
-    "parseStatus": "ok",
-    "parseWarnings": null
-  },
-  {
-    "timestamp": "2026-08-20T08:01:21.005Z",
-    "errorType": "unknown",
-    "category": "unknown",
-    "severity": "low",
-    "agentId": "a216b7d4f6692dd2a",
-    "agentType": "bkit:pdca-iterator",
-    "sessionId": "165f8fbd-eb5a-4fb7-a753-27c65c156b59",
-    "message": "",
-    "parseStatus": "ok",
-    "parseWarnings": null
-  },
-  {
-    "timestamp": "2026-08-20T08:04:25.222Z",
+    "timestamp": "2026-08-29T22:43:24.946Z",
     "errorType": "unknown",
     "category": "unknown",
     "severity": "low",
     "agentId": null,
     "agentType": null,
-    "sessionId": "165f8fbd-eb5a-4fb7-a753-27c65c156b59",
+    "sessionId": "df231907-c11d-4ec8-9e95-f2800145d8fb",
     "message": "",
     "parseStatus": "partial",
     "parseWarnings": "StopFailure payload missing useful fields (keys: session_id,transcript_path,cwd,prompt_id,effort,hook_event_name,error,last_assistant_message)"
