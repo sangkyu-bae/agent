@@ -58,3 +58,10 @@ temp/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Dependency lock (로컬 전용 — 팀 합의 전까지 커밋 제외)
+uv.lock
+
+# Golden Sample 원본 (대용량 바이너리 · 사내 문서, 로컬 전용)
+# tests/integration/blueprint/test_golden_sample_fidelity.py 는 파일이 없으면 skip 한다.
+samples/
