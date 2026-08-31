@@ -1,6 +1,7 @@
 """RAGAgentUseCase: LangGraph ReAct 에이전트 기반 내부 문서 질의응답."""
 from langgraph.prebuilt import create_react_agent
 
+from src.application.agent_run.prompt_rendering import render_datetime_block
 from src.application.rag_agent.tools import InternalDocumentSearchTool
 from src.domain.llm.interfaces import LLMFactoryInterface
 from src.domain.llm_model.entity import LlmModel
@@ -32,11 +33,15 @@ class RAGAgentUseCase:
         llm_factory: LLMFactoryInterface,
         llm_model: LlmModel,
         logger: LoggerInterface,
+        *,
+        agent_timezone: str | None = None,
     ) -> None:
         self._hybrid_search = hybrid_search_use_case
         self._llm_factory = llm_factory
         self._llm_model = llm_model
         self._logger = logger
+        # runtime-datetime-context D3/D9: None이면 [현재 날짜] 블록 생략 — 무회귀.
+        self._agent_timezone = agent_timezone
 
     async def execute(
         self, request: RAGAgentRequest, request_id: str
@@ -65,8 +70,12 @@ class RAGAgentUseCase:
             llm = self._llm_factory.create(self._llm_model, temperature=0)
             agent = create_react_agent(llm, tools=[tool])
 
+            # Design Ref: runtime-datetime-context §D9 — 날짜 블록 prefix.
+            datetime_block = render_datetime_block(
+                self._agent_timezone, logger=self._logger
+            )
             messages = [
-                {"role": "system", "content": self._SYSTEM_PROMPT},
+                {"role": "system", "content": datetime_block + self._SYSTEM_PROMPT},
                 {"role": "user", "content": request.query},
             ]
             result = await agent.ainvoke({"messages": messages})

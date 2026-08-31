@@ -31,7 +31,10 @@ from src.application.agent_run.context import (
     reset_run_context,
     set_current_run_context,
 )
-from src.application.agent_run.prompt_rendering import render_user_context_block
+from src.application.agent_run.prompt_rendering import (
+    render_datetime_block,
+    render_user_context_block,
+)
 from src.domain.agent_run.value_objects import RunId
 from src.application.conversation.interfaces import ConversationSummarizerInterface
 from src.application.general_chat.tools import REQUIRED_TOOL_IDS, ChatToolBuilder
@@ -150,8 +153,13 @@ class GeneralChatUseCase:
         memory_extractor=None,
         middleware_provider=None,
         tool_filter=None,
+        *,
+        agent_timezone: str | None = None,
     ) -> None:
         self._tool_builder = chat_tool_builder
+        # runtime-datetime-context D3/D8: [현재 날짜] 블록 기준 타임존
+        # (main.py가 settings.agent_timezone 주입). None이면 블록 생략 — 무회귀.
+        self._agent_timezone = agent_timezone
         # tool-recommender module-4: 미주입(None) 시 도구 선별 비활성 —
         # 즉 이 기능이 없던 상태와 동일하게 전량 바인딩된다 (하위호환).
         self._tool_filter = tool_filter
@@ -273,9 +281,16 @@ class GeneralChatUseCase:
         - auth_ctx가 있으면 system prompt 앞에 사용자 컨텍스트 블록 prepend.
         - render_user_context_block은 None/anonymous면 빈 문자열 반환 (graceful).
         agent-memory 결정 ③: 메모리 블록은 사용자 정보 다음, 시스템 규칙 앞.
+        runtime-datetime-context D8: 날짜 블록은 맨 앞 (날짜 → 사용자 → 메모리 → 규칙).
         """
         llm = self._llm_factory.create(self._llm_model, temperature=0)
-        prompt = render_user_context_block(auth_ctx) + memory_block + _SYSTEM_PROMPT
+        datetime_block = render_datetime_block(
+            self._agent_timezone, logger=self._logger
+        )
+        prompt = (
+            datetime_block + render_user_context_block(auth_ctx)
+            + memory_block + _SYSTEM_PROMPT
+        )
         return create_agent(
             model=llm, tools=tools, system_prompt=prompt,
             middleware=middlewares or [],

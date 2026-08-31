@@ -7,7 +7,14 @@ agent-user-context Design §4.3 + 테스트 전략 §10.1:
 supervisor-overblock-fix D1/D2: 권한 목록('허용된 정보 영역') 미노출 +
 권한 심사 위임 가드 문구 — LLM 자체 권한 심사로 인한 과차단 방지.
 """
-from src.application.agent_run.prompt_rendering import render_user_context_block
+from datetime import UTC, datetime
+from unittest.mock import MagicMock
+from zoneinfo import ZoneInfo
+
+from src.application.agent_run.prompt_rendering import (
+    render_datetime_block,
+    render_user_context_block,
+)
 from src.domain.agent_run.auth_context import AuthContext
 
 
@@ -139,12 +146,10 @@ class TestRenderUserContextBlockDeterministic:
 
 # ── wiki-agentic-navigation FR-03/FR-04: 위키 목차 블록 ──────────────
 
-from datetime import datetime, timezone
-
 from src.application.agent_run.prompt_rendering import render_wiki_toc_block
 from src.application.wiki.schemas import WikiTreeItem
 
-_NOW = datetime(2026, 7, 23, tzinfo=timezone.utc)
+_NOW = datetime(2026, 7, 23, tzinfo=UTC)
 
 
 def _toc_item(id="w1", title="한도 산정 기준", path="여신/한도") -> WikiTreeItem:
@@ -208,3 +213,76 @@ class TestRenderWikiTocBlockLimits:
             [_toc_item()], max_items=50, max_bytes=4000
         )
         assert "생략" not in block
+
+
+# ── runtime-datetime-context D1: render_datetime_block ──────────────
+
+
+class TestRenderDatetimeBlock:
+    """FR-01/02/03/11 + NFR(길이·캐시 안정·금지어)."""
+
+    _NOW = datetime(2026, 8, 24, 15, 30, tzinfo=UTC)  # KST 2026-08-25 00:30
+
+    def test_snapshot_2026_08_25_is_tuesday(self):
+        """FR-01: 헤더 + 'YYYY-MM-DD (요일)' + 지침 + '---' 구분자."""
+        block = render_datetime_block("Asia/Seoul", now_utc=self._NOW)
+        # Design §4.2 고정 스냅샷 — 전체 문자열 동등 (지침 3줄 누락도 잡는다)
+        assert block == (
+            "[현재 날짜]\n"
+            "- 2026-08-25 (화)\n\n"
+            "'오늘', '최근', '최신', '이번 주/이번 달' 같은 표현은 "
+            "위 날짜를 기준으로 해석하세요.\n"
+            "웹 검색이 필요하면 검색어에 위 날짜(연-월-일)를 포함하세요.\n"
+            "검색 결과나 문서의 날짜가 위 날짜와 다르면 "
+            "그 날짜를 답변에 함께 밝히세요.\n"
+            "\n---\n\n"
+        )
+
+    def test_utc_2330_renders_next_day_in_kst(self):
+        """FR-02: 서버 로컬시간이 아닌 tz 기준 날짜."""
+        block = render_datetime_block("Asia/Seoul", now_utc=self._NOW)
+        assert "2026-08-25" in block and "2026-08-24" not in block
+        assert "2026-08-24" in render_datetime_block("UTC", now_utc=self._NOW)
+
+    def test_now_utc_default_uses_current_time(self):
+        """FR-03: now_utc 미지정 시 현재 UTC — 오늘 날짜(양 tz 중 하나) 포함."""
+        block = render_datetime_block("Asia/Seoul")
+        today_kst = datetime.now(UTC).astimezone(
+            ZoneInfo("Asia/Seoul")
+        ).strftime("%Y-%m-%d")
+        assert today_kst in block
+
+    def test_none_tz_returns_empty_without_logging(self):
+        """tz=None = 미배선 opt-out — 빈 문자열, 로그 없음."""
+        logger = MagicMock()
+        assert render_datetime_block(None, now_utc=self._NOW, logger=logger) == ""
+        logger.warning.assert_not_called()
+
+    def test_invalid_tz_returns_empty_and_warns_with_exception(self):
+        """FR-11: degraded — 빈 문자열 + warning(exception=e)."""
+        logger = MagicMock()
+        block = render_datetime_block("Mars/Olympus", now_utc=self._NOW, logger=logger)
+        assert block == ""
+        logger.warning.assert_called_once()
+        assert "exception" in logger.warning.call_args.kwargs
+
+    def test_invalid_tz_without_logger_does_not_raise(self):
+        assert render_datetime_block("Mars/Olympus", now_utc=self._NOW) == ""
+
+    def test_block_length_under_200(self):
+        """NFR: 워커 N개에 각각 prepend되므로 크기 상한."""
+        assert len(render_datetime_block("Asia/Seoul", now_utc=self._NOW)) <= 200
+
+    def test_same_day_two_times_render_identical(self):
+        """NFR 캐시 안정: 시각 미포함 → 같은 날이면 동일 텍스트."""
+        a = render_datetime_block("Asia/Seoul", now_utc=self._NOW)
+        b = render_datetime_block(
+            "Asia/Seoul", now_utc=datetime(2026, 8, 25, 10, 0, tzinfo=UTC)
+        )
+        assert a == b
+
+    def test_block_has_no_gate_vocabulary(self):
+        """supervisor-overblock-fix 교훈: 심사/게이트 프레이밍 어휘 금지."""
+        block = render_datetime_block("Asia/Seoul", now_utc=self._NOW)
+        for word in ("거부", "차단", "권한"):
+            assert word not in block
