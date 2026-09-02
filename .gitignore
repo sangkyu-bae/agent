@@ -28,6 +28,8 @@ ehthumbs.db
 .bkit/runtime/
 .bkit/snapshots/
 .bkit/state/
+# 체크포인트 JSON 은 로컬 전용 — diff 노이즈가 커서 커밋 대상에서 제외 (idt/·idt_front/ 하위 포함)
+**/.bkit/checkpoints/
 
 # Claude Code 로컬 설정 (개인 전용)
 .claude/settings.local.json
