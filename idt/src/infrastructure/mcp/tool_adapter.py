@@ -39,6 +39,11 @@ class MCPToolAdapter(BaseTool):
     server_config: MCPServerConfig
     mcp_tool_name: str
 
+    # Design Ref: fix-mcp-tool-call-not-reaching-server §4 —
+    # ③ 실행 구간 로그의 추적 필드. 미주입(기본 "")이어도 기존 호출부는 그대로 동작한다.
+    request_id: str = ""
+    tool_id: str = ""
+
     model_config = {"arbitrary_types_allowed": True}
 
     def _run(self, arguments: dict[str, Any] | None = None) -> str:
@@ -61,7 +66,11 @@ class MCPToolAdapter(BaseTool):
             연결 실패 또는 Tool 실행 오류 시 예외 전파
         """
         args = arguments or {}
+        # Design Ref: §2.2 — "MCP tool execution started"의 유무가
+        # "LLM이 도구를 호출했는가"와 "서버까지 갔는가"를 가르는 판정점이다.
         log_extra = {
+            "request_id": self.request_id,
+            "tool_id": self.tool_id,
             "server": self.server_config.name,
             "tool": self.mcp_tool_name,
         }
@@ -69,7 +78,11 @@ class MCPToolAdapter(BaseTool):
         logger.info("MCP tool execution started", **log_extra)
 
         try:
-            async with MCPClientFactory.create_session(self.server_config) as session:
+            # Design Ref: §4 — ③ 경로의 세션 로그도 같은 request_id로 이어야
+            # 한 요청의 로그 체인이 끊기지 않는다.
+            async with MCPClientFactory.create_session(
+                self.server_config, self.request_id or None
+            ) as session:
                 result = await session.call_tool(
                     name=self.mcp_tool_name,
                     arguments=args,

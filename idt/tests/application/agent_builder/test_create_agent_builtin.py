@@ -147,15 +147,22 @@ class TestBuiltinInjection:
         assert set(result.tool_ids) == {"wiki_read", "wiki_list"}
 
     @pytest.mark.asyncio
-    async def test_active_mcp_builtin_injected_as_single_server_worker(self):
-        """동일 서버 빌트인 도구 여러 개 → mcp_{srv} 워커 1개 병합."""
+    async def test_active_mcp_builtins_injected_per_tool(self):
+        """동일 서버 빌트인 도구 여러 개 → 도구별 워커.
+
+        빌트인도 개별 도구 단위다 — 서버 단위로 접으면 관리자가 켠 도구와
+        실제 바인딩되는 도구가 달라진다.
+        """
         builtins = [
             _builtin_entry(f"mcp:{MCP_SERVER_ID}:tool_a"),
             _builtin_entry(f"mcp:{MCP_SERVER_ID}:tool_b"),
         ]
         use_case, _ = _make_use_case(builtins=builtins)
         result = await use_case.execute(_request(), "req")
-        assert result.tool_ids == [f"mcp_{MCP_SERVER_ID}"]
+        assert result.tool_ids == [
+            f"mcp:{MCP_SERVER_ID}:tool_a",
+            f"mcp:{MCP_SERVER_ID}:tool_b",
+        ]
 
     @pytest.mark.asyncio
     async def test_no_catalog_repo_skips_injection(self):

@@ -207,6 +207,11 @@ export const queryKeys = {
       [...queryKeys.eval.all, 'runResults', runId, params] as const,
     adminDashboard: () =>
       [...queryKeys.eval.all, 'adminDashboard'] as const,
+    // agent-model-benchmark: 모델 스윕
+    sweeps: (params?: { limit?: number; offset?: number }) =>
+      [...queryKeys.eval.all, 'sweeps', params] as const,
+    sweepDetail: (sweepId: string) =>
+      [...queryKeys.eval.all, 'sweepDetail', sweepId] as const,
   },
 
   // ── Agent Builder ──────────────────────────────────────

@@ -2,7 +2,7 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { beforeAll, afterEach, afterAll, describe, it, expect } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { server } from '@/__tests__/mocks/server';
-import { useToolCatalog } from '@/hooks/useToolCatalog';
+import { useSyncMcpTools, useToolCatalog } from '@/hooks/useToolCatalog';
 import { createWrapper } from '@/__tests__/mocks/wrapper';
 import { API_ENDPOINTS } from '@/constants/api';
 
@@ -51,5 +51,42 @@ describe('useToolCatalog', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toHaveLength(0);
+  });
+});
+
+describe('useSyncMcpTools', () => {
+  // mcp-tool-auto-sync FR-11: 서버별 수동 재동기화 + 카탈로그 캐시 무효화
+  it('mcp_server_id 를 실어 sync 를 호출한다', async () => {
+    let captured: Record<string, unknown> | null = null;
+    server.use(
+      http.post(`*${API_ENDPOINTS.TOOL_CATALOG_SYNC}`, async ({ request }) => {
+        captured = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ synced_count: 3 });
+      }),
+    );
+
+    const { result } = renderHook(() => useSyncMcpTools(), {
+      wrapper: createWrapper(),
+    });
+    result.current.mutate('srv-1');
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(captured).toEqual({ mcp_server_id: 'srv-1' });
+    expect(result.current.data?.synced_count).toBe(3);
+  });
+
+  it('실패 시 isError 가 true 이다 (500 — 백엔드가 예외를 잡지 않음)', async () => {
+    server.use(
+      http.post(`*${API_ENDPOINTS.TOOL_CATALOG_SYNC}`, () =>
+        HttpResponse.json({ detail: 'boom' }, { status: 500 }),
+      ),
+    );
+
+    const { result } = renderHook(() => useSyncMcpTools(), {
+      wrapper: createWrapper(),
+    });
+    result.current.mutate('srv-1');
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
   });
 });

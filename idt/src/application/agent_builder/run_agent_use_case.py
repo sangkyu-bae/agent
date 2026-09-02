@@ -128,6 +128,25 @@ class _StreamState:
     analysis_source: list = field(default_factory=list)
 
 
+def _effective_model_id(agent: Any, request: RunAgentRequest) -> str:
+    """요청 오버라이드가 있으면 그것을, 없으면 에이전트 설정을 쓴다 (D1).
+
+    _prepare_graph(컴파일)와 _begin_observability(기록)가 같은 답을 내야
+    ai_run.llm_model_id가 실제 호출된 모델을 가리킨다 (Plan FR-02).
+    """
+    return request.llm_model_id_override or agent.llm_model_id
+
+
+def _effective_temperature(agent: Any, request: RunAgentRequest) -> float:
+    """temperature 오버라이드 해석 (D9).
+
+    0.0은 falsy이므로 `or`를 쓰면 에이전트 값으로 새어나가 재현성이 깨진다.
+    """
+    if request.temperature_override is not None:
+        return request.temperature_override
+    return agent.temperature
+
+
 def _node_type_for(name: str) -> NodeType:
     if name == "supervisor":
         return NodeType.SUPERVISOR
@@ -226,6 +245,7 @@ class RunAgentUseCase:
         session_id = request.session_id or str(uuid.uuid4())
         user_message_id = await self._save_user_message(
             request.query, request.user_id, session_id, agent_id,
+            persist=request.persist_conversation,
         )
 
         run_id, callback, ctx_token = await self._begin_observability(
@@ -281,6 +301,7 @@ class RunAgentUseCase:
                 answer, request.user_id, session_id, agent_id,
                 charts=state.charts or None,
                 analysis_data=snapshot,
+                persist=request.persist_conversation,
             )
             answer_payload: dict = {"answer": answer, "tools_used": tools_used}
             # agent-recursion-limit D7: True일 때만 부착 (charts 선례와 동형).
@@ -429,6 +450,7 @@ class RunAgentUseCase:
             answer, request.user_id, session_id, agent_id,
             charts=state.charts or None,
             analysis_data=snapshot,
+            persist=request.persist_conversation,
         )
         yield self._build_event(
             seq, AgentRunEventType.ANSWER_COMPLETED, run_id,
@@ -495,7 +517,9 @@ class RunAgentUseCase:
                 conversation_id=session_id,
                 user_id=request.user_id,
                 agent_id=agent_id,
-                agent_llm_model_id=agent.llm_model_id,
+                # Plan FR-02: 실효 모델을 기록해야 토큰·비용이 실제로 호출된
+                # 모델에 귀속된다. 원본 모델로 찍으면 스윕 집계가 통째로 틀어진다.
+                agent_llm_model_id=_effective_model_id(agent, request),
                 user_message_id=user_message_id,
                 langgraph_thread_id=session_id,
             )
@@ -544,12 +568,13 @@ class RunAgentUseCase:
             request.session_id is not None,
         )
 
-        llm_model = await self._llm_model_repository.find_by_id(
-            agent.llm_model_id, request_id
-        )
+        # agent-model-benchmark D1: 모델·temperature 오버라이드 해석 단일 지점.
+        # 하위 컴포넌트(컴파일러·워커·툴)는 오버라이드의 존재를 알지 못한다.
+        model_id = _effective_model_id(agent, request)
+        llm_model = await self._llm_model_repository.find_by_id(model_id, request_id)
         if llm_model is None:
             raise ValueError(
-                f"에이전트에 연결된 LLM 모델을 찾을 수 없습니다: {agent.llm_model_id}"
+                f"에이전트에 연결된 LLM 모델을 찾을 수 없습니다: {model_id}"
             )
 
         workflow = agent.to_workflow_definition()
@@ -559,7 +584,7 @@ class RunAgentUseCase:
         graph = await self._compiler.compile(
             workflow=workflow,
             llm_model=llm_model,
-            temperature=agent.temperature,
+            temperature=_effective_temperature(agent, request),
             request_id=request_id,
             supervisor_config=sv_config,
             depth=0,
@@ -975,8 +1000,13 @@ class RunAgentUseCase:
         user_id: str,
         session_id: str,
         agent_id: str,
+        *,
+        persist: bool = True,
     ) -> int | None:
         """user message 저장 후 message_id 반환 (Design §5-2).
+
+        agent-model-benchmark D2: persist=False면 저장을 건너뛰고 None을 돌려준다.
+        ai_run.user_message_id는 nullable(V021)이라 관측은 그대로 이어진다.
 
         AGENT-OBS-001 fix: session_factory가 주입되었으면 별도 세션에서 즉시 commit한다.
         - Tracker가 ai_run INSERT 시 FK 체크하는 conversation_message.id row 락이 즉시 풀려야
@@ -984,6 +1014,8 @@ class RunAgentUseCase:
         - 의미적으로도 user 질문은 어시스턴트 실패와 무관하게 영속화되는 것이 자연스럽다.
         - session_factory가 없으면(테스트/기존 호출 경로) 메인 세션 사용 (legacy fallback).
         """
+        if not persist:
+            return None
         if self._session_factory is not None:
             async with self._session_factory() as session:
                 async with session.begin():
@@ -1032,14 +1064,18 @@ class RunAgentUseCase:
         *,
         charts: Optional[list[dict]] = None,
         analysis_data: Optional[dict] = None,
+        persist: bool = True,
     ) -> None:
         """assistant message 저장 (user message 이후 turn_index 자동 계산).
 
+        agent-model-benchmark D2: persist=False면 건너뛴다 (강등 경로도 동시 적용).
         chat-chart-persistence: charts는 표시 전용 메타 — LLM 컨텍스트(_build_messages)
         에는 재투입하지 않는다 (Design D7).
         analysis-data-continuity: analysis_data는 다음 턴 컨텍스트에 재주입되는
         데이터 스냅샷 (요약 입력에는 미포함).
         """
+        if not persist:
+            return
         existing = await self._message_repo.find_by_session(
             UserId(user_id), SessionId(session_id)
         )

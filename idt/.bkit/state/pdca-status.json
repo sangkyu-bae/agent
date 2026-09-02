@@ -1,6 +1,6 @@
 {
   "version": "3.0",
-  "lastUpdated": "2026-08-31T09:00:02.000Z",
+  "lastUpdated": "2026-09-02T00:00:00.000Z",
   "activeFeatures": [
     "websocket-common-module",
     "agent-chat-multiturn",
@@ -599,6 +599,24 @@
           "V-3 pattern-C from_openai eager ChatOpenAI"
         ]
       }
+    },
+    "mcp-tool-auto-sync": {
+      "phase": "archived",
+      "matchRate": 98,
+      "iterationCount": 0,
+      "startedAt": "2026-08-31T00:00:00.000Z",
+      "qaStatus": "SKIP",
+      "archivedAt": "2026-09-01T00:00:00.000Z",
+      "archivedTo": "docs/archive/2026-09/mcp-tool-auto-sync/"
+    },
+    "agent-model-benchmark": {
+      "phase": "archived",
+      "matchRate": 97.1,
+      "iterationCount": 2,
+      "qaStatus": "PASS",
+      "startedAt": "2026-08-31T10:47:49.000Z",
+      "archivedAt": "2026-09-02T04:35:54.000Z",
+      "archivedTo": "docs/archive/2026-09/agent-model-benchmark/"
     }
   },
   "features": {
@@ -6668,6 +6686,33 @@
       },
       "archivedAt": "2026-08-29T06:53:44.787668Z",
       "archivedTo": "docs/archive/2026-08/blueprint-render-style-fidelity/"
+    },
+    "mcp-tool-auto-sync": {
+      "phase": "archived",
+      "matchRate": 98,
+      "iterationCount": 0,
+      "startedAt": "2026-08-31T00:00:00.000Z",
+      "qaStatus": "SKIP",
+      "archivedAt": "2026-09-01T00:00:00.000Z",
+      "archivedTo": "docs/archive/2026-09/mcp-tool-auto-sync/"
+    },
+    "agent-model-benchmark": {
+      "phase": "archived",
+      "matchRate": 97.1,
+      "iterationCount": 2,
+      "qaStatus": "PASS",
+      "startedAt": "2026-08-31T10:47:49.000Z",
+      "archivedAt": "2026-09-02T04:35:54.000Z",
+      "archivedTo": "docs/archive/2026-09/agent-model-benchmark/"
+    },
+    "fix-mcp-tool-call-not-reaching-server": {
+      "phase": "archived",
+      "matchRate": 96.4,
+      "iterationCount": 1,
+      "qaStatus": "SKIP",
+      "startedAt": "2026-09-02T00:00:00.000Z",
+      "archivedAt": "2026-09-02T00:00:00.000Z",
+      "archivedTo": "docs/archive/2026-09/fix-mcp-tool-call-not-reaching-server/"
     }
   },
   "pipeline": {
@@ -6678,269 +6723,9 @@
   "session": {
     "startedAt": "2026-03-04T10:49:14.367Z",
     "onboardingCompleted": false,
-    "lastActivity": "2026-08-29T07:02:00.718Z"
+    "lastActivity": "2026-09-02T08:25:09.352Z"
   },
   "history": [
-    {
-      "timestamp": "2026-08-12T03:05:07.733Z",
-      "feature": "ChatPage",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:05:10.119Z",
-      "feature": "ChatPage",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:05:22.020Z",
-      "feature": "JobsPage",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:05:24.107Z",
-      "feature": "JobsPage",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:05:27.663Z",
-      "feature": "JobsPage",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:05:32.604Z",
-      "feature": "JobsPage",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:05:37.629Z",
-      "feature": "JobsPage",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:05:43.167Z",
-      "feature": "layout",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:05:54.176Z",
-      "feature": "layout",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:06:43.706Z",
-      "feature": "ChatPage",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-12T03:06:58.705Z",
-      "feature": "ChatPage",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "feature": "agent-create-entry",
-      "event": "phase_transition",
-      "phase": "plan",
-      "timestamp": "2026-08-12T12:00:00.000Z"
-    },
-    {
-      "timestamp": "2026-08-12T12:05:19.924Z",
-      "feature": "agent-create-entry",
-      "event": "PLAN_DONE",
-      "from": "plan",
-      "to": "design",
-      "action": "state_transition",
-      "automationLevel": 2
-    },
-    {
-      "feature": "agent-create-entry",
-      "event": "phase_transition",
-      "phase": "design",
-      "timestamp": "2026-08-12T12:40:00.000Z"
-    },
-    {
-      "feature": "agent-create-entry",
-      "event": "phase_transition",
-      "phase": "do",
-      "timestamp": "2026-08-12T13:10:00.000Z"
-    },
-    {
-      "timestamp": "2026-08-13T04:45:01.828Z",
-      "feature": "tool-recommender",
-      "event": "PLAN_DONE",
-      "from": "plan",
-      "to": "design",
-      "action": "state_transition",
-      "automationLevel": 2
-    },
-    {
-      "feature": "intent-analyzer",
-      "event": "phase_transition",
-      "phase": "plan",
-      "timestamp": "2026-08-13T04:47:54.507157Z"
-    },
-    {
-      "timestamp": "2026-08-13T04:48:28.576Z",
-      "feature": "intent-analyzer",
-      "event": "PLAN_DONE",
-      "from": "plan",
-      "to": "design",
-      "action": "state_transition",
-      "automationLevel": 2
-    },
-    {
-      "timestamp": "2026-08-13T04:55:16.573Z",
-      "feature": "intent-analyzer",
-      "event": "PLAN_DONE",
-      "from": "plan",
-      "to": "design",
-      "action": "state_transition",
-      "automationLevel": 2
-    },
-    {
-      "timestamp": "2026-08-13T04:59:48.107Z",
-      "feature": "intent-analyzer",
-      "event": "PLAN_DONE",
-      "from": "plan",
-      "to": "design",
-      "action": "state_transition",
-      "automationLevel": 2
-    },
-    {
-      "feature": "intent-analyzer",
-      "event": "phase_transition",
-      "phase": "design",
-      "timestamp": "2026-08-13T04:59:48.491653Z"
-    },
-    {
-      "timestamp": "2026-08-13T07:01:39.173Z",
-      "feature": "tool-recommender",
-      "phase": "design",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-08-13T09:27:18.127Z",
-      "feature": "tool-recommender",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "feature": "intent-analyzer",
-      "event": "phase_transition",
-      "phase": "do",
-      "scope": "module-1,module-2",
-      "timestamp": "2026-08-13T09:30:52.954973Z"
-    },
-    {
-      "feature": "intent-analyzer",
-      "event": "do_complete",
-      "scope": "module-3",
-      "timestamp": "2026-08-13T09:56:09.208352Z"
-    },
-    {
-      "feature": "intent-analyzer",
-      "event": "phase_transition",
-      "phase": "check",
-      "matchRate": 100,
-      "timestamp": "2026-08-13T10:04:25.625295Z"
-    },
-    {
-      "timestamp": "2026-08-13T10:07:15.386Z",
-      "feature": "tool-recommender",
-      "phase": "act",
-      "action": "updated"
-    },
-    {
-      "feature": "intent-analyzer",
-      "event": "phase_transition",
-      "phase": "completed",
-      "matchRate": 100,
-      "timestamp": "2026-08-13T10:24:12.795830Z"
-    },
-    {
-      "feature": "intent-analyzer",
-      "event": "phase_transition",
-      "phase": "archived",
-      "matchRate": 100,
-      "archivedTo": "docs/archive/2026-08/intent-analyzer/",
-      "timestamp": "2026-08-13T11:06:37.419634Z"
-    },
-    {
-      "feature": "intent-slot-elicitation",
-      "phase": "plan",
-      "event": "plan_created",
-      "at": "2026-08-14T00:00:00.000Z"
-    },
-    {
-      "timestamp": "2026-08-14T06:51:58.503Z",
-      "feature": "intent-slot-elicitation",
-      "event": "PLAN_DONE",
-      "from": "plan",
-      "to": "design",
-      "action": "state_transition",
-      "automationLevel": 2
-    },
-    {
-      "feature": "intent-slot-elicitation",
-      "phase": "design",
-      "event": "design_created",
-      "at": "2026-08-14T00:00:00.000Z"
-    },
-    {
-      "feature": "intent-slot-elicitation",
-      "phase": "do",
-      "event": "do_module_1_2_done",
-      "at": "2026-08-14T00:00:00.000Z"
-    },
-    {
-      "feature": "intent-slot-elicitation",
-      "phase": "do",
-      "event": "do_module_3_4_done",
-      "at": "2026-08-14T00:00:00.000Z"
-    },
-    {
-      "feature": "intent-slot-elicitation",
-      "phase": "do",
-      "event": "do_complete",
-      "at": "2026-08-14T00:00:00.000Z"
-    },
-    {
-      "feature": "intent-slot-elicitation",
-      "phase": "check",
-      "event": "analyze_done_matchrate_99",
-      "at": "2026-08-16T00:00:00.000Z"
-    },
-    {
-      "feature": "intent-slot-elicitation",
-      "phase": "act",
-      "event": "act1_strict_schema_fix",
-      "at": "2026-08-16T00:00:00.000Z"
-    },
-    {
-      "feature": "intent-slot-elicitation",
-      "phase": "act",
-      "event": "act2_option_fallback_and_anti_confabulation",
-      "at": "2026-08-16T00:00:00.000Z"
-    },
-    {
-      "timestamp": "2026-08-16T05:45:32.266Z",
-      "feature": "intent-slot-elicitation",
-      "event": "ANALYZE_DONE",
-      "from": "act",
-      "to": "check",
-      "action": "state_transition",
-      "automationLevel": 2
-    },
     {
       "timestamp": "2026-08-16T05:51:21.787Z",
       "feature": "intent-slot-elicitation",
@@ -7505,6 +7290,244 @@
       "timestamp": "2026-08-31T09:00:02.000Z",
       "event": "phase_transition",
       "archivedTo": "docs/archive/2026-08/admin-default-llm-routing/"
+    },
+    {
+      "timestamp": "2026-08-31T10:10:22.964Z",
+      "feature": "mcp-tool-auto-sync",
+      "event": "PLAN_DONE",
+      "from": "plan",
+      "to": "design",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "timestamp": "2026-08-31T10:16:42.152Z",
+      "feature": "mcp-tool-auto-sync",
+      "event": "PLAN_DONE",
+      "from": "plan",
+      "to": "design",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "timestamp": "2026-08-31T10:27:49.370Z",
+      "feature": "mcp-tool-auto-sync",
+      "event": "PLAN_DONE",
+      "from": "plan",
+      "to": "design",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "timestamp": "2026-08-31T10:29:21.791Z",
+      "feature": "mcp-tool-auto-sync",
+      "event": "DESIGN_DONE",
+      "from": "design",
+      "to": "do",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "feature": "agent-model-benchmark",
+      "phase": "plan",
+      "timestamp": "2026-08-31T10:47:49.000Z",
+      "event": "phase_transition"
+    },
+    {
+      "timestamp": "2026-08-31T10:48:12.737Z",
+      "feature": "agent-model-benchmark",
+      "event": "PLAN_DONE",
+      "from": "plan",
+      "to": "design",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "timestamp": "2026-08-31T10:51:57.370Z",
+      "feature": "agent-model-benchmark",
+      "event": "PLAN_DONE",
+      "from": "plan",
+      "to": "design",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "feature": "agent-model-benchmark",
+      "phase": "design",
+      "timestamp": "2026-08-31T11:00:15.000Z",
+      "event": "phase_transition"
+    },
+    {
+      "timestamp": "2026-08-31T11:00:38.200Z",
+      "feature": "agent-model-benchmark",
+      "event": "DESIGN_DONE",
+      "from": "design",
+      "to": "do",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "timestamp": "2026-08-31T11:10:51.049Z",
+      "feature": "agent-model-benchmark",
+      "event": "DESIGN_DONE",
+      "from": "design",
+      "to": "do",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "timestamp": "2026-09-01T02:58:14.317Z",
+      "feature": "agent-model-benchmark",
+      "event": "DESIGN_DONE",
+      "from": "design",
+      "to": "do",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "timestamp": "2026-09-01T03:03:57.777Z",
+      "feature": "agent-model-benchmark",
+      "event": "DESIGN_DONE",
+      "from": "design",
+      "to": "do",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "timestamp": "2026-09-01T10:17:26.641Z",
+      "feature": "agent-model-benchmark",
+      "event": "DESIGN_DONE",
+      "from": "design",
+      "to": "do",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "feature": "agent-model-benchmark",
+      "phase": "do",
+      "timestamp": "2026-09-01T10:18:43.000Z",
+      "event": "phase_transition",
+      "scope": "module-1,module-3"
+    },
+    {
+      "feature": "agent-model-benchmark",
+      "phase": "do",
+      "timestamp": "2026-09-01T10:39:52.000Z",
+      "event": "scope_completed",
+      "scope": "module-2"
+    },
+    {
+      "feature": "agent-model-benchmark",
+      "phase": "do",
+      "timestamp": "2026-09-01T11:20:23.000Z",
+      "event": "scope_completed",
+      "scope": "module-4,module-5"
+    },
+    {
+      "feature": "agent-model-benchmark",
+      "phase": "do",
+      "timestamp": "2026-09-01T11:39:30.000Z",
+      "event": "scope_completed",
+      "scope": "module-6,module-7"
+    },
+    {
+      "feature": "agent-model-benchmark",
+      "phase": "check",
+      "timestamp": "2026-09-02T02:18:55.000Z",
+      "event": "phase_transition",
+      "matchRate": 88.6
+    },
+    {
+      "feature": "agent-model-benchmark",
+      "phase": "act",
+      "timestamp": "2026-09-02T02:32:52.000Z",
+      "event": "iteration_completed",
+      "iteration": 1,
+      "matchRate": 94.3
+    },
+    {
+      "timestamp": "2026-09-02T02:33:11.980Z",
+      "feature": "agent-model-benchmark",
+      "event": "ANALYZE_DONE",
+      "from": "act",
+      "to": "check",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "feature": "agent-model-benchmark",
+      "phase": "qa",
+      "timestamp": "2026-09-02T02:44:31.000Z",
+      "event": "phase_transition",
+      "qaStatus": "FAIL"
+    },
+    {
+      "feature": "agent-model-benchmark",
+      "phase": "act",
+      "timestamp": "2026-09-02T02:53:44.000Z",
+      "event": "iteration_completed",
+      "iteration": 2,
+      "matchRate": 97.1,
+      "qaStatus": "PASS"
+    },
+    {
+      "timestamp": "2026-09-02T02:54:02.037Z",
+      "feature": "agent-model-benchmark",
+      "event": "ANALYZE_DONE",
+      "from": "act",
+      "to": "check",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "timestamp": "2026-09-02T04:20:06.993Z",
+      "feature": "agent-model-benchmark",
+      "event": "ANALYZE_DONE",
+      "from": "act",
+      "to": "check",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "feature": "agent-model-benchmark",
+      "phase": "completed",
+      "timestamp": "2026-09-02T04:20:40.000Z",
+      "event": "phase_transition",
+      "matchRate": 97.1
+    },
+    {
+      "feature": "agent-model-benchmark",
+      "phase": "archived",
+      "timestamp": "2026-09-02T04:35:54.000Z",
+      "event": "phase_transition",
+      "archivedTo": "docs/archive/2026-09/agent-model-benchmark/"
+    },
+    {
+      "timestamp": "2026-09-02T08:12:23.224Z",
+      "feature": "fix-mcp-tool-call-not-reaching-server",
+      "event": "PLAN_DONE",
+      "from": "plan",
+      "to": "design",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "timestamp": "2026-09-02T08:15:29.352Z",
+      "feature": "fix-mcp-tool-call-not-reaching-server",
+      "event": "PLAN_DONE",
+      "from": "plan",
+      "to": "design",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "timestamp": "2026-09-02T08:25:09.352Z",
+      "feature": "fix-mcp-tool-call-not-reaching-server",
+      "event": "DESIGN_DONE",
+      "from": "design",
+      "to": "do",
+      "action": "state_transition",
+      "automationLevel": 2
     }
   ],
   "featurePhases": {
@@ -7547,7 +7570,10 @@
     "multimodal-extractor": "archived",
     "pptx-font-fidelity": "check",
     "runtime-datetime-context": "archived",
-    "deep-search-pipeline": "archived"
+    "deep-search-pipeline": "archived",
+    "mcp-tool-auto-sync": "archived",
+    "agent-model-benchmark": "archived",
+    "fix-mcp-tool-call-not-reaching-server": "archived"
   },
   "matchRates": {
     "supervisor-overblock-fix": 100,
@@ -7562,7 +7588,9 @@
     "prompt-depth": 99,
     "multimodal-extractor": 96,
     "pptx-font-fidelity": 99,
-    "deep-search-pipeline": 97
+    "deep-search-pipeline": 97,
+    "mcp-tool-auto-sync": 98,
+    "agent-model-benchmark": 97.1
   },
   "archivedTo": {
     "self-hosted-qwen-endpoint": "docs/archive/2026-06/self-hosted-qwen-endpoint/",
@@ -7575,9 +7603,11 @@
     "intent-analyzer": "docs/archive/2026-08/intent-analyzer/",
     "agent-create-wizard": "docs/archive/2026-08/agent-create-wizard/",
     "prompt-depth": "docs/archive/2026-08/prompt-depth/",
-    "multimodal-extractor": "docs/archive/2026-08/multimodal-extractor/"
+    "multimodal-extractor": "docs/archive/2026-08/multimodal-extractor/",
+    "mcp-tool-auto-sync": "docs/archive/2026-09/mcp-tool-auto-sync/",
+    "agent-model-benchmark": "docs/archive/2026-09/agent-model-benchmark/"
   },
-  "currentFeature": "blueprint-render-style-fidelity",
+  "currentFeature": null,
   "stateMachine": {
     "defaultWorkflow": "default",
     "activeWorkflows": {},
@@ -7764,5 +7794,5 @@
       "createdAt": "2026-08-17T11:37:23.967Z"
     }
   ],
-  "updatedAt": "2026-08-26T13:00:00.000000Z"
+  "updatedAt": "2026-09-02T04:35:54.000Z"
 }

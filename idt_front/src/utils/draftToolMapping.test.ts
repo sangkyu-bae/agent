@@ -53,7 +53,22 @@ describe('mapDraftToolIdsToCatalog', () => {
     ]);
   });
 
-  it('mcp_{서버ID}는 해당 서버의 카탈로그 도구 전체로 전개한다', () => {
+  it('카탈로그 형식 mcp:{srv}:{tool}은 그대로 통과시킨다', () => {
+    expect(mapDraftToolIdsToCatalog(['mcp:srv-1:fetch_page'], catalog)).toEqual([
+      'mcp:srv-1:fetch_page',
+    ]);
+  });
+
+  it('같은 서버의 서로 다른 도구를 합치지 않는다', () => {
+    expect(
+      mapDraftToolIdsToCatalog(
+        ['mcp:srv-1:fetch_page', 'mcp:srv-1:parse_html'],
+        catalog,
+      ),
+    ).toEqual(['mcp:srv-1:fetch_page', 'mcp:srv-1:parse_html']);
+  });
+
+  it('레거시 mcp_{서버ID}는 해당 서버의 카탈로그 도구 전체로 전개한다', () => {
     expect(mapDraftToolIdsToCatalog(['mcp_srv-1'], catalog)).toEqual([
       'mcp:srv-1:fetch_page',
       'mcp:srv-1:parse_html',

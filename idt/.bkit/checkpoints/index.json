@@ -1086,5 +1086,277 @@
     "phase": "check",
     "feature": "admin-default-llm-routing",
     "description": "check → act"
+  },
+  {
+    "id": "cp-1788171022926",
+    "createdAt": "2026-08-31T10:10:22.926Z",
+    "type": "phase_transition",
+    "phase": "plan",
+    "feature": "mcp-tool-auto-sync",
+    "description": "plan → design"
+  },
+  {
+    "id": "cp-1788171402134",
+    "createdAt": "2026-08-31T10:16:42.134Z",
+    "type": "phase_transition",
+    "phase": "plan",
+    "feature": "mcp-tool-auto-sync",
+    "description": "plan → design"
+  },
+  {
+    "id": "cp-1788172069327",
+    "createdAt": "2026-08-31T10:27:49.327Z",
+    "type": "phase_transition",
+    "phase": "plan",
+    "feature": "mcp-tool-auto-sync",
+    "description": "plan → design"
+  },
+  {
+    "id": "cp-1788172161725",
+    "createdAt": "2026-08-31T10:29:21.725Z",
+    "type": "phase_transition",
+    "phase": "design",
+    "feature": "mcp-tool-auto-sync",
+    "description": "design → do"
+  },
+  {
+    "id": "cp-1788173292688",
+    "createdAt": "2026-08-31T10:48:12.688Z",
+    "type": "phase_transition",
+    "phase": "plan",
+    "feature": "agent-model-benchmark",
+    "description": "plan → design"
+  },
+  {
+    "id": "cp-1788173517323",
+    "createdAt": "2026-08-31T10:51:57.323Z",
+    "type": "phase_transition",
+    "phase": "plan",
+    "feature": "agent-model-benchmark",
+    "description": "plan → design"
+  },
+  {
+    "id": "cp-1788174038141",
+    "createdAt": "2026-08-31T11:00:38.141Z",
+    "type": "phase_transition",
+    "phase": "design",
+    "feature": "agent-model-benchmark",
+    "description": "design → do"
+  },
+  {
+    "id": "cp-1788174651000",
+    "createdAt": "2026-08-31T11:10:51.000Z",
+    "type": "phase_transition",
+    "phase": "design",
+    "feature": "agent-model-benchmark",
+    "description": "design → do"
+  },
+  {
+    "id": "cp-1788231494217",
+    "createdAt": "2026-09-01T02:58:14.217Z",
+    "type": "phase_transition",
+    "phase": "design",
+    "feature": "agent-model-benchmark",
+    "description": "design → do"
+  },
+  {
+    "id": "cp-1788231837662",
+    "createdAt": "2026-09-01T03:03:57.662Z",
+    "type": "phase_transition",
+    "phase": "design",
+    "feature": "agent-model-benchmark",
+    "description": "design → do"
+  },
+  {
+    "id": "cp-1788257846614",
+    "createdAt": "2026-09-01T10:17:26.614Z",
+    "type": "phase_transition",
+    "phase": "design",
+    "feature": "agent-model-benchmark",
+    "description": "design → do"
+  },
+  {
+    "id": "cp-1788257950184",
+    "createdAt": "2026-09-01T10:19:10.184Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "agent-model-benchmark",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1788258076926",
+    "createdAt": "2026-09-01T10:21:16.926Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "agent-model-benchmark",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1788259215320",
+    "createdAt": "2026-09-01T10:40:15.320Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "agent-model-benchmark",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1788261648023",
+    "createdAt": "2026-09-01T11:20:48.023Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "agent-model-benchmark",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1788262792941",
+    "createdAt": "2026-09-01T11:39:52.941Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "agent-model-benchmark",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1788315477279",
+    "createdAt": "2026-09-02T02:17:57.279Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "agent-model-benchmark",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1788315549896",
+    "createdAt": "2026-09-02T02:19:09.896Z",
+    "type": "phase_transition",
+    "phase": "check",
+    "feature": "agent-model-benchmark",
+    "description": "check → act"
+  },
+  {
+    "id": "cp-1788315696278",
+    "createdAt": "2026-09-02T02:21:36.278Z",
+    "type": "phase_transition",
+    "phase": "check",
+    "feature": "agent-model-benchmark",
+    "description": "check → act"
+  },
+  {
+    "id": "cp-1788316391958",
+    "createdAt": "2026-09-02T02:33:11.958Z",
+    "type": "phase_transition",
+    "phase": "act",
+    "feature": "agent-model-benchmark",
+    "description": "act → qa"
+  },
+  {
+    "id": "cp-1788317089399",
+    "createdAt": "2026-09-02T02:44:49.399Z",
+    "type": "phase_transition",
+    "phase": "qa",
+    "feature": "agent-model-benchmark",
+    "description": "qa → report"
+  },
+  {
+    "id": "cp-1788317642014",
+    "createdAt": "2026-09-02T02:54:02.014Z",
+    "type": "phase_transition",
+    "phase": "act",
+    "feature": "agent-model-benchmark",
+    "description": "act → qa"
+  },
+  {
+    "id": "cp-1788322806953",
+    "createdAt": "2026-09-02T04:20:06.953Z",
+    "type": "phase_transition",
+    "phase": "act",
+    "feature": "agent-model-benchmark",
+    "description": "act → qa"
+  },
+  {
+    "id": "cp-1788336743199",
+    "createdAt": "2026-09-02T08:12:23.199Z",
+    "type": "phase_transition",
+    "phase": "plan",
+    "feature": "fix-mcp-tool-call-not-reaching-server",
+    "description": "plan → design"
+  },
+  {
+    "id": "cp-1788336929297",
+    "createdAt": "2026-09-02T08:15:29.297Z",
+    "type": "phase_transition",
+    "phase": "plan",
+    "feature": "fix-mcp-tool-call-not-reaching-server",
+    "description": "plan → design"
+  },
+  {
+    "id": "cp-1788337509324",
+    "createdAt": "2026-09-02T08:25:09.324Z",
+    "type": "phase_transition",
+    "phase": "design",
+    "feature": "fix-mcp-tool-call-not-reaching-server",
+    "description": "design → do"
+  },
+  {
+    "id": "cp-1788344528385",
+    "createdAt": "2026-09-02T10:22:08.385Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "fix-mcp-tool-call-not-reaching-server",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1788345170243",
+    "createdAt": "2026-09-02T10:32:50.243Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "fix-mcp-tool-call-not-reaching-server",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1788345358515",
+    "createdAt": "2026-09-02T10:35:58.515Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "fix-mcp-tool-call-not-reaching-server",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1788346056878",
+    "createdAt": "2026-09-02T10:47:36.878Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "fix-mcp-tool-call-not-reaching-server",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1788346342436",
+    "createdAt": "2026-09-02T10:52:22.436Z",
+    "type": "phase_transition",
+    "phase": "do",
+    "feature": "fix-mcp-tool-call-not-reaching-server",
+    "description": "do → check"
+  },
+  {
+    "id": "cp-1788346836787",
+    "createdAt": "2026-09-02T11:00:36.787Z",
+    "type": "phase_transition",
+    "phase": "check",
+    "feature": "fix-mcp-tool-call-not-reaching-server",
+    "description": "check → act"
+  },
+  {
+    "id": "cp-1788346969739",
+    "createdAt": "2026-09-02T11:02:49.739Z",
+    "type": "phase_transition",
+    "phase": "check",
+    "feature": "fix-mcp-tool-call-not-reaching-server",
+    "description": "check → act"
+  },
+  {
+    "id": "cp-1788347104540",
+    "createdAt": "2026-09-02T11:05:04.540Z",
+    "type": "phase_transition",
+    "phase": "check",
+    "feature": "fix-mcp-tool-call-not-reaching-server",
+    "description": "check → act"
   }
 ]

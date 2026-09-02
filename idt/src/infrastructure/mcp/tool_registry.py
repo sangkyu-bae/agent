@@ -80,7 +80,8 @@ class MCPToolRegistry:
 
             tools: list[BaseTool] = []
             for mcp_tool in tools_response.tools:
-                tool_name = MCPConnectionPolicy.sanitize_tool_name(
+                # Design Ref: §3.2 — 단순 절단은 같은 서버 내 도구 이름 충돌을 만든다.
+                tool_name = MCPConnectionPolicy.build_tool_name(
                     f"{config.name}_{mcp_tool.name}"
                 )
                 adapter = MCPToolAdapter(
@@ -88,12 +89,18 @@ class MCPToolRegistry:
                     description=mcp_tool.description or f"MCP tool: {mcp_tool.name}",
                     server_config=config,
                     mcp_tool_name=mcp_tool.name,
+                    # Design Ref: §4 — ③ 실행 로그가 요청/도구를 되짚을 수 있도록 전달.
+                    request_id=request_id or "",
+                    tool_id=config.name,
                 )
                 tools.append(adapter)
 
+            # Design Ref: §2.2 — tool_count=0 / 의도한 도구가 목록에 없음을
+            # 여기서 바로 판별할 수 있어야 한다.
             logger.info(
                 "MCP server tools loaded",
                 tool_count=len(tools),
+                tool_names=[t.mcp_tool_name for t in tools],
                 **log_extra,
             )
             return tools

@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from src.application.mcp_registry.schemas import (
     ListMCPServersResponse,
     MCPServerResponse,
+    ToolSyncResultResponse,
 )
 from src.api.routes.mcp_registry_router import (
     router,
@@ -155,3 +156,74 @@ class TestDeleteMCPRegistry:
         c = TestClient(app)
         response = c.delete("/api/v1/mcp-registry/missing")
         assert response.status_code == 404
+
+
+class TestToolSyncInResponse:
+    """mcp-tool-auto-sync FR-09: 등록/수정 응답의 tool_sync 계약.
+
+    Design Ref: §4.2 — tool_sync=null(sync 미수행)과 {ok:false}(시도 후 실패)를
+    응답 수준에서 구분한다.
+    """
+
+    def test_register_success_carries_tool_sync(self, app, mock_list_uc, mock_update_uc, mock_delete_uc):
+        uc = MagicMock()
+        uc.execute = AsyncMock(
+            return_value=_make_response().model_copy(
+                update={"tool_sync": ToolSyncResultResponse(ok=True, synced_count=3)}
+            )
+        )
+        app.dependency_overrides[get_register_use_case] = lambda: uc
+        response = TestClient(app).post(
+            "/api/v1/mcp-registry",
+            json={
+                "user_id": "u1",
+                "name": "My Tool",
+                "description": "A tool",
+                "endpoint": "https://mcp.example.com/sse",
+            },
+        )
+        assert response.status_code == 201
+        assert response.json()["tool_sync"] == {
+            "ok": True,
+            "synced_count": 3,
+            "error_hint": None,
+        }
+
+    def test_register_returns_201_even_when_sync_failed(self, app, mock_list_uc, mock_update_uc, mock_delete_uc):
+        """FR-03 핵심: MCP 서버가 죽어 있어도 등록은 201로 성공한다."""
+        uc = MagicMock()
+        uc.execute = AsyncMock(
+            return_value=_make_response().model_copy(
+                update={
+                    "tool_sync": ToolSyncResultResponse(
+                        ok=False, synced_count=0, error_hint="연결 실패"
+                    )
+                }
+            )
+        )
+        app.dependency_overrides[get_register_use_case] = lambda: uc
+        response = TestClient(app).post(
+            "/api/v1/mcp-registry",
+            json={
+                "user_id": "u1",
+                "name": "My Tool",
+                "description": "A tool",
+                "endpoint": "https://mcp.example.com/sse",
+            },
+        )
+        assert response.status_code == 201
+        body = response.json()
+        assert body["id"] == "uuid-1"
+        assert body["tool_sync"]["ok"] is False
+        assert body["tool_sync"]["error_hint"] == "연결 실패"
+
+    def test_list_response_has_null_tool_sync(self, client):
+        """조회는 sync를 수행하지 않으므로 null이다."""
+        response = client.get("/api/v1/mcp-registry")
+        assert response.status_code == 200
+        assert response.json()["items"][0]["tool_sync"] is None
+
+    def test_get_by_id_response_has_null_tool_sync(self, client):
+        response = client.get("/api/v1/mcp-registry/uuid-1")
+        assert response.status_code == 200
+        assert response.json()["tool_sync"] is None

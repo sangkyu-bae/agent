@@ -1,14 +1,38 @@
 [
   {
-    "timestamp": "2026-08-29T22:43:24.946Z",
+    "timestamp": "2026-09-02T02:55:24.986Z",
+    "errorType": "unknown",
+    "category": "unknown",
+    "severity": "low",
+    "agentId": "a8a7a7d996367244d",
+    "agentType": null,
+    "sessionId": "c4bbe918-dbc8-4b48-80ab-bf007c06f1c0",
+    "message": "",
+    "parseStatus": "ok",
+    "parseWarnings": null
+  },
+  {
+    "timestamp": "2026-09-02T05:16:27.049Z",
     "errorType": "unknown",
     "category": "unknown",
     "severity": "low",
     "agentId": null,
     "agentType": null,
-    "sessionId": "df231907-c11d-4ec8-9e95-f2800145d8fb",
+    "sessionId": "1337acd9-2752-419c-b161-47b9572f35d2",
     "message": "",
     "parseStatus": "partial",
     "parseWarnings": "StopFailure payload missing useful fields (keys: session_id,transcript_path,cwd,prompt_id,effort,hook_event_name,error,last_assistant_message)"
+  },
+  {
+    "timestamp": "2026-09-02T05:22:29.694Z",
+    "errorType": "unknown",
+    "category": "unknown",
+    "severity": "low",
+    "agentId": "acef77d84ac087e6f",
+    "agentType": null,
+    "sessionId": "1337acd9-2752-419c-b161-47b9572f35d2",
+    "message": "",
+    "parseStatus": "ok",
+    "parseWarnings": null
   }
 ]

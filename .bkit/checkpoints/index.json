@@ -14,5 +14,37 @@
     "phase": "plan",
     "feature": "prompt-depth",
     "description": "plan → design"
+  },
+  {
+    "id": "cp-1788167498356",
+    "createdAt": "2026-08-31T09:11:38.356Z",
+    "type": "phase_transition",
+    "phase": "plan",
+    "feature": "prompt-depth",
+    "description": "plan → design"
+  },
+  {
+    "id": "cp-1788167805670",
+    "createdAt": "2026-08-31T09:16:45.670Z",
+    "type": "phase_transition",
+    "phase": "plan",
+    "feature": "prompt-depth",
+    "description": "plan → design"
+  },
+  {
+    "id": "cp-1788168281182",
+    "createdAt": "2026-08-31T09:24:41.182Z",
+    "type": "phase_transition",
+    "phase": "plan",
+    "feature": "prompt-depth",
+    "description": "plan → design"
+  },
+  {
+    "id": "cp-1788347638855",
+    "createdAt": "2026-09-02T11:13:58.855Z",
+    "type": "phase_transition",
+    "phase": "plan",
+    "feature": "prompt-depth",
+    "description": "plan → design"
   }
 ]

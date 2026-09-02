@@ -63,10 +63,16 @@ export const API_ENDPOINTS = {
   RAGAS_RUNS: '/api/ragas/runs',
   RAGAS_RUN_DETAIL: (runId: string) => `/api/ragas/runs/${runId}`,
   RAGAS_RUN_RESULTS: (runId: string) => `/api/ragas/runs/${runId}/results`,
+  // agent-model-benchmark: 모델 스윕
+  RAGAS_SWEEPS: '/api/ragas/sweeps',
+  RAGAS_SWEEP_ESTIMATE: '/api/ragas/sweeps/estimate',
+  RAGAS_SWEEP_DETAIL: (sweepId: string) => `/api/ragas/sweeps/${sweepId}`,
 
   // Tools
   TOOL_CATALOG: '/api/v1/tool-catalog',
   TOOL_CATALOG_BUILTIN: '/api/v1/tool-catalog/builtin',
+  // mcp-tool-auto-sync FR-11: MCP 서버별 도구 재동기화 (admin 전용)
+  TOOL_CATALOG_SYNC: '/api/v1/tool-catalog/sync',
 
   // Middleware Catalog (builtin-middleware)
   MIDDLEWARE_CATALOG: '/api/v1/middleware-catalog',

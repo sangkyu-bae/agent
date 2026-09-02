@@ -2,7 +2,7 @@
 from abc import ABC, abstractmethod
 
 from src.domain.ragas.entities import EvaluationResult, EvaluationRun
-from src.domain.ragas.value_objects import EvalConfig, TestCase
+from src.domain.ragas.value_objects import EvalConfig, TargetExecution, TestCase
 
 
 class EvaluationRepositoryInterface(ABC):
@@ -100,7 +100,14 @@ class EvaluatorInterface(ABC):
         ground_truth: str | None,
         metrics: list[str],
         request_id: str,
-    ) -> dict[str, float]: ...
+        judge_model: str | None = None,
+    ) -> dict[str, float]:
+        """agent-model-benchmark D4: judge_model은 실행별 채점 모델.
+
+        None이면 기존 동작(RAGAS 라이브러리 기본 judge)을 유지한다 — 실시간
+        평가 등 기존 호출자는 인자를 넘기지 않으므로 영향이 없다.
+        """
+        ...
 
 
 class EvalRunStoreInterface(ABC):
@@ -129,6 +136,7 @@ class TargetExecutorInterface(ABC):
         case: TestCase,
         user_id: str | None,
         request_id: str,
-    ) -> tuple[str, list[str], dict[str, float]]:
-        """(answer, contexts, extra_scores) 반환 — extra_scores는 순위 메트릭 등."""
+    ) -> TargetExecution:
+        """agent-model-benchmark: 기존 (answer, contexts, extra_scores) 튜플을
+        TargetExecution으로 교체 — tools_used·ai_run_id를 함께 실어 올린다."""
         ...

@@ -165,3 +165,70 @@ class TestMCPToolRegistry:
             tools = await registry.get_tools()
 
         assert len(tools) == 2
+
+
+class TestMCPToolRegistryDiagnostics:
+    """① 로드 구간 계측 (Design Ref: fix-mcp-tool-call-not-reaching-server §4)."""
+
+    @staticmethod
+    def _mock_tools(*names):
+        out = []
+        for n in names:
+            t = MagicMock()
+            t.name = n
+            t.description = f"desc {n}"
+            out.append(t)
+        return out
+
+    @pytest.mark.asyncio
+    async def test_adapters_receive_request_id_and_tool_id(self, single_stdio_config):
+        """어댑터에 추적 필드가 주입돼 ③ 실행 로그까지 이어진다 (FR-01)."""
+        from src.infrastructure.mcp.tool_registry import MCPToolRegistry
+
+        mock_session = AsyncMock()
+        mock_session.list_tools = AsyncMock(
+            return_value=MagicMock(tools=self._mock_tools("read_file"))
+        )
+
+        with patch(
+            "src.infrastructure.mcp.tool_registry.MCPClientFactory.create_session"
+        ) as mock_ctx:
+            mock_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_ctx.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            tools = await MCPToolRegistry(single_stdio_config).get_tools(
+                request_id="req-042"
+            )
+
+        assert tools[0].request_id == "req-042"
+        assert tools[0].tool_id == "server1"  # config.name = 등록 tool_id
+
+    @pytest.mark.asyncio
+    async def test_loaded_log_lists_actual_tool_names(self, single_stdio_config):
+        """서버가 실제로 준 도구 목록이 로그에 남는다 — 의도한 도구 부재를 판별."""
+        from src.infrastructure.mcp.tool_registry import MCPToolRegistry
+
+        mock_session = AsyncMock()
+        mock_session.list_tools = AsyncMock(
+            return_value=MagicMock(
+                tools=self._mock_tools("create_issue", "list_issues")
+            )
+        )
+
+        with patch(
+            "src.infrastructure.mcp.tool_registry.MCPClientFactory.create_session"
+        ) as mock_ctx, patch(
+            "src.infrastructure.mcp.tool_registry.logger"
+        ) as mock_logger:
+            mock_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_ctx.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            await MCPToolRegistry(single_stdio_config).get_tools(request_id="req-043")
+
+        loaded = [c for c in mock_logger.info.call_args_list
+                  if c.args[0] == "MCP server tools loaded"]
+        assert loaded, "서버 도구 로드 로그가 없다"
+        kwargs = loaded[0].kwargs
+        assert kwargs["tool_count"] == 2
+        assert kwargs["tool_names"] == ["create_issue", "list_issues"]
+        assert kwargs["request_id"] == "req-043"

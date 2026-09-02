@@ -132,3 +132,112 @@ class TestMCPToolAdapter:
         mock_result = MagicMock()
         mock_result.content = []
         assert MCPToolAdapter._extract_content(mock_result) == ""
+
+
+class TestMCPToolAdapterDiagnostics:
+    """U15 — 실행 로그 계측 (Design Ref: fix-mcp-tool-call-not-reaching-server §4)."""
+
+    def test_request_id_and_tool_id_default_to_empty(self, adapter):
+        """미주입 시에도 어댑터 생성이 깨지지 않는다 (기존 호출부 하위호환)."""
+        assert adapter.request_id == ""
+        assert adapter.tool_id == ""
+
+    @pytest.mark.asyncio
+    async def test_arun_logs_carry_request_id_and_tool_id(self, stdio_server_config):
+        """③ 실행 구간 로그에 request_id/tool_id가 실린다 (FR-01)."""
+        from src.infrastructure.mcp.tool_adapter import MCPToolAdapter
+
+        adapter = MCPToolAdapter(
+            name="test_server_read_file",
+            description="Read a file",
+            server_config=stdio_server_config,
+            mcp_tool_name="read_file",
+            request_id="req-diag-001",
+            tool_id="mcp:srv-uuid:read_file",
+        )
+
+        mock_item = MagicMock()
+        mock_item.text = "ok"
+        mock_result = MagicMock()
+        mock_result.content = [mock_item]
+        mock_session = AsyncMock()
+        mock_session.call_tool = AsyncMock(return_value=mock_result)
+
+        with patch(
+            "src.infrastructure.mcp.tool_adapter.MCPClientFactory.create_session"
+        ) as mock_ctx, patch(
+            "src.infrastructure.mcp.tool_adapter.logger"
+        ) as mock_logger:
+            mock_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_ctx.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            await adapter._arun(arguments={})
+
+        started = [c for c in mock_logger.info.call_args_list
+                   if "execution started" in c.args[0]]
+        assert started, "실행 시작 로그가 없다"
+        kwargs = started[0].kwargs
+        assert kwargs["request_id"] == "req-diag-001"
+        assert kwargs["tool_id"] == "mcp:srv-uuid:read_file"
+        assert kwargs["tool"] == "read_file"
+
+    @pytest.mark.asyncio
+    async def test_arun_failure_log_carries_request_id_and_tool_id(
+        self, stdio_server_config
+    ):
+        """실패 경로에서도 추적 필드가 유지된다 (LOG-001: 스택 트레이스 동반)."""
+        from src.infrastructure.mcp.tool_adapter import MCPToolAdapter
+
+        adapter = MCPToolAdapter(
+            name="test_server_read_file",
+            description="Read a file",
+            server_config=stdio_server_config,
+            mcp_tool_name="read_file",
+            request_id="req-diag-002",
+            tool_id="mcp_srv-uuid",
+        )
+
+        with patch(
+            "src.infrastructure.mcp.tool_adapter.MCPClientFactory.create_session"
+        ) as mock_ctx, patch(
+            "src.infrastructure.mcp.tool_adapter.logger"
+        ) as mock_logger:
+            mock_ctx.return_value.__aenter__ = AsyncMock(
+                side_effect=ConnectionError("boom")
+            )
+            mock_ctx.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            with pytest.raises(ConnectionError):
+                await adapter._arun()
+
+        assert mock_logger.error.called
+        kwargs = mock_logger.error.call_args.kwargs
+        assert kwargs["request_id"] == "req-diag-002"
+        assert kwargs["tool_id"] == "mcp_srv-uuid"
+        assert "exception" in kwargs
+
+    @pytest.mark.asyncio
+    async def test_arun_passes_request_id_to_session_factory(self, stdio_server_config):
+        """G-03: ③ 실행 경로의 세션 로그도 같은 request_id로 이어져야 한다."""
+        from src.infrastructure.mcp.tool_adapter import MCPToolAdapter
+
+        adapter = MCPToolAdapter(
+            name="t", description="d",
+            server_config=stdio_server_config, mcp_tool_name="read_file",
+            request_id="req-chain-001", tool_id="mcp:srv:read_file",
+        )
+        mock_result = MagicMock()
+        mock_result.content = []
+        mock_session = AsyncMock()
+        mock_session.call_tool = AsyncMock(return_value=mock_result)
+
+        with patch(
+            "src.infrastructure.mcp.tool_adapter.MCPClientFactory.create_session"
+        ) as mock_ctx:
+            mock_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_ctx.return_value.__aexit__ = AsyncMock(return_value=None)
+            await adapter._arun(arguments={})
+
+        assert "req-chain-001" in mock_ctx.call_args.args, (
+            "create_session에 request_id가 전달되지 않아 로그 체인이 끊긴다"
+        )

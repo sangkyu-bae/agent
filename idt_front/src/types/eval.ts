@@ -52,6 +52,9 @@ export interface EvalRun {
   summary: Record<string, number>;
   error_message: string | null;
   config: Record<string, unknown>;
+  /** agent-model-benchmark: 스윕 소속 식별. 단독 실행이면 null (목록에선 제외됨) */
+  sweep_id?: string | null;
+  llm_model_id?: string | null;
 }
 
 export interface EvalResultItem {

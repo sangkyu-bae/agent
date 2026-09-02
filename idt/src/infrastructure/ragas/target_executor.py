@@ -8,7 +8,8 @@
 컨텍스트 텍스트에 부분 포함되면 해당 순위를 관련 문서로 간주한다
 (ID 배관 없이 동작하는 v1 근사 — 코드 주석으로 계약 고정).
 """
-from typing import Awaitable, Callable
+from dataclasses import dataclass, field
+from typing import Protocol
 
 from langchain_core.prompts import ChatPromptTemplate
 from qdrant_client import AsyncQdrantClient
@@ -16,15 +17,43 @@ from qdrant_client import AsyncQdrantClient
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.domain.ragas.interfaces import TargetExecutorInterface
 from src.domain.ragas.policies import RETRIEVAL_RANK_METRICS
-from src.domain.ragas.value_objects import EvalConfig, TestCase
+from src.domain.ragas.value_objects import EvalConfig, TargetExecution, TestCase
 from src.domain.vector.interfaces import EmbeddingInterface
 from src.infrastructure.ragas.retrieval_metric_calculator import (
     RetrievalMetricCalculator,
 )
 from src.infrastructure.retriever.qdrant_retriever import QdrantRetriever
 
-# (agent_id, question, user_id, request_id) -> answer
-AgentRunner = Callable[[str, str, str, str], Awaitable[str]]
+@dataclass(frozen=True)
+class AgentRunOutcome:
+    """헤드리스 에이전트 실행 1회의 결과.
+
+    agent-model-benchmark: 기존에는 answer(str)만 돌려줬다. 스윕은 도구 F1과
+    비용·지연을 회수해야 하므로 tools_used와 ai_run_id가 함께 올라와야 한다.
+    """
+
+    answer: str
+    tools_used: list[str] = field(default_factory=list)
+    ai_run_id: str | None = None
+
+
+class AgentRunner(Protocol):
+    """헤드리스 에이전트 실행기 (main.py의 _run_agent_headless가 구현).
+
+    오버라이드 인자는 키워드 전용 + 기본값 None — 기존 호출 형태를 깨지 않는다.
+    """
+
+    async def __call__(
+        self,
+        agent_id: str,
+        question: str,
+        user_id: str,
+        request_id: str,
+        *,
+        llm_model_id_override: str | None = None,
+        temperature_override: float | None = None,
+        persist_conversation: bool = True,
+    ) -> AgentRunOutcome: ...
 
 _RAG_PROMPT = ChatPromptTemplate.from_messages([
     (
@@ -58,19 +87,19 @@ class DefaultTargetExecutor(TargetExecutorInterface):
         case: TestCase,
         user_id: str | None,
         request_id: str,
-    ) -> tuple[str, list[str], dict[str, float]]:
+    ) -> TargetExecution:
         if target_type == "agent":
             return await self._run_agent(config, case, user_id, request_id)
 
         contexts = await self._retrieve(config, case.question)
         if target_type == "retrieval":
             extra = self._rank_scores(config, contexts, case.expected_contexts)
-            return "", contexts, extra
+            return TargetExecution(answer="", contexts=contexts, extra_scores=extra)
 
         answer = await self._generate_answer(
             case.question, contexts, config.llm_model
         )
-        return answer, contexts, {}
+        return TargetExecution(answer=answer, contexts=contexts)
 
     # ── agent ───────────────────────────────────────────────────────
 
@@ -80,15 +109,28 @@ class DefaultTargetExecutor(TargetExecutorInterface):
         case: TestCase,
         user_id: str | None,
         request_id: str,
-    ) -> tuple[str, list[str], dict[str, float]]:
+    ) -> TargetExecution:
         if not config.agent_id:
             raise ValueError("agent 대상 평가에는 agent_id가 필요합니다")
         if not user_id:
             raise ValueError("agent 대상 평가에는 실행 사용자가 필요합니다")
-        answer = await self._agent_runner(
-            config.agent_id, case.question, user_id, request_id
+        # agent-model-benchmark D1/D2/D9: 스윕이 지정한 모델·temperature로 실행하고,
+        # 평가 실행은 대화 이력을 남기지 않는다. 미지정 시 기존 동작 그대로.
+        outcome = await self._agent_runner(
+            config.agent_id,
+            case.question,
+            user_id,
+            request_id,
+            llm_model_id_override=config.llm_model_id_override,
+            temperature_override=config.temperature_override,
+            persist_conversation=config.persist_conversation,
         )
-        return answer, [], {}
+        return TargetExecution(
+            answer=outcome.answer,
+            contexts=[],
+            tools_used=outcome.tools_used,
+            ai_run_id=outcome.ai_run_id,
+        )
 
     # ── rag / retrieval ────────────────────────────────────────────
 

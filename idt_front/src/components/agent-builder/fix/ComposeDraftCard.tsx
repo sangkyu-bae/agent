@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { ComposeAgentDraftResponse } from '@/types/agentComposer';
+import { isMcpToolId, mcpToolLabel } from '@/utils/mcpToolId';
 
 interface ComposeDraftCardProps {
   draft: ComposeAgentDraftResponse;
@@ -84,8 +85,8 @@ const ComposeDraftCard = ({
                 key={id}
                 className="flex items-center gap-1 rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-[11.5px] text-zinc-600"
               >
-                {id}
-                {id.startsWith('mcp_') && (
+                {mcpToolLabel(id)}
+                {isMcpToolId(id) && (
                   <span className="rounded bg-sky-100 px-1 py-px text-[9.5px] font-semibold text-sky-600">
                     MCP
                   </span>

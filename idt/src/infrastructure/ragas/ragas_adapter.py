@@ -23,6 +23,7 @@ class RagasEvaluatorAdapter(EvaluatorInterface):
 
     def __init__(self, llm_model: str = "gpt-4o-mini") -> None:
         self._logger = get_logger(__name__)
+        # 기본 judge 모델. evaluate(judge_model=...)로 실행별 재정의 가능 (D4).
         self._llm_model = llm_model
 
     async def evaluate(
@@ -33,16 +34,23 @@ class RagasEvaluatorAdapter(EvaluatorInterface):
         ground_truth: str | None,
         metrics: list[str],
         request_id: str,
+        judge_model: str | None = None,
     ) -> dict[str, float]:
+        effective_judge = judge_model or self._llm_model
         self._logger.info(
             "RAGAS evaluate start",
             request_id=request_id,
             metrics=metrics,
+            judge_model=effective_judge,
         )
         try:
             ragas_metrics = self._build_metrics(metrics)
             if not ragas_metrics:
                 return {}
+            # agent-model-benchmark D4: judge를 각 metric에 실제로 주입한다.
+            # 주입하지 않으면 RAGAS가 자체 기본 LLM을 쓰기 때문에 화면에서 고른
+            # judge가 무시되고, 스윕 간 채점 기준이 조용히 달라진다.
+            self._attach_judge(ragas_metrics, effective_judge, request_id)
 
             result = await asyncio.get_event_loop().run_in_executor(
                 None,
@@ -64,6 +72,34 @@ class RagasEvaluatorAdapter(EvaluatorInterface):
         except Exception:
             self._logger.exception("RAGAS evaluate failed", request_id=request_id)
             raise
+
+    def _attach_judge(
+        self, ragas_metrics: list, judge_model: str, request_id: str
+    ) -> None:
+        """각 RAGAS metric에 채점용 LLM을 주입한다 (D4).
+
+        embedding 기반 metric(SemanticSimilarity 등)은 llm 속성이 없어 건너뛴다.
+        주입 실패는 채점을 막지 않는다 — RAGAS 기본 judge로 낙하하고 경고만 남긴다.
+        """
+        try:
+            from langchain_openai import ChatOpenAI
+            from ragas.llms import LangchainLLMWrapper
+
+            wrapped = LangchainLLMWrapper(
+                ChatOpenAI(model=judge_model, temperature=0)
+            )
+        except Exception as e:
+            self._logger.warning(
+                "Judge LLM 주입 실패 — RAGAS 기본 judge로 진행",
+                request_id=request_id,
+                judge_model=judge_model,
+                exception=e,
+            )
+            return
+
+        for metric in ragas_metrics:
+            if hasattr(metric, "llm"):
+                metric.llm = wrapped
 
     def _build_metrics(self, metric_names: list[str]) -> list:
         from ragas.metrics import (

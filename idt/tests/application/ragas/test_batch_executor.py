@@ -7,7 +7,12 @@ import pytest
 
 from src.application.ragas.batch_executor import BatchEvalExecutor
 from src.domain.ragas.entities import EvaluationRun
-from src.domain.ragas.value_objects import EvalConfig, MetricType, TestCase
+from src.domain.ragas.value_objects import (
+    EvalConfig,
+    MetricType,
+    TargetExecution,
+    TestCase,
+)
 
 
 def _run(status="pending"):
@@ -29,9 +34,18 @@ def _store(run=None):
     return store
 
 
-def _target(answer="답", contexts=("c1",), extra=None):
+def _target(answer="답", contexts=("c1",), extra=None, tools_used=None, ai_run_id=None):
+    """agent-model-benchmark: execute()가 튜플 대신 TargetExecution을 돌려준다."""
     target = MagicMock()
-    target.execute = AsyncMock(return_value=(answer, list(contexts), extra or {}))
+    target.execute = AsyncMock(
+        return_value=TargetExecution(
+            answer=answer,
+            contexts=list(contexts),
+            extra_scores=extra or {},
+            tools_used=tools_used,
+            ai_run_id=ai_run_id,
+        )
+    )
     return target
 
 

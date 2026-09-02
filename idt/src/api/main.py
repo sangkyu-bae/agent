@@ -479,6 +479,12 @@ from src.api.routes.ragas_router import (
     get_eval_result_use_case,
     get_testset_use_case,
     get_testset_generate_use_case,
+    # agent-model-benchmark module-5
+    get_create_sweep_use_case,
+    get_estimate_sweep_use_case,
+    get_sweep_detail_use_case,
+    get_list_sweeps_use_case,
+    get_delete_sweep_use_case,
 )
 from src.application.ragas.batch_eval_use_case import BatchEvaluationUseCase
 from src.application.ragas.realtime_eval_use_case import RealtimeEvaluationUseCase
@@ -2664,9 +2670,22 @@ def create_agent_builder_factories():
         folder_threshold=settings.wiki_folder_mode_threshold,
     )
 
+    # MCP 워커(tool_id="mcp_{uuid}") 실행 의존.
+    # ToolFactory/DocumentConversionAdapter는 앱 싱글톤이라 per-request 세션을
+    # 들 수 없다 — 매 호출마다 세션을 여는 세션 스코프 저장소를 공유한다.
+    _mcp_tool_loader = MCPToolLoader(logger=app_logger)
+    _mcp_runtime_repo = SessionScopedMcpServerRepository(
+        session_factory=get_session_factory(),
+        logger=app_logger,
+        cipher=_mcp_cipher(),
+    )
+
     tool_factory = ToolFactory(
         logger=app_logger,
         hybrid_search_use_case_getter=get_configured_hybrid_search_use_case,
+        # MCP 서버를 워커로 붙인 에이전트 실행 경로.
+        mcp_tool_loader=_mcp_tool_loader,
+        mcp_repository=_mcp_runtime_repo,
         tavily_api_key=os.environ.get("TAVILY_API_KEY"),
         tracker=run_tracker,                # ★ M4: RAG retrieval 영속화
         run_observability_config=_obs_config,
@@ -2694,12 +2713,8 @@ def create_agent_builder_factories():
         session_factory=get_session_factory(), logger=app_logger,
     )
     _dt_conversion_adapter = DocumentConversionAdapter(
-        mcp_tool_loader=MCPToolLoader(logger=app_logger),
-        mcp_repository=SessionScopedMcpServerRepository(
-            session_factory=get_session_factory(),
-            logger=app_logger,
-            cipher=_mcp_cipher(),
-        ),
+        mcp_tool_loader=_mcp_tool_loader,
+        mcp_repository=_mcp_runtime_repo,
         logger=app_logger,
     )
     _dt_composer = DocumentComposer(
@@ -3356,7 +3371,10 @@ def create_ragas_factories(build_run_agent_uc=None):
         parse_testset_file,
     )
     from src.infrastructure.ragas.run_store import SessionScopedEvalRunStore
-    from src.infrastructure.ragas.target_executor import DefaultTargetExecutor
+    from src.infrastructure.ragas.target_executor import (
+        AgentRunOutcome,
+        DefaultTargetExecutor,
+    )
 
     app_logger = get_app_logger()
     evaluator = RagasEvaluatorAdapter()
@@ -3369,8 +3387,17 @@ def create_ragas_factories(build_run_agent_uc=None):
     eval_embedding = OpenAIEmbedding(model_name=settings.openai_embedding_model)
 
     async def _run_agent_headless(
-        agent_id: str, question: str, user_id: str, request_id: str
-    ) -> str:
+        agent_id: str,
+        question: str,
+        user_id: str,
+        request_id: str,
+        *,
+        llm_model_id_override: str | None = None,
+        temperature_override: float | None = None,
+        persist_conversation: bool = True,
+    ) -> AgentRunOutcome:
+        """agent-model-benchmark module-4: 오버라이드를 실행 경로로 전달하고,
+        도구 호출·관측 run_id를 함께 회수한다 (D1/D2/D6/D10)."""
         if build_run_agent_uc is None:
             raise ValueError("agent 대상 평가 실행기가 구성되지 않았습니다")
         async with session_factory() as session:
@@ -3378,11 +3405,21 @@ def create_ragas_factories(build_run_agent_uc=None):
                 run_uc = build_run_agent_uc(session)
                 resp = await run_uc.execute(
                     agent_id,
-                    RunAgentRequest(query=question, user_id=user_id),
+                    RunAgentRequest(
+                        query=question,
+                        user_id=user_id,
+                        llm_model_id_override=llm_model_id_override,
+                        temperature_override=temperature_override,
+                        persist_conversation=persist_conversation,
+                    ),
                     request_id,
                     viewer_user_id=user_id,
                 )
-                return resp.answer
+                return AgentRunOutcome(
+                    answer=resp.answer,
+                    tools_used=list(resp.tools_used),
+                    ai_run_id=resp.run_id,
+                )
 
     batch_executor = BatchEvalExecutor(
         store=SessionScopedEvalRunStore(session_factory, app_logger),
@@ -3442,9 +3479,117 @@ def create_ragas_factories(build_run_agent_uc=None):
     def generate_factory():
         return generate_uc
 
+    # ── agent-model-benchmark module-5: 모델 스윕 배선 ────────────────
+    from src.application.eval_sweep.sweep_executor import SweepExecutor
+    from src.application.eval_sweep.use_cases import (
+        CreateSweepUseCase,
+        DeleteSweepUseCase,
+        EstimateSweepCostUseCase,
+        GetSweepDetailUseCase,
+        ListSweepsUseCase,
+    )
+    from src.infrastructure.eval_sweep.repository import SweepRepository
+
+    def _make_sweep_repo(session: AsyncSession):
+        return SweepRepository(session=session, logger=app_logger)
+
+    def _make_llm_model_repo(session: AsyncSession):
+        return LlmModelRepository(session=session, logger=app_logger)
+
+    async def _agent_token_stats(agent_id: str, request_id: str) -> dict:
+        """비용 추정용 실측 평균 토큰 (§4.2 basis).
+
+        해당 에이전트의 최근 성공 실행에서 평균을 낸다. 이력이 없으면 빈 dict를
+        돌려 UseCase가 상수 fallback을 쓰게 한다 — 추정 실패로 막지 않는다.
+        """
+        from sqlalchemy import func as sa_func
+        from src.infrastructure.persistence.models.agent_run import AgentRunModel
+
+        try:
+            async with session_factory() as session:
+                stmt = (
+                    select(
+                        sa_func.avg(AgentRunModel.prompt_tokens),
+                        sa_func.avg(AgentRunModel.completion_tokens),
+                        sa_func.count(AgentRunModel.id),
+                    )
+                    .where(
+                        AgentRunModel.agent_id == agent_id,
+                        AgentRunModel.status == "SUCCESS",
+                    )
+                )
+                row = (await session.execute(stmt)).one_or_none()
+        except Exception as e:
+            app_logger.warning(
+                "토큰 실측 조회 실패 — 상수 fallback 사용",
+                request_id=request_id,
+                agent_id=agent_id,
+                exception=e,
+            )
+            return {}
+
+        if row is None or not row[2]:
+            return {}
+        return {
+            "avg_prompt_tokens": int(row[0] or 0),
+            "avg_completion_tokens": int(row[1] or 0),
+            "sample_size": int(row[2]),
+            "source": "ai_run_recent_avg",
+        }
+
+    sweep_executor = SweepExecutor(
+        batch_executor=batch_executor,
+        sweep_repo_builder=_make_sweep_repo,
+        session_factory=session_factory,
+        logger=app_logger,
+    )
+
+    def _estimator(session: AsyncSession):
+        return EstimateSweepCostUseCase(
+            eval_repo=_make_repo(session),
+            llm_model_repo=_make_llm_model_repo(session),
+            token_stats_provider=_agent_token_stats,
+            logger=app_logger,
+        )
+
+    def estimate_sweep_factory(session: AsyncSession = Depends(get_session)):
+        return _estimator(session)
+
+    def create_sweep_factory(session: AsyncSession = Depends(get_session)):
+        return CreateSweepUseCase(
+            sweep_repo=_make_sweep_repo(session),
+            eval_repo=_make_repo(session),
+            llm_model_repo=_make_llm_model_repo(session),
+            executor=sweep_executor,
+            estimator=_estimator(session),
+            logger=app_logger,
+        )
+
+    def sweep_detail_factory(session: AsyncSession = Depends(get_session)):
+        return GetSweepDetailUseCase(
+            sweep_repo=_make_sweep_repo(session),
+            llm_model_repo=_make_llm_model_repo(session),
+            logger=app_logger,
+            # G-2: 실험 조건(에이전트명·테스트셋명·케이스 수) 표시용
+            agent_repo=AgentDefinitionRepository(session=session, logger=app_logger),
+            eval_repo=_make_repo(session),
+        )
+
+    def list_sweeps_factory(session: AsyncSession = Depends(get_session)):
+        return ListSweepsUseCase(
+            sweep_repo=_make_sweep_repo(session), logger=app_logger
+        )
+
+    def delete_sweep_factory(session: AsyncSession = Depends(get_session)):
+        return DeleteSweepUseCase(
+            sweep_repo=_make_sweep_repo(session), logger=app_logger
+        )
+
     return (
         batch_factory, realtime_factory, result_factory,
         testset_factory, admin_eval_factory, generate_factory,
+        create_sweep_factory, estimate_sweep_factory,
+        sweep_detail_factory, list_sweeps_factory, delete_sweep_factory,
     )
 
 
@@ -4205,11 +4350,28 @@ def create_mcp_registry_factories():
     def _make_repo(session: AsyncSession):
         return MCPServerRepository(session=session, logger=app_logger, cipher=_mcp_cipher())
 
+    def _make_sync_uc(session: AsyncSession):
+        """mcp-tool-auto-sync Design Ref: §11.4 — DB-001 준수.
+
+        Depends(get_session)가 준 **동일 세션 인스턴스**를 등록/수정 UseCase와
+        공유한다. repository 인스턴스가 2개인 것은 무방하고, 금지되는 것은
+        세션이 2개인 경우다(요청 1건 = 세션 1개 = 트랜잭션 1건).
+        """
+        return SyncMcpToolsUseCase(
+            tool_catalog_repo=ToolCatalogRepository(session=session, logger=app_logger),
+            mcp_server_repo=_make_repo(session),
+            mcp_tool_loader=MCPToolLoader(logger=app_logger),
+            logger=app_logger,
+        )
+
     def register_factory(session: AsyncSession = Depends(get_session)):
         return RegisterMCPServerUseCase(
             repository=_make_repo(session),
             logger=app_logger,
             secrets_enabled=secrets_enabled,
+            # mcp-tool-auto-sync FR-01: 등록 직후 도구 카탈로그 자동 반영
+            sync_use_case=_make_sync_uc(session),
+            sync_timeout_sec=settings.mcp_tool_sync_timeout_sec,
         )
 
     def list_factory(session: AsyncSession = Depends(get_session)):
@@ -4220,6 +4382,9 @@ def create_mcp_registry_factories():
             repository=_make_repo(session),
             logger=app_logger,
             secrets_enabled=secrets_enabled,
+            # mcp-tool-auto-sync FR-02/FR-08: 수정 직후 반영(비활성화 연동 포함)
+            sync_use_case=_make_sync_uc(session),
+            sync_timeout_sec=settings.mcp_tool_sync_timeout_sec,
         )
 
     def delete_factory(session: AsyncSession = Depends(get_session)):
@@ -4477,6 +4642,14 @@ def create_middleware_agent_factories():
     tool_factory = ToolFactory(
         logger=app_logger,
         tavily_api_key=os.environ.get("TAVILY_API_KEY"),
+        # RunMiddlewareAgentUseCase도 create_async를 저장소 없이 호출한다 —
+        # 에이전트 빌더와 동일하게 세션 스코프 저장소를 주입한다.
+        mcp_tool_loader=MCPToolLoader(logger=app_logger),
+        mcp_repository=SessionScopedMcpServerRepository(
+            session_factory=get_session_factory(),
+            logger=app_logger,
+            cipher=_mcp_cipher(),
+        ),
     )
     middleware_builder = MiddlewareBuilder(logger=app_logger)
 
@@ -5331,6 +5504,8 @@ def create_app() -> FastAPI:
         _ragas_batch_f, _ragas_realtime_f,
         _ragas_result_f, _ragas_testset_f, _ragas_admin_f,
         _ragas_generate_f,
+        _sweep_create_f, _sweep_estimate_f,
+        _sweep_detail_f, _sweep_list_f, _sweep_delete_f,
     ) = create_ragas_factories(_build_run_agent_uc)
     app.dependency_overrides[get_batch_eval_use_case] = _ragas_batch_f
     app.dependency_overrides[get_realtime_eval_use_case] = _ragas_realtime_f
@@ -5338,6 +5513,12 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_testset_use_case] = _ragas_testset_f
     app.dependency_overrides[get_testset_generate_use_case] = _ragas_generate_f
     app.dependency_overrides[get_admin_eval_use_case] = _ragas_admin_f
+    # agent-model-benchmark module-5: 모델 스윕
+    app.dependency_overrides[get_create_sweep_use_case] = _sweep_create_f
+    app.dependency_overrides[get_estimate_sweep_use_case] = _sweep_estimate_f
+    app.dependency_overrides[get_sweep_detail_use_case] = _sweep_detail_f
+    app.dependency_overrides[get_list_sweeps_use_case] = _sweep_list_f
+    app.dependency_overrides[get_delete_sweep_use_case] = _sweep_delete_f
 
     # Include routers
     app.include_router(document_router)

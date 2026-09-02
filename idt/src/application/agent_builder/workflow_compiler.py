@@ -77,6 +77,8 @@ from src.domain.llm.interfaces import LLMFactoryInterface
 from src.domain.llm_model.entity import LlmModel
 from src.domain.llm_model.interfaces import LlmModelRepositoryInterface
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
+from src.domain.mcp.exceptions import McpWiringError
+from src.domain.tool_catalog.mcp_tool_id import parse_mcp_tool_id
 from src.infrastructure.agent_builder.tool_factory import ToolFactory
 
 if TYPE_CHECKING:
@@ -284,6 +286,9 @@ class WorkflowCompiler:
             function_node_ids: set[str] = set()
             # analysis-chart-router: analysis 카테고리 워커는 직후 chart_router로 보낸다.
             analysis_worker_ids: set[str] = set()
+            # Design Ref: fix-mcp-tool-call-not-reaching-server §6.2 —
+            # 도구 생성에 실패해 그래프에서 제외된 워커. supervisor 목록에서도 뺀다.
+            failed_worker_ids: set[str] = set()
 
             for worker_def in workflow.workers:
                 if worker_def.worker_type == "sub_agent":
@@ -363,16 +368,42 @@ class WorkflowCompiler:
                     analysis_worker_ids.add(worker_def.worker_id)
                     continue
 
-                if worker_def.tool_id.startswith("mcp_"):
-                    tool = await self._tool_factory.create_async(
-                        worker_def.tool_id, request_id,
-                        tool_config=worker_def.tool_config,
-                    )
+                # Design Ref: fix-mcp-tool-call-not-reaching-server §6.1 E6 —
+                # 레거시 mcp_{server} 워커는 서버의 도구 전체를 받아야 한다.
+                # 첫 도구만 넘기면 나머지는 LLM 도구 목록에 없어 호출이 성립하지
+                # 않고 MCP 서버에 요청이 가지 않는다(module-1 실측).
+                if parse_mcp_tool_id(worker_def.tool_id) is not None:
+                    # Design Ref: §6.2 — MCP 서버 1개 장애가 에이전트 전체를
+                    # 죽이지 않도록 워커 단위로 격리한다. tool_registry가 서버
+                    # 단위로 쓰는 격리 철학을 워커 레벨에 맞춘 것.
+                    # 배선 오류(E1/E2)는 격리 대상이 아니다 — 조용한 실패 재발 방지.
+                    try:
+                        worker_tools = await self._tool_factory.create_all_async(
+                            worker_def.tool_id, request_id,
+                            tool_config=worker_def.tool_config,
+                        )
+                    except McpWiringError:
+                        # Design Ref: §6.2 — 배선 누락은 개발자 실수다.
+                        # 격리하면 워커만 조용히 사라져 이 사이클의 실패 모드가
+                        # 그대로 재발한다. 즉시 드러나도록 전파한다.
+                        raise
+                    except Exception as e:
+                        self._logger.error(
+                            "MCP worker tool creation failed",
+                            request_id=request_id,
+                            worker_id=worker_def.worker_id,
+                            tool_id=worker_def.tool_id,
+                            exception=e,
+                        )
+                        failed_worker_ids.add(worker_def.worker_id)
+                        continue
                 else:
-                    tool = self._tool_factory.create(
+                    worker_tools = [self._tool_factory.create(
                         worker_def.tool_id, request_id,
                         tool_config=worker_def.tool_config,
-                    )
+                    )]
+                # search 노드·wiki 분기는 단일 도구 계약을 유지한다.
+                tool = worker_tools[0]
 
                 if category == "search":
                     # deep-search-pipeline FR-13: 모드에 따라 legacy/deep 팩토리 선택.
@@ -423,7 +454,7 @@ class WorkflowCompiler:
                             {"system_prompt": datetime_block} if datetime_block else {}
                         )
                         worker_agent = create_agent(
-                            model=llm, tools=[tool], name=worker_def.worker_id,
+                            model=llm, tools=worker_tools, name=worker_def.worker_id,
                             middleware=_instantiate(middleware_plan),
                             **worker_kwargs,
                         )
@@ -431,7 +462,16 @@ class WorkflowCompiler:
 
             # final-answer-node D2: answer_agent 가상 워커 방식 제거 —
             # 최종 답변은 supervisor의 선택이 아닌 라우팅(route_to_worker_or_final)이 보장.
-            workers_for_supervisor = list(workflow.workers)
+            # Design Ref: §6.2 — 도구 생성에 실패한 워커는 supervisor가 라우팅할 수
+            # 없다. 전부 실패했다면 빈 그래프를 만드는 대신 실패시킨다(U14).
+            workers_for_supervisor = [
+                w for w in workflow.workers if w.worker_id not in failed_worker_ids
+            ]
+            if workflow.workers and not workers_for_supervisor:
+                raise ValueError(
+                    "All workers failed tool creation — cannot compile workflow "
+                    f"(failed: {sorted(failed_worker_ids)})"
+                )
 
             # 첨부/시각화 라우팅: analysis 워커가 있고 외부 주입 훅이 없을(기본) 때만
             # AttachmentRoutingHooks로 대체. 명시적 주입 훅은 존중(테스트/확장).

@@ -15,6 +15,10 @@ dependencies = [
     "langchain-openai>=0.3.0",
     "langchain-community>=0.3.0",
     "langgraph>=0.2.0",
+    # uuid-utils 0.17.0 네이티브 확장(_uuid_utils.pyd)이 Windows Smart App Control
+    # (평판 미확보 미서명 바이너리)에 차단되어 langchain-core import 가 실패한다.
+    # 평판이 확보된 0.16.x 로 고정한다. (langchain-core/langsmith 요구: >=0.12.0,<1.0)
+    "uuid-utils>=0.12.0,<0.17.0",
     # Database
     "sqlalchemy>=2.0.0",
     "asyncmy>=0.2.9",
@@ -72,6 +76,16 @@ dev = [
     "pytest-cov>=4.1.0",
     "ruff>=0.2.0",
     "mypy>=1.8.0",
+]
+# RAGAS 평가 (ragas_adapter.py / agent-model-benchmark 품질 축).
+# 임포트가 전부 함수 내부라 미설치 상태에서도 앱은 기동하며, 품질 지표만 비게 된다.
+#
+# ⚠️ base 의존성에 넣지 않은 이유: ragas 0.4.x 는 openai<3 을 요구해
+#    현재 고정된 openai 3.x 를 메이저 다운그레이드시킨다. langchain-openai 의
+#    허용 범위(>=2.45,<4) 안이긴 하나 LLM 스택 전체에 영향이 가므로,
+#    품질 축을 실측할 환경에서만 `uv pip install -e ".[eval]"` 로 켠다.
+eval = [
+    "ragas>=0.2.0",
 ]
 
 [build-system]

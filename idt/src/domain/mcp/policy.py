@@ -7,6 +7,7 @@ domain 레이어 — 외부 의존성 없음.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
@@ -19,7 +20,12 @@ class MCPConnectionPolicy:
     """MCP 연결 정책."""
 
     MAX_SERVERS = 20
-    MAX_TOOL_NAME_LENGTH = 100
+    # Design Ref: fix-mcp-tool-call-not-reaching-server §3.2 —
+    # OpenAI function name 상한과 동일하게 맞춘다. 이전 값(100)은 LLM 등록 단계에서
+    # 400을 유발했다.
+    MAX_TOOL_NAME_LENGTH = 64
+    # 초과분을 잘라낸 뒤 붙이는 해시 접미사 길이("_" 포함 5자).
+    _HASH_SUFFIX_LEN = 4
 
     @staticmethod
     def validate_server_config(config: MCPServerConfig) -> bool:
@@ -65,6 +71,35 @@ class MCPConnectionPolicy:
         if len(sanitized) > MCPConnectionPolicy.MAX_TOOL_NAME_LENGTH:
             sanitized = sanitized[: MCPConnectionPolicy.MAX_TOOL_NAME_LENGTH]
         return sanitized
+
+    @staticmethod
+    def build_tool_name(name: str) -> str:
+        """LLM에 노출할 Tool 이름을 만든다 — 정규화 + 길이 상한 + 충돌 회피.
+
+        Design Ref: fix-mcp-tool-call-not-reaching-server §3.2
+
+        단순 절단(sanitize_tool_name)은 접두부가 긴 MCP 도구명에서 위험하다.
+        `mcp_{uuid}_` 접두부만 41자로 고정이라, 도구명이 길면 서로 다른 도구가
+        같은 이름으로 잘려 LangChain 도구 목록에서 하나가 가려진다 — 호출은
+        성립하지 않고 MCP 서버에는 아무 요청도 가지 않는다.
+
+        상한을 넘으면 원본 전체의 해시를 접미사로 붙여 결정적으로 갈라낸다.
+
+        Args:
+            name: 원본 Tool 이름
+
+        Returns:
+            OpenAI function name 패턴을 만족하는 MAX_TOOL_NAME_LENGTH 이하의 이름
+        """
+        sanitized = name.replace("-", "_").replace(" ", "_").lower()
+        limit = MCPConnectionPolicy.MAX_TOOL_NAME_LENGTH
+        if len(sanitized) <= limit:
+            return sanitized
+
+        suffix_len = MCPConnectionPolicy._HASH_SUFFIX_LEN
+        digest = hashlib.sha1(sanitized.encode("utf-8")).hexdigest()[:suffix_len]
+        head = sanitized[: limit - suffix_len - 1]
+        return f"{head}_{digest}"
 
 
 class MCPRetryPolicy(BaseModel):

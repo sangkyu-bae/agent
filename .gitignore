@@ -74,3 +74,6 @@ idt/test-docs/
 # 문서 이미지 (로컬 전용)
 **/docs/img/
 
+
+# 소개/포트폴리오 자료 (로컬 전용, 커밋 금지)
+docs/intro/

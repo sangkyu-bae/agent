@@ -25,9 +25,11 @@ class SyncMcpToolsUseCase:
         self._logger.info("SyncMcpToolsUseCase start", request_id=request_id)
         try:
             if mcp_server_id:
-                servers = [await self._mcp_server_repo.find_by_id(mcp_server_id)]
+                servers = [
+                    await self._mcp_server_repo.find_by_id(mcp_server_id, request_id)
+                ]
             else:
-                servers = await self._mcp_server_repo.find_active_all(request_id)
+                servers = await self._mcp_server_repo.find_all_active(request_id)
 
             count = 0
             for server in servers:
@@ -39,14 +41,17 @@ class SyncMcpToolsUseCase:
                     )
                     continue
 
-                tools = await self._mcp_tool_loader.list_tools(server)
+                tools = await self._mcp_tool_loader.load(server, request_id)
                 for tool in tools:
+                    # 어댑터의 .name은 'mcp_{uuid}_{tool}'로 접두사가 붙는다.
+                    # 카탈로그 계약은 원본 이름 기준이다 — mcp:{server_id}:{tool}.
+                    tool_name = tool.mcp_tool_name
                     entry = ToolCatalogEntry(
                         id=str(uuid.uuid4()),
-                        tool_id=f"mcp:{server.id}:{tool.name}",
+                        tool_id=f"mcp:{server.id}:{tool_name}",
                         source="mcp",
                         mcp_server_id=server.id,
-                        name=tool.name,
+                        name=tool_name,
                         description=tool.description or "",
                         is_active=True,
                     )

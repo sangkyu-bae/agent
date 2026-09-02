@@ -10,9 +10,9 @@
     "rejections": 0,
     "modifications": 0,
     "destructiveBlocked": 0,
-    "checkpointsCreated": 9,
+    "checkpointsCreated": 43,
     "rollbacksPerformed": 0,
-    "phaseComplete": 6
+    "phaseComplete": 34
   },
   "emergencyStop": false,
   "cooldownUntil": null,

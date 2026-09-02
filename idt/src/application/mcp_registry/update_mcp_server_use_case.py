@@ -6,6 +6,7 @@ from src.application.mcp_registry.schemas import (
     UpdateMCPServerRequest,
     to_response,
 )
+from src.application.tool_catalog.sync_outcome import run_tool_sync
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.domain.mcp_registry.interfaces import MCPServerRegistryRepositoryInterface
 from src.domain.mcp_registry.policies import MCPRegistrationPolicy
@@ -19,11 +20,17 @@ class UpdateMCPServerUseCase:
         repository: MCPServerRegistryRepositoryInterface,
         logger: LoggerInterface,
         secrets_enabled: bool = True,
+        sync_use_case=None,
+        sync_timeout_sec: float = 10.0,
     ):
         self._repo = repository
         self._logger = logger
         # MCP_SECRET_KEY(암호화 키) 설정 여부. False면 시크릿 저장이 불가능하다.
         self._secrets_enabled = secrets_enabled
+        # mcp-tool-auto-sync FR-02/FR-06: SyncMcpToolsUseCase. 미주입 시 sync를
+        # 건너뛰고 기존과 동일하게 동작한다(기존 테스트 하위 호환).
+        self._sync_use_case = sync_use_case
+        self._sync_timeout_sec = sync_timeout_sec
 
     async def execute(
         self, id: str, request: UpdateMCPServerRequest, request_id: str
@@ -86,7 +93,22 @@ class UpdateMCPServerUseCase:
         )
 
         saved = await self._repo.update(existing, request_id)
-        self._logger.info(
-            "UpdateMCPServerUseCase done", request_id=request_id, id=id
+
+        # Design Ref: §2.0 — 수정 직후 도구 카탈로그 동기화(best-effort).
+        # is_active=False 수정 시 여기서 카탈로그 비활성화가 일어난다(FR-08, 원 설계 Q5).
+        tool_sync = await run_tool_sync(
+            self._sync_use_case,
+            server_id=saved.id,
+            request_id=request_id,
+            timeout_sec=self._sync_timeout_sec,
+            logger=self._logger,
         )
-        return to_response(saved)
+
+        self._logger.info(
+            "UpdateMCPServerUseCase done",
+            request_id=request_id,
+            id=id,
+            tool_sync_ok=tool_sync.ok,
+            tool_sync_count=tool_sync.synced_count,
+        )
+        return to_response(saved, tool_sync=tool_sync)

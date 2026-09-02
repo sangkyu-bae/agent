@@ -313,7 +313,7 @@ class ComposeAgentUseCase:
             )
             notes.append(f"후보에 없는 도구 제외: {', '.join(dropped)}")
 
-        mapped, mapping_changed = self._map_mcp_workers(kept, candidates_by_id)
+        mapped, mapping_changed = self._dedupe_workers(kept)
 
         clamped, cut = ComposePolicy.clamp_tool_count(
             mapped, AgentBuilderPolicy.MAX_TOOLS
@@ -330,21 +330,20 @@ class ComposeAgentUseCase:
         return final_workers, bool(dropped) or bool(cut) or mapping_changed
 
     @staticmethod
-    def _map_mcp_workers(
+    def _dedupe_workers(
         workers: list[WorkerDefinition],
-        candidates_by_id: dict[str, CandidateTool],
     ) -> tuple[list[WorkerDefinition], bool]:
-        """FR-05: mcp:{srv}:{tool} → mcp_{srv} 매핑 + 동일 tool_id 병합."""
+        """FR-05: 동일 tool_id 워커 병합.
+
+        MCP는 개별 도구 단위(`mcp:{srv}:{tool}`)를 그대로 유지한다 — 같은
+        서버라도 도구가 다르면 별개 워커다. 서버 단위로 접으면 실행 시
+        어느 도구를 바인딩할지 특정할 수 없다.
+        """
         result: list[WorkerDefinition] = []
         by_tool_id: dict[str, WorkerDefinition] = {}
         changed = False
         for w in workers:
-            target_id = w.tool_id
-            cand = candidates_by_id.get(w.tool_id)
-            if cand and cand.source == "mcp" and not cand.server_level:
-                target_id = f"mcp_{cand.mcp_server_id}"
-                changed = True
-            existing = by_tool_id.get(target_id)
+            existing = by_tool_id.get(w.tool_id)
             if existing is not None:
                 existing.description = f"{existing.description}; {w.description}"
                 if w.instruction:
@@ -356,15 +355,8 @@ class ComposeAgentUseCase:
                 existing.sort_order = min(existing.sort_order, w.sort_order)
                 changed = True
                 continue
-            mapped = WorkerDefinition(
-                tool_id=target_id,
-                worker_id=f"{target_id}_worker" if target_id != w.tool_id else w.worker_id,
-                description=w.description,
-                sort_order=w.sort_order,
-                instruction=w.instruction,
-            )
-            by_tool_id[target_id] = mapped
-            result.append(mapped)
+            by_tool_id[w.tool_id] = w
+            result.append(w)
         return result, changed
 
     # ── 응답 조립 ────────────────────────────────────────────────

@@ -27,6 +27,8 @@ class EvaluationRepository(EvaluationRepositoryInterface):
             target_type=run.target_type,
             target_id=run.target_id,
             user_id=run.user_id,
+            sweep_id=run.sweep_id,
+            llm_model_id=run.llm_model_id,
             status=run.status,
             total_cases=run.total_cases,
             config=run.config,
@@ -71,8 +73,14 @@ class EvaluationRepository(EvaluationRepositoryInterface):
         request_id: str,
         user_id: str | None = None,
     ) -> tuple[list[EvaluationRun], int]:
-        stmt = select(EvaluationRunModel)
-        count_stmt = select(func.count(EvaluationRunModel.id))
+        # agent-model-benchmark G-11: 스윕 하위 run은 '평가 실행' 목록에서 제외한다.
+        # 모델 5개짜리 스윕 1회가 목록에 5행을 밀어넣어 실제 평가 실행을 덮어버린다.
+        # 스윕은 전용 섹션(GET /sweeps)에서 보므로 여기서 빠져도 접근성 손실이 없고,
+        # 이 필터는 기능 도입 이전의 목록 의미를 그대로 복원한다.
+        stmt = select(EvaluationRunModel).where(EvaluationRunModel.sweep_id.is_(None))
+        count_stmt = select(func.count(EvaluationRunModel.id)).where(
+            EvaluationRunModel.sweep_id.is_(None)
+        )
 
         # 소유권 스코프 — NULL(레거시) 행은 일반 사용자에게 절대 미노출 (Design §2.2)
         if user_id is not None:
@@ -252,7 +260,11 @@ class EvaluationRepository(EvaluationRepositoryInterface):
         self._logger.info(
             "Dashboard stats query", request_id=request_id,
         )
-        total_stmt = select(func.count(EvaluationRunModel.id))
+        # agent-model-benchmark D8: 스윕 run은 실험이라 운영 품질 통계에서 제외한다.
+        # 섞이면 실험용 저성능 모델 때문에 평균이 왜곡된다.
+        not_sweep = EvaluationRunModel.sweep_id.is_(None)
+
+        total_stmt = select(func.count(EvaluationRunModel.id)).where(not_sweep)
         total = (await self._session.execute(total_stmt)).scalar() or 0
 
         status_stmt = (
@@ -260,6 +272,7 @@ class EvaluationRepository(EvaluationRepositoryInterface):
                 EvaluationRunModel.status,
                 func.count(EvaluationRunModel.id),
             )
+            .where(not_sweep)
             .group_by(EvaluationRunModel.status)
         )
         status_rows = (await self._session.execute(status_stmt)).all()
@@ -270,6 +283,7 @@ class EvaluationRepository(EvaluationRepositoryInterface):
                 EvaluationRunModel.target_type,
                 func.count(EvaluationRunModel.id),
             )
+            .where(not_sweep)
             .group_by(EvaluationRunModel.target_type)
         )
         tt_rows = (await self._session.execute(tt_stmt)).all()
@@ -277,7 +291,7 @@ class EvaluationRepository(EvaluationRepositoryInterface):
 
         completed_ids_stmt = (
             select(EvaluationRunModel.id)
-            .where(EvaluationRunModel.status == "completed")
+            .where(EvaluationRunModel.status == "completed", not_sweep)
         )
         metrics_stmt = (
             select(EvaluationResultModel.metrics)
@@ -290,6 +304,7 @@ class EvaluationRepository(EvaluationRepositoryInterface):
 
         recent_stmt = (
             select(EvaluationRunModel)
+            .where(not_sweep)
             .order_by(EvaluationRunModel.created_at.desc())
             .limit(recent_limit)
         )
@@ -372,6 +387,8 @@ class EvaluationRepository(EvaluationRepositoryInterface):
             target_type=model.target_type,
             target_id=model.target_id,
             user_id=model.user_id,
+            sweep_id=model.sweep_id,
+            llm_model_id=model.llm_model_id,
             status=model.status,
             total_cases=model.total_cases,
             config=model.config or {},
@@ -390,6 +407,8 @@ class EvaluationRepository(EvaluationRepositoryInterface):
             answer=model.answer,
             contexts=model.contexts or [],
             metrics=model.metrics or {},
+            ai_run_id=model.ai_run_id,
+            tools_used=model.tools_used,
             created_at=model.created_at,
         )
 
@@ -403,5 +422,7 @@ class EvaluationRepository(EvaluationRepositoryInterface):
             answer=result.answer,
             contexts=result.contexts,
             metrics=result.metrics,
+            ai_run_id=result.ai_run_id,
+            tools_used=result.tools_used,
             created_at=result.created_at,
         )

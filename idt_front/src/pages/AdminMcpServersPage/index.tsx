@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import Dropdown from '@/components/common/Dropdown';
 import {
   useMcpServers,
@@ -7,6 +7,7 @@ import {
   useDeleteMcpServer,
   useTestMcpConnection,
 } from '@/hooks/useMcpServers';
+import { useSyncMcpTools } from '@/hooks/useToolCatalog';
 import { useAuthStore } from '@/store/authStore';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import Modal from '@/components/common/Modal';
@@ -388,6 +389,47 @@ const TRANSPORT_LABEL: Record<McpTransport, string> = {
   streamable_http: 'Streamable HTTP',
 };
 
+/** mcp-tool-auto-sync: 행 단위 동기화 상태 (성공 안내 또는 실패 사유) */
+type SyncRowState =
+  | { kind: 'ok'; count: number }
+  | { kind: 'error'; hint: string };
+
+/**
+ * 동기화 실패 응답을 사용자 문구로 바꾼다 (Design §6.3).
+ *
+ * 기존 POST /tool-catalog/sync는 MCP 연결 실패 시 예외를 잡지 않아 500이 나간다.
+ * FR-07(기존 API 무변경)을 지키기 위해 프론트에서 흡수한다.
+ */
+const syncErrorMessage = (err: unknown): string => {
+  // authApiClient 인터셉터가 ApiError(message, status)로 reject한다 —
+  // axios 원형(err.response.status)이 아니라 err.status를 봐야 한다.
+  const status = (err as { status?: number })?.status;
+  if (status === 403) return '관리자 권한이 필요합니다.';
+  return 'MCP 서버에서 도구 목록을 가져오지 못했습니다. [테스트]로 연결을 확인하세요.';
+};
+
+/** 등록/수정 응답의 tool_sync를 행 상태로 변환. null(=sync 미수행)이면 표시하지 않는다. */
+const toSyncRowState = (server: McpServer): SyncRowState | null => {
+  const sync = server.tool_sync;
+  if (sync == null || sync.ok) return null;
+  return {
+    kind: 'error',
+    hint: sync.error_hint ?? '도구 목록을 가져오지 못했습니다.',
+  };
+};
+
+/** mcp-tool-auto-sync FR-10: 행 하단 동기화 상태 배너 */
+const SyncBanner = ({ state }: { state: SyncRowState }) =>
+  state.kind === 'ok' ? (
+    <div className="mt-2 rounded-lg bg-emerald-50 px-3 py-2 text-[12.5px] text-emerald-700">
+      도구 {state.count}개를 동기화했습니다
+    </div>
+  ) : (
+    <div className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[12.5px] text-amber-700">
+      <span className="font-medium">도구 동기화 실패</span> — {state.hint}
+    </div>
+  );
+
 const AdminMcpServersPage = () => {
   const { data, isLoading, isError, refetch } = useMcpServers();
   const servers = data?.items ?? [];
@@ -399,10 +441,21 @@ const AdminMcpServersPage = () => {
   const [formError, setFormError] = useState<string | null>(null);
   const [rowTest, setRowTest] = useState<{ server: McpServer; result: McpConnectionTestResponse | null } | null>(null);
 
+  /**
+   * mcp-tool-auto-sync FR-10: 서버별 도구 동기화 상태.
+   *
+   * 등록/수정 응답의 tool_sync는 목록 재조회(GET)를 하면 null로 덮이므로
+   * 페이지 로컬 state에 보관한다(Design §5.4). 재동기화에 성공하면 제거한다.
+   */
+  const [syncState, setSyncState] = useState<Record<string, SyncRowState>>({});
+  /** 진행 중인 행 id — 전역 isPending을 쓰면 다른 행 버튼까지 잠긴다(Design §5.4) */
+  const [syncingId, setSyncingId] = useState<string | null>(null);
+
   const createMutation = useCreateMcpServer();
   const updateMutation = useUpdateMcpServer();
   const deleteMutation = useDeleteMcpServer();
   const rowTestMutation = useTestMcpConnection();
+  const syncMutation = useSyncMcpTools();
 
   const apiError = (err: unknown, fallback: string) =>
     (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? fallback;
@@ -415,10 +468,45 @@ const AdminMcpServersPage = () => {
     createMutation.mutate(
       { ...req, user_id: String(userId) },
       {
-        onSuccess: () => setIsCreateOpen(false),
+        onSuccess: (res) => {
+          setIsCreateOpen(false);
+          // FR-10: 자동 sync가 실패했다면 해당 서버 행에 배너를 남긴다
+          rememberSyncResult(res);
+        },
         onError: (err) => setFormError(apiError(err, 'MCP 서버 등록에 실패했습니다.')),
       },
     );
+  };
+
+  /** 등록/수정 응답의 tool_sync를 행 상태에 반영한다 (실패일 때만 남긴다). */
+  const rememberSyncResult = (server: McpServer | undefined) => {
+    if (!server?.id) return;
+    const state = toSyncRowState(server);
+    setSyncState((prev) => {
+      const next = { ...prev };
+      if (state) next[server.id] = state;
+      else delete next[server.id];
+      return next;
+    });
+  };
+
+  const handleSync = (server: McpServer) => {
+    setSyncingId(server.id);
+    syncMutation.mutate(server.id, {
+      onSuccess: (res) => {
+        setSyncState((prev) => ({
+          ...prev,
+          [server.id]: { kind: 'ok', count: res.synced_count },
+        }));
+      },
+      onError: (err) => {
+        setSyncState((prev) => ({
+          ...prev,
+          [server.id]: { kind: 'error', hint: syncErrorMessage(err) },
+        }));
+      },
+      onSettled: () => setSyncingId(null),
+    });
   };
 
   const handleUpdate = (dataReq: UpdateMcpServerRequest) => {
@@ -426,7 +514,10 @@ const AdminMcpServersPage = () => {
     updateMutation.mutate(
       { id: editing.id, data: dataReq },
       {
-        onSuccess: () => setEditing(null),
+        onSuccess: (res) => {
+          setEditing(null);
+          rememberSyncResult(res);
+        },
         onError: (err) => setFormError(apiError(err, 'MCP 서버 수정에 실패했습니다.')),
       },
     );
@@ -503,7 +594,8 @@ const AdminMcpServersPage = () => {
             </thead>
             <tbody className="divide-y divide-zinc-100">
               {servers.map((srv) => (
-                <tr key={srv.id} className="transition-colors hover:bg-zinc-50/50">
+                <Fragment key={srv.id}>
+                <tr className="transition-colors hover:bg-zinc-50/50">
                   <td className="px-5 py-4">
                     <div className="text-[14px] font-medium text-zinc-900">{srv.name}</div>
                     <div className="text-[12px] text-zinc-400">{srv.description}</div>
@@ -528,6 +620,14 @@ const AdminMcpServersPage = () => {
                   <td className="px-5 py-4">
                     <div className="flex justify-end gap-2">
                       <button
+                        onClick={() => handleSync(srv)}
+                        disabled={syncingId === srv.id}
+                        aria-label={`${srv.name} 도구 동기화`}
+                        className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-[12px] font-medium text-zinc-600 transition-all hover:border-violet-200 hover:text-violet-600 active:scale-95 disabled:opacity-50"
+                      >
+                        {syncingId === srv.id ? '동기화 중...' : '동기화'}
+                      </button>
+                      <button
                         onClick={() => handleRowTest(srv)}
                         disabled={rowTestMutation.isPending}
                         className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-[12px] font-medium text-zinc-600 transition-all hover:border-violet-200 hover:text-violet-600 active:scale-95 disabled:opacity-50"
@@ -550,6 +650,14 @@ const AdminMcpServersPage = () => {
                     </div>
                   </td>
                 </tr>
+                {syncState[srv.id] && (
+                  <tr>
+                    <td colSpan={5} className="px-5 pb-3 pt-0">
+                      <SyncBanner state={syncState[srv.id]} />
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               ))}
             </tbody>
           </table>

@@ -8,6 +8,8 @@ from src.domain.agent_builder.rag_tool_config import RagToolConfig, sanitize_too
 from src.domain.agent_builder.tool_registry import get_tool_meta
 from src.domain.agent_run.auth_context import AuthContext
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
+from src.domain.mcp.exceptions import McpWiringError
+from src.domain.tool_catalog.mcp_tool_id import McpToolRef, parse_mcp_tool_id
 
 
 class ToolFactory:
@@ -24,6 +26,7 @@ class ToolFactory:
         hybrid_search_use_case_getter: Callable[[], Any] | None = None,
         tavily_api_key: str | None = None,
         mcp_tool_loader=None,
+        mcp_repository: Any = None,                # ★ MCP 서버 조회용 저장소
         tracker: Any = None,                       # ★ M4: RunTracker | None
         run_observability_config: Any = None,      # ★ M4: RunObservabilityConfig | None
         wiki_search: Any = None,                   # ★ LLM-WIKI-001: RunScopedWikiSearch | None
@@ -37,6 +40,10 @@ class ToolFactory:
         self._hybrid_search_getter = hybrid_search_use_case_getter
         self._tavily_api_key = tavily_api_key
         self._mcp_tool_loader = mcp_tool_loader
+        # WorkflowCompiler는 create_async에 mcp_repository를 넘기지 않는다.
+        # 팩토리는 앱 싱글톤이므로 per-request 세션을 들 수 없어,
+        # 매 호출마다 세션을 여는 SessionScopedMcpServerRepository를 주입받는다.
+        self._mcp_repository = mcp_repository
         self._tracker = tracker
         self._obs_config = run_observability_config
         # use_wiki_first=True인 RAG 도구에 주입할 위키 우선 검색 어댑터(없으면 hybrid 폴백).
@@ -177,24 +184,163 @@ class ToolFactory:
         """
         tool_id에 해당하는 BaseTool 인스턴스 반환 (비동기).
 
-        - `mcp_` 접두사: MCPToolLoader로 분기 (DB 조회 + SSE 연결)
+        - MCP 형식(`mcp:{srv}:{tool}` / 레거시 `mcp_{srv}`): MCPToolLoader로 분기
         - 그 외: 동기 create() 위임
         """
-        if tool_id.startswith("mcp_"):
-            if self._mcp_tool_loader is None:
-                raise ValueError(
-                    f"MCPToolLoader is required for tool_id={tool_id!r}"
-                )
-            tools = await self._mcp_tool_loader.load_by_tool_id(
-                tool_id=tool_id,
-                repository=mcp_repository,
-                request_id=request_id,
+        ref = parse_mcp_tool_id(tool_id)
+        if ref is not None:
+            return await self._create_mcp_tool(
+                ref, tool_id, request_id, mcp_repository
             )
-            if not tools:
-                raise ValueError(f"MCP tool not found: {tool_id!r}")
-            return tools[0]
 
         return self.create(tool_id, request_id, tool_config=tool_config)
+
+    async def create_all_async(
+        self,
+        tool_id: str,
+        request_id: str = "",
+        mcp_repository=None,
+        tool_config: dict | None = None,
+    ) -> list[BaseTool]:
+        """tool_id가 가리키는 도구 '전부'를 반환한다.
+
+        Design Ref: fix-mcp-tool-call-not-reaching-server §6.1 E6 —
+        레거시 `mcp_{server}`는 서버 하나를 가리킬 뿐 도구를 특정하지 못한다.
+        첫 도구만 바인딩하면 워커 description이 안내한 나머지 도구는 LLM의
+        도구 목록에 없어 호출이 성립하지 않고, MCP 서버에는 아무 요청도 가지
+        않는다(module-1 실측). 서버 단위 참조는 도구 전체를 워커에 넘긴다.
+
+        - `mcp:{srv}:{tool}` — 지정 도구 1개
+        - `mcp_{srv}` — 서버가 노출하는 도구 전체
+        - 비-MCP — 기존 동기 create() 결과 1개
+        """
+        ref = parse_mcp_tool_id(tool_id)
+        if ref is None:
+            return [self.create(tool_id, request_id, tool_config=tool_config)]
+
+        tools = await self._load_mcp_tools(ref, tool_id, request_id, mcp_repository)
+        if not ref.is_server_level:
+            return [self._bind_tool(ref, tool_id, request_id, tools)]
+
+        self._logger.info(
+            "MCP tools bound",
+            request_id=request_id,
+            tool_id=tool_id,
+            bound_tools=[getattr(t, "mcp_tool_name", None) for t in tools],
+            available=len(tools),
+            server_level=True,
+        )
+        return tools
+
+    async def _create_mcp_tool(
+        self,
+        ref: McpToolRef,
+        tool_id: str,
+        request_id: str,
+        mcp_repository,
+    ) -> BaseTool:
+        """MCP 서버에서 도구를 로드해 워커에 바인딩할 단일 도구를 고른다.
+
+        하위호환 경로 — 복수 바인딩이 필요하면 create_all_async를 쓴다.
+        """
+        tools = await self._load_mcp_tools(ref, tool_id, request_id, mcp_repository)
+        return self._bind_tool(ref, tool_id, request_id, tools)
+
+    async def _load_mcp_tools(
+        self,
+        ref: McpToolRef,
+        tool_id: str,
+        request_id: str,
+        mcp_repository,
+    ) -> list[BaseTool]:
+        """MCP 서버에 접속해 도구 목록을 로드한다 (§2.2 ① 구간)."""
+        # Design Ref: fix-mcp-tool-call-not-reaching-server §2.2 —
+        # 이 로그가 없으면 compile이 MCP 워커에 도달조차 못한 것이다.
+        self._logger.info(
+            "MCP tool binding start",
+            request_id=request_id,
+            tool_id=tool_id,
+            server_id=ref.server_id,
+            requested_tool=ref.tool_name,
+        )
+        if self._mcp_tool_loader is None:
+            # Design Ref: §6.2 — 배선 오류는 워커 격리 대상이 아니다.
+            raise McpWiringError(
+                f"MCPToolLoader is required for tool_id={tool_id!r}"
+            )
+        repository = mcp_repository or self._mcp_repository
+        if repository is None:
+            raise McpWiringError(
+                f"MCP repository is required for tool_id={tool_id!r}"
+            )
+
+        tools = await self._mcp_tool_loader.load_by_tool_id(
+            tool_id=f"mcp_{ref.server_id}",
+            repository=repository,
+            request_id=request_id,
+        )
+        if not tools:
+            raise ValueError(f"MCP tool not found: {tool_id!r}")
+        return tools
+
+    def _bind_tool(
+        self,
+        ref: McpToolRef,
+        tool_id: str,
+        request_id: str,
+        tools: list[BaseTool],
+    ) -> BaseTool:
+        """로드된 도구 목록에서 워커에 바인딩할 도구 하나를 고르고 결과를 남긴다.
+
+        Design Ref: §2.2 — "MCP tool bound"의 bound_tool이 의도한 도구와 다르면
+        레거시 서버 단위 ID의 첫-도구 폴백(D1)이 원인이다.
+        """
+        if ref.is_server_level:
+            # 레거시 서버 단위 워커 — 어떤 도구를 원했는지 알 수 없다.
+            # 첫 도구로 폴백하되, 선택이 임의라는 사실을 남긴다.
+            self._logger.warning(
+                "Legacy server-level MCP worker — binding first tool",
+                request_id=request_id,
+                tool_id=tool_id,
+                bound_tool=getattr(tools[0], "mcp_tool_name", None),
+                available=len(tools),
+            )
+            self._log_bound(request_id, tool_id, tools[0], len(tools), fallback=True)
+            return tools[0]
+
+        for tool in tools:
+            if getattr(tool, "mcp_tool_name", None) == ref.tool_name:
+                self._log_bound(
+                    request_id, tool_id, tool, len(tools), fallback=False
+                )
+                return tool
+        # Design Ref: §6.1 E5 — "무엇이 있는지"를 알려줘야 진단이 한 번에 끝난다.
+        available = [getattr(t, "mcp_tool_name", None) for t in tools]
+        raise ValueError(
+            f"MCP tool not found: {ref.tool_name!r} on server {ref.server_id!r} "
+            f"(available: {available})"
+        )
+
+    def _log_bound(
+        self,
+        request_id: str,
+        tool_id: str,
+        tool: BaseTool,
+        available: int,
+        *,
+        fallback: bool,
+    ) -> None:
+        """바인딩 결과 계측 (FR-01). exposed_name은 LLM에 노출되는 이름이다."""
+        self._logger.info(
+            "MCP tool bound",
+            request_id=request_id,
+            tool_id=tool_id,
+            bound_tool=getattr(tool, "mcp_tool_name", None),
+            exposed_name=getattr(tool, "name", None),
+            exposed_name_len=len(getattr(tool, "name", "") or ""),
+            available=available,
+            fallback=fallback,
+        )
 
     @staticmethod
     def _merge_kb_filter(rag_config: RagToolConfig) -> dict[str, str]:

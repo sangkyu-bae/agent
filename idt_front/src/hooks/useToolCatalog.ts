@@ -21,3 +21,20 @@ export const useSetToolBuiltin = () => {
     },
   });
 };
+
+/**
+ * mcp-tool-auto-sync FR-11: MCP 서버별 도구 재동기화.
+ *
+ * 등록/수정 시 자동 sync가 실패했을 때의 복구 경로다. 성공하면 도구 카탈로그
+ * 캐시를 무효화해 도구 선택창에 즉시 반영시킨다.
+ */
+export const useSyncMcpTools = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (mcpServerId: string) =>
+      toolCatalogService.syncMcpTools(mcpServerId).then((r) => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.toolCatalog.all });
+    },
+  });
+};
