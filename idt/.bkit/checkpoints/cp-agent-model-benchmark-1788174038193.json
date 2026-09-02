@@ -1,0 +1,9 @@
+{
+  "feature": "agent-model-benchmark",
+  "state": "do",
+  "timestamp": "2026-08-31T11:00:38.193Z",
+  "context": {
+    "matchRate": 0,
+    "iterationCount": 0
+  }
+}

@@ -1,8 +1,56 @@
 {
   "fileEditCounts": {
-    "C:\\Users\\tkdrb\\project\\agent\\agent\\idt\\docs\\04-report\\features\\admin-default-llm-routing.report.md": {
+    "C:\\Users\\tkdrb\\project\\agent\\agent\\idt_front\\src\\utils\\mcpToolId.test.ts": {
       "count": 1,
-      "ts": 1788166254503
+      "ts": 1788336307008
+    },
+    "C:\\Users\\tkdrb\\project\\agent\\agent\\idt_front\\src\\utils\\mcpToolId.ts": {
+      "count": 1,
+      "ts": 1788336319173
+    },
+    "C:\\Users\\tkdrb\\project\\agent\\agent\\idt\\docs\\01-plan\\features\\fix-mcp-tool-call-not-reaching-server.plan.md": {
+      "count": 2,
+      "ts": 1788344496766
+    },
+    "C:\\Users\\tkdrb\\project\\agent\\agent\\idt\\docs\\02-design\\features\\fix-mcp-tool-call-not-reaching-server.design.md": {
+      "count": 3,
+      "ts": 1788346286782
+    },
+    "C:\\Users\\tkdrb\\project\\agent\\agent\\idt\\src\\infrastructure\\mcp\\tool_adapter.py": {
+      "count": 2,
+      "ts": 1788344142069
+    },
+    "C:\\Users\\tkdrb\\project\\agent\\agent\\idt\\src\\infrastructure\\mcp\\tool_registry.py": {
+      "count": 2,
+      "ts": 1788344773889
+    },
+    "C:\\Users\\tkdrb\\project\\agent\\agent\\idt\\src\\infrastructure\\agent_builder\\tool_factory.py": {
+      "count": 4,
+      "ts": 1788344819677
+    },
+    "C:\\Users\\tkdrb\\project\\agent\\agent\\idt\\src\\domain\\mcp\\policy.py": {
+      "count": 2,
+      "ts": 1788344758616
+    },
+    "C:\\Users\\tkdrb\\project\\agent\\agent\\idt\\src\\application\\agent_builder\\workflow_compiler.py": {
+      "count": 6,
+      "ts": 1788346744072
+    },
+    "C:\\Users\\tkdrb\\project\\agent\\agent\\idt\\tests\\api\\test_runtime_tool_factory_wiring.py": {
+      "count": 2,
+      "ts": 1788346049642
+    },
+    "C:\\Users\\tkdrb\\project\\agent\\agent\\idt\\docs\\03-analysis\\fix-mcp-tool-call-not-reaching-server.analysis.md": {
+      "count": 1,
+      "ts": 1788346575431
+    },
+    "C:\\Users\\tkdrb\\project\\agent\\agent\\idt\\src\\domain\\mcp\\exceptions.py": {
+      "count": 1,
+      "ts": 1788346717160
+    },
+    "C:\\Users\\tkdrb\\project\\agent\\agent\\idt\\docs\\04-report\\fix-mcp-tool-call-not-reaching-server.report.md": {
+      "count": 1,
+      "ts": 1788347230809
     }
   }
 }
