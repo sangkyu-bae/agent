@@ -120,7 +120,7 @@ def _make_use_case(
 class TestComposeAgentUseCase:
     @pytest.mark.asyncio
     async def test_mixed_internal_and_mcp_draft(self):
-        """① 내부+MCP 혼합 초안: mcp:{srv}:{tool}이 mcp_{srv}로 매핑된다."""
+        """① 내부+MCP 혼합 초안: mcp:{srv}:{tool}이 그대로 유지된다."""
         output = _make_output([
             _WorkerOutput(tool_id="tavily_search", worker_id="search_worker",
                           description="검색", sort_order=0),
@@ -134,13 +134,16 @@ class TestComposeAgentUseCase:
             ComposeAgentRequest(user_request="검색해서 수집하는 에이전트"), "req-1"
         )
         assert result.coverage == "full"
-        assert result.tool_ids == ["tavily_search", "mcp_srv-1"]
+        assert result.tool_ids == ["tavily_search", "mcp:srv-1:fetch_page"]
         assert result.llm_model_id == "model-default"
         assert result.system_prompt == "생성된 프롬프트"
 
     @pytest.mark.asyncio
-    async def test_same_server_tools_merged_into_one_worker(self):
-        """② 같은 서버의 개별 도구 2건 → mcp_{srv} 워커 1개로 병합."""
+    async def test_same_server_tools_stay_separate_workers(self):
+        """② 같은 서버라도 도구가 다르면 워커를 따로 만든다.
+
+        하나로 접으면 실행 시 어느 도구를 바인딩할지 특정할 수 없다.
+        """
         output = _make_output([
             _WorkerOutput(tool_id="mcp:srv-1:fetch_page", worker_id="fetch_worker",
                           description="페이지 수집", sort_order=0),
@@ -157,10 +160,10 @@ class TestComposeAgentUseCase:
         result = await use_case.execute(
             ComposeAgentRequest(user_request="웹 수집 에이전트"), "req-1"
         )
-        assert result.tool_ids == ["mcp_srv-1"]
-        assert len(result.workers) == 1
-        assert "페이지 수집" in result.workers[0].description
-        assert "HTML 파싱" in result.workers[0].description
+        assert result.tool_ids == ["mcp:srv-1:fetch_page", "mcp:srv-1:parse_html"]
+        assert len(result.workers) == 2
+        assert result.workers[0].description == "페이지 수집"
+        assert result.workers[1].description == "HTML 파싱"
 
     @pytest.mark.asyncio
     async def test_worker_instruction_exposed_in_response(self):
@@ -177,8 +180,32 @@ class TestComposeAgentUseCase:
         assert result.workers[0].instruction == "최신 정보 질문에만 사용."
 
     @pytest.mark.asyncio
-    async def test_merged_workers_merge_instructions(self):
-        """compose-tool-instructions FR-04: 병합 시 instruction '; ' 연결."""
+    async def test_duplicate_tool_id_merges_instructions(self):
+        """compose-tool-instructions FR-04: 동일 tool_id 중복 시 '; ' 연결.
+
+        병합 대상은 이제 '같은 서버'가 아니라 '완전히 같은 도구'다.
+        """
+        output = _make_output([
+            _WorkerOutput(tool_id="mcp:srv-1:fetch_page", worker_id="fetch_worker",
+                          description="페이지 수집", sort_order=0,
+                          instruction="URL을 받아 본문을 수집."),
+            _WorkerOutput(tool_id="mcp:srv-1:fetch_page", worker_id="fetch_worker_2",
+                          description="본문 추출", sort_order=1,
+                          instruction="수집된 HTML에서 표를 추출."),
+        ])
+        use_case, _, _, _ = _make_use_case(
+            output, catalog_entries=[_mcp_catalog_entry("fetch_page")],
+        )
+        result = await use_case.execute(
+            ComposeAgentRequest(user_request="수집 에이전트"), "req-1"
+        )
+        assert len(result.workers) == 1
+        assert "URL을 받아 본문을 수집." in result.workers[0].instruction
+        assert "수집된 HTML에서 표를 추출." in result.workers[0].instruction
+
+    @pytest.mark.asyncio
+    async def test_distinct_tools_keep_own_instructions(self):
+        """서로 다른 도구의 instruction은 섞이지 않는다."""
         output = _make_output([
             _WorkerOutput(tool_id="mcp:srv-1:fetch_page", worker_id="fetch_worker",
                           description="페이지 수집", sort_order=0,
@@ -197,9 +224,9 @@ class TestComposeAgentUseCase:
         result = await use_case.execute(
             ComposeAgentRequest(user_request="수집 에이전트"), "req-1"
         )
-        assert len(result.workers) == 1
-        assert "URL을 받아 본문을 수집." in result.workers[0].instruction
-        assert "수집된 HTML에서 표를 추출." in result.workers[0].instruction
+        assert len(result.workers) == 2
+        assert result.workers[0].instruction == "URL을 받아 본문을 수집."
+        assert result.workers[1].instruction == "수집된 HTML에서 표를 추출."
 
     @pytest.mark.asyncio
     async def test_catalog_empty_falls_back_to_server_meta(self):
@@ -367,4 +394,5 @@ class TestComposeAgentUseCase:
             ComposeAgentRequest(user_request="여러 도구 에이전트"), "req-1"
         )
         assert len(result.workers) == 5
-        assert "mcp_s5" in result.notes
+        # 잘려나간 도구는 카탈로그 형식 그대로 안내된다.
+        assert "mcp:s5:tool_5" in result.notes

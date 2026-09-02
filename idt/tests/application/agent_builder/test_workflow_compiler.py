@@ -531,11 +531,14 @@ class TestMcpToolAsync:
     """MCP 도구 비동기 생성 테스트 (TC-M01~M02)."""
 
     @pytest.mark.asyncio
-    async def test_mcp_tool_uses_create_async(self):
-        """TC-M01: mcp_ 접두사 tool_id는 create_async 사용."""
+    async def test_mcp_tool_uses_create_all_async(self):
+        """TC-M01: MCP tool_id는 create_all_async 사용 (서버 도구 전체 바인딩).
+
+        Design Ref: fix-mcp-tool-call-not-reaching-server §6.1 E6
+        """
         mock_tool = MagicMock()
         tool_factory = MagicMock()
-        tool_factory.create_async = AsyncMock(return_value=mock_tool)
+        tool_factory.create_all_async = AsyncMock(return_value=[mock_tool])
         llm_factory = MagicMock(spec=LLMFactoryInterface)
         llm_factory.create.return_value = MagicMock()
         logger = MagicMock()
@@ -557,8 +560,161 @@ class TestMcpToolAsync:
                    return_value=MagicMock()):
             await compiler.compile(workflow, _make_llm_model(), "req-1")
 
-        tool_factory.create_async.assert_called_once()
+        tool_factory.create_all_async.assert_called_once()
         tool_factory.create.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_mcp_worker_receives_every_tool_from_server(self):
+        """TC-M03: 서버가 3개 도구를 노출하면 워커도 3개를 전부 받는다.
+
+        module-1 실측: 첫 도구만 바인딩되면 워커 description이 안내한 나머지
+        도구는 LLM 도구 목록에 없어 MCP 서버로 요청이 나가지 않는다.
+        """
+        mcp_tools = [MagicMock(name=f"t{i}") for i in range(3)]
+        tool_factory = MagicMock()
+        tool_factory.create_all_async = AsyncMock(return_value=mcp_tools)
+        llm_factory = MagicMock(spec=LLMFactoryInterface)
+        llm_factory.create.return_value = MagicMock()
+        compiler = WorkflowCompiler(
+            tool_factory=tool_factory,
+            llm_factory=llm_factory,
+            logger=MagicMock(),
+        )
+        workers = [
+            WorkerDefinition(
+                tool_id="mcp_081c6fe7-e0bd-4aad-9a42-29b8bf073167",
+                worker_id="mcp_worker",
+                description="MCP 도구", sort_order=0, category="action",
+            ),
+        ]
+        workflow = WorkflowDefinition(
+            supervisor_prompt="프롬프트", workers=workers, flow_hint="test",
+        )
+        with patch(
+            "src.application.agent_builder.workflow_compiler.create_agent",
+            return_value=MagicMock(),
+        ) as mock_create_agent:
+            await compiler.compile(workflow, _make_llm_model(), "req-m03")
+
+        passed = mock_create_agent.call_args.kwargs["tools"]
+        assert passed == mcp_tools
+        assert len(passed) == 3
+
+    @pytest.mark.asyncio
+    async def test_failed_mcp_worker_is_skipped_not_fatal(self):
+        """U13: MCP 워커 1개가 실패해도 나머지 워커로 그래프가 컴파일된다.
+
+        Design Ref: fix-mcp-tool-call-not-reaching-server §6.2 —
+        MCP 서버 1개 장애가 에이전트 전체를 죽이면 안 된다.
+        """
+        tool_factory = MagicMock()
+        tool_factory.create_all_async = AsyncMock(
+            side_effect=ValueError("MCP tool not found: 'mcp_dead'")
+        )
+        tool_factory.create.return_value = MagicMock()
+        llm_factory = MagicMock(spec=LLMFactoryInterface)
+        llm_factory.create.return_value = MagicMock()
+        logger = MagicMock()
+        compiler = WorkflowCompiler(
+            tool_factory=tool_factory, llm_factory=llm_factory, logger=logger,
+        )
+        workers = [
+            WorkerDefinition(
+                tool_id="mcp_dead", worker_id="dead_worker",
+                description="죽은 MCP", sort_order=0, category="action",
+            ),
+            WorkerDefinition(
+                tool_id="python_code_executor", worker_id="live_worker",
+                description="정상 도구", sort_order=1, category="action",
+            ),
+        ]
+        workflow = WorkflowDefinition(
+            supervisor_prompt="프롬프트", workers=workers, flow_hint="test",
+        )
+        with patch(
+            "src.application.agent_builder.workflow_compiler.create_agent",
+            return_value=MagicMock(),
+        ) as mock_create_agent:
+            compiled = await compiler.compile(workflow, _make_llm_model(), "req-u13")
+
+        assert compiled is not None
+        # 정상 워커만 에이전트로 만들어졌다
+        assert mock_create_agent.call_count == 1
+        assert mock_create_agent.call_args.kwargs["name"] == "live_worker"
+        # 실패 사유가 식별 가능한 형태로 남는다
+        failed = [c for c in logger.error.call_args_list
+                  if c.args[0] == "MCP worker tool creation failed"]
+        assert failed
+        assert failed[0].kwargs["worker_id"] == "dead_worker"
+        assert failed[0].kwargs["tool_id"] == "mcp_dead"
+        assert "exception" in failed[0].kwargs
+
+    @pytest.mark.asyncio
+    async def test_wiring_error_is_not_isolated(self):
+        """G-01: 배선 오류는 격리하지 않고 compile을 실패시킨다.
+
+        Design Ref: §6.2 — 배선 누락을 조용히 넘기면 "도구를 호출했는데
+        아무 일도 없다"는 이번 사이클의 실패 모드가 그대로 재발한다.
+        일반 워커가 함께 있어 전체 실패 가드(U14)가 발동하지 않는 조합이
+        정확히 그 시나리오다.
+        """
+        from src.domain.mcp.exceptions import McpWiringError
+
+        tool_factory = MagicMock()
+        tool_factory.create_all_async = AsyncMock(
+            side_effect=McpWiringError("MCPToolLoader is required for tool_id='mcp_x'")
+        )
+        tool_factory.create.return_value = MagicMock()
+        llm_factory = MagicMock(spec=LLMFactoryInterface)
+        llm_factory.create.return_value = MagicMock()
+        compiler = WorkflowCompiler(
+            tool_factory=tool_factory, llm_factory=llm_factory, logger=MagicMock(),
+        )
+        workers = [
+            WorkerDefinition(
+                tool_id="mcp_x", worker_id="mcp_worker",
+                description="MCP", sort_order=0, category="action",
+            ),
+            WorkerDefinition(
+                tool_id="python_code_executor", worker_id="live_worker",
+                description="정상 도구", sort_order=1, category="action",
+            ),
+        ]
+        workflow = WorkflowDefinition(
+            supervisor_prompt="프롬프트", workers=workers, flow_hint="test",
+        )
+        with patch(
+            "src.application.agent_builder.workflow_compiler.create_agent",
+            return_value=MagicMock(),
+        ):
+            with pytest.raises(McpWiringError):
+                await compiler.compile(workflow, _make_llm_model(), "req-g01")
+
+    @pytest.mark.asyncio
+    async def test_compile_fails_when_every_worker_fails(self):
+        """U14: 워커가 전부 실패하면 빈 그래프를 만들지 않고 실패시킨다."""
+        tool_factory = MagicMock()
+        tool_factory.create_all_async = AsyncMock(side_effect=ValueError("boom"))
+        llm_factory = MagicMock(spec=LLMFactoryInterface)
+        llm_factory.create.return_value = MagicMock()
+        compiler = WorkflowCompiler(
+            tool_factory=tool_factory, llm_factory=llm_factory, logger=MagicMock(),
+        )
+        workers = [
+            WorkerDefinition(
+                tool_id="mcp_dead", worker_id="dead_worker",
+                description="죽은 MCP", sort_order=0, category="action",
+            ),
+        ]
+        workflow = WorkflowDefinition(
+            supervisor_prompt="프롬프트", workers=workers, flow_hint="test",
+        )
+        with patch(
+            "src.application.agent_builder.workflow_compiler.create_agent",
+            return_value=MagicMock(),
+        ):
+            with pytest.raises(ValueError):
+                await compiler.compile(workflow, _make_llm_model(), "req-u14")
 
     @pytest.mark.asyncio
     async def test_non_mcp_tool_uses_sync_create(self):

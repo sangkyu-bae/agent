@@ -4,6 +4,8 @@
  * 시크릿(auth_config·server_config)은 응답에서 '****'로 마스킹되어 온다.
  */
 
+import type { ToolSyncResult } from '@/types/toolCatalog';
+
 export type McpTransport = 'sse' | 'streamable_http';
 
 /** 백엔드 MCPServerResponse 매핑 */
@@ -21,6 +23,11 @@ export interface McpServer {
   updated_at: string;
   auth_config: Record<string, unknown> | null; // masked
   server_config: Record<string, unknown> | null; // masked
+  /**
+   * mcp-tool-auto-sync FR-09: 등록/수정 직후의 도구 동기화 결과.
+   * 조회(GET) 응답에서는 항상 null — sync를 수행하지 않았다는 뜻이다.
+   */
+  tool_sync?: ToolSyncResult | null;
 }
 
 /** 백엔드 ListMCPServersResponse 매핑 */

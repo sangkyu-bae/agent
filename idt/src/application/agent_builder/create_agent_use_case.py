@@ -33,6 +33,7 @@ from src.domain.agent_builder.policies import (
     AgentBuilderPolicy,
     VisibilityPolicy,
 )
+from src.domain.agent_builder.rag_tool_config import sanitize_tool_name
 from src.domain.agent_builder.schemas import (
     AgentDefinition,
     WorkerDefinition,
@@ -52,6 +53,7 @@ from src.domain.knowledge_base.policy import KnowledgeBasePolicy
 from src.domain.llm_model.interfaces import LlmModelRepositoryInterface
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.domain.tool_catalog.interfaces import ToolCatalogRepositoryInterface
+from src.domain.tool_catalog.mcp_tool_id import parse_mcp_tool_id
 
 
 class CreateAgentUseCase:
@@ -338,12 +340,12 @@ class CreateAgentUseCase:
         seen: set[str] = set()
         for raw_id in tool_ids:
             tool_id = self._normalize_tool_id(raw_id)
-            # 동일 서버의 카탈로그 도구 여러 개 → mcp_{srv} 워커 1개로 병합 (D5)
+            # 완전히 동일한 tool_id만 중복 제거 (서버가 같아도 도구가 다르면 별개)
             if tool_id in seen:
                 continue
             seen.add(tool_id)
             i = len(workers)
-            if tool_id.startswith("mcp_"):
+            if parse_mcp_tool_id(tool_id) is not None:
                 description = await self._resolve_mcp_description(
                     tool_id, request_id
                 )
@@ -352,7 +354,7 @@ class CreateAgentUseCase:
             config = configs_by_id.get(tool_id)
             workers.append(WorkerDefinition(
                 tool_id=tool_id,
-                worker_id=f"{tool_id}_worker",
+                worker_id=self._make_worker_id(tool_id),
                 description=description,
                 sort_order=i,
                 tool_config=config.model_dump() if config else None,
@@ -442,7 +444,7 @@ class CreateAgentUseCase:
         실패시키면 안 된다 (경고 로그 후 격하).
         """
         try:
-            if storage_id.startswith("mcp_"):
+            if parse_mcp_tool_id(storage_id) is not None:
                 return await self._resolve_mcp_description(storage_id, request_id)
             return get_tool_meta(storage_id).description
         except ValueError as e:
@@ -455,28 +457,62 @@ class CreateAgentUseCase:
     async def _resolve_mcp_description(
         self, tool_id: str, request_id: str
     ) -> str:
-        """mcp_{server_id} tool_id의 워커 설명을 MCP 레지스트리에서 해석한다."""
-        if self._mcp_server_repo is None:
+        """MCP 워커 설명을 해석한다.
+
+        개별 도구(`mcp:{srv}:{tool}`)는 카탈로그 설명이 가장 구체적이므로
+        우선 쓰고, 카탈로그에 없으면 서버 등록정보로 폴백한다.
+        서버 활성 여부는 두 경우 모두 레지스트리로 검증한다.
+        """
+        ref = parse_mcp_tool_id(tool_id)
+        if ref is None or self._mcp_server_repo is None:
             raise ValueError(f"Unknown tool_id: {tool_id!r}")
-        server_id = tool_id.removeprefix("mcp_")
-        reg = await self._mcp_server_repo.find_by_id(server_id, request_id)
+
+        reg = await self._mcp_server_repo.find_by_id(ref.server_id, request_id)
         if reg is None or not reg.is_active:
             raise ValueError(
                 f"등록되지 않았거나 비활성화된 MCP 도구입니다: {tool_id}"
             )
+
+        if not ref.is_server_level:
+            entry = await self._find_catalog_entry(tool_id, request_id)
+            if entry is not None and entry.description:
+                return entry.description
+            return f"{reg.description or reg.name} - {ref.tool_name}"
         return reg.description or reg.name
+
+    async def _find_catalog_entry(self, tool_id: str, request_id: str):
+        """카탈로그 조회 실패가 에이전트 생성을 막아선 안 된다."""
+        if self._tool_catalog_repo is None:
+            return None
+        try:
+            return await self._tool_catalog_repo.find_by_tool_id(
+                tool_id, request_id
+            )
+        except Exception as e:
+            self._logger.warning(
+                "Tool catalog lookup failed — falling back to server meta",
+                request_id=request_id, tool_id=tool_id, exception=e,
+            )
+            return None
 
     @staticmethod
     def _normalize_tool_id(raw_key: str) -> str:
-        """카탈로그 형식(`internal:{id}`, `mcp:{srv}:{tool}`)을 저장 형식으로 정규화.
+        """카탈로그 형식을 저장 형식으로 정규화.
 
-        compose-tool-instructions D5: MCP 카탈로그 ID는 도구명이 아니라
-        서버 단위 저장 형식 `mcp_{server_id}`로 매핑한다.
+        MCP는 개별 도구 단위(`mcp:{srv}:{tool}`)를 **그대로** 저장한다.
+        서버 단위로 접으면 사용자가 고른 도구가 소실되고, 실행 시 서버가
+        먼저 돌려준 임의의 도구가 바인딩된다.
+        레거시 `mcp_{srv}`도 그대로 통과시킨다(기존 에이전트 호환).
+        `internal:{id}`만 접두사를 벗긴다.
         """
-        if raw_key.startswith("mcp:"):
-            parts = raw_key.split(":")
-            return f"mcp_{parts[1]}" if len(parts) >= 3 and parts[1] else raw_key
+        if parse_mcp_tool_id(raw_key) is not None:
+            return raw_key
         return raw_key.split(":")[-1] if ":" in raw_key else raw_key
+
+    @staticmethod
+    def _make_worker_id(tool_id: str) -> str:
+        """worker_id는 LangGraph 노드명·LLM 노출명이라 콜론을 못 쓴다."""
+        return sanitize_tool_name(f"{tool_id}_worker", fallback="mcp_worker")
 
     async def _resolve_visibility(
         self,

@@ -1,4 +1,5 @@
 """CreateAgentUseCase — FR-08: 명시적 tool_ids 경로의 mcp_* 수용 테스트."""
+import re
 import uuid
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
@@ -147,21 +148,25 @@ class TestCreateAgentWithMcpToolIds:
         assert result.tool_ids == ["tavily_search", "excel_export"]
 
     @pytest.mark.asyncio
-    async def test_catalog_format_mcp_tool_id_normalized_to_server_id(self):
-        """compose-tool-instructions D5: mcp:{srv}:{tool} → mcp_{srv} 정규화."""
+    async def test_catalog_format_mcp_tool_id_is_preserved(self):
+        """개별 도구 단위 유지 — mcp:{srv}:{tool}을 그대로 저장한다.
+
+        서버 단위로 접으면 사용자가 고른 도구가 소실되고, 실행 시 서버가
+        먼저 돌려준 임의의 도구가 바인딩된다.
+        """
         mcp_repo = MagicMock()
         mcp_repo.find_by_id = AsyncMock(return_value=_mcp_registration())
         use_case, repository = _make_use_case(mcp_server_repo=mcp_repo)
 
         result = await use_case.execute(_request(["mcp:srv-1:search"]), "req-1")
 
-        assert result.tool_ids == ["mcp_srv-1"]
+        assert result.tool_ids == ["mcp:srv-1:search"]
         saved_agent = repository.save.call_args[0][0]
-        assert saved_agent.workers[0].tool_id == "mcp_srv-1"
+        assert saved_agent.workers[0].tool_id == "mcp:srv-1:search"
 
     @pytest.mark.asyncio
-    async def test_same_server_multiple_catalog_tools_deduplicated(self):
-        """compose-tool-instructions D5: 동일 서버 도구 여러 개 → mcp_{srv} 1개."""
+    async def test_same_server_multiple_tools_become_separate_workers(self):
+        """동일 서버의 서로 다른 도구는 각각 워커가 된다."""
         mcp_repo = MagicMock()
         mcp_repo.find_by_id = AsyncMock(return_value=_mcp_registration())
         use_case, repository = _make_use_case(mcp_server_repo=mcp_repo)
@@ -170,17 +175,46 @@ class TestCreateAgentWithMcpToolIds:
             _request(["mcp:srv-1:search", "mcp:srv-1:fetch"]), "req-1"
         )
 
-        assert result.tool_ids == ["mcp_srv-1"]
+        assert result.tool_ids == ["mcp:srv-1:search", "mcp:srv-1:fetch"]
         saved_agent = repository.save.call_args[0][0]
-        assert len(saved_agent.workers) == 1
+        assert len(saved_agent.workers) == 2
+
+    @pytest.mark.asyncio
+    async def test_duplicate_same_tool_is_deduplicated(self):
+        """완전히 같은 도구가 두 번 오면 하나로 합친다."""
+        mcp_repo = MagicMock()
+        mcp_repo.find_by_id = AsyncMock(return_value=_mcp_registration())
+        use_case, repository = _make_use_case(mcp_server_repo=mcp_repo)
+
+        result = await use_case.execute(
+            _request(["mcp:srv-1:search", "mcp:srv-1:search"]), "req-1"
+        )
+
+        assert result.tool_ids == ["mcp:srv-1:search"]
+
+    @pytest.mark.asyncio
+    async def test_worker_id_has_no_colon(self):
+        """worker_id는 LangGraph 노드명·LLM 노출명으로 쓰인다.
+
+        OpenAI tool name 패턴(^[a-zA-Z0-9_-]+$)에 콜론은 들어갈 수 없다.
+        """
+        mcp_repo = MagicMock()
+        mcp_repo.find_by_id = AsyncMock(return_value=_mcp_registration())
+        use_case, repository = _make_use_case(mcp_server_repo=mcp_repo)
+
+        await use_case.execute(_request(["mcp:srv-1:search"]), "req-1")
+
+        worker_id = repository.save.call_args[0][0].workers[0].worker_id
+        assert ":" not in worker_id
+        assert re.fullmatch(r"[a-zA-Z0-9_-]+", worker_id)
 
     def test_normalize_tool_id_formats(self):
-        """compose-tool-instructions D5: 4가지 형식 정규화 규칙."""
+        """internal 접두사만 벗기고, MCP 카탈로그 형식은 보존한다."""
         norm = CreateAgentUseCase._normalize_tool_id
         assert norm("internal:excel_export") == "excel_export"
         assert norm("excel_export") == "excel_export"
-        assert norm("mcp_srv-1") == "mcp_srv-1"
-        assert norm("mcp:srv-1:search") == "mcp_srv-1"
+        assert norm("mcp_srv-1") == "mcp_srv-1"  # 레거시 서버 단위 보존
+        assert norm("mcp:srv-1:search") == "mcp:srv-1:search"
 
     @pytest.mark.asyncio
     async def test_mcp_worker_created_with_worker_description(self):

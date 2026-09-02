@@ -188,6 +188,11 @@ class Settings(BaseSettings):
     # 키 생성: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
     mcp_secret_key: str = ""
 
+    # mcp-tool-auto-sync R-03: MCP 서버 등록/수정 직후 수행하는 도구 카탈로그
+    # 동기화의 대기 상한(초). 초과하면 sync만 중단하고 등록/수정은 성공시킨다(FR-03).
+    # 선례: tool_selector_timeout_sec
+    mcp_tool_sync_timeout_sec: float = 10.0
+
     # Agent Schedule (agent-schedule)
     # 외부 트리거(POST /internal/schedules/trigger) 인증 토큰.
     # 빈 값이면 트리거 비활성(503). 외부 cron 이 X-Scheduler-Token 헤더로 전달.

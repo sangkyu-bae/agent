@@ -111,3 +111,191 @@ describe('AdminMcpServersPage', () => {
     await waitFor(() => expect(deleted).toBe(true));
   });
 });
+
+describe('AdminMcpServersPage — 도구 동기화 (mcp-tool-auto-sync)', () => {
+  it('S-1: 모든 서버 행에 "동기화" 버튼이 있다 (FR-12 상시 노출)', async () => {
+    renderPage();
+    await screen.findByText('Naver Search');
+
+    expect(screen.getByRole('button', { name: 'Naver Search 도구 동기화' })).toBeInTheDocument();
+  });
+
+  it('S-2: 동기화 클릭 시 mcp_server_id 로 sync 를 호출한다 (FR-11)', async () => {
+    let captured: Record<string, unknown> | null = null;
+    server.use(
+      http.post('*/api/v1/tool-catalog/sync', async ({ request }) => {
+        captured = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ synced_count: 3 });
+      }),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Naver Search');
+
+    await user.click(screen.getByRole('button', { name: 'Naver Search 도구 동기화' }));
+
+    await waitFor(() => expect(captured).not.toBeNull());
+    expect(captured).toEqual({ mcp_server_id: 'srv-1' });
+  });
+
+  it('S-3: 동기화 성공 시 동기화된 도구 수를 안내한다', async () => {
+    server.use(
+      http.post('*/api/v1/tool-catalog/sync', () =>
+        HttpResponse.json({ synced_count: 3 }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Naver Search');
+
+    await user.click(screen.getByRole('button', { name: 'Naver Search 도구 동기화' }));
+
+    expect(await screen.findByText(/도구 3개를 동기화했습니다/)).toBeInTheDocument();
+  });
+
+  it('S-4: 동기화 실패(500) 시 사용자 문구로 안내한다 (§6.3)', async () => {
+    server.use(
+      http.post('*/api/v1/tool-catalog/sync', () =>
+        HttpResponse.json({ detail: 'boom' }, { status: 500 }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Naver Search');
+
+    await user.click(screen.getByRole('button', { name: 'Naver Search 도구 동기화' }));
+
+    expect(
+      await screen.findByText(/도구 목록을 가져오지 못했습니다/),
+    ).toBeInTheDocument();
+  });
+
+  it('S-5: 동기화 403 시 관리자 권한 안내를 표시한다', async () => {
+    server.use(
+      http.post('*/api/v1/tool-catalog/sync', () =>
+        HttpResponse.json({ detail: 'forbidden' }, { status: 403 }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Naver Search');
+
+    await user.click(screen.getByRole('button', { name: 'Naver Search 도구 동기화' }));
+
+    expect(await screen.findByText(/관리자 권한이 필요합니다/)).toBeInTheDocument();
+  });
+
+  it('S-6: 등록 응답 tool_sync.ok=false 면 실패 배너를 띄운다 (FR-10)', async () => {
+    // 등록 성공 후 목록이 재조회되면 새 서버가 포함된다(실제 동작 반영)
+    server.use(
+      http.get('*/api/v1/mcp-registry', () =>
+        HttpResponse.json({
+          items: [
+            {
+              id: 'srv-new',
+              user_id: '1',
+              name: 'My SSE',
+              description: '설명',
+              endpoint: 'https://e.example.com/sse',
+              transport: 'sse',
+              input_schema: null,
+              is_active: true,
+              tool_id: 'mcp_srv-new',
+              created_at: '2026-08-31T00:00:00Z',
+              updated_at: '2026-08-31T00:00:00Z',
+              auth_config: null,
+              server_config: null,
+              tool_sync: null,
+            },
+          ],
+          total: 1,
+        }),
+      ),
+      http.post('*/api/v1/mcp-registry', () =>
+        HttpResponse.json(
+          {
+            id: 'srv-new',
+            user_id: '1',
+            name: 'My SSE',
+            description: '설명',
+            endpoint: 'https://e.example.com/sse',
+            transport: 'sse',
+            input_schema: null,
+            is_active: true,
+            tool_id: 'mcp_srv-new',
+            created_at: '2026-08-31T00:00:00Z',
+            updated_at: '2026-08-31T00:00:00Z',
+            auth_config: null,
+            server_config: null,
+            tool_sync: {
+              ok: false,
+              synced_count: 0,
+              error_hint: 'api_key 누락으로 인한 404 가능성이 높습니다',
+            },
+          },
+          { status: 201 },
+        ),
+      ),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('My SSE');
+
+    await user.click(screen.getByRole('button', { name: '서버 등록' }));
+    await user.type(screen.getByPlaceholderText('예: Naver Search'), 'My SSE');
+    await user.type(screen.getByPlaceholderText('서버에 대한 설명'), '설명');
+    await user.type(
+      screen.getByPlaceholderText('https://server.example.com/mcp'),
+      'https://e.example.com/sse',
+    );
+    await user.click(screen.getByRole('button', { name: '등록' }));
+
+    expect(await screen.findByText(/도구 동기화 실패/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/api_key 누락으로 인한 404 가능성이 높습니다/),
+    ).toBeInTheDocument();
+  });
+
+  it('S-7: 등록 응답 tool_sync.ok=true 면 실패 배너를 띄우지 않는다', async () => {
+    server.use(
+      http.post('*/api/v1/mcp-registry', () =>
+        HttpResponse.json(
+          {
+            id: 'srv-new',
+            user_id: '1',
+            name: 'My SSE',
+            description: '설명',
+            endpoint: 'https://e.example.com/sse',
+            transport: 'sse',
+            input_schema: null,
+            is_active: true,
+            tool_id: 'mcp_srv-new',
+            created_at: '2026-08-31T00:00:00Z',
+            updated_at: '2026-08-31T00:00:00Z',
+            auth_config: null,
+            server_config: null,
+            tool_sync: { ok: true, synced_count: 2, error_hint: null },
+          },
+          { status: 201 },
+        ),
+      ),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Naver Search');
+
+    await user.click(screen.getByRole('button', { name: '서버 등록' }));
+    await user.type(screen.getByPlaceholderText('예: Naver Search'), 'My SSE');
+    await user.type(screen.getByPlaceholderText('서버에 대한 설명'), '설명');
+    await user.type(
+      screen.getByPlaceholderText('https://server.example.com/mcp'),
+      'https://e.example.com/sse',
+    );
+    await user.click(screen.getByRole('button', { name: '등록' }));
+
+    await waitFor(() =>
+      expect(screen.queryByPlaceholderText('예: Naver Search')).not.toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/도구 동기화 실패/)).not.toBeInTheDocument();
+  });
+});
