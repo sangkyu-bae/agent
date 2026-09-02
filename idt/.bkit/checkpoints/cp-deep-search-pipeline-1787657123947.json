@@ -1,9 +1,0 @@
-{
-  "feature": "deep-search-pipeline",
-  "state": "do",
-  "timestamp": "2026-08-25T11:25:23.947Z",
-  "context": {
-    "matchRate": 0,
-    "iterationCount": 0
-  }
-}

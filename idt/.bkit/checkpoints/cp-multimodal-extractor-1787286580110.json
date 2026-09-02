@@ -1,9 +1,0 @@
-{
-  "feature": "multimodal-extractor",
-  "state": "do",
-  "timestamp": "2026-08-21T04:29:40.110Z",
-  "context": {
-    "matchRate": 0,
-    "iterationCount": 0
-  }
-}
