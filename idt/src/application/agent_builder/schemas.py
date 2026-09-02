@@ -224,6 +224,14 @@ class RunAgentRequest(BaseModel):
     # analysis-node-agent: 분석 노드 입력용 첨부(엑셀 파일 경로 등).
     # 예: [{"type": "excel", "file_path": "/tmp/x.xlsx", "user_id": "u1"}]
     attachments: list[dict] | None = None
+    # agent-model-benchmark D1: 에이전트 정의를 수정하지 않고 모델만 교체한다.
+    # 모델 스윕에서만 사용하며, None이면 에이전트에 저장된 값을 그대로 따른다.
+    llm_model_id_override: str | None = None
+    # D9: 0.0은 falsy이므로 소비 측에서 반드시 `is not None`으로 판정해야 한다.
+    temperature_override: float | None = Field(default=None, ge=0.0, le=2.0)
+    # D2: 평가 실행은 conversation_message를 남기지 않는다 — 스윕 1회가
+    # 모델 수 × 케이스 수만큼 세션을 만들어 사용자 대화 이력을 오염시킨다.
+    persist_conversation: bool = True
 
 
 class RunAgentResponse(BaseModel):

@@ -18,6 +18,13 @@ from fastapi import (
 )
 from pydantic import BaseModel, Field
 
+from src.application.eval_sweep.schemas import (
+    CreateSweepRequest,
+    CreateSweepResponse,
+    SweepDetailResponse,
+    SweepEstimateRequest,
+    SweepEstimateResponse,
+)
 from src.domain.auth.entities import User
 from src.domain.ragas.policies import (
     METRICS_REQUIRING_GROUND_TRUTH,
@@ -48,6 +55,28 @@ def get_testset_use_case():
 
 
 def get_testset_generate_use_case():
+    raise NotImplementedError
+
+
+# agent-model-benchmark module-5: 모델 스윕 UseCase DI 플레이스홀더.
+
+def get_create_sweep_use_case():
+    raise NotImplementedError
+
+
+def get_estimate_sweep_use_case():
+    raise NotImplementedError
+
+
+def get_sweep_detail_use_case():
+    raise NotImplementedError
+
+
+def get_list_sweeps_use_case():
+    raise NotImplementedError
+
+
+def get_delete_sweep_use_case():
     raise NotImplementedError
 
 
@@ -107,6 +136,9 @@ class EvalRunDetailBody(BaseModel):
     summary: dict[str, float]
     error_message: str | None = None
     config: dict = Field(default_factory=dict)
+    # agent-model-benchmark §4.3 / G-10: 스윕 소속 식별 (단독 실행이면 None)
+    sweep_id: str | None = None
+    llm_model_id: str | None = None
 
 
 class EvalResultItemBody(BaseModel):
@@ -170,6 +202,8 @@ def _to_run_body(detail) -> EvalRunDetailBody:
         summary=detail.summary,
         error_message=detail.error_message,
         config=detail.config,
+        sweep_id=getattr(detail, "sweep_id", None),
+        llm_model_id=getattr(detail, "llm_model_id", None),
     )
 
 
@@ -537,3 +571,84 @@ async def delete_testset(
     )
     if not deleted:
         raise HTTPException(status_code=404, detail="Testset not found")
+
+
+# ── 모델 스윕 (agent-model-benchmark §4.1) ───────────────────────────
+#
+# 검증 실패는 _raise_eval_error가 422로 매핑한다. Design §4.2는 400으로 적었으나
+# 이 라우터의 기존 선례(배치 평가·테스트셋)를 따라 422로 통일한다.
+
+@router.post("/sweeps/estimate", response_model=SweepEstimateResponse)
+async def estimate_sweep(
+    body: SweepEstimateRequest,
+    use_case=Depends(get_estimate_sweep_use_case),
+    user: User = Depends(get_current_user),
+) -> SweepEstimateResponse:
+    """실행 전 예상 비용·소요시간. 부수효과 없음 (FR-05)."""
+    request_id = str(uuid.uuid4())
+    try:
+        return await use_case.execute(body, request_id)
+    except ValueError as e:
+        _raise_eval_error(e)
+
+
+@router.post("/sweeps", status_code=202, response_model=CreateSweepResponse)
+async def create_sweep(
+    body: CreateSweepRequest,
+    use_case=Depends(get_create_sweep_use_case),
+    user: User = Depends(get_current_user),
+) -> CreateSweepResponse:
+    """스윕 생성 + 순차 실행 시작 (202 Accepted)."""
+    request_id = str(uuid.uuid4())
+    try:
+        return await use_case.execute(body, request_id, user_id=str(user.id))
+    except ValueError as e:
+        _raise_eval_error(e)
+
+
+@router.get("/sweeps", response_model=PaginatedResponse)
+async def list_sweeps(
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    use_case=Depends(get_list_sweeps_use_case),
+    user: User = Depends(get_current_user),
+) -> PaginatedResponse:
+    request_id = str(uuid.uuid4())
+    items, total = await use_case.execute(
+        limit, offset, request_id, scope_user_id=_scope(user)
+    )
+    return PaginatedResponse(
+        items=[i.model_dump() for i in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get("/sweeps/{sweep_id}", response_model=SweepDetailResponse)
+async def get_sweep(
+    sweep_id: str,
+    use_case=Depends(get_sweep_detail_use_case),
+    user: User = Depends(get_current_user),
+) -> SweepDetailResponse:
+    """스윕 상세 + 모델별 4축 집계 (FR-09)."""
+    request_id = str(uuid.uuid4())
+    try:
+        return await use_case.execute(
+            sweep_id, request_id, scope_user_id=_scope(user)
+        )
+    except ValueError as e:
+        _raise_eval_error(e)
+
+
+@router.delete("/sweeps/{sweep_id}", status_code=204)
+async def delete_sweep(
+    sweep_id: str,
+    use_case=Depends(get_delete_sweep_use_case),
+    user: User = Depends(get_current_user),
+) -> None:
+    request_id = str(uuid.uuid4())
+    try:
+        await use_case.execute(sweep_id, request_id, scope_user_id=_scope(user))
+    except ValueError as e:
+        _raise_eval_error(e)

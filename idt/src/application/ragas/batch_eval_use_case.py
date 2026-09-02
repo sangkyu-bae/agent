@@ -54,6 +54,9 @@ class BatchEvaluationUseCase:
                 ground_truth=tc.get("ground_truth"),
                 expected_contexts=tc.get("expected_contexts", []),
                 metadata=tc.get("metadata", {}),
+                # agent-model-benchmark §3.4: 테스트셋 cases는 JSON이라
+                # 키 추가만으로 실린다 (DDL 변경 없음).
+                expected_tools=tc.get("expected_tools"),
             )
             for tc in raw_cases
         ]

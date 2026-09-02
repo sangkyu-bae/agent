@@ -5,6 +5,12 @@ import { useDeleteEvalRun, useEvalRuns } from '@/hooks/useEval';
 import type { EvalRunStatus, EvalTargetType } from '@/types/eval';
 import CreateRunModal, { type RunPrefill } from './CreateRunModal';
 import RunDetailPanel from './RunDetailPanel';
+// agent-model-benchmark: 모델 스윕
+import CreateSweepModal from './CreateSweepModal';
+import SweepMatrixPanel from './SweepMatrixPanel';
+import { useSweeps } from '@/hooks/useSweeps';
+import { SWEEP_STATUS_BADGE } from '@/types/sweep';
+import type { SweepSummary } from '@/types/sweep';
 
 const STATUS_BADGE: Record<EvalRunStatus, { label: string; cls: string }> = {
   pending: { label: '대기', cls: 'bg-zinc-100 text-zinc-500' },
@@ -23,6 +29,9 @@ const RunsTab = () => {
   const [showCreate, setShowCreate] = useState(false);
   const [prefill, setPrefill] = useState<RunPrefill | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [showSweepCreate, setShowSweepCreate] = useState(false);
+  const [selectedSweepId, setSelectedSweepId] = useState<string | null>(null);
+  const { data: sweepData } = useSweeps();
 
   const { data, isLoading } = useEvalRuns();
   const deleteMutation = useDeleteEvalRun();
@@ -49,13 +58,28 @@ const RunsTab = () => {
         <p className="text-[13px] text-zinc-500">
           총 <span className="font-medium text-zinc-700">{data?.total ?? 0}</span>건의 평가 실행
         </p>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="rounded-xl bg-zinc-900 px-3.5 py-2 text-[13px] font-medium text-white hover:bg-zinc-800"
-        >
-          + 평가 실행
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowSweepCreate(true)}
+            className="rounded-xl border border-zinc-200 px-3.5 py-2 text-[13px] font-medium text-zinc-700 hover:border-violet-300 hover:text-violet-600"
+          >
+            + 모델 스윕
+          </button>
+          <button
+            onClick={() => setShowCreate(true)}
+            className="rounded-xl bg-zinc-900 px-3.5 py-2 text-[13px] font-medium text-white hover:bg-zinc-800"
+          >
+            + 평가 실행
+          </button>
+        </div>
       </div>
+
+      {/* agent-model-benchmark: 모델 스윕 목록 + 매트릭스 */}
+      <SweepSection
+        sweeps={sweepData?.items ?? []}
+        selectedSweepId={selectedSweepId}
+        onSelect={setSelectedSweepId}
+      />
 
       {isLoading && (
         <p className="py-16 text-center text-[13px] text-zinc-400">불러오는 중...</p>
@@ -157,7 +181,77 @@ const RunsTab = () => {
           }}
         />
       )}
+
+      {showSweepCreate && (
+        <CreateSweepModal
+          onClose={() => setShowSweepCreate(false)}
+          onCreated={setSelectedSweepId}
+        />
+      )}
     </div>
+  );
+};
+
+// agent-model-benchmark Design §5.1: 스윕 목록 + 선택 시 매트릭스.
+// 스윕이 없으면 아무것도 렌더하지 않는다 — 기존 평가 실행 화면을 가리지 않기 위함.
+interface SweepSectionProps {
+  sweeps: SweepSummary[];
+  selectedSweepId: string | null;
+  onSelect: (sweepId: string | null) => void;
+}
+
+const SweepSection = ({
+  sweeps,
+  selectedSweepId,
+  onSelect,
+}: SweepSectionProps) => {
+  if (sweeps.length === 0) return null;
+
+  return (
+    <section className="mb-6" data-testid="sweep-section">
+      <h3 className="mb-2 text-[13px] font-medium text-zinc-700">모델 스윕</h3>
+      <div className="space-y-2">
+        {sweeps.map((sw) => {
+          const badge = SWEEP_STATUS_BADGE[sw.status];
+          const selected = sw.id === selectedSweepId;
+          return (
+            <button
+              key={sw.id}
+              type="button"
+              onClick={() => onSelect(selected ? null : sw.id)}
+              className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left ${
+                selected
+                  ? 'border-violet-300 bg-violet-50/30'
+                  : 'border-zinc-200 hover:border-violet-200'
+              }`}
+            >
+              <span className="text-[13.5px] font-medium text-zinc-800">
+                {sw.name}
+              </span>
+              <span className="flex items-center gap-2">
+                <span className="text-[12px] text-zinc-400">
+                  {sw.completed_runs}/{sw.total_runs}
+                </span>
+                <span
+                  className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${badge.cls}`}
+                >
+                  {badge.label}
+                </span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {selectedSweepId && (
+        <div className="mt-3">
+          <SweepMatrixPanel
+            sweepId={selectedSweepId}
+            onClose={() => onSelect(null)}
+          />
+        </div>
+      )}
+    </section>
   );
 };
 

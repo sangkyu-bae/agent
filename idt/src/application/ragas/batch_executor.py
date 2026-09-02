@@ -18,6 +18,7 @@ from src.domain.ragas.interfaces import (
     EvaluatorInterface,
     TargetExecutorInterface,
 )
+from src.domain.eval_sweep.policies import ToolAccuracyPolicy
 from src.domain.ragas.policies import RAGAS_METRICS
 from src.domain.ragas.value_objects import EvalConfig, TestCase
 
@@ -56,6 +57,25 @@ class BatchEvalExecutor:
         )
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
+
+    async def run_now(
+        self,
+        run_id: str,
+        target_type: str,
+        testcases: list[TestCase],
+        config: EvalConfig,
+        user_id: str | None,
+        request_id: str,
+    ) -> None:
+        """run 1건을 **await 가능하게** 실행한다 (agent-model-benchmark D7).
+
+        kickoff은 fire-and-forget이라 순차 오케스트레이션에 쓸 수 없다. SweepExecutor는
+        모델을 하나씩 끝내야 지연 측정이 오염되지 않으므로 이 진입점을 쓴다.
+        예외는 _run_guarded가 삼켜 개별 run 실패가 스윕을 죽이지 않는다 (D12).
+        """
+        await self._run_guarded(
+            run_id, target_type, testcases, config, user_id, request_id
+        )
 
     async def _run_guarded(
         self,
@@ -124,33 +144,44 @@ class BatchEvalExecutor:
         user_id: str | None,
         request_id: str,
     ) -> EvaluationResult:
-        answer, contexts, extra_scores = await self._target_executor.execute(
+        execution = await self._target_executor.execute(
             target_type, config, tc, user_id, request_id
         )
 
         ragas_metric_names = [
             m.value for m in config.metrics if m in RAGAS_METRICS
         ]
-        scores: dict[str, float] = {}
+        scores: dict[str, float | None] = {}
         if ragas_metric_names:
             scores = await self._evaluator.evaluate(
                 question=tc.question,
-                answer=answer,
-                contexts=contexts,
+                answer=execution.answer,
+                contexts=execution.contexts,
                 ground_truth=tc.ground_truth,
                 metrics=ragas_metric_names,
                 request_id=request_id,
+                # agent-model-benchmark D4: 실행에 박제된 judge로 채점한다.
+                judge_model=config.judge_llm_model,
             )
-        scores = {**scores, **extra_scores}
+        # D6: expected_tools가 있는 케이스만 도구 지표를 붙인다. 기재가 없으면
+        # 키 자체를 만들지 않는다 — 부재도 N/A이고, rag/retrieval 결과에 의미
+        # 없는 tool_* 키를 남기지 않기 위함이다 (FR-15).
+        scores = {**scores, **execution.extra_scores}
+        if tc.expected_tools:
+            scores.update(
+                ToolAccuracyPolicy.score(tc.expected_tools, execution.tools_used or [])
+            )
 
         return EvaluationResult(
             id=str(uuid.uuid4()),
             run_id=run_id,
             question=tc.question,
-            answer=answer,
-            contexts=contexts,
+            answer=execution.answer,
+            contexts=execution.contexts,
             ground_truth=tc.ground_truth,
             metrics=scores,
+            ai_run_id=execution.ai_run_id,
+            tools_used=execution.tools_used,
             created_at=datetime.now(timezone.utc),
         )
 

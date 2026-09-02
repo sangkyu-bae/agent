@@ -54,6 +54,9 @@ class EvalRunDetailResponse:
     summary: dict[str, float]
     error_message: str | None = None  # 실패 원인 표면화 (에러 은닉 금지)
     config: dict = field(default_factory=dict)  # 재실행 프리필용
+    # agent-model-benchmark §4.3 / G-10: 스윕 소속 식별. 단독 실행이면 둘 다 None.
+    sweep_id: str | None = None
+    llm_model_id: str | None = None
 
 
 @dataclass(frozen=True)

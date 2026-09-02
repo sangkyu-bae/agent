@@ -117,6 +117,9 @@ class EvalResultUseCase:
             summary=summary,
             error_message=run.error_message,
             config=run.config or {},
+            # G-10: 스윕 소속 식별 — 목록에서 제외되더라도 상세 조회로는 드러나야 한다.
+            sweep_id=run.sweep_id,
+            llm_model_id=run.llm_model_id,
         )
 
     @staticmethod
