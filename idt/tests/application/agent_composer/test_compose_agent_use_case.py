@@ -15,6 +15,7 @@ from src.application.agent_composer.schemas import (
     ComposeCurrentConfig,
     ComposeHistoryTurn,
 )
+from src.domain.agent_builder.policies import AgentBuilderPolicy
 from src.domain.llm_model.entity import LlmModel
 from src.domain.mcp_registry.schemas import MCPServerRegistration, MCPTransportType
 from src.domain.tool_catalog.entity import ToolCatalogEntry
@@ -372,27 +373,30 @@ class TestComposeAgentUseCase:
 
     @pytest.mark.asyncio
     async def test_tool_count_clamped_with_notes(self):
-        """D7: MAX_TOOLS(5) 초과 시 sort_order 상위 5개만 유지 + notes.
+        """D7: MAX_TOOLS 초과 시 sort_order 상위 MAX_TOOLS개만 유지 + notes.
 
-        서로 다른 MCP 서버 6개의 도구를 선택하게 하여 병합 없이 워커 6개를 만든다.
+        서로 다른 MCP 서버의 도구를 상한보다 1개 많게 선택하게 하여
+        병합 없이 워커를 상한+1개 만든다. 상한은 정책 상수를 참조하므로
+        MAX_TOOLS 가 바뀌어도 이 테스트가 따라간다.
         """
+        over = AgentBuilderPolicy.MAX_TOOLS + 1
         mcp_catalog = [
             ToolCatalogEntry(
                 id=f"cat-{i}", tool_id=f"mcp:s{i}:tool_{i}", source="mcp",
                 name=f"도구{i}", description=f"도구{i} 설명", mcp_server_id=f"s{i}",
             )
-            for i in range(6)
+            for i in range(over)
         ]
         mcp_workers = [
             _WorkerOutput(tool_id=f"mcp:s{i}:tool_{i}", worker_id=f"w{i}",
                           description=f"도구{i}", sort_order=i)
-            for i in range(6)
+            for i in range(over)
         ]
         output = _make_output(mcp_workers)
         use_case, _, _, _ = _make_use_case(output, catalog_entries=mcp_catalog)
         result = await use_case.execute(
             ComposeAgentRequest(user_request="여러 도구 에이전트"), "req-1"
         )
-        assert len(result.workers) == 5
+        assert len(result.workers) == AgentBuilderPolicy.MAX_TOOLS
         # 잘려나간 도구는 카탈로그 형식 그대로 안내된다.
-        assert "mcp:s5:tool_5" in result.notes
+        assert f"mcp:s{over - 1}:tool_{over - 1}" in result.notes

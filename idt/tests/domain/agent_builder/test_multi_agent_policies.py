@@ -185,7 +185,11 @@ class TestValidateWorkerCount:
         AgentBuilderPolicy.validate_worker_count([])
 
     def test_exceeds_total_max_raises(self):
-        workers = [_tool_worker(f"tool_{i}", i) for i in range(7)]
+        # 상한 상수를 참조 — MAX_WORKERS_TOTAL 이 바뀌어도 테스트가 따라간다
+        workers = [
+            _tool_worker(f"tool_{i}", i)
+            for i in range(AgentBuilderPolicy.MAX_WORKERS_TOTAL + 1)
+        ]
         with pytest.raises(ValueError, match="최대"):
             AgentBuilderPolicy.validate_worker_count(workers)
 
@@ -195,6 +199,9 @@ class TestValidateWorkerCount:
             AgentBuilderPolicy.validate_worker_count(workers)
 
     def test_exceeds_tool_max_raises(self):
-        workers = [_tool_worker(f"tool_{i}", i) for i in range(6)]
+        workers = [
+            _tool_worker(f"tool_{i}", i)
+            for i in range(AgentBuilderPolicy.MAX_TOOLS + 1)
+        ]
         with pytest.raises(ValueError, match="최대"):
             AgentBuilderPolicy.validate_worker_count(workers)

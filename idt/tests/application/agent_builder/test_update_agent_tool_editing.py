@@ -424,9 +424,7 @@ async def test_t15_exceeding_tool_limit_raises():
 
     agent = _make_agent()
     use_case, _, _, _ = _make_use_case(agent)
-    too_many = [f"internal:{t}" for t in _many_tool_ids(
-        AgentBuilderPolicy.MAX_TOOLS + 1
-    )]
+    too_many = _many_tool_ids(AgentBuilderPolicy.MAX_TOOLS + 1)
 
     with pytest.raises(ValueError, match="최대"):
         await use_case.execute(
@@ -435,11 +433,17 @@ async def test_t15_exceeding_tool_limit_raises():
 
 
 def _many_tool_ids(count: int) -> list[str]:
+    """상한 초과 검증용 도구 ID 목록.
+
+    내부 레지스트리 도구 수가 MAX_TOOLS 보다 적을 수 있으므로(상한을 올리면
+    바로 그렇게 된다) 모자란 만큼 MCP 개별 도구 ID 로 채운다. 상한 검증은
+    도구 출처와 무관하게 워커 총 개수로 이뤄지므로 검증 의도는 동일하다.
+    """
     from src.domain.agent_builder.tool_registry import TOOL_REGISTRY
 
-    ids = list(TOOL_REGISTRY.keys())
-    assert len(ids) >= count, "레지스트리 도구 수가 상한 테스트에 부족하다"
-    return ids[:count]
+    ids = [f"internal:{t}" for t in TOOL_REGISTRY][:count]
+    ids += [f"mcp:{MCP_SERVER_ID}:extra_{i}" for i in range(count - len(ids))]
+    return ids
 
 
 # --- T-16 visibility clamp ----------------------------------------------
