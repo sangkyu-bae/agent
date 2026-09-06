@@ -240,18 +240,23 @@ export const queryKeys = {
   // ── Background Jobs (background-jobs) ──────────────────
   backgroundJobs: {
     all: ['backgroundJobs'] as const,
-    /** 내 작업 목록 (작업함) */
-    list: (params?: { status?: string; limit?: number; offset?: number }) =>
-      [...queryKeys.backgroundJobs.all, 'list', params] as const,
+    /** 통합 작업 이력 (작업함) — 필터별로 캐시를 분리한다 */
+    list: (params?: {
+      status?: string;
+      type?: string;
+      period?: string;
+      limit?: number;
+      offset?: number;
+    }) => [...queryKeys.backgroundJobs.all, 'list', params] as const,
     /** 단건 조회 */
     detail: (jobId: string) =>
       [...queryKeys.backgroundJobs.all, 'detail', jobId] as const,
     /** 미확인 완료/실패 카운트 (벨 배지) */
     unseenCount: () =>
       [...queryKeys.backgroundJobs.all, 'unseenCount'] as const,
-    /** 내 스케줄 실행 이력 (작업함 스케줄 탭, D9) */
-    scheduleRuns: (params?: { limit?: number; offset?: number }) =>
-      [...queryKeys.backgroundJobs.all, 'scheduleRuns', params] as const,
+    /** 내 스케줄 정의 (작업함 스케줄 작업 탭, jobs-page-revamp FR-15) */
+    mySchedules: () =>
+      [...queryKeys.backgroundJobs.all, 'mySchedules'] as const,
   },
 
   // ── Agent Webhook (agent-webhook) ──────────────────────

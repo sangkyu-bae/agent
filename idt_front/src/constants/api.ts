@@ -71,6 +71,8 @@ export const API_ENDPOINTS = {
   // Tools
   TOOL_CATALOG: '/api/v1/tool-catalog',
   TOOL_CATALOG_BUILTIN: '/api/v1/tool-catalog/builtin',
+  // mcp-tool-category-routing FR-13: 도구 분류·호출 상한 지정 (admin 전용)
+  TOOL_CATALOG_METADATA: '/api/v1/tool-catalog/metadata',
   // mcp-tool-auto-sync FR-11: MCP 서버별 도구 재동기화 (admin 전용)
   TOOL_CATALOG_SYNC: '/api/v1/tool-catalog/sync',
 
@@ -258,9 +260,12 @@ export const API_ENDPOINTS = {
   JOBS: '/api/v1/jobs',
   JOBS_UNSEEN_COUNT: '/api/v1/jobs/unseen-count',
   JOBS_SEEN_ALL: '/api/v1/jobs/seen-all',
+  /** 완료된 작업 일괄 정리 (jobs-page-revamp FR-05) */
+  JOBS_CLEANUP: '/api/v1/jobs/cleanup',
   JOB_DETAIL: (jobId: string) => `/api/v1/jobs/${jobId}`,
   JOB_SEEN: (jobId: string) => `/api/v1/jobs/${jobId}/seen`,
-  MY_SCHEDULE_RUNS: '/api/v1/schedule-runs',
+  /** 내 스케줄 정의 전체 (jobs-page-revamp FR-15) — 관리는 AGENT_SCHEDULE_* 사용 */
+  MY_SCHEDULES: '/api/v1/schedules',
 
   // Agent Webhook (agent-webhook) — 관리(JWT) + 공개 inbound 경로
   AGENT_WEBHOOK: (agentId: string) => `/api/v1/agents/${agentId}/webhook`,
