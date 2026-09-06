@@ -16,6 +16,17 @@ from src.infrastructure.mcp.tool_adapter import MCPToolAdapter
 logger = get_logger(__name__)
 
 
+def _as_schema_dict(raw) -> dict:
+    """Design Ref: mcp-tool-category-routing module-2 —
+    list_tools 응답의 inputSchema를 안전하게 dict로 정규화한다.
+
+    MCP 서버는 스키마를 아예 주지 않을 수도, 규격 밖 형태로 줄 수도 있다.
+    그대로 어댑터에 넘기면 pydantic 검증 실패로 해당 서버의 도구 로딩
+    전체가 무너지므로, 알 수 없는 형태는 '스키마 미상'(빈 dict)으로 낮춘다.
+    """
+    return raw if isinstance(raw, dict) else {}
+
+
 class MCPToolRegistry:
     """MCP 서버 Tool 레지스트리.
 
@@ -89,6 +100,15 @@ class MCPToolRegistry:
                     description=mcp_tool.description or f"MCP tool: {mcp_tool.name}",
                     server_config=config,
                     mcp_tool_name=mcp_tool.name,
+                    # Design Ref: mcp-tool-category-routing module-2 —
+                    # 지금까지 버려지던 도구별 입력 스키마. collect 노드가
+                    # 실제 인자 키를 알아야 추측 없이 호출할 수 있다.
+                    # 스키마 미제공·비정형 응답은 빈 dict로 degrade한다.
+                    # dict가 아닌 값을 그대로 넘기면 pydantic 검증에서 터져
+                    # 그 서버의 도구 로딩 '전체'가 실패한다(§6.2 격리 철학 위배).
+                    mcp_input_schema=_as_schema_dict(
+                        getattr(mcp_tool, "inputSchema", None)
+                    ),
                     # Design Ref: §4 — ③ 실행 로그가 요청/도구를 되짚을 수 있도록 전달.
                     request_id=request_id or "",
                     tool_id=config.name,

@@ -4,6 +4,8 @@ import type {
   SetBuiltinResponse,
   SyncMcpToolsResponse,
   ToolCatalogResponse,
+  ToolMetadataRequest,
+  ToolMetadataResponse,
 } from '@/types/toolCatalog';
 
 export const toolCatalogService = {
@@ -15,6 +17,13 @@ export const toolCatalogService = {
       tool_id: toolId,
       is_builtin: isBuiltin,
     }),
+  // mcp-tool-category-routing FR-13: 분류·호출 상한 지정 (admin 전용).
+  // 부분 갱신 — payload에 담은 필드만 서버에서 갱신된다.
+  updateMetadata: (payload: ToolMetadataRequest) =>
+    authApiClient.patch<ToolMetadataResponse>(
+      API_ENDPOINTS.TOOL_CATALOG_METADATA,
+      payload,
+    ),
   // mcp-tool-auto-sync FR-11: 서버별 도구 재동기화 (admin 전용).
   // 등록/수정 시 자동 sync가 실패했을 때의 복구 경로이자,
   // MCP 서버 쪽 도구가 나중에 바뀐 경우의 재반영 수단이다.

@@ -65,6 +65,74 @@ def render_datetime_block(
     )
 
 
+# worker-context-injection §4.1: 워커 system_prompt에 주입할 에이전트 지침의
+# 문자 수 상한. 초과분은 절단하고 생략 사실을 LLM에 알린다 (토큰 폭증 방지).
+MAX_AGENT_PROMPT_CHARS = 2000
+
+# §4.1 소프트 가드 — 근거 없는 도구 인자 합성을 막는 지침. 다른 절이 모두
+# 비어도 항상 포함된다(도구를 가진 워커에는 언제나 유효한 규범이므로).
+_TOOL_USAGE_NORM = (
+    "[도구 사용 규범]\n"
+    "도구 인자로 URL·식별자·날짜를 추측해서 만들지 마세요.\n"
+    "대화 내용, 이전 단계 결과, 이전 도구 응답에 근거가 없으면 도구를 호출하지 말고\n"
+    "무엇이 확인되지 않았는지 답변에 밝히세요.\n"
+    "데이터를 정재만 할뿐 어떠한 작업을 하지 마세요. 상위에서 노드에서 이를 책임집니다.\n"
+)
+
+
+def render_worker_context_block(
+    agent_prompt: str | None,
+    worker_description: str | None,
+    tool_names: list[str] | None,
+    include_tool_norm: bool = True,
+) -> str:
+    """워커 react agent의 system_prompt에 prepend할 컨텍스트 블록.
+
+    Design Ref: worker-context-injection §4.1.
+
+    supervisor만 에이전트 시스템 프롬프트를 보고 워커는 보지 못하던 유실을
+    메운다. 워커는 이 블록으로 '어떤 에이전트의 어떤 역할'인지 알게 된다.
+
+    Args:
+        agent_prompt: 에이전트 시스템 프롬프트. 비면 해당 절 생략.
+        worker_description: 워커 역할 설명. 비면 해당 절 생략.
+        tool_names: 워커에 바인딩된 도구 이름. 비면 해당 절 생략.
+        include_tool_norm: 도구 사용 규범 포함 여부. 도구를 직접 호출하지 않는
+            노드(analysis 등)는 False — 무관한 지침이 프롬프트를 오염시키지 않도록.
+
+    Returns:
+        블록 텍스트(끝에 '\\n---\\n\\n' 구분자). 담을 절이 하나도 없으면 ''
+        (규범을 끄고 프롬프트·역할도 비면 미배선으로 보고 기존 동작 보존).
+    """
+    sections: list[str] = []
+
+    prompt = (agent_prompt or "").strip()
+    if prompt:
+        sections.append(f"[에이전트 지침]\n{_truncate_prompt(prompt)}\n")
+
+    description = (worker_description or "").strip()
+    if description:
+        sections.append(f"[당신의 역할]\n{description}\n")
+
+    names = [n for n in (tool_names or []) if n]
+    if names:
+        listed = "\n".join(f"- {name}" for name in names)
+        sections.append(f"[사용 가능한 도구]\n{listed}\n")
+
+    if include_tool_norm:
+        sections.append(_TOOL_USAGE_NORM)
+    if not sections:
+        return ""
+    return "\n".join(sections) + "\n---\n\n"
+
+
+def _truncate_prompt(prompt: str) -> str:
+    """상한 초과 시 절단하고 생략 사실을 명시한다 (§4.1)."""
+    if len(prompt) <= MAX_AGENT_PROMPT_CHARS:
+        return prompt
+    return prompt[:MAX_AGENT_PROMPT_CHARS] + "\n…(에이전트 지침 일부 생략)"
+
+
 def render_user_context_block(ctx: AuthContext | None) -> str:
     """사용자 컨텍스트 블록 한국어 텍스트 생성.
 

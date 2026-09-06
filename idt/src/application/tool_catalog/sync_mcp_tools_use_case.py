@@ -46,6 +46,11 @@ class SyncMcpToolsUseCase:
                     # 어댑터의 .name은 'mcp_{uuid}_{tool}'로 접두사가 붙는다.
                     # 카탈로그 계약은 원본 이름 기준이다 — mcp:{server_id}:{tool}.
                     tool_name = tool.mcp_tool_name
+                    # Design Ref: mcp-tool-category-routing §5 D-02 (FR-03) —
+                    # category / max_tool_calls는 관리자 지정값이다. sync가
+                    # 만드는 entry는 이 값을 참칭하지 않고 기본(None)으로 둔다.
+                    # 실제 보존은 repository UPDATE 분기가 두 컬럼을 SET 절에
+                    # 넣지 않음으로써 성립한다 (is_builtin D2와 동형).
                     entry = ToolCatalogEntry(
                         id=str(uuid.uuid4()),
                         tool_id=f"mcp:{server.id}:{tool_name}",

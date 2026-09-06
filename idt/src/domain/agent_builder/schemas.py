@@ -166,3 +166,17 @@ class AgentDefinition:
         for i, worker in enumerate(sub_workers):
             worker.sort_order = len(tool_workers) + i
         self.workers = tool_workers + sub_workers
+
+    def replace_tool_workers(self, tool_workers: list["WorkerDefinition"]) -> None:
+        """sub_agent 워커는 보존하고 tool 워커만 교체. sort_order를 재정렬한다.
+
+        agent-update-tool-editing D §3.1 — replace_sub_agents 의 대칭 연산.
+        수정(edit) 경로에서 도구 구성만 목표 상태로 갱신할 때 사용한다.
+        서브에이전트는 항상 도구 워커 뒤로 재배치된다.
+        """
+        sub_workers = [w for w in self.workers if w.worker_type == "sub_agent"]
+        for i, worker in enumerate(tool_workers):
+            worker.sort_order = i
+        for j, worker in enumerate(sub_workers):
+            worker.sort_order = len(tool_workers) + j
+        self.workers = tool_workers + sub_workers

@@ -1,10 +1,11 @@
 """WorkflowCompiler: WorkflowDefinition → Custom StateGraph CompiledGraph 동적 컴파일."""
 from typing import Any, Awaitable, Callable, Optional, TYPE_CHECKING
 
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, HumanMessage
 from langchain.agents import create_agent
 from langgraph.graph import END, StateGraph
 
+from src.application.agent_builder.collect_pipeline import create_collect_node
 from src.application.agent_builder.message_normalization import ensure_user_tail
 from src.application.agent_builder.search_pipeline import (
     create_search_pipeline_node,
@@ -28,11 +29,14 @@ from src.application.agent_builder.supervisor_nodes import (
     route_to_worker_or_final,
 )
 from src.application.agent_builder.supervisor_state import SupervisorState
+from src.application.agent_builder.worker_run_cap_hooks import WorkerRunCapHooks
+from src.application.middleware.middleware_builder import MiddlewareBuilder
 from src.application.agent_run.auth_context import get_current_auth_context
 from src.application.agent_run.prompt_rendering import (
     WIKI_FOLDER_HEADER_TAG,
     render_datetime_block,
     render_user_context_block,
+    render_worker_context_block,
 )
 from src.application.visualization.analysis_prompt import (
     ANALYSIS_OUTPUT_GUIDE,
@@ -65,10 +69,12 @@ from src.domain.agent_run.auth_context import AuthContext
 from src.domain.agent_builder.interfaces import AgentDefinitionRepositoryInterface
 from src.domain.agent_builder.policies import (
     CircularReferencePolicy,
+    CollectPipelinePolicy,
     IterationLimitPolicy,
     NestingDepthPolicy,
     QualityGatePolicy,
     SearchPipelinePolicy,
+    ToolCallBudgetPolicy,
 )
 from src.domain.agent_builder.schemas import SupervisorConfig, WorkerDefinition, WorkflowDefinition
 from src.domain.agent_builder.tool_registry import get_tool_meta
@@ -78,6 +84,7 @@ from src.domain.llm_model.entity import LlmModel
 from src.domain.llm_model.interfaces import LlmModelRepositoryInterface
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.domain.mcp.exceptions import McpWiringError
+from src.domain.mcp.tool_argument_policy import ToolArgumentPolicy
 from src.domain.tool_catalog.mcp_tool_id import parse_mcp_tool_id
 from src.infrastructure.agent_builder.tool_factory import ToolFactory
 
@@ -109,6 +116,107 @@ def _instantiate(middleware_plan) -> list:
     if middleware_plan is None:
         return []
     return middleware_plan.instantiate()
+
+
+# worker-context-injection §4.1: supervisor가 task를 주지 못한 경우(강제 라우팅·
+# 구조화 출력 누락)의 폴백 지시 — 변경 전과 동일한 문구를 유지한다.
+_FALLBACK_WORKER_INSTRUCTION = (
+    "위 대화 맥락과 이전 단계 결과를 참고하여 "
+    "당신의 역할에 해당하는 작업을 수행하세요."
+)
+
+
+def _blocked_step_summary(messages: list) -> str:
+    """react agent 트레이스에서 도구 차단 응답을 찾아 step 요약으로 만든다.
+
+    Design Ref: worker-context-injection §6.3 (FR-09).
+
+    `MCPToolAdapter`(infrastructure)는 application을 참조할 수 없으므로 차단을
+    직접 기록하지 못한다. 대신 domain 정책이 정한 접두어로 응답을 식별해,
+    노드 레벨인 여기서 `_wrap_step`이 소비할 요약을 만든다.
+
+    Args:
+        messages: 워커 react agent가 반환한 내부 메시지들
+
+    Returns:
+        차단이 있으면 요약 문자열, 없으면 ''.
+    """
+    blocked = [
+        m for m in messages
+        if ToolArgumentPolicy.is_blocked_message(getattr(m, "content", None))
+    ]
+    if not blocked:
+        return ""
+    first = getattr(blocked[0], "content", "")
+    detail = first.split("\n")[1] if "\n" in first else ""
+    return f"도구 호출 {len(blocked)}건 차단 (근거 없는 인자). {detail}".strip()
+
+
+def _tool_call_step_summary(messages: list, limit: int | None) -> str:
+    """react agent 트레이스의 도구 호출 횟수를 step 요약으로 만든다.
+
+    Design Ref: mcp-tool-category-routing Analysis Gap-01 (FR-12).
+
+    `ToolCallLimitMiddleware`는 상한 초과를 langchain 내부에서 차단하므로 그
+    사실이 실행 이력에 남지 않는다. 이 사이클의 핵심 지표("스크랩 4~5회 →
+    몇 회?")를 운영 중에 측정하려면 횟수 자체가 보여야 한다.
+
+    내부 트레이스는 state로 유출되기 전에 폐기되므로(worker-toolmessage-leak-fix
+    D1) `_blocked_step_summary`와 같은 위치에서 횟수만 건져 올린다.
+
+    Args:
+        messages: 워커 react agent가 반환한 내부 메시지들
+        limit: 이 워커에 적용된 호출 상한. None이면 상한 표기를 생략한다.
+
+    Returns:
+        도구 호출이 있으면 요약 문자열, 없으면 '' (잡음 방지).
+    """
+    count = sum(1 for m in messages if getattr(m, "type", "") == "tool")
+    if count == 0:
+        return ""
+    summary = f"도구 호출 {count}회"
+    if limit is not None and count >= limit:
+        summary += f" (상한 {limit} 도달)"
+    return summary
+
+
+def _build_worker_input(state: SupervisorState) -> list:
+    """워커 react agent에 넘길 메시지 배열을 조립한다.
+
+    Design Ref: worker-context-injection §4.1 (FR-05).
+
+    worker_task는 ensure_user_tail의 instruction으로 넘길 수 없다. ensure_user_tail은
+    tail이 user면 no-op이라(message_normalization.py:35-37) 첫 워커 호출
+    (= tail이 사용자 질문)에서 지시가 통째로 유실된다. 지시는 무조건 append하고,
+    ensure_user_tail은 본래 역할인 prefill 방어(AI-last 방지)만 맡는다.
+
+    fix-anthropic-prefill-error: 직전 워커 AIMessage-last 상태로 react agent에
+    진입하면 Claude 4.6+ 가 prefill을 거부한다(400).
+
+    Args:
+        state: supervisor 그래프 상태. worker_task가 비면 폴백 지시를 쓴다.
+
+    Returns:
+        워커에 전달할 메시지 리스트. 원본 state["messages"]는 변형하지 않는다.
+    """
+    messages = list(state["messages"])
+    task = state.get("worker_task", "")
+    if task:
+        messages.append(HumanMessage(content=f"[현재 작업]\n{task}"))
+    return ensure_user_tail(messages, instruction=_FALLBACK_WORKER_INSTRUCTION)
+
+
+def _tool_names(tools: list) -> list[str]:
+    """worker-context-injection §4.1: 워커에 바인딩된 도구 이름만 추린다.
+
+    이름이 문자열이 아닌 객체(테스트 대역 등)는 조용히 제외한다.
+    """
+    names = []
+    for tool in tools or []:
+        name = getattr(tool, "name", None)
+        if isinstance(name, str) and name:
+            names.append(name)
+    return names
 
 
 def _is_tool_message(msg) -> bool:
@@ -163,6 +271,7 @@ class WorkflowCompiler:
         presentation_generator=None,
         blueprint_repository=None,
         excel_generator=None,
+        tool_catalog_repository=None,
         *,
         agent_timezone: str | None = None,
     ) -> None:
@@ -201,6 +310,10 @@ class WorkflowCompiler:
         self._blueprint_repository = blueprint_repository
         # excel-generator-node §2.1: 엑셀 생성 노드 의존 (미주입 시 안내 노옵).
         self._excel_generator = excel_generator
+        # Design Ref: mcp-tool-category-routing §5 D-08 — 도구 카테고리·호출
+        # 상한 조회용 카탈로그 저장소. 미주입(None)이면 카탈로그 단계를 통째로
+        # 건너뛰어 이 사이클 이전과 동일한 2단계 해석이 된다 (FR-14).
+        self._tool_catalog_repository = tool_catalog_repository
         # runtime-datetime-context D3: [현재 날짜] 블록 기준 타임존 (main.py가
         # settings.agent_timezone 주입). None이면 블록 생략 — 기존 동작·테스트 무회귀.
         self._agent_timezone = agent_timezone
@@ -280,12 +393,24 @@ class WorkflowCompiler:
                     agent_id, request_id, default_builtin=False
                 )
 
+            # Design Ref: mcp-tool-category-routing §5 D-09 —
+            # 도구 카테고리·호출 상한은 compile()당 1회만 조회한다.
+            catalog_meta = await self._load_catalog_metadata(request_id)
+
             worker_map: dict[str, object] = {}
             # search/analysis 처럼 LLM 래핑 없이 직접 실행되는 "함수형 노드" id 집합.
             # 노드 등록 시 _wrap_worker 우회 판별에 사용(취약한 isinstance 휴리스틱 대체).
             function_node_ids: set[str] = set()
             # analysis-chart-router: analysis 카테고리 워커는 직후 chart_router로 보낸다.
             analysis_worker_ids: set[str] = set()
+            # mcp-tool-category-routing §5 D-07 (FR-11): 런당 1회로 제한할 워커.
+            # collect 한정 — search는 REGISTRY 분류라 관리자 지정 없이 동작이
+            # 바뀌므로 제외한다(module-3 개정, FR-14 취지 보존).
+            collect_worker_ids: list[str] = []
+            # Analysis Gap-01 (FR-12): 워커별로 실제 적용된 도구 호출 상한.
+            # _wrap_worker가 '상한 도달' 판정에 쓴다. wiki 분기(D-06)는 상한이
+            # 없으므로 담지 않는다 — None이면 횟수만 기록된다.
+            worker_run_limits: dict[str, int] = {}
             # Design Ref: fix-mcp-tool-call-not-reaching-server §6.2 —
             # 도구 생성에 실패해 그래프에서 제외된 워커. supervisor 목록에서도 뺀다.
             failed_worker_ids: set[str] = set()
@@ -309,6 +434,17 @@ class WorkflowCompiler:
                     worker_map[worker_def.worker_id] = sub_node
                     continue
 
+                # Design Ref: worker-context-injection §4.1 (FR-03, GAP-01) —
+                # 생성 노드는 LLM 호출이 주입 생성기 내부에서 일어나 컴파일러에
+                # 프롬프트 훅이 없었다. 각 생성기 계약에 블록을 전달한다.
+                # 외부 도구를 호출하지 않으므로 도구 사용 규범은 제외한다.
+                generator_context_block = render_worker_context_block(
+                    agent_prompt=workflow.supervisor_prompt,
+                    worker_description=worker_def.description,
+                    tool_names=None,
+                    include_tool_norm=False,
+                )
+
                 # document-template-extractor Design §4-1: 전용 합성 노드.
                 # ToolFactory 미경유 (단일 툴 react agent 미채택 — Plan §3-3).
                 if worker_def.tool_id == "document_extractor":
@@ -316,6 +452,7 @@ class WorkflowCompiler:
                         self._create_document_extractor_node(
                             llm, worker_def,
                             auth_ctx=auth_ctx, request_id=request_id,
+                            worker_context_block=generator_context_block,
                         )
                     )
                     function_node_ids.add(worker_def.worker_id)
@@ -328,6 +465,7 @@ class WorkflowCompiler:
                         self._create_document_generator_node(
                             llm, worker_def,
                             auth_ctx=auth_ctx, request_id=request_id,
+                            worker_context_block=generator_context_block,
                         )
                     )
                     function_node_ids.add(worker_def.worker_id)
@@ -340,6 +478,7 @@ class WorkflowCompiler:
                             llm, worker_def,
                             auth_ctx=auth_ctx, request_id=request_id,
                             callback=callback,
+                            worker_context_block=generator_context_block,
                         )
                     )
                     function_node_ids.add(worker_def.worker_id)
@@ -352,17 +491,27 @@ class WorkflowCompiler:
                         self._create_excel_generator_node(
                             llm, worker_def,
                             auth_ctx=auth_ctx, request_id=request_id,
+                            worker_context_block=generator_context_block,
                         )
                     )
                     function_node_ids.add(worker_def.worker_id)
                     continue
 
-                category = self._resolve_category(worker_def)
+                category = self._resolve_category(worker_def, catalog_meta)
 
                 # analysis 노드는 도구를 직접 쓰지 않으므로 tool 생성을 생략한다.
                 if category == "analysis":
+                    # Design Ref: worker-context-injection §4.1 (FR-03, GAP-01) —
+                    # 에이전트 프롬프트는 이미 받고 있었으나 자기 역할은 몰랐다.
+                    # 도구가 없으므로 도구 사용 규범은 제외한다.
                     worker_map[worker_def.worker_id] = self._create_analysis_node(
-                        llm, worker_def.worker_id, workflow.supervisor_prompt,
+                        llm, worker_def.worker_id,
+                        render_worker_context_block(
+                            agent_prompt=workflow.supervisor_prompt,
+                            worker_description=worker_def.description,
+                            tool_names=None,
+                            include_tool_norm=False,
+                        ),
                     )
                     function_node_ids.add(worker_def.worker_id)
                     analysis_worker_ids.add(worker_def.worker_id)
@@ -405,17 +554,38 @@ class WorkflowCompiler:
                 # search 노드·wiki 분기는 단일 도구 계약을 유지한다.
                 tool = worker_tools[0]
 
-                if category == "search":
+                # Design Ref: worker-context-injection §4.1 (FR-02/03) —
+                # 워커 react agent는 supervisor_prompt도 자기 역할도 보지 못해
+                # 도구 인자를 지어냈다. 블록은 항상 datetime 뒤·노드별 기존
+                # 지시 앞에만 붙이며 기존 지시 문자열은 건드리지 않는다.
+                worker_context_block = render_worker_context_block(
+                    agent_prompt=workflow.supervisor_prompt,
+                    worker_description=worker_def.description,
+                    tool_names=_tool_names(worker_tools),
+                )
+
+                if category in ("search", "collect"):
                     # deep-search-pipeline FR-13: 모드에 따라 legacy/deep 팩토리 선택.
-                    worker_map[worker_def.worker_id] = self._create_search_node(
-                        worker_id=worker_def.worker_id,
-                        tool_id=worker_def.tool_id,
-                        tool=tool,
-                        llm=llm,
-                        user_context_block=user_context_block,
-                        datetime_block=datetime_block,  # §D4 (FR-05a)
+                    # mcp-tool-category-routing §5 D-03 (FR-05): collect는 react
+                    # 루프 없는 단일샷 노드 — 산출이 도구 원본이라 하류가 근거로 쓴다.
+                    worker_map[worker_def.worker_id] = (
+                        self._create_worker_node_for_category(
+                            category=category,
+                            worker_id=worker_def.worker_id,
+                            tool_id=worker_def.tool_id,
+                            tool=tool,
+                            llm=llm,
+                            user_context_block=user_context_block,
+                            datetime_block=datetime_block,  # §D4 (FR-05a)
+                            # worker-context-injection §4.1 (FR-03, GAP-01):
+                            # 실제 검색어·도구 인자를 작성하는 LLM이 에이전트 맥락을
+                            # 모르면 근거 없는 값을 지어낸다.
+                            worker_context_block=worker_context_block,
+                        )
                     )
                     function_node_ids.add(worker_def.worker_id)
+                    if category == "collect":
+                        collect_worker_ids.append(worker_def.worker_id)
                 else:
                     if worker_def.tool_id == "wiki_read" and wiki_toc_block:
                         # D1: 워커 LLM도 목차를 봐야 열람할 문서 id를 고를 수 있다.
@@ -443,19 +613,41 @@ class WorkflowCompiler:
                         worker_agent = create_agent(
                             model=llm, tools=wiki_tools,
                             name=worker_def.worker_id,
-                            # §D5: 날짜 → 목차 → 지시
-                            system_prompt=datetime_block + wiki_toc_block + instruction,
+                            # §D5 + worker-context-injection §4.1:
+                            # 날짜 → 워커 컨텍스트 → 목차 → 기존 지시
+                            system_prompt=(
+                                datetime_block + worker_context_block
+                                + wiki_toc_block + instruction
+                            ),
+                            # mcp-tool-category-routing §5 D-06: wiki 분기는
+                            # 호출 상한 예외 — 폴더 모드가 지도→wiki_list→
+                            # wiki_read로 최소 2회를 쓰는 기존 워크플로우를 지킨다.
                             middleware=_instantiate(middleware_plan),
                         )
                     else:
-                        # §D5 (FR-05b): 시스템 프롬프트가 없던 일반 워커에 날짜 블록.
-                        # 빈 문자열은 넘기지 않는다 — 미배선 시 기존 호출 형태 보존.
+                        # §D5 (FR-05b) + worker-context-injection §4.1 (FR-02):
+                        # 날짜 블록 + 워커 컨텍스트 블록. 둘 다 비면 넘기지 않는다
+                        # (미배선 시 기존 호출 형태 보존).
+                        combined_prompt = datetime_block + worker_context_block
                         worker_kwargs = (
-                            {"system_prompt": datetime_block} if datetime_block else {}
+                            {"system_prompt": combined_prompt} if combined_prompt else {}
                         )
+                        # mcp-tool-category-routing §5 D-05 (FR-10): 미분류
+                        # react 워커의 도구 호출 예산. 관찰된 4~5회 반복 호출을
+                        # 워커 내부에서 봉쇄한다. 워커마다 새 인스턴스 (D6).
+                        budget = self._tool_call_budget_middleware(
+                            tool_id=worker_def.tool_id,
+                            catalog_meta=catalog_meta,
+                            is_wiki_branch=False,
+                        )
+                        if budget:
+                            # Analysis Gap-01: 관측을 위해 적용 상한을 기록한다.
+                            worker_run_limits[worker_def.worker_id] = (
+                                budget[0].run_limit
+                            )
                         worker_agent = create_agent(
                             model=llm, tools=worker_tools, name=worker_def.worker_id,
-                            middleware=_instantiate(middleware_plan),
+                            middleware=_instantiate(middleware_plan) + budget,
                             **worker_kwargs,
                         )
                     worker_map[worker_def.worker_id] = worker_agent
@@ -486,6 +678,15 @@ class WorkflowCompiler:
                         logger=self._logger,
                     )
 
+            # mcp-tool-category-routing §5 D-07 (FR-11): collect 워커 재라우팅 상한.
+            # 위에서 정해진 훅을 감싸므로 첨부·시각화 강제 라우팅 판단은 보존된다.
+            # collect 워커가 없으면 감싸지 않는다 — 기존 동작 그대로 (FR-14).
+            if collect_worker_ids:
+                effective_hooks = WorkerRunCapHooks(
+                    effective_hooks, sorted(collect_worker_ids),
+                    logger=self._logger,
+                )
+
             supervisor_fn = create_supervisor_node(
                 llm=llm,
                 workers=workers_for_supervisor,
@@ -496,7 +697,7 @@ class WorkflowCompiler:
                 viz_policy=viz_policy,
                 # doc-generator D6: 문서 생성 라우팅 판단 기준 (강제 아님)
                 docgen_guidance_block=self._render_docgen_guidance_block(
-                    workflow.workers
+                    workflow.workers, catalog_meta
                 ),
             )
             quality_gate_fn = create_quality_gate_node(
@@ -563,7 +764,12 @@ class WorkflowCompiler:
                         _wrap_step(
                             worker_id,
                             NodeType.WORKER,
-                            self._wrap_worker(worker_id, worker_agent),
+                            # Analysis Gap-01 (FR-12): 이 워커에 적용된 상한을
+                            # 함께 넘겨 '상한 도달' 여부까지 이력에 남긴다.
+                            self._wrap_worker(
+                                worker_id, worker_agent,
+                                tool_call_limit=worker_run_limits.get(worker_id),
+                            ),
                         ),
                     )
 
@@ -721,15 +927,118 @@ class WorkflowCompiler:
 
         return self._wrap_sub_agent(worker_def.worker_id, sub_graph)
 
-    def _resolve_category(self, worker_def: WorkerDefinition) -> str:
-        """카테고리 결정: DB 오버라이드 → TOOL_REGISTRY → 기본값 "action"."""
+    async def _load_catalog_metadata(self, request_id: str) -> dict:
+        """도구 카탈로그 메타를 compile()당 1회 배치 조회한다 (D-09).
+
+        Design Ref: mcp-tool-category-routing §5 D-08/D-09 —
+        워커마다 조회하면 N+1이 된다. 저장소 미주입이거나 조회가 실패하면
+        빈 맵으로 낮춰 카탈로그 단계를 건너뛴다(기존 해석으로 graceful).
+
+        키는 워커 저장 형식으로 맞춘다. 카탈로그는 내부 도구를
+        `internal:{id}`로 보관하지만 agent_tool은 접두사를 벗긴 `{id}`로
+        저장한다(CreateAgentUseCase._normalize_tool_id) — 그대로 두면
+        내부 도구가 영원히 조회되지 않는다.
+        """
+        if self._tool_catalog_repository is None:
+            return {}
+        try:
+            entries = await self._tool_catalog_repository.list_active(request_id)
+        except Exception as e:
+            self._logger.warning(
+                "tool catalog metadata load failed, falling back to registry",
+                request_id=request_id, exception=e,
+            )
+            return {}
+        return {self._catalog_key(e.tool_id): e for e in entries}
+
+    @staticmethod
+    def _catalog_key(tool_id: str) -> str:
+        """카탈로그 tool_id → 워커 저장 형식. MCP는 양쪽이 동일하다."""
+        if parse_mcp_tool_id(tool_id) is not None:
+            return tool_id
+        return tool_id.split(":")[-1] if ":" in tool_id else tool_id
+
+    def _resolve_category(
+        self, worker_def: WorkerDefinition, catalog_meta: dict | None = None
+    ) -> str:
+        """카테고리 결정 (FR-04).
+
+        우선순위: agent_tool.category → tool_catalog.category
+                  → TOOL_REGISTRY → 기본값 "action"
+
+        catalog_meta가 없으면(미주입·조회 실패) 카탈로그 단계를 건너뛰어
+        이 사이클 이전과 동일하게 동작한다 (FR-14).
+        """
         if worker_def.category is not None:
             return worker_def.category
+        entry = (catalog_meta or {}).get(worker_def.tool_id)
+        if entry is not None and entry.category:
+            return entry.category
         try:
             meta = get_tool_meta(worker_def.tool_id)
             return meta.category
         except ValueError:
             return "action"
+
+    def _tool_call_budget_middleware(
+        self, tool_id: str, catalog_meta: dict | None, is_wiki_branch: bool,
+    ) -> list:
+        """react 워커에 붙일 도구 호출 예산 미들웨어 (FR-10 / D-05).
+
+        Design Ref: §5 D-06 — wiki 분기는 예외다. 폴더 모드는
+        지도 → wiki_list → wiki_read로 최소 2회를 호출하는 확립된
+        워크플로우이고 기본 상한 2회에 정확히 걸쳐 회귀 위험이 크다.
+        사용자 결정에 따라 기존 워크플로우를 그대로 둔다.
+
+        Returns:
+            미들웨어 인스턴스 리스트 (wiki 분기면 빈 리스트)
+        """
+        if is_wiki_branch:
+            return []
+        entry = (catalog_meta or {}).get(tool_id)
+        run_limit = ToolCallBudgetPolicy.resolve(
+            entry.max_tool_calls if entry is not None else None
+        )
+        # D-11: langchain 클래스 참조는 MiddlewareBuilder에 가둔다.
+        return [MiddlewareBuilder.build_tool_call_budget(run_limit)]
+
+    def _create_worker_node_for_category(
+        self,
+        category: str,
+        worker_id: str,
+        tool_id: str,
+        tool,
+        llm,
+        user_context_block: str = "",
+        datetime_block: str = "",
+        worker_context_block: str = "",
+    ):
+        """카테고리별 함수형 워커 노드 생성 (search / collect).
+
+        두 팩토리는 시그니처·반환 계약이 동일하다 (AD-1).
+        """
+        if category == "collect":
+            # Design Ref: §5 D-03 — 수집형은 react 루프 없이 도구를 1회만
+            # 부르고 산출을 근거 규약으로 남긴다(분석은 하류 책임).
+            return create_collect_node(
+                worker_id=worker_id,
+                tool=tool,
+                pipeline_llm=self._resolve_pipeline_llm(llm),
+                policy=CollectPipelinePolicy(self._search_compress_threshold),
+                logger=self._logger,
+                user_context_block=user_context_block,
+                datetime_block=datetime_block,
+                worker_context_block=worker_context_block,
+            )
+        return self._create_search_node(
+            worker_id=worker_id,
+            tool_id=tool_id,
+            tool=tool,
+            llm=llm,
+            user_context_block=user_context_block,
+            datetime_block=datetime_block,
+            worker_context_block=worker_context_block,
+        )
 
     def _create_final_answer_node(self, llm, system_prompt: str):
         """모든 워커 결과(검색·분석·차트)를 종합하는 필수 최종 답변 노드.
@@ -878,6 +1187,7 @@ class WorkflowCompiler:
         llm,
         user_context_block: str = "",
         datetime_block: str = "",
+        worker_context_block: str = "",
     ):
         """search 워커 노드 생성. 두 팩토리는 시그니처·반환 계약이 동일하다 (AD-1)."""
         pipeline_llm = self._resolve_pipeline_llm(llm)
@@ -890,6 +1200,7 @@ class WorkflowCompiler:
                 logger=self._logger,
                 user_context_block=user_context_block,
                 datetime_block=datetime_block,
+                worker_context_block=worker_context_block,
             )
         # search-node-query-pipeline: rewrite → search → validate → compress
         return create_search_pipeline_node(
@@ -900,6 +1211,7 @@ class WorkflowCompiler:
             logger=self._logger,
             user_context_block=user_context_block,
             datetime_block=datetime_block,
+            worker_context_block=worker_context_block,
         )
 
     def _resolve_pipeline_llm(self, run_llm):
@@ -929,6 +1241,7 @@ class WorkflowCompiler:
 
     def _create_document_extractor_node(
         self, llm, worker_def: WorkerDefinition, *, auth_ctx, request_id: str,
+        worker_context_block: str = "",
     ):
         """문서추출기 전용 합성 노드 (document-template-extractor Design §4-2).
 
@@ -992,6 +1305,8 @@ class WorkflowCompiler:
                     conversation_block=conversation_block,
                     owner_user_id=owner_user_id,
                     request_id=request_id,
+                    # worker-context-injection §4.1 (GAP-01)
+                    worker_context_block=worker_context_block,
                 )
             except (ComposeError, McpConversionError, ValueError) as e:
                 logger.error(
@@ -1015,6 +1330,7 @@ class WorkflowCompiler:
 
     def _create_document_generator_node(
         self, llm, worker_def: WorkerDefinition, *, auth_ctx, request_id: str,
+        worker_context_block: str = "",
     ):
         """문서생성기 전용 생성 노드 (doc-generator Design §4-4, 추출기 동형).
 
@@ -1079,6 +1395,8 @@ class WorkflowCompiler:
                     conversation_block=conversation_block,
                     owner_user_id=owner_user_id,
                     request_id=request_id,
+                    # worker-context-injection §4.1 (GAP-01)
+                    worker_context_block=worker_context_block,
                 )
             except (
                 GenerateError,
@@ -1126,6 +1444,7 @@ class WorkflowCompiler:
 
     def _create_excel_generator_node(
         self, llm, worker_def: WorkerDefinition, *, auth_ctx, request_id: str,
+        worker_context_block: str = "",
     ):
         """엑셀 생성 전용 노드 (excel-generator-node §2.1, 문서생성기 D9 동형).
 
@@ -1178,6 +1497,8 @@ class WorkflowCompiler:
                     conversation_block=conversation_block,
                     owner_user_id=owner_user_id,
                     request_id=request_id,
+                    # worker-context-injection §4.1 (GAP-01)
+                    worker_context_block=worker_context_block,
                 )
             except NoExcelDataError:
                 return _reply(state, (
@@ -1230,7 +1551,7 @@ class WorkflowCompiler:
 
     def _create_presentation_generator_node(
         self, llm, worker_def: WorkerDefinition, *, auth_ctx, request_id: str,
-        callback=None,
+        callback=None, worker_context_block: str = "",
     ):
         """발표자료 생성 노드 (golden-sample-blueprint §2.2, 문서생성기 D9 동형).
 
@@ -1291,6 +1612,8 @@ class WorkflowCompiler:
                     user_instruction=_last_human_text(state["messages"]),
                     owner_user_id=owner_user_id,
                     request_id=request_id,
+                    # worker-context-injection §4.1 (GAP-01)
+                    worker_context_block=worker_context_block,
                     # Plan FR-17: UsageCallback 전달 → ai_llm_call 사용량 영속(관측 활성 시)
                     callbacks=[callback] if callback is not None else None,
                 )
@@ -1315,7 +1638,7 @@ class WorkflowCompiler:
         return presentation_generator_node
 
     def _render_docgen_guidance_block(
-        self, workers: list[WorkerDefinition]
+        self, workers: list[WorkerDefinition], catalog_meta: dict | None = None
     ) -> str:
         """문서 생성 라우팅 판단 기준 블록 (D6 — 순서 강제 아님).
 
@@ -1331,11 +1654,13 @@ class WorkflowCompiler:
             return ""
         search_ids = [
             w.worker_id for w in others
-            if w.worker_type == "tool" and self._resolve_category(w) == "search"
+            if w.worker_type == "tool"
+            and self._resolve_category(w, catalog_meta) == "search"
         ]
         analysis_ids = [
             w.worker_id for w in others
-            if w.worker_type == "tool" and self._resolve_category(w) == "analysis"
+            if w.worker_type == "tool"
+            and self._resolve_category(w, catalog_meta) == "analysis"
         ]
         gen_list = ", ".join(generator_ids)
         lines = [
@@ -1545,20 +1870,22 @@ class WorkflowCompiler:
         # 새어 나온 코드블록/JSON 제거 → chart_router/품질검증이 깨끗한 텍스트 수신.
         return ANALYSIS_OUTPUT_SANITIZER.strip(content)
 
-    def _wrap_worker(self, worker_id: str, worker_agent):
+    def _wrap_worker(
+        self, worker_id: str, worker_agent, tool_call_limit: int | None = None
+    ):
+        """react 워커 노드 래퍼.
+
+        Args:
+            worker_id: 워커 id
+            worker_agent: create_agent 산출물
+            tool_call_limit: 이 워커에 적용된 도구 호출 상한 (Gap-01 관측용).
+                None이면 상한 표기 없이 횟수만 남긴다 — 기존 호출부 호환.
+        """
+        logger = self._logger
+
         async def wrapped(state: SupervisorState) -> dict:
-            # fix-anthropic-prefill-error: 직전 워커 AIMessage-last 상태로
-            # react agent에 진입하면 Claude 4.6+ 가 prefill 거부(400).
             result = await worker_agent.ainvoke(
-                {
-                    "messages": ensure_user_tail(
-                        state["messages"],
-                        instruction=(
-                            "위 대화 맥락과 이전 단계 결과를 참고하여 "
-                            "당신의 역할에 해당하는 작업을 수행하세요."
-                        ),
-                    )
-                }
+                {"messages": _build_worker_input(state)}
             )
             result_messages = result.get("messages", [])
 
@@ -1577,11 +1904,30 @@ class WorkflowCompiler:
                 len(answer_content) // 4 if isinstance(answer_content, str) else 0
             )
 
-            return {
+            out: dict = {
                 "messages": [answer_msg],
                 "last_worker_id": worker_id,
                 "token_usage": state["token_usage"] + token_delta,
             }
+            # Design Ref: worker-context-injection §6.3 (FR-09) — 도구 차단은
+            # react agent 내부 트레이스에만 남아 실행 이력에서 보이지 않는다.
+            # 내부 트레이스가 state로 유출되기 전에 여기서 요약만 건져 올린다.
+            blocked_summary = _blocked_step_summary(result_messages)
+            # Design Ref: Analysis Gap-01 (FR-12) — 상한 도달은 langchain
+            # 내부에서 처리돼 이력에 남지 않는다. 횟수를 함께 실어 이번
+            # 사이클의 지표(호출 몇 회로 줄었는가)를 측정 가능하게 한다.
+            call_summary = _tool_call_step_summary(result_messages, tool_call_limit)
+            if call_summary:
+                logger.info(
+                    "worker tool calls",
+                    worker_id=worker_id,
+                    summary=call_summary,
+                    limit=tool_call_limit,
+                )
+            summary = " / ".join(s for s in (call_summary, blocked_summary) if s)
+            if summary:
+                out[STEP_OUTPUT_SUMMARY_KEY] = summary
+            return out
 
         return wrapped
 

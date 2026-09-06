@@ -72,13 +72,14 @@ class ExcelGenerator:
         conversation_block: str,
         owner_user_id: str,
         request_id: str,
+        worker_context_block: str = "",
     ) -> ExcelGenerateResult:
         catalog, sheet_store = self._build_catalog(
             analysis_source, attachments, owner_user_id, request_id
         )
         filename, items = await self._plan_sheets(
             llm, catalog, sheet_store, evidence_block, conversation_block,
-            request_id,
+            request_id, worker_context_block,
         )
         if not items:
             raise NoExcelDataError("엑셀로 정리할 데이터가 없습니다")
@@ -174,13 +175,15 @@ class ExcelGenerator:
     # ── 시트 계획 (LLM 1회, Design §2.2) ────────────────────────────────────
     async def _plan_sheets(
         self, llm, catalog, sheet_store, evidence_block, conversation_block,
-        request_id,
+        request_id, worker_context_block: str = "",
     ) -> tuple[str, list[SheetPlanItem]]:
+        # worker-context-injection §4.1 (GAP-01): 에이전트 지침·역할을 앞단에.
         messages = [
             {
                 "role": "system",
                 "content": (
-                    _PLAN_GUIDELINES + "\n\n"
+                    worker_context_block
+                    + _PLAN_GUIDELINES + "\n\n"
                     + self._render_catalog(catalog, sheet_store)
                 ),
             },

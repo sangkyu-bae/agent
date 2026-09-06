@@ -139,6 +139,7 @@ def create_deep_search_node(
     logger: LoggerInterface,
     user_context_block: str = "",
     datetime_block: str = "",
+    worker_context_block: str = "",
 ):
     """Requirement 분해 → 병렬 검색 → 근거 누적 → 커버리지 검증 → 선택적 재검색.
 
@@ -146,9 +147,11 @@ def create_deep_search_node(
 
     runtime-datetime-context D4: datetime_block은 사용자 블록보다 앞에 prepend —
     쿼리를 작성하는 plan LLM과 시점 제약을 판정하는 evaluate LLM이 날짜를 알아야 한다.
+    worker-context-injection §4.1 (GAP-01): worker_context_block은 사용자 블록 뒤 —
+    쿼리를 작성하는 plan LLM이 에이전트 맥락과 자기 역할을 알아야 한다.
     """
-    # Design Ref: runtime-datetime-context §D4 — 순서: 날짜 → 사용자 → 본문
-    context_block = datetime_block + user_context_block
+    # Design Ref: runtime-datetime-context §D4 — 순서: 날짜 → 사용자 → 워커 → 본문
+    context_block = datetime_block + user_context_block + worker_context_block
     deps = NodeDeps(
         tool=tool,
         llm=pipeline_llm,

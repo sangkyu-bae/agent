@@ -46,6 +46,10 @@ class SyncInternalToolsUseCase:
                         # builtin-tools D1: INSERT 시드 전용 — UPDATE 분기는
                         # is_builtin을 건드리지 않으므로(D2) 기존 행에는 무영향.
                         is_builtin=meta.builtin_default,
+                        # Design Ref: mcp-tool-category-routing §5 D-02 (FR-03) —
+                        # category / max_tool_calls는 관리자 지정값이므로 sync가
+                        # 값을 싣지 않는다(기본 None). 내부 도구의 분류는
+                        # TOOL_REGISTRY.category가 해석 폴백으로 계속 담당한다.
                     ),
                     request_id,
                 )

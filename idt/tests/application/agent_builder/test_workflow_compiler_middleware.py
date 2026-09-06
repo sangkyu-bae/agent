@@ -60,14 +60,23 @@ def _make_provider(instances_factory):
 
 class TestCompilerMiddlewareWiring:
     @pytest.mark.asyncio
-    async def test_provider_미주입이면_middleware_빈_리스트(self):
+    async def test_provider_미주입이면_plan_미들웨어_없음(self):
+        """provider가 없으면 plan 유래 미들웨어는 0개다.
+
+        mcp-tool-category-routing §5 D-05 (FR-10): react 워커에는 도구 호출
+        예산 미들웨어가 항상 1개 실린다. plan 유래가 0개라는 성질은 그대로다.
+        """
+        from langchain.agents.middleware import ToolCallLimitMiddleware
+
         compiler = _make_compiler(middleware_provider=None)
         with patch(
             "src.application.agent_builder.workflow_compiler.create_agent",
             return_value=MagicMock(),
         ) as mock_create:
             await compiler.compile(_make_workflow(), _make_llm_model(), "req-1")
-        assert mock_create.call_args.kwargs.get("middleware") == []
+        middleware = mock_create.call_args.kwargs.get("middleware")
+        assert all(isinstance(m, ToolCallLimitMiddleware) for m in middleware)
+        assert len(middleware) == 1
 
     @pytest.mark.asyncio
     async def test_provider_주입시_prepare_1회_default_builtin_False(self):
@@ -98,9 +107,29 @@ class TestCompilerMiddlewareWiring:
                 _make_workflow(worker_count=3), _make_llm_model(), "req-1",
                 agent_id="agent-1",
             )
+        from langchain.agents.middleware import ToolCallLimitMiddleware
+
         assert plan.instantiate.call_count == 3
         for call in mock_create.call_args_list:
-            assert len(call.kwargs["middleware"]) == 1
+            middleware = call.kwargs["middleware"]
+            plan_middleware = [
+                m for m in middleware
+                if not isinstance(m, ToolCallLimitMiddleware)
+            ]
+            # plan 유래는 워커당 정확히 1개 (인스턴스 공유 금지 — D6)
+            assert len(plan_middleware) == 1
+            # mcp-tool-category-routing §5 D-05: 예산 미들웨어도 워커마다 새로
+            budgets = [
+                m for m in middleware if isinstance(m, ToolCallLimitMiddleware)
+            ]
+            assert len(budgets) == 1
+        budget_ids = {
+            id(m)
+            for call in mock_create.call_args_list
+            for m in call.kwargs["middleware"]
+            if isinstance(m, ToolCallLimitMiddleware)
+        }
+        assert len(budget_ids) == 3, "예산 미들웨어가 워커 간 공유되면 안 된다"
 
     @pytest.mark.asyncio
     async def test_sub_agent_재귀에는_미전달(self):

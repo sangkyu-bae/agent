@@ -11,14 +11,21 @@ from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.domain.visualization.policies import VisualizationRoutingPolicy
 
 
-def _is_current_turn_search_result(msg) -> bool:
+def is_current_turn_search_result(msg) -> bool:
     """현재 턴에서 수집한 검색결과 식별 — 재주입분(이전 턴 스냅샷) 제외.
 
     data-inventory-requery D2: 재주입분은 강제 라우팅의 근거가 아니다.
+
+    mcp-tool-category-routing §5 D-07: WorkerRunCapHooks도 '이번 턴에 실행됐나'를
+    같은 기준으로 판정해야 하므로 공개 이름을 부여했다(판정 규칙 단일 출처).
     """
     return is_search_result(msg) and not AnalysisSnapshotPolicy.is_reinjected(
         getattr(msg, "content", "")
     )
+
+
+# 기존 내부 호출부 보존용 별칭 — 동작 변화 없음.
+_is_current_turn_search_result = is_current_turn_search_result
 
 
 class SupervisorHooks(Protocol):

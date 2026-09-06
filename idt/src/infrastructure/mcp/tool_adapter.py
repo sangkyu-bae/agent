@@ -9,6 +9,7 @@ from typing import Any
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
+from src.domain.mcp.tool_argument_policy import ToolArgumentPolicy
 from src.domain.mcp.value_objects import MCPServerConfig
 from src.infrastructure.logging import get_logger
 from src.infrastructure.mcp.client_factory import MCPClientFactory
@@ -38,6 +39,13 @@ class MCPToolAdapter(BaseTool):
 
     server_config: MCPServerConfig
     mcp_tool_name: str
+
+    # Design Ref: mcp-tool-category-routing module-2 —
+    # args_schema는 모든 MCP 도구가 공유하는 제네릭 래퍼(MCPToolInput)라
+    # 도구별 실제 입력 스키마를 담지 못한다. 서버가 list_tools로 준
+    # inputSchema를 여기 보존해야 collect 노드가 근거 있는 인자를 만들 수 있다.
+    # 스키마를 주지 않는 서버도 있으므로 기본은 빈 dict(= 스키마 미상).
+    mcp_input_schema: dict[str, Any] = {}
 
     # Design Ref: fix-mcp-tool-call-not-reaching-server §4 —
     # ③ 실행 구간 로그의 추적 필드. 미주입(기본 "")이어도 기존 호출부는 그대로 동작한다.
@@ -74,6 +82,19 @@ class MCPToolAdapter(BaseTool):
             "server": self.server_config.name,
             "tool": self.mcp_tool_name,
         }
+
+        # Design Ref: worker-context-injection §6.1 — 워커가 컨텍스트를 잃고
+        # 지어낸 예시 URL은 서버에 도달하기 전에 차단한다. 예외가 아닌 지시성
+        # 문자열을 반환해야 ToolMessage로 감싸여 워커가 자기 교정할 수 있다.
+        blocked = ToolArgumentPolicy.find_placeholder(args)
+        if blocked is not None:
+            logger.warning(
+                "MCP tool call blocked (placeholder argument)",
+                reason="placeholder_url",
+                blocked_value=blocked,
+                **log_extra,
+            )
+            return ToolArgumentPolicy.build_blocked_message(blocked)
 
         logger.info("MCP tool execution started", **log_extra)
 

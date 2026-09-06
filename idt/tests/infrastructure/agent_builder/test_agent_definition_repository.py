@@ -143,6 +143,26 @@ class TestAgentDefinitionRepositoryUpdate:
         assert session.flush.await_count >= 1
 
     @pytest.mark.asyncio
+    async def test_update_persists_flow_hint(self):
+        """agent-update-tool-editing: 도구 재구성 시 flow_hint 도 함께 갱신된다.
+
+        누락되면 supervisor 프롬프트가 옛 도구 체인을 계속 가리킨다.
+        """
+        repo, session = _make_repo()
+
+        mock_model = MagicMock()
+        mock_model.tools = []
+        mock_result = MagicMock()
+        mock_result.scalar_one.return_value = mock_model
+        session.execute.return_value = mock_result
+
+        agent = _make_agent()
+        agent.flow_hint = "excel_export → wiki_read"
+        await repo.update(agent, "req-1")
+
+        assert mock_model.flow_hint == "excel_export → wiki_read"
+
+    @pytest.mark.asyncio
     async def test_update_syncs_worker_rows(self):
         """update는 도메인 workers와 일치하도록 tool row를 재구성한다."""
         repo, session = _make_repo()

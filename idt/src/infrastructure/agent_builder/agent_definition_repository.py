@@ -116,6 +116,9 @@ class AgentDefinitionRepository(AgentDefinitionRepositoryInterface):
             model.max_iterations = agent.max_iterations
             # agent-builder-edit-mapping FR-5: 미반영 시 모델 변경이 조용히 무효
             model.llm_model_id = agent.llm_model_id
+            # agent-update-tool-editing: 도구 재구성 시 flow_hint 도 바뀐다 —
+            # 미반영 시 supervisor 프롬프트가 옛 도구 체인을 계속 가리킨다.
+            model.flow_hint = agent.flow_hint
             model.updated_at = datetime.now(timezone.utc)
             await self._sync_workers(model, agent.workers)
             # builtin-middleware D5: None = 미변경 (미로드 상태에서 스냅샷 소실 방지)

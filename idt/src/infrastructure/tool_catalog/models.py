@@ -1,7 +1,17 @@
 """SQLAlchemy ORM 모델: tool_catalog."""
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, JSON, String, Text, UniqueConstraint
+from sqlalchemy import (
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    JSON,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.infrastructure.persistence.models.base import Base
@@ -34,6 +44,25 @@ class ToolCatalogModel(Base):
         comment=(
             "빌트인 여부 — 에이전트 생성 시 자동 주입. 관리자 토글, sync 보존, "
             "INSERT 시 ToolMeta.builtin_default 시드"
+        ),
+    )
+    # mcp-tool-category-routing §3.3 (FR-01): DDL COMMENT와 동일 문구 유지.
+    category: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+        default=None,
+        comment=(
+            "워커 노드 분류(search/collect/analysis/action). "
+            "NULL=미분류 → react 기본 경로. 관리자 지정, sync 보존"
+        ),
+    )
+    max_tool_calls: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        default=None,
+        comment=(
+            "워커 1회 실행당 도구 호출 상한. NULL=정책 기본값(2회). "
+            "관리자 지정, sync 보존"
         ),
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

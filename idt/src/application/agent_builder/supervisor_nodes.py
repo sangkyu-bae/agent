@@ -157,6 +157,7 @@ def build_initial_state(
         "limit_reached": False,
         "quality_gate_result": "",
         "attachments": attachments or [],
+        "worker_task": "",
         "viz_decision": "",
         "charts": [],
         "visualization_done": False,
@@ -175,6 +176,16 @@ class SupervisorDecision(BaseModel):
     answer: str = Field(
         default="",
         description="FINISH 선택 시 사용자에게 전달할 응답. 워커 호출 없이 직접 답변할 때 작성.",
+    )
+    # worker-context-injection §3.1 (FR-04): 워커는 에이전트 프롬프트를 보지 못한다.
+    # default="" — 구조화 출력이 필드를 누락해도 그래프는 기존대로 동작한다.
+    task: str = Field(
+        default="",
+        description=(
+            "선택한 워커가 지금 수행할 작업을 한국어 1~3문장으로 구체적으로 기술. "
+            "대화에서 확인된 대상·기간·범위를 명시하고, 확인되지 않은 값은 "
+            "지어내지 말고 '미확인'으로 남길 것. FINISH면 빈 문자열."
+        ),
     )
 
 
@@ -209,9 +220,12 @@ def create_supervisor_node(
 
         forced = hooks.force_worker(state)
         if forced:
+            # worker-context-injection §3.1: 강제 라우팅은 SupervisorDecision을
+            # 거치지 않는다. 직전 턴의 지시가 새어 나가지 않도록 비운다.
             return {
                 "next_worker": forced,
                 "forced_worker": forced,
+                "worker_task": "",
                 "iteration_count": state["iteration_count"] + 1,
             }
 
@@ -244,6 +258,11 @@ def create_supervisor_node(
             f"answer 필드에 사용자에게 전달할 자연스러운 응답을 작성하세요\n"
             f"- 모든 작업이 완료되었으면 'FINISH'를 선택 (워커를 이미 호출했다면 "
             f"최종 답변은 시스템이 워커 결과를 종합해 생성하므로 answer는 비워두세요)\n"
+            # worker-context-injection §3.1: 워커는 위 에이전트 지침을 보지
+            # 못한다. task가 비면 워커는 대화 원문만 보고 작업을 재추론한다.
+            f"- 워커를 선택했다면 task 필드에 그 워커가 지금 수행할 작업을 "
+            f"구체적으로 적으세요. 대화에서 확인된 대상·기간·범위를 명시하고, "
+            f"확인되지 않은 값은 지어내지 말고 '미확인'이라고 적으세요\n"
             f"스킵된 워커(사용 불가): {skipped}"
         )
 
@@ -281,6 +300,7 @@ def create_supervisor_node(
                     "next_worker": next_worker,
                     "messages": [AIMessage(content=decision.answer)],
                     "skipped_workers": skipped,
+                    "worker_task": "",
                     "iteration_count": state["iteration_count"] + 1,
                     "_step_output_summary": step_summary,
                 }
@@ -290,9 +310,13 @@ def create_supervisor_node(
             logger.warning("invalid worker selected", selected=next_worker)
             next_worker = "__end__"
 
+        # worker-context-injection §3.1 (FR-05): 워커로 라우팅할 때만 지시를
+        # 싣는다. 종료 경로에 남기면 다음 턴 워커가 낡은 지시를 받는다.
+        routed_to_worker = next_worker not in ("__end__", "")
         return {
             "next_worker": next_worker,
             "skipped_workers": skipped,
+            "worker_task": decision.task if routed_to_worker else "",
             "iteration_count": state["iteration_count"] + 1,
             "_step_output_summary": step_summary,
         }

@@ -5,6 +5,7 @@ langchain v1 클래스 참조는 본 모듈에만 존재한다 (A→B 전환 격
 """
 from langchain.agents.middleware import (
     ModelCallLimitMiddleware,
+    ToolCallLimitMiddleware,
     ModelFallbackMiddleware,
     ModelRetryMiddleware,
     ToolRetryMiddleware,
@@ -46,6 +47,28 @@ class MiddlewareBuilder:
                     exception=e,
                 )
         return instances
+
+    @staticmethod
+    def build_tool_call_budget(run_limit: int):
+        """Design Ref: mcp-tool-category-routing §5 D-05/D-11 (FR-10).
+
+        미분류(react) 워커의 도구 호출 예산 미들웨어를 만든다.
+        langchain v1 클래스 참조를 이 모듈 밖으로 새게 하지 않기 위한
+        팩토리다(D8 격리 계약) — 컴파일러는 인스턴스만 받는다.
+
+        exit_behavior="continue": 상한 초과분만 차단하고 모델은 그때까지
+        수집한 내용으로 답변을 마무리한다. "end"는 즉시 중단이라 수집한
+        내용의 종합이 유실된다.
+
+        Args:
+            run_limit: 워커 1회 실행당 허용 도구 호출 수
+
+        Returns:
+            ToolCallLimitMiddleware 인스턴스 (워커마다 새로 만들 것 — D6)
+        """
+        return ToolCallLimitMiddleware(
+            run_limit=run_limit, exit_behavior="continue",
+        )
 
     @staticmethod
     def _build_one(a: AppliedMiddleware, fallback_models: list):

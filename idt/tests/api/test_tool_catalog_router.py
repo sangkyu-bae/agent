@@ -171,3 +171,146 @@ class TestSyncMcpTools:
         )
         assert resp.status_code == 200
         assert resp.json()["synced_count"] == 3
+
+
+class TestUpdateToolMetadata:
+    """Design Ref: mcp-tool-category-routing §4.2 (FR-13).
+
+    엔드포인트 형태는 set_builtin과 같은 body 방식이다 — 카탈로그 tool_id
+    (mcp:{uuid}:{tool})가 콜론·임의 도구명을 포함해 path 세그먼트로 부적합하다.
+    """
+
+    @staticmethod
+    def _mock_uc(entry=None):
+        from src.domain.tool_catalog.entity import ToolCatalogEntry
+
+        mock_uc = MagicMock()
+        mock_uc.execute = AsyncMock(
+            return_value=entry or ToolCatalogEntry(
+                id="tc-1",
+                tool_id="mcp:3f2a1b4c-0000-1111-2222-333344445555:scrape",
+                source="mcp", name="scrape", description="d",
+                category="collect", max_tool_calls=2,
+            )
+        )
+        return mock_uc
+
+    def test_update_metadata_returns_200(self):
+        from src.api.routes.tool_catalog_router import (
+            get_update_tool_metadata_use_case,
+        )
+
+        mock_uc = self._mock_uc()
+        client = _make_client({get_update_tool_metadata_use_case: lambda: mock_uc})
+
+        res = client.patch(
+            "/api/v1/tool-catalog/metadata",
+            json={
+                "tool_id": "mcp:3f2a1b4c-0000-1111-2222-333344445555:scrape",
+                "category": "collect",
+                "max_tool_calls": 2,
+            },
+        )
+
+        assert res.status_code == 200
+        body = res.json()
+        assert body["category"] == "collect"
+        assert body["max_tool_calls"] == 2
+
+    def test_omitted_field_is_not_forwarded(self):
+        """부분 갱신: body에 없는 필드는 유스케이스에 전달되지 않는다."""
+        from src.api.routes.tool_catalog_router import (
+            get_update_tool_metadata_use_case,
+        )
+
+        mock_uc = self._mock_uc()
+        client = _make_client({get_update_tool_metadata_use_case: lambda: mock_uc})
+
+        client.patch(
+            "/api/v1/tool-catalog/metadata",
+            json={
+                "tool_id": "mcp:3f2a1b4c-0000-1111-2222-333344445555:scrape",
+                "category": "collect",
+            },
+        )
+
+        assert "max_tool_calls" not in mock_uc.execute.await_args.kwargs
+
+    def test_explicit_null_is_forwarded(self):
+        """명시적 null은 '미분류로 되돌리기' — 생략과 구분해 전달한다."""
+        from src.api.routes.tool_catalog_router import (
+            get_update_tool_metadata_use_case,
+        )
+
+        mock_uc = self._mock_uc()
+        client = _make_client({get_update_tool_metadata_use_case: lambda: mock_uc})
+
+        client.patch(
+            "/api/v1/tool-catalog/metadata",
+            json={
+                "tool_id": "mcp:3f2a1b4c-0000-1111-2222-333344445555:scrape",
+                "category": None,
+            },
+        )
+
+        assert mock_uc.execute.await_args.kwargs["category"] is None
+
+    def test_domain_error_returns_400(self):
+        """허용값 밖 카테고리 / collect on server-level → 400 (D-04)."""
+        from src.api.routes.tool_catalog_router import (
+            get_update_tool_metadata_use_case,
+        )
+
+        mock_uc = MagicMock()
+        mock_uc.execute = AsyncMock(
+            side_effect=ValueError("collect category requires a single-tool reference")
+        )
+        client = _make_client({get_update_tool_metadata_use_case: lambda: mock_uc})
+
+        res = client.patch(
+            "/api/v1/tool-catalog/metadata",
+            json={"tool_id": "mcp_srv1", "category": "collect"},
+        )
+
+        assert res.status_code == 400
+        assert "collect" in res.json()["detail"]
+
+    def test_unknown_tool_returns_404(self):
+        from src.api.routes.tool_catalog_router import (
+            get_update_tool_metadata_use_case,
+        )
+
+        mock_uc = MagicMock()
+        mock_uc.execute = AsyncMock(
+            side_effect=LookupError("Unknown catalog tool_id: 'nope'")
+        )
+        client = _make_client({get_update_tool_metadata_use_case: lambda: mock_uc})
+
+        res = client.patch(
+            "/api/v1/tool-catalog/metadata",
+            json={"tool_id": "nope", "category": "collect"},
+        )
+
+        assert res.status_code == 404
+
+    def test_non_admin_is_rejected(self):
+        from src.api.routes.tool_catalog_router import (
+            get_update_tool_metadata_use_case,
+            router,
+        )
+        from src.interfaces.dependencies.auth import get_current_user
+
+        app = FastAPI()
+        app.include_router(router)
+        app.dependency_overrides[get_current_user] = _make_fake_user
+        app.dependency_overrides[get_update_tool_metadata_use_case] = (
+            lambda: self._mock_uc()
+        )
+        client = TestClient(app)
+
+        res = client.patch(
+            "/api/v1/tool-catalog/metadata",
+            json={"tool_id": "x", "category": "collect"},
+        )
+
+        assert res.status_code == 403

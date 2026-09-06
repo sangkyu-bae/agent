@@ -1,21 +1,72 @@
 import { useState } from 'react';
-import { useSetToolBuiltin, useToolCatalog } from '@/hooks/useToolCatalog';
-import type { CatalogTool } from '@/types/toolCatalog';
+import {
+  useSetToolBuiltin,
+  useToolCatalog,
+  useUpdateToolMetadata,
+} from '@/hooks/useToolCatalog';
+import type {
+  CatalogTool,
+  ToolCategory,
+  ToolMetadataRequest,
+} from '@/types/toolCatalog';
+import {
+  TOOL_CALL_LIMIT_MAX,
+  TOOL_CALL_LIMIT_MIN,
+  TOOL_CATEGORIES,
+  TOOL_CATEGORY_LABELS,
+} from '@/types/toolCatalog';
 
 /** authClient가 detail을 ApiError(message, status)로 정규화한다 */
 const getErrorMessage = (err: unknown, fallback: string): string =>
   err instanceof Error && err.message ? err.message : fallback;
 
+/** 빈 문자열(select의 미분류 옵션) → null 로 정규화 */
+const toCategory = (raw: string): ToolCategory | null =>
+  raw === '' ? null : (raw as ToolCategory);
+
 /**
- * 관리자 도구 카탈로그 관리 — builtin-tools D9.
- * 카탈로그 목록을 표시하고 도구별 빌트인(에이전트 생성 시 자동 주입)을 토글한다.
+ * 관리자 도구 카탈로그 관리 — builtin-tools D9 + mcp-tool-category-routing FR-13.
+ *
+ * 카탈로그 목록을 표시하고 도구별로
+ *   - 빌트인(에이전트 생성 시 자동 주입) 토글
+ *   - 워커 노드 분류(category)와 도구 호출 상한(max_tool_calls)
+ * 을 지정한다. 분류를 지정하지 않은 도구는 기존 react 경로로 동작한다(FR-14).
  */
 const AdminToolsPage = () => {
   const { data: tools, isLoading, isError, refetch } = useToolCatalog();
   const setBuiltinMutation = useSetToolBuiltin();
+  const updateMetadataMutation = useUpdateToolMetadata();
   const [error, setError] = useState<string | null>(null);
   // 행 단위 pending — 다른 행 토글은 막지 않되 같은 행 이중 클릭은 차단
   const [pendingToolId, setPendingToolId] = useState<string | null>(null);
+
+  /**
+   * 부분 갱신 전송 — payload에 담은 필드만 서버가 갱신한다.
+   * category: null 은 '미분류로 되돌리기'라 생략이 아니라 명시적으로 보낸다.
+   */
+  const submitMetadata = (payload: ToolMetadataRequest, failMessage: string) => {
+    setError(null);
+    updateMetadataMutation.mutate(payload, {
+      onError: (err) => setError(getErrorMessage(err, failMessage)),
+    });
+  };
+
+  const handleCategoryChange = (tool: CatalogTool, raw: string) => {
+    submitMetadata(
+      { tool_id: tool.tool_id, category: toCategory(raw) },
+      '분류 변경에 실패했습니다.',
+    );
+  };
+
+  const handleLimitCommit = (tool: CatalogTool, raw: string) => {
+    const next = raw.trim() === '' ? null : Number(raw);
+    if (next !== null && !Number.isInteger(next)) return;
+    if (next === (tool.max_tool_calls ?? null)) return;
+    submitMetadata(
+      { tool_id: tool.tool_id, max_tool_calls: next },
+      '호출 상한 변경에 실패했습니다.',
+    );
+  };
 
   const handleToggle = (tool: CatalogTool) => {
     if (pendingToolId) return;
@@ -39,7 +90,8 @@ const AdminToolsPage = () => {
         </p>
         <h1 className="text-3xl font-bold tracking-tight text-zinc-900">도구 관리</h1>
         <p className="mt-1 text-[13px] text-zinc-400">
-          도구 카탈로그를 조회하고, 에이전트 생성 시 자동 포함되는 빌트인 도구를 지정합니다.
+          도구 카탈로그를 조회하고, 빌트인 도구·워커 분류·도구 호출 상한을 지정합니다.
+          분류를 지정하지 않은 도구는 기존 동작을 그대로 유지합니다.
         </p>
       </div>
 
@@ -72,6 +124,8 @@ const AdminToolsPage = () => {
                 <th className="px-5 py-3">도구</th>
                 <th className="px-5 py-3">소스</th>
                 <th className="px-5 py-3">설명</th>
+                <th className="px-5 py-3">분류</th>
+                <th className="px-5 py-3 text-center">호출 상한</th>
                 <th className="px-5 py-3 text-center">빌트인</th>
               </tr>
             </thead>
@@ -93,6 +147,33 @@ const AdminToolsPage = () => {
                   </td>
                   <td className="max-w-md px-5 py-3.5">
                     <p className="line-clamp-2 text-[12.5px] text-zinc-500">{tool.description}</p>
+                  </td>
+                  <td className="px-5 py-3.5">
+                    <select
+                      aria-label={`${tool.name} 분류`}
+                      value={tool.category ?? ''}
+                      onChange={(e) => handleCategoryChange(tool, e.target.value)}
+                      className="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-[12.5px] text-zinc-700 focus:border-violet-400 focus:outline-none"
+                    >
+                      <option value="">미분류</option>
+                      {TOOL_CATEGORIES.map((category) => (
+                        <option key={category} value={category}>
+                          {TOOL_CATEGORY_LABELS[category]}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="px-5 py-3.5 text-center">
+                    <input
+                      type="number"
+                      aria-label={`${tool.name} 호출 상한`}
+                      min={TOOL_CALL_LIMIT_MIN}
+                      max={TOOL_CALL_LIMIT_MAX}
+                      defaultValue={tool.max_tool_calls ?? ''}
+                      placeholder="기본"
+                      onBlur={(e) => handleLimitCommit(tool, e.target.value)}
+                      className="w-16 rounded-lg border border-zinc-200 bg-white px-2 py-1 text-center text-[12.5px] text-zinc-700 focus:border-violet-400 focus:outline-none"
+                    />
                   </td>
                   <td className="px-5 py-3.5 text-center">
                     <button
@@ -117,7 +198,7 @@ const AdminToolsPage = () => {
               ))}
               {(tools ?? []).length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-5 py-10 text-center text-[13px] text-zinc-400">
+                  <td colSpan={6} className="px-5 py-10 text-center text-[13px] text-zinc-400">
                     등록된 도구가 없습니다
                   </td>
                 </tr>
