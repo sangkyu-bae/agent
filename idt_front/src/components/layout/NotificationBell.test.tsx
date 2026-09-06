@@ -4,11 +4,11 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import NotificationBell from './NotificationBell';
-import type { BackgroundJob } from '@/types/backgroundJob';
+import type { JobHistoryItem } from '@/types/backgroundJob';
 
 const mocks = vi.hoisted(() => ({
   useUnseenCount: vi.fn(),
-  useJobList: vi.fn(),
+  useJobHistory: vi.fn(),
   useMarkSeen: vi.fn(),
   useMarkAllSeen: vi.fn(),
   navigate: vi.fn(),
@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/hooks/useBackgroundJobs', () => ({
   useUnseenCount: mocks.useUnseenCount,
-  useJobList: mocks.useJobList,
+  useJobHistory: mocks.useJobHistory,
   useMarkSeen: mocks.useMarkSeen,
   useMarkAllSeen: mocks.useMarkAllSeen,
 }));
@@ -26,21 +26,26 @@ vi.mock('react-router-dom', async (importOriginal) => {
   return { ...actual, useNavigate: () => mocks.navigate };
 });
 
-const job = (overrides: Partial<BackgroundJob> = {}): BackgroundJob => ({
+const job = (overrides: Partial<JobHistoryItem> = {}): JobHistoryItem => ({
   id: 'j1',
+  type: 'manual',
+  occurred_at: '2026-08-11T02:00:00',
+  title: '보고서 만들어줘',
+  status: 'success',
   agent_id: 'a1',
   agent_name: '리서치 봇',
-  source: 'chat',
-  query: '보고서 만들어줘',
   session_id: 'sess-1',
-  run_id: 'run-1',
-  status: 'success',
   error_message: null,
   seen_at: null,
-  queued_at: '2026-08-11T02:00:00',
   started_at: '2026-08-11T02:00:05',
   finished_at: '2026-08-11T02:01:05',
+  deletable: true,
   ...overrides,
+});
+
+/** jobs-page-revamp: 목록 응답이 {items,total} 로 바뀌었다 */
+const listResult = (items: JobHistoryItem[]) => ({
+  data: { items, total: items.length },
 });
 
 let markSeenMutation: { mutate: ReturnType<typeof vi.fn> };
@@ -50,7 +55,7 @@ beforeEach(() => {
   markSeenMutation = { mutate: vi.fn() };
   markAllSeenMutation = { mutate: vi.fn() };
   mocks.useUnseenCount.mockReturnValue({ data: { count: 2 } });
-  mocks.useJobList.mockReturnValue({ data: [job()] });
+  mocks.useJobHistory.mockReturnValue(listResult([job()]));
   mocks.useMarkSeen.mockReturnValue(markSeenMutation);
   mocks.useMarkAllSeen.mockReturnValue(markAllSeenMutation);
 });
@@ -116,7 +121,7 @@ describe('NotificationBell (D11)', () => {
   });
 
   it('세션 없는 항목 클릭 시 작업함으로 이동한다', async () => {
-    mocks.useJobList.mockReturnValue({ data: [job({ session_id: null })] });
+    mocks.useJobHistory.mockReturnValue(listResult([job({ session_id: null })]));
     renderBell();
     await userEvent.click(
       screen.getByRole('button', { name: '백그라운드 작업 알림' }),
@@ -126,12 +131,12 @@ describe('NotificationBell (D11)', () => {
   });
 
   it('드롭다운에는 완료/실패만 표시한다 — 진행중 혼입 방지', async () => {
-    mocks.useJobList.mockReturnValue({
-      data: [
-        job({ id: 'j-running', status: 'running', query: '진행중 작업' }),
-        job({ id: 'j-done', query: '완료된 작업' }),
-      ],
-    });
+    mocks.useJobHistory.mockReturnValue(
+      listResult([
+        job({ id: 'j-running', status: 'running', title: '진행중 작업' }),
+        job({ id: 'j-done', title: '완료된 작업' }),
+      ]),
+    );
     renderBell();
     await userEvent.click(
       screen.getByRole('button', { name: '백그라운드 작업 알림' }),
@@ -157,8 +162,15 @@ describe('NotificationBell (D11)', () => {
     expect(screen.queryByTestId('bell-badge')).not.toBeInTheDocument();
   });
 
+  it('드롭다운은 수동 작업만 요청한다 — 배지(unseen-count)와 목록 일치', () => {
+    renderBell();
+    expect(mocks.useJobHistory).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'manual' }),
+    );
+  });
+
   it('작업이 없으면 빈 상태 문구를 표시한다', async () => {
-    mocks.useJobList.mockReturnValue({ data: [] });
+    mocks.useJobHistory.mockReturnValue(listResult([]));
     renderBell();
     await userEvent.click(
       screen.getByRole('button', { name: '백그라운드 작업 알림' }),

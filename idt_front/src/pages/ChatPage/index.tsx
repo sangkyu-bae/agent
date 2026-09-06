@@ -15,7 +15,7 @@ import {
   extractJobError,
   isJobConflictError,
   useEnqueueJob,
-  useJobList,
+  useJobHistory,
 } from '@/hooks/useBackgroundJobs';
 import { isJobActive } from '@/types/backgroundJob';
 import agentAttachmentService from '@/services/agentAttachmentService';
@@ -127,12 +127,14 @@ const ChatPage = () => {
   const [activeStream, setActiveStream] = useState<ActiveStream | null>(null);
 
   // background-jobs S9: 현재 세션의 진행중 백그라운드 작업 가드 (D5 프론트 축)
-  const { data: myJobs } = useJobList();
+  // jobs-page-revamp: 목록이 통합 이력으로 바뀌었다. 서버의 세션 중복 가드는
+  // agent_background_job 만 보므로 여기서도 수동 작업의 진행중 건만 받는다.
+  const { data: myJobs } = useJobHistory({ type: 'manual', status: 'running' });
   const enqueueJob = useEnqueueJob();
   const [bgNotice, setBgNotice] = useState<string | null>(null);
   const activeSessionJob = useMemo(
     () =>
-      (myJobs ?? []).find(
+      (myJobs?.items ?? []).find(
         (j) => j.session_id === activeSessionId && isJobActive(j.status),
       ) ?? null,
     [myJobs, activeSessionId],

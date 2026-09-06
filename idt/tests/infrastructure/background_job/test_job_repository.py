@@ -209,32 +209,6 @@ class TestFindActiveBySession:
         assert await repo.find_active_by_session("sess-1", "req-1") is None
 
 
-class TestListByUser:
-    @pytest.mark.asyncio
-    async def test_returns_job_with_agent_name(self, mock_session, mock_logger):
-        mock_session.execute = AsyncMock(
-            return_value=_exec_result(rows=[(_model(), "리서치 봇")])
-        )
-        repo = BackgroundJobRepository(mock_session, mock_logger)
-        rows = await repo.list_by_user("u1", None, 20, 0, "req-1")
-        assert len(rows) == 1
-        job, agent_name = rows[0]
-        assert job.id == "j1"
-        assert agent_name == "리서치 봇"
-
-    @pytest.mark.asyncio
-    async def test_statement_joins_agent_and_filters(
-        self, mock_session, mock_logger
-    ):
-        mock_session.execute = AsyncMock(return_value=_exec_result())
-        repo = BackgroundJobRepository(mock_session, mock_logger)
-        await repo.list_by_user("u1", "success", 20, 0, "req-1")
-        sql = str(mock_session.execute.call_args[0][0])
-        assert "LEFT OUTER JOIN agent_definition" in sql
-        assert "agent_background_job.user_id" in sql
-        assert "agent_background_job.status" in sql
-
-
 class TestSeen:
     @pytest.mark.asyncio
     async def test_count_unseen(self, mock_session, mock_logger):
@@ -261,3 +235,255 @@ class TestSeen:
         mock_session.execute = AsyncMock(return_value=_exec_result(rowcount=4))
         repo = BackgroundJobRepository(mock_session, mock_logger)
         assert await repo.mark_all_seen("u1", _NOW, "req-1") == 4
+
+
+class TestSoftDeleteFilterCoverage:
+    """Design §10.2 전수 점검 — 조회·집계 쿼리에 deleted_at 필터가 빠지면
+    삭제한 작업이 목록·벨 배지에 되살아난다. SQL 문자열로 직접 검증한다."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "call",
+        [
+            lambda r: r.find_by_id("j1", "req-1"),
+            lambda r: r.find_active_by_session("sess-1", "req-1"),
+            lambda r: r.count_unseen("u1", "req-1"),
+            lambda r: r.mark_seen("j1", "u1", _NOW, "req-1"),
+            lambda r: r.mark_all_seen("u1", _NOW, "req-1"),
+            lambda r: r.soft_delete("j1", "u1", _NOW, "req-1"),
+            lambda r: r.soft_delete_completed("u1", _NOW, "req-1"),
+        ],
+    )
+    async def test_query_filters_deleted_rows(
+        self, mock_session, mock_logger, call
+    ):
+        mock_session.execute = AsyncMock(
+            return_value=_exec_result(scalar_one=0, rowcount=0, first=None)
+        )
+        repo = BackgroundJobRepository(mock_session, mock_logger)
+        await call(repo)
+        sql = str(mock_session.execute.call_args[0][0])
+        assert "agent_background_job.deleted_at IS NULL" in sql
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("history_type", ["all", "manual"])
+    async def test_history_filters_deleted_rows(
+        self, mock_session, mock_logger, history_type
+    ):
+        mock_session.execute = AsyncMock(return_value=_exec_result())
+        repo = BackgroundJobRepository(mock_session, mock_logger)
+        await repo.list_history(
+            "u1",
+            status_group="all",
+            history_type=history_type,
+            since_utc=None,
+            limit=20,
+            offset=0,
+            request_id="req-1",
+        )
+        sql = str(mock_session.execute.call_args[0][0])
+        assert "agent_background_job.deleted_at IS NULL" in sql
+
+
+class TestSoftDelete:
+    @pytest.mark.asyncio
+    async def test_returns_true_when_row_updated(self, mock_session, mock_logger):
+        mock_session.execute = AsyncMock(return_value=_exec_result(rowcount=1))
+        repo = BackgroundJobRepository(mock_session, mock_logger)
+        assert await repo.soft_delete("j1", "u1", _NOW, "req-1") is True
+
+    @pytest.mark.asyncio
+    async def test_returns_false_when_not_owned(self, mock_session, mock_logger):
+        mock_session.execute = AsyncMock(return_value=_exec_result(rowcount=0))
+        repo = BackgroundJobRepository(mock_session, mock_logger)
+        assert await repo.soft_delete("j1", "other", _NOW, "req-1") is False
+
+    @pytest.mark.asyncio
+    async def test_sets_deleted_at_not_physical_delete(
+        self, mock_session, mock_logger
+    ):
+        mock_session.execute = AsyncMock(return_value=_exec_result(rowcount=1))
+        repo = BackgroundJobRepository(mock_session, mock_logger)
+        await repo.soft_delete("j1", "u1", _NOW, "req-1")
+        sql = str(mock_session.execute.call_args[0][0])
+        assert sql.startswith("UPDATE agent_background_job")
+        assert "deleted_at" in sql
+
+    @pytest.mark.asyncio
+    async def test_where_excludes_active_jobs(self, mock_session, mock_logger):
+        """TOCTOU 방어 — UseCase 검사 이후 워커가 claim 해도 지워지면 안 된다."""
+        mock_session.execute = AsyncMock(return_value=_exec_result(rowcount=0))
+        repo = BackgroundJobRepository(mock_session, mock_logger)
+        await repo.soft_delete("j1", "u1", _NOW, "req-1")
+        compiled = mock_session.execute.call_args[0][0].compile()
+        assert "agent_background_job.status IN" in str(compiled)
+        assert ["success", "failed"] in compiled.params.values()
+
+    @pytest.mark.asyncio
+    async def test_cleanup_targets_finished_only(self, mock_session, mock_logger):
+        mock_session.execute = AsyncMock(return_value=_exec_result(rowcount=3))
+        repo = BackgroundJobRepository(mock_session, mock_logger)
+        count = await repo.soft_delete_completed("u1", _NOW, "req-1")
+        assert count == 3
+        sql = str(mock_session.execute.call_args[0][0])
+        assert "agent_background_job.status IN" in sql
+
+
+class TestListHistory:
+    @pytest.mark.asyncio
+    async def test_union_includes_both_sources(self, mock_session, mock_logger):
+        mock_session.execute = AsyncMock(return_value=_exec_result())
+        repo = BackgroundJobRepository(mock_session, mock_logger)
+        await repo.list_history(
+            "u1",
+            status_group="all",
+            history_type="all",
+            since_utc=None,
+            limit=20,
+            offset=0,
+            request_id="req-1",
+        )
+        sql = str(mock_session.execute.call_args[0][0])
+        assert "UNION ALL" in sql
+        assert "agent_schedule_run" in sql
+        assert "agent_background_job" in sql
+
+    @pytest.mark.asyncio
+    async def test_schedule_only_skips_union(self, mock_session, mock_logger):
+        """유형이 단일값이면 UNION 없이 해당 테이블만 조회한다 (Design §4.3)."""
+        mock_session.execute = AsyncMock(return_value=_exec_result())
+        repo = BackgroundJobRepository(mock_session, mock_logger)
+        await repo.list_history(
+            "u1",
+            status_group="all",
+            history_type="schedule",
+            since_utc=None,
+            limit=20,
+            offset=0,
+            request_id="req-1",
+        )
+        sql = str(mock_session.execute.call_args[0][0])
+        assert "UNION ALL" not in sql
+        assert "agent_background_job" not in sql
+        # 소유자는 agent_schedule 경유로만 판정한다
+        assert "agent_schedule.user_id" in sql
+
+    @pytest.mark.asyncio
+    async def test_orders_by_occurred_at_then_id(self, mock_session, mock_logger):
+        """보조 키(id) 없이는 동시각 항목이 페이지 경계에서 흔들린다."""
+        mock_session.execute = AsyncMock(return_value=_exec_result())
+        repo = BackgroundJobRepository(mock_session, mock_logger)
+        await repo.list_history(
+            "u1",
+            status_group="all",
+            history_type="all",
+            since_utc=None,
+            limit=20,
+            offset=0,
+            request_id="req-1",
+        )
+        sql = str(mock_session.execute.call_args[0][0])
+        order = sql[sql.index("ORDER BY"):]
+        assert "occurred_at DESC" in order
+        assert "id ASC" in order
+
+    @pytest.mark.asyncio
+    async def test_status_group_expands_to_statuses(
+        self, mock_session, mock_logger
+    ):
+        mock_session.execute = AsyncMock(return_value=_exec_result())
+        repo = BackgroundJobRepository(mock_session, mock_logger)
+        await repo.list_history(
+            "u1",
+            status_group="running",
+            history_type="manual",
+            since_utc=None,
+            limit=20,
+            offset=0,
+            request_id="req-1",
+        )
+        compiled = mock_session.execute.call_args[0][0].compile()
+        assert ["queued", "running"] in compiled.params.values()
+
+    @pytest.mark.asyncio
+    async def test_since_filter_uses_each_sources_time_column(
+        self, mock_session, mock_logger
+    ):
+        mock_session.execute = AsyncMock(return_value=_exec_result())
+        repo = BackgroundJobRepository(mock_session, mock_logger)
+        await repo.list_history(
+            "u1",
+            status_group="all",
+            history_type="all",
+            since_utc=_NOW,
+            limit=20,
+            offset=0,
+            request_id="req-1",
+        )
+        sql = str(mock_session.execute.call_args[0][0])
+        assert "agent_background_job.queued_at >=" in sql
+        assert "agent_schedule_run.scheduled_for >=" in sql
+
+    @pytest.mark.asyncio
+    async def test_maps_rows_to_history_items(self, mock_session, mock_logger):
+        row = MagicMock()
+        row.id, row.type = "j1", "manual"
+        row.occurred_at = _NOW
+        row.title, row.status = "시장 조사해줘", "success"
+        row.agent_id, row.agent_name = "a1", "리서치 봇"
+        row.session_id, row.error_message = "sess-1", None
+        row.seen_at = row.started_at = row.finished_at = None
+        mock_session.execute = AsyncMock(return_value=_exec_result(rows=[row]))
+        repo = BackgroundJobRepository(mock_session, mock_logger)
+        items = await repo.list_history(
+            "u1",
+            status_group="all",
+            history_type="all",
+            since_utc=None,
+            limit=20,
+            offset=0,
+            request_id="req-1",
+        )
+        assert len(items) == 1
+        assert items[0].title == "시장 조사해줘"
+        assert items[0].deletable is True
+
+    @pytest.mark.asyncio
+    async def test_count_history_returns_scalar(self, mock_session, mock_logger):
+        mock_session.execute = AsyncMock(
+            return_value=_exec_result(scalar_one=7)
+        )
+        repo = BackgroundJobRepository(mock_session, mock_logger)
+        total = await repo.count_history(
+            "u1",
+            status_group="all",
+            history_type="all",
+            since_utc=None,
+            request_id="req-1",
+        )
+        assert total == 7
+        assert "count(*)" in str(mock_session.execute.call_args[0][0])
+
+    @pytest.mark.asyncio
+    async def test_unknown_filters_rejected(self, mock_session, mock_logger):
+        repo = BackgroundJobRepository(mock_session, mock_logger)
+        with pytest.raises(ValueError):
+            await repo.list_history(
+                "u1",
+                status_group="nope",
+                history_type="all",
+                since_utc=None,
+                limit=20,
+                offset=0,
+                request_id="req-1",
+            )
+        with pytest.raises(ValueError):
+            await repo.list_history(
+                "u1",
+                status_group="all",
+                history_type="nope",
+                since_utc=None,
+                limit=20,
+                offset=0,
+                request_id="req-1",
+            )

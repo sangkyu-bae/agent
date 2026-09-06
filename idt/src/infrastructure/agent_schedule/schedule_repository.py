@@ -16,6 +16,7 @@ from src.domain.agent_schedule.interfaces import (
 from src.domain.agent_schedule.policies import SchedulePolicy
 from src.domain.agent_schedule.value_objects import ScheduleSpec
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
+from src.infrastructure.agent_builder.models import AgentDefinitionModel
 from src.infrastructure.agent_schedule.models import AgentScheduleModel
 
 
@@ -102,6 +103,26 @@ class ScheduleRepository(ScheduleRepositoryInterface):
         )
         result = await self._session.execute(stmt)
         return [_to_entity(m) for m in result.scalars().all()]
+
+    async def list_by_user(
+        self, user_id: str, request_id: str
+    ) -> list[tuple[AgentSchedule, str | None]]:
+        """내 스케줄 정의 전체 (jobs-page-revamp — 작업함 스케줄 작업 탭).
+
+        소유자 기준은 agent_schedule.user_id. 에이전트명은 표시용이므로
+        outerjoin 으로 붙여 삭제된 에이전트도 행이 사라지지 않게 한다.
+        """
+        stmt = (
+            select(AgentScheduleModel, AgentDefinitionModel.name)
+            .outerjoin(
+                AgentDefinitionModel,
+                AgentScheduleModel.agent_id == AgentDefinitionModel.id,
+            )
+            .where(AgentScheduleModel.user_id == user_id)
+            .order_by(AgentScheduleModel.created_at.desc())
+        )
+        result = await self._session.execute(stmt)
+        return [(_to_entity(m), name) for m, name in result.all()]
 
     async def count_by_agent(self, agent_id: str, request_id: str) -> int:
         stmt = select(func.count()).select_from(AgentScheduleModel).where(

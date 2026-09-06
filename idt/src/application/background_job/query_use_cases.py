@@ -6,7 +6,10 @@
 from datetime import datetime, timezone
 
 from src.application.background_job.errors import JobNotFoundError
+from src.application.background_job.period import period_to_utc_start
 from src.application.background_job.schemas import (
+    JobHistoryResponse,
+    JobListResponse,
     JobResponse,
     SeenAllResponse,
     UnseenCountResponse,
@@ -19,7 +22,12 @@ def _utc_now() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
-class ListJobsUseCase:
+class ListJobHistoryUseCase:
+    """작업 기록 — 수동 job + 스케줄 실행 통합 목록 (jobs-page-revamp §4.2).
+
+    Design Ref: §2.0 Option C — 정렬·페이징·총건수는 전부 DB 가 계산한다.
+    """
+
     def __init__(
         self, job_repo: BackgroundJobRepositoryInterface, logger: LoggerInterface
     ) -> None:
@@ -29,17 +37,29 @@ class ListJobsUseCase:
     async def execute(
         self,
         user_id: str,
-        status: str | None,
+        status_group: str,
+        history_type: str,
+        period: str,
         limit: int,
         offset: int,
         request_id: str,
-    ) -> list[JobResponse]:
-        rows = await self._job_repo.list_by_user(
-            user_id, status, limit, offset, request_id
+    ) -> JobListResponse:
+        # Plan SC: FR-09 — KST 경계를 UTC naive 로 환산해 DB 값과 비교
+        since_utc = period_to_utc_start(period, _utc_now())
+        filters = dict(
+            status_group=status_group,
+            history_type=history_type,
+            since_utc=since_utc,
         )
-        return [
-            JobResponse.from_entity(job, agent_name) for job, agent_name in rows
-        ]
+        items = await self._job_repo.list_history(
+            user_id, limit=limit, offset=offset, request_id=request_id, **filters
+        )
+        total = await self._job_repo.count_history(
+            user_id, request_id=request_id, **filters
+        )
+        return JobListResponse(
+            items=[JobHistoryResponse.from_item(i) for i in items], total=total
+        )
 
 
 class GetJobUseCase:

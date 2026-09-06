@@ -7,3 +7,7 @@ class JobNotFoundError(Exception):
 
 class JobConflictError(Exception):
     """같은 세션에 진행중 job 존재 → 409 (D5)."""
+
+
+class JobDeleteConflictError(Exception):
+    """진행 중(queued|running) 작업 삭제 시도 → 409 (jobs-page-revamp FR-04)."""

@@ -12,10 +12,10 @@ import { AxiosError } from 'axios';
 
 import ChatPage from './index';
 import type { AgentChatOutletContext } from '@/types/agent';
-import type { BackgroundJob } from '@/types/backgroundJob';
+import type { JobHistoryItem } from '@/types/backgroundJob';
 
 const bg = vi.hoisted(() => ({
-  useJobList: vi.fn(),
+  useJobHistory: vi.fn(),
   useEnqueueJob: vi.fn(),
 }));
 
@@ -25,7 +25,7 @@ vi.mock('@/hooks/useBackgroundJobs', async (importOriginal) => {
     await importOriginal<typeof import('@/hooks/useBackgroundJobs')>();
   return {
     ...actual,
-    useJobList: bg.useJobList,
+    useJobHistory: bg.useJobHistory,
     useEnqueueJob: bg.useEnqueueJob,
   };
 });
@@ -84,21 +84,28 @@ const AGENT = {
   isDefault: false,
 };
 
-const activeJob = (overrides: Partial<BackgroundJob> = {}): BackgroundJob => ({
+const activeJob = (
+  overrides: Partial<JobHistoryItem> = {},
+): JobHistoryItem => ({
   id: 'j1',
+  type: 'manual',
+  occurred_at: '2026-08-11T02:00:00',
+  title: '보고서 만들어줘',
+  status: 'running',
   agent_id: AGENT.id,
   agent_name: 'My Agent',
-  source: 'chat',
-  query: '보고서 만들어줘',
   session_id: 'sess-1',
-  run_id: null,
-  status: 'running',
   error_message: null,
   seen_at: null,
-  queued_at: '2026-08-11T02:00:00',
   started_at: '2026-08-11T02:00:05',
   finished_at: null,
+  deletable: true,
   ...overrides,
+});
+
+/** jobs-page-revamp: 목록 응답이 {items,total} 로 바뀌었다 */
+const listResult = (items: JobHistoryItem[]) => ({
+  data: { items, total: items.length },
 });
 
 function renderChatPage() {
@@ -129,7 +136,7 @@ function renderChatPage() {
 const mutateMock = vi.fn();
 
 beforeEach(() => {
-  bg.useJobList.mockReturnValue({ data: [] });
+  bg.useJobHistory.mockReturnValue(listResult([]));
   bg.useEnqueueJob.mockReturnValue({ mutate: mutateMock, isPending: false });
 });
 
@@ -139,7 +146,7 @@ afterEach(() => {
 
 describe('ChatPage — 백그라운드 작업 통합 (S9)', () => {
   it('현재 세션에 진행중 job 이 있으면 배너를 띄우고 입력을 잠근다 (D5)', async () => {
-    bg.useJobList.mockReturnValue({ data: [activeJob()] });
+    bg.useJobHistory.mockReturnValue(listResult([activeJob()]));
     renderChatPage();
     expect(
       screen.getByText(/이 대화에서 백그라운드 작업이 실행 중입니다/),
@@ -151,9 +158,9 @@ describe('ChatPage — 백그라운드 작업 통합 (S9)', () => {
   });
 
   it('다른 세션의 진행중 job 은 입력을 잠그지 않는다', async () => {
-    bg.useJobList.mockReturnValue({
-      data: [activeJob({ session_id: 'other-sess' })],
-    });
+    bg.useJobHistory.mockReturnValue(
+      listResult([activeJob({ session_id: 'other-sess' })]),
+    );
     renderChatPage();
     expect(
       screen.queryByText(/이 대화에서 백그라운드 작업이 실행 중입니다/),

@@ -2,7 +2,11 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
 
-from src.domain.background_job.entity import BackgroundJob, JobStatus
+from src.domain.background_job.entity import (
+    BackgroundJob,
+    JobHistoryItem,
+    JobStatus,
+)
 
 
 class BackgroundJobRepositoryInterface(ABC):
@@ -50,16 +54,48 @@ class BackgroundJobRepositoryInterface(ABC):
         """기동 시 고아 running → failed 일괄 정리 (D6). 처리 건수 반환."""
         ...
 
+    # ── jobs-page-revamp: 통합 이력 조회 + 소프트 삭제 (Design §4.3) ──
+
     @abstractmethod
-    async def list_by_user(
+    async def list_history(
         self,
         user_id: str,
-        status: str | None,
+        *,
+        status_group: str,
+        history_type: str,
+        since_utc: datetime | None,
         limit: int,
         offset: int,
         request_id: str,
-    ) -> list[tuple[BackgroundJob, str | None]]:
-        """내 작업 목록 — (job, agent_name) 쌍. 에이전트명은 작업함 표시용."""
+    ) -> list[JobHistoryItem]:
+        """수동 job + 스케줄 실행 통합 목록 (occurred_at DESC, id ASC)."""
+        ...
+
+    @abstractmethod
+    async def count_history(
+        self,
+        user_id: str,
+        *,
+        status_group: str,
+        history_type: str,
+        since_utc: datetime | None,
+        request_id: str,
+    ) -> int:
+        """list_history 와 동일 조건의 총건수 (페이지네이션용)."""
+        ...
+
+    @abstractmethod
+    async def soft_delete(
+        self, job_id: str, user_id: str, now_utc: datetime, request_id: str
+    ) -> bool:
+        """본인 소유 활성 job 소프트 삭제. 미존재/타인/이미 삭제면 False."""
+        ...
+
+    @abstractmethod
+    async def soft_delete_completed(
+        self, user_id: str, now_utc: datetime, request_id: str
+    ) -> int:
+        """본인 소유 success|failed job 일괄 소프트 삭제. 처리 건수 반환."""
         ...
 
     @abstractmethod
