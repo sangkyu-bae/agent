@@ -178,6 +178,14 @@ class Settings(BaseSettings):
     # 기본 MCP 변환 도구 id — 빈 값이면 extractor 키로 폴백 (D5 체인)
     document_generator_html_to_doc_tool_id: str = ""
 
+    # 문서 폰트 임베드 (fix-doc-generator-korean-font Design §10.3)
+    # MCP 변환 서버에 한글 폰트가 없어 생성 PDF 한글이 .notdef 로 깨지는 문제 대응.
+    # 변환 직전 HTML 에 사용 문자만 서브셋한 폰트를 @font-face data URI 로 심는다.
+    document_font_embed_enabled: bool = True          # 사고 시 즉시 차단용 스위치
+    document_font_family: str = "Pretendard"          # 임베드 폰트 패밀리명
+    document_font_dir: str = "resources/fonts"        # 폰트 자산 디렉토리
+    document_font_max_embed_kb: int = 200             # 초과 시 경고(차단 아님)
+
     # golden-sample-blueprint (Design §8.3) — 선택 env. 비전 모델·동시성은 multimodal_setting
     blueprint_font_dir: str = ""                      # 서버 설치 폰트 디렉토리(빈 값 = 기본 폰트만)
     blueprint_default_font: str = "NanumGothic"       # 미매핑 폰트 대체 기본 폰트명

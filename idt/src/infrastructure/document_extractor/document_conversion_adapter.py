@@ -32,11 +32,19 @@ class DocumentConversionAdapter:
     """MCP 변환 도구 호출 + 방향별 도구 선택 + 응답 정규화."""
 
     def __init__(
-        self, mcp_tool_loader, mcp_repository, logger: LoggerInterface
+        self,
+        mcp_tool_loader,
+        mcp_repository,
+        logger: LoggerInterface,
+        font_embedder=None,
     ) -> None:
         self._loader = mcp_tool_loader
         self._repository = mcp_repository
         self._logger = logger
+        # fix-doc-generator-korean-font Design §2.0 Option C — html→doc 변환이
+        # 반드시 지나는 이 한 지점에서 한글 폰트를 보장한다. 미주입(None)이면
+        # 기존 동작 그대로라 하위 호환이 깨지지 않는다.
+        self._font_embedder = font_embedder
 
     async def to_html(
         self,
@@ -74,12 +82,18 @@ class DocumentConversionAdapter:
         mcp_tool_id: str,
         request_id: str,
     ) -> bytes:
-        """채워진 HTML → PDF/Word 바이트. `html_to_{output_format}` 도구 선택."""
+        """채워진 HTML → PDF/Word 바이트. `html_to_{output_format}` 도구 선택.
+
+        변환 서버에 한글 폰트가 없어도 깨지지 않도록, 전송 직전 HTML 에 사용
+        문자만 서브셋한 폰트를 심는다 (Plan SC: 한글 .notdef 비율 0%).
+        """
         tool = await self._select_tool(
             mcp_tool_id, f"html_to_{output_format}", request_id
         )
         payload = self._build_payload(
-            base64.b64encode(html.encode("utf-8")).decode("ascii"),
+            base64.b64encode(
+                self._embed_fonts(html, output_format, request_id).encode("utf-8")
+            ).decode("ascii"),
             filename="filled.html",
         )
         result = await self._invoke(tool, payload, mcp_tool_id, request_id)
@@ -97,6 +111,25 @@ class DocumentConversionAdapter:
         result = await self._invoke(tool, payload, mcp_tool_id, request_id)
         self._log_warnings(result, mcp_tool_id, request_id)
         return self._normalize_file(result, mcp_tool_id)
+
+    # ── 폰트 임베드 ──────────────────────────────────────────────────────
+    def _embed_fonts(self, html: str, output_format: str, request_id: str) -> str:
+        """폰트 처리 실패는 변환을 막지 않는다 (Plan FR-09).
+
+        GAP-04: PDF 만 대상이다. Word 는 CSS @font-face 로 폰트를 싣지 못하므로
+        base64 폰트를 붙여봐야 페이로드만 커진다.
+        """
+        if self._font_embedder is None or output_format.lower() != "pdf":
+            return html
+        try:
+            return self._font_embedder.wrap(html, request_id).html
+        except Exception as e:
+            self._logger.warning(
+                "document font embed failed, sending original html",
+                request_id=request_id,
+                reason=str(e),
+            )
+            return html
 
     # ── 도구 선택 ────────────────────────────────────────────────────────
     async def _select_tool(

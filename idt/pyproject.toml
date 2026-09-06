@@ -47,6 +47,8 @@ dependencies = [
     "kiwipiepy>=0.17.0",
     # HTML to PDF
     "xhtml2pdf>=0.2.17",
+    # 문서 변환용 한글 폰트 서브셋 (fix-doc-generator-korean-font Design §2.3)
+    "fonttools>=4.50.0",
     # Excel
     "pandas>=2.0.0",
     "openpyxl>=3.1.0",
@@ -94,6 +96,10 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src"]
+# fix-doc-generator-korean-font GAP-02 — 폰트 자산이 휠에 안 실리면
+# resolve_font_dir 가 빈 경로를 가리키고, 임베더가 조용히 폴백해
+# 생성 PDF 의 한글이 다시 .notdef 로 깨진다 (경고 로그만 남음).
+force-include = { "resources/fonts" = "resources/fonts" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
