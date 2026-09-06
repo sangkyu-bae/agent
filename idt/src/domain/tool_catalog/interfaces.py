@@ -4,6 +4,17 @@ from abc import ABC, abstractmethod
 from src.domain.tool_catalog.entity import ToolCatalogEntry
 
 
+class _Unset:
+    """'인자 생략'과 '명시적 None'을 구분하는 센티널 (§4.2 부분 갱신)."""
+
+    def __repr__(self) -> str:  # pragma: no cover - 디버깅 표시용
+        return "<UNSET>"
+
+
+UNSET = _Unset()
+_UNSET = UNSET
+
+
 class ToolCatalogRepositoryInterface(ABC):
     @abstractmethod
     async def save(self, entry: ToolCatalogEntry, request_id: str) -> ToolCatalogEntry: ...
@@ -33,3 +44,20 @@ class ToolCatalogRepositoryInterface(ABC):
 
     @abstractmethod
     async def list_builtin(self, request_id: str) -> list[ToolCatalogEntry]: ...
+
+    @abstractmethod
+    async def update_metadata(
+        self,
+        tool_id: str,
+        request_id: str,
+        *,
+        category: str | None = _UNSET,
+        max_tool_calls: int | None = _UNSET,
+    ) -> ToolCatalogEntry | None:
+        """Design Ref: mcp-tool-category-routing §4.2 — 분류·호출 상한 부분 갱신.
+
+        인자를 생략하면 해당 컬럼을 건드리지 않는다. 명시적으로 None을 주면
+        '미분류로 되돌리기'를 뜻하므로, 생략과 None을 구분하기 위해 _UNSET
+        센티널을 쓴다. 대상이 없으면 None을 반환한다.
+        """
+        ...

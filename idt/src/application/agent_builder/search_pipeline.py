@@ -301,6 +301,7 @@ def create_search_pipeline_node(
     logger: LoggerInterface,
     user_context_block: str = "",
     datetime_block: str = "",
+    worker_context_block: str = "",
 ):
     """rewrite → search → validate(루프) → compress 파이프라인 search 노드 생성.
 
@@ -308,9 +309,12 @@ def create_search_pipeline_node(
     사용자 컨텍스트)이 주어지면 3단계 LLM system prompt 모두에 prepend된다.
     runtime-datetime-context D4: datetime_block([현재 날짜])은 사용자 블록보다
     앞에 prepend — 검색어를 실제로 작성하는 rewrite LLM이 날짜를 알아야 한다 (FR-05a).
+    worker-context-injection §4.1 (GAP-01): worker_context_block([에이전트 지침]·
+    [당신의 역할])은 사용자 블록 뒤 — rewrite LLM이 어떤 에이전트의 어떤 작업으로
+    검색어를 쓰는지 알아야 근거 없는 검색어를 만들지 않는다.
     """
-    # Design Ref: runtime-datetime-context §D4 — 순서: 날짜 → 사용자 → 본문
-    context_block = datetime_block + user_context_block
+    # Design Ref: runtime-datetime-context §D4 — 순서: 날짜 → 사용자 → 워커 → 본문
+    context_block = datetime_block + user_context_block + worker_context_block
 
     async def search_node(state: SupervisorState) -> dict:
         messages = state["messages"]

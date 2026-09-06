@@ -66,10 +66,12 @@ class DocumentGenerator:
         conversation_block: str,
         owner_user_id: str,
         request_id: str,
+        worker_context_block: str = "",
     ) -> GenerateResult:
         mcp_tool_id = self._resolve_mcp_tool_id(tool_config)
         draft = await self._write_html(
-            llm, gen_type, evidence_block, conversation_block, request_id
+            llm, gen_type, evidence_block, conversation_block, request_id,
+            worker_context_block,
         )
         html = HtmlSanitizePolicy.clean(draft.html)
 
@@ -107,9 +109,14 @@ class DocumentGenerator:
         evidence_block: str,
         conversation_block: str,
         request_id: str,
+        worker_context_block: str = "",
     ) -> _Draft:
+        # worker-context-injection §4.1 (GAP-01): 에이전트 지침·역할을 앞단에.
         messages = [
-            {"role": "system", "content": self._build_prompt(gen_type)},
+            {
+                "role": "system",
+                "content": worker_context_block + self._build_prompt(gen_type),
+            },
             {
                 "role": "user",
                 "content": self._build_user_content(

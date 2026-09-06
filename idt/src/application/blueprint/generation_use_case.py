@@ -121,14 +121,19 @@ class PresentationGenerationUseCase:
         owner_user_id: str,
         request_id: str,
         callbacks: list | None = None,
+        worker_context_block: str = "",
     ) -> PresentationResult:
         evidence = self._truncate(evidence_block)
         conversation = self._truncate(conversation_block)
         planner = self._planner_factory(llm, callbacks)
         writer = self._writer_factory(llm, callbacks)
 
+        # worker-context-injection §4.1 (GAP-01): 슬라이드 계획 LLM이 어떤
+        # 에이전트의 어떤 역할로 구성하는지 알아야 한다. SlidePlannerPort
+        # 시그니처는 유지하고 지시문 앞단에 블록을 붙인다.
         planned = await self._plan(
-            planner, blueprint, user_instruction, evidence, tool_config
+            planner, blueprint, worker_context_block + user_instruction,
+            evidence, tool_config,
         )
         slides = await self._write_all(
             writer, blueprint, planned.plans, evidence, conversation

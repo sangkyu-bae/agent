@@ -1139,13 +1139,22 @@ class TestDatetimeContext:
         assert mock_create.call_args.kwargs["system_prompt"].startswith(self._MARK)
 
     @pytest.mark.asyncio
-    async def test_generic_worker_without_tz_has_no_system_prompt(self):
-        """빈 문자열을 system_prompt로 넘기지 않는다(기존 호출 형태 보존)."""
+    async def test_generic_worker_without_tz_still_gets_context_block(self):
+        """tz 미배선이어도 워커 컨텍스트 블록은 주입된다.
+
+        worker-context-injection §4.1 (FR-02)로 계약이 바뀌었다. 이전에는
+        datetime_block이 유일한 system_prompt 원천이라 tz가 없으면 인자를
+        아예 넘기지 않았지만, 이제는 에이전트 프롬프트·역할·도구 사용 규범이
+        tz와 무관하게 주입된다. 날짜 블록만 비어 있다.
+        """
         compiler, _ = _make_compiler()
         with patch("src.application.agent_builder.workflow_compiler.create_agent",
                    return_value=MagicMock()) as mock_create:
             await compiler.compile(_make_workflow(), _make_llm_model(), "req-1")
-        assert "system_prompt" not in mock_create.call_args.kwargs
+        prompt = mock_create.call_args.kwargs.get("system_prompt")
+        assert prompt is not None
+        assert "[현재 날짜]" not in prompt
+        assert "[도구 사용 규범]" in prompt
 
     @pytest.mark.asyncio
     async def test_search_worker_receives_datetime_block(self):

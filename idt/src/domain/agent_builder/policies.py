@@ -84,9 +84,9 @@ class VisibilityPolicy:
 
 
 class AgentBuilderPolicy:
-    MAX_TOOLS = 5
+    MAX_TOOLS = 10
     MAX_SUB_AGENTS = 3
-    MAX_WORKERS_TOTAL = 6
+    MAX_WORKERS_TOTAL = 10
     MAX_NAME_LENGTH = 200
     MAX_SYSTEM_PROMPT_LENGTH = 4000
     MAX_USER_REQUEST_LENGTH = 1000
@@ -227,6 +227,66 @@ class SearchPipelinePolicy:
 
     def needs_compression(self, text: str) -> bool:
         return len(text) > self.compress_threshold
+
+
+class CollectPipelinePolicy:
+    """collect 노드 도메인 규칙 (mcp-tool-category-routing §3.1).
+
+    순수 규칙만 보관 — LLM/도구 호출 없음. SearchPipelinePolicy와 동형이되
+    '시도 횟수' 개념이 없다: collect는 도구를 정확히 1회 호출하는 단일샷이며,
+    이 계약은 설정으로 바뀌지 않는다(TOOL_CALLS_PER_RUN 상수).
+    """
+
+    # 단일샷 계약 — react 루프 부재의 근거. 변경 금지(설정 대상 아님).
+    TOOL_CALLS_PER_RUN = 1
+    # 압축 발동 임계 길이(자). search 파이프라인과 같은 기준을 쓴다 —
+    # 두 노드의 산출이 같은 근거 블록으로 소비되므로 길이 정책이 갈리면
+    # 하류 컨텍스트 예산이 노드 종류에 따라 들쭉날쭉해진다.
+    DEFAULT_COMPRESS_THRESHOLD = 4000
+
+    def __init__(self, compress_threshold: int | None = None) -> None:
+        self.compress_threshold = (
+            compress_threshold
+            if compress_threshold and compress_threshold > 0
+            else self.DEFAULT_COMPRESS_THRESHOLD
+        )
+
+    def needs_compression(self, text: str) -> bool:
+        """FR-09: 임계치를 넘을 때만 압축 — 짧은 수집물은 무손실 통과."""
+        return len(text) > self.compress_threshold
+
+
+class ToolCallBudgetPolicy:
+    """react 워커의 도구 호출 예산 (mcp-tool-category-routing §5 D-05).
+
+    미분류(react) 워커가 워커 1회 실행당 도구를 몇 번까지 부를 수 있는지
+    정한다. 기본 2회인 이유: 1차 호출이 ToolArgumentPolicy에 차단되면
+    워커가 차단 메시지를 받아 스스로 교정할 기회가 정확히 한 번 필요하다.
+    """
+
+    DEFAULT_RUN_LIMIT = 2
+    MIN_RUN_LIMIT = 1
+    MAX_RUN_LIMIT = 20
+
+    @classmethod
+    def resolve(cls, max_tool_calls: int | None) -> int:
+        """카탈로그 지정값을 해석한다. 없거나 범위 밖이면 기본값으로 클램프.
+
+        Args:
+            max_tool_calls: tool_catalog.max_tool_calls (None 허용)
+
+        Returns:
+            실제 적용할 run_limit
+        """
+        if max_tool_calls is None or isinstance(max_tool_calls, bool):
+            return cls.DEFAULT_RUN_LIMIT
+        if not isinstance(max_tool_calls, int):
+            return cls.DEFAULT_RUN_LIMIT
+        if max_tool_calls < cls.MIN_RUN_LIMIT:
+            return cls.MIN_RUN_LIMIT
+        if max_tool_calls > cls.MAX_RUN_LIMIT:
+            return cls.MAX_RUN_LIMIT
+        return max_tool_calls
 
 
 class UpdateAgentPolicy:

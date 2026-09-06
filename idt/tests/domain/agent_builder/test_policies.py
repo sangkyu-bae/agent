@@ -12,7 +12,8 @@ class TestAgentBuilderPolicy:
         AgentBuilderPolicy.validate_tool_count(1)  # 예외 없음
 
     def test_validate_tool_count_max_passes(self):
-        AgentBuilderPolicy.validate_tool_count(5)  # 예외 없음
+        # 상한값 자체는 통과 — 정책 상수를 참조해 상한 변경 시 함께 따라간다
+        AgentBuilderPolicy.validate_tool_count(AgentBuilderPolicy.MAX_TOOLS)
 
     def test_validate_tool_count_zero_passes(self):
         # agent-instruction-required: 도구 0개 허용 (하한 제거)
@@ -20,7 +21,7 @@ class TestAgentBuilderPolicy:
 
     def test_validate_tool_count_over_max_raises(self):
         with pytest.raises(ValueError, match="최대"):
-            AgentBuilderPolicy.validate_tool_count(6)
+            AgentBuilderPolicy.validate_tool_count(AgentBuilderPolicy.MAX_TOOLS + 1)
 
     # ── validate_worker_count ───────────────────────────────────
 
@@ -33,7 +34,7 @@ class TestAgentBuilderPolicy:
             WorkerDefinition(
                 tool_id=f"tool_{i}", worker_id=f"w_{i}", description="d",
             )
-            for i in range(7)
+            for i in range(AgentBuilderPolicy.MAX_WORKERS_TOTAL + 1)
         ]
         with pytest.raises(ValueError, match="최대"):
             AgentBuilderPolicy.validate_worker_count(workers)

@@ -210,3 +210,35 @@ class TestDeleteAndTouch:
         await repo.touch_last_run("s1", datetime(2026, 7, 2, 0, 1), "req-1")
         mock_session.execute.assert_awaited_once()
         mock_session.flush.assert_awaited_once()
+
+
+class TestListByUser:
+    """jobs-page-revamp FR-15 — 작업함 스케줄 작업 탭은 에이전트를 가로질러 본다."""
+
+    @pytest.mark.asyncio
+    async def test_returns_schedule_with_agent_name(
+        self, mock_session, mock_logger
+    ):
+        result = MagicMock()
+        result.all.return_value = [(_daily_model(), "리서치 봇")]
+        mock_session.execute = AsyncMock(return_value=result)
+        repo = ScheduleRepository(session=mock_session, logger=mock_logger)
+        rows = await repo.list_by_user("u1", "req-1")
+        assert len(rows) == 1
+        schedule, agent_name = rows[0]
+        assert schedule.id == "s1"
+        assert agent_name == "리서치 봇"
+
+    @pytest.mark.asyncio
+    async def test_statement_filters_by_user_and_outerjoins_agent(
+        self, mock_session, mock_logger
+    ):
+        result = MagicMock()
+        result.all.return_value = []
+        mock_session.execute = AsyncMock(return_value=result)
+        repo = ScheduleRepository(session=mock_session, logger=mock_logger)
+        await repo.list_by_user("u1", "req-1")
+        sql = str(mock_session.execute.call_args[0][0])
+        assert "agent_schedule.user_id" in sql
+        # 삭제된 에이전트의 스케줄도 목록에서 사라지면 안 된다
+        assert "LEFT OUTER JOIN agent_definition" in sql

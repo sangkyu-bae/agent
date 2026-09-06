@@ -1,10 +1,14 @@
-"""UpdateAgentUseCase: 시스템 프롬프트 / 이름 / 서브에이전트 / 문서 템플릿 수정."""
+"""UpdateAgentUseCase: 시스템 프롬프트 / 이름 / 도구 / 서브에이전트 / 문서 수정."""
+from dataclasses import dataclass
+
 from src.application.agent_builder.document_generation_type_binding import (
+    DOCUMENT_GENERATOR_TOOL_ID,
     build_document_generation_type_plan,
     ensure_generation_type_wiring,
     persist_document_generation_type,
 )
 from src.application.agent_builder.document_template_binding import (
+    DOCUMENT_EXTRACTOR_TOOL_ID,
     build_document_template_plan,
     ensure_template_wiring,
     persist_document_template,
@@ -17,6 +21,10 @@ from src.application.agent_builder.schemas import (
     UpdateAgentResponse,
 )
 from src.application.agent_builder.sub_agent_worker_builder import SubAgentWorkerBuilder
+from src.application.agent_builder.worker_skeleton_builder import (
+    WorkerSkeletonBuilder,
+    make_worker_id,
+)
 from src.application.agent_skill.sync_agent_skills_use_case import (
     SyncAgentSkillsUseCase,
 )
@@ -41,6 +49,17 @@ from src.domain.llm_model.interfaces import LlmModelRepositoryInterface
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 
 
+@dataclass(frozen=True)
+class _ClampResult:
+    """도구 변경으로 발생한 visibility 조정 결과 (응답 통지용)."""
+
+    clamped: bool = False
+    max_visibility: str | None = None
+
+
+_NO_CLAMP = _ClampResult()
+
+
 class UpdateAgentUseCase:
     def __init__(
         self,
@@ -57,6 +76,8 @@ class UpdateAgentUseCase:
         kb_repo: KnowledgeBaseRepositoryInterface | None = None,
         llm_model_repo: LlmModelRepositoryInterface | None = None,
         middleware_catalog_repo=None,
+        tool_catalog_repo=None,
+        mcp_server_repo=None,
     ) -> None:
         self._repository = repository
         self._perm_repo = perm_repo
@@ -77,6 +98,13 @@ class UpdateAgentUseCase:
         # builtin-middleware D5: middleware_types 수정 시 카탈로그 존재 검증용
         self._middleware_catalog_repo = middleware_catalog_repo
         self._sub_agent_builder = SubAgentWorkerBuilder(repository, logger)
+        # agent-update-tool-editing D §2.3: 워커 빌드 규칙은 create 와 공유한다
+        # (미주입 시 빌트인 주입 생략 / mcp_* 는 ValueError → 422).
+        self._skeleton_builder = WorkerSkeletonBuilder(
+            logger=logger,
+            mcp_server_repo=mcp_server_repo,
+            tool_catalog_repo=tool_catalog_repo,
+        )
 
     async def execute(
         self,
@@ -110,7 +138,9 @@ class UpdateAgentUseCase:
                 status=agent.status, system_prompt=request.system_prompt
             )
 
-            if request.visibility is not None:
+            # agent-update-tool-editing D §7: tool_ids 가 함께 오면 재구성된
+            # 새 워커 기준으로 검증해야 하므로 호출 지점을 뒤로 미룬다.
+            if request.visibility is not None and request.tool_ids is None:
                 await self._validate_visibility_scope(
                     request.visibility, agent.workers, request_id,
                     viewer_user_id or agent.user_id, viewer_role,
@@ -137,6 +167,21 @@ class UpdateAgentUseCase:
                 llm_model_id=request.llm_model_id,
                 middleware_types=middleware_types,
             )
+
+            # 도구 구성 교체 (agent-update-tool-editing D §2.2):
+            # 재구성 → 종속정리 → scope clamp → 정책검증 순서. 서브에이전트
+            # 재배치·문서/발표자료 바인딩보다 **앞서야** 한다 (새 워커가 있어야
+            # 바인딩이 주입할 대상을 찾는다 — 이 순서가 원 결함의 해소 지점).
+            clamp = _NO_CLAMP
+            if request.tool_ids is not None:
+                clamp = await self._rebuild_tool_workers(
+                    agent, request, request_id,
+                    viewer_user_id or agent.user_id, viewer_role,
+                )
+            elif request.tool_configs is not None:
+                raise ValueError(
+                    "tool_configs 는 tool_ids 와 함께 전달해야 합니다."
+                )
 
             if request.sub_agent_configs is not None:
                 await self._apply_sub_agents(
@@ -183,12 +228,143 @@ class UpdateAgentUseCase:
                 name=updated.name,
                 system_prompt=updated.system_prompt,
                 updated_at=updated.updated_at.isoformat(),
+                visibility=updated.visibility,
+                visibility_clamped=clamp.clamped,
+                max_visibility=clamp.max_visibility,
             )
         except Exception as e:
             self._logger.error(
                 "UpdateAgentUseCase failed", exception=e, request_id=request_id
             )
             raise
+
+    async def _rebuild_tool_workers(
+        self,
+        agent,
+        request: UpdateAgentRequest,
+        request_id: str,
+        user_id: str,
+        viewer_role: str,
+    ) -> _ClampResult:
+        """도구 워커를 목표 상태로 재구성한다 (D §2.2 ①~⑤).
+
+        Raises:
+            ValueError: 미지 도구·비활성 MCP·정책 위반 (요청 422/409)
+            PermissionError: KB 읽기권한 없음 (403)
+        """
+        previous = {
+            w.tool_id: w for w in agent.workers if w.worker_type == "tool"
+        }
+        skeleton = await self._skeleton_builder.build_from_tool_ids(
+            request.tool_ids, request.tool_configs, request_id
+        )
+        self._inherit_tool_configs(skeleton.workers, previous)
+
+        # 정책은 사용자 선택분 기준 (빌트인은 상한에서 제외 — builtin-tools D6)
+        subs = [w for w in agent.workers if w.worker_type == "sub_agent"]
+        if subs:
+            AgentBuilderPolicy.validate_worker_count(skeleton.workers + subs)
+        else:
+            AgentBuilderPolicy.validate_tool_count(len(skeleton.workers))
+
+        builtin_workers = await self._skeleton_builder.build_builtin_workers(
+            skeleton.workers, None, request_id
+        )
+        tool_workers = skeleton.workers + builtin_workers
+
+        # kb-rag-filter D1/D3/D7: 존재·권한 검증 → 물리 컬렉션 고정 → clamp
+        kbs = await self._resolve_kbs(
+            tool_workers, request_id, user_id, viewer_role
+        )
+        self._canonicalize_kb_collections(tool_workers, kbs)
+
+        agent.replace_tool_workers(tool_workers)
+        agent.flow_hint = skeleton.flow_hint
+
+        removed = set(previous) - {w.tool_id for w in tool_workers}
+        await self._cleanup_removed_tool_deps(agent, removed, request_id)
+
+        self._logger.info(
+            "Agent tool workers rebuilt",
+            request_id=request_id,
+            agent_id=agent.id,
+            added_tool_ids=[
+                w.tool_id for w in tool_workers if w.tool_id not in previous
+            ],
+            removed_tool_ids=sorted(removed),
+        )
+        return await self._apply_scope_clamp(
+            agent, request, tool_workers, kbs, request_id, user_id, viewer_role
+        )
+
+    @staticmethod
+    def _inherit_tool_configs(
+        workers: list[WorkerDefinition],
+        previous: dict[str, WorkerDefinition],
+    ) -> None:
+        """FR-03: 유지 도구는 기존 tool_config 승계 (요청 전달분이 우선)."""
+        for w in workers:
+            if w.tool_config is None and w.tool_id in previous:
+                w.tool_config = previous[w.tool_id].tool_config
+
+    async def _apply_scope_clamp(
+        self,
+        agent,
+        request: UpdateAgentRequest,
+        workers: list[WorkerDefinition],
+        kbs: dict,
+        request_id: str,
+        user_id: str,
+        viewer_role: str,
+    ) -> _ClampResult:
+        """FR-06: 도구 변경 후 scope 재해석.
+
+        명시적 visibility 요청은 위반 시 422 거부(기존 계약), 미요청 시에는
+        현재 visibility 를 자동 clamp 하고 그 사실을 응답으로 알린다 (D §7).
+        """
+        if request.visibility is not None:
+            await self._validate_visibility_scope(
+                request.visibility, workers, request_id, user_id, viewer_role
+            )
+            return _NO_CLAMP
+
+        scopes = await self._lookup_collection_scopes(workers, request_id)
+        scopes += [kb.scope.value for kb in kbs.values()]
+        if not scopes:
+            return _NO_CLAMP
+
+        clamped_vis = VisibilityPolicy.clamp_visibility(agent.visibility, scopes)
+        max_vis = VisibilityPolicy.max_visibility_for_scopes(scopes)
+        if clamped_vis == agent.visibility:
+            return _ClampResult(clamped=False, max_visibility=max_vis)
+
+        self._logger.info(
+            "Agent visibility clamped by tool scope",
+            request_id=request_id, agent_id=agent.id,
+            before=agent.visibility, after=clamped_vis,
+        )
+        # department 로 낮아졌는데 소속 부서가 없으면 유효하지 않은 조합이므로
+        # private 까지 내린다 (AgentDefinition 불변식과 정합).
+        if clamped_vis == "department" and agent.department_id is None:
+            clamped_vis = "private"
+        agent.visibility = clamped_vis
+        return _ClampResult(clamped=True, max_visibility=max_vis)
+
+    async def _cleanup_removed_tool_deps(
+        self, agent, removed_tool_ids: set[str], request_id: str
+    ) -> None:
+        """FR-04: 제거된 도구의 종속 레코드를 soft-delete (고아 방지)."""
+        for tool_id, repo in (
+            (DOCUMENT_EXTRACTOR_TOOL_ID, self._document_template_repo),
+            (DOCUMENT_GENERATOR_TOOL_ID, self._document_generation_type_repo),
+        ):
+            if tool_id not in removed_tool_ids or repo is None:
+                continue
+            existing = await repo.find_active_by_agent_worker(
+                agent.id, make_worker_id(tool_id), request_id
+            )
+            if existing is not None:
+                await repo.soft_delete(existing.id, request_id)
 
     async def _validate_middleware_types(
         self, middleware_types: list[str], request_id: str
@@ -311,20 +487,7 @@ class UpdateAgentUseCase:
         user_id: str,
         viewer_role: str,
     ) -> None:
-        # kb-rag-filter D7: kb_id 워커는 KB scope가 지배 — 물리 컬렉션 조회 제외.
-        collection_names = [
-            w.tool_config["collection_name"]
-            for w in workers
-            if w.tool_config
-            and not w.tool_config.get("kb_id")
-            and w.tool_config.get("collection_name")
-        ]
-        scopes: list[str] = []
-        for name in collection_names:
-            perm = await self._perm_repo.find_by_collection_name(
-                name, request_id
-            )
-            scopes.append(perm.scope.value if perm else "PERSONAL")
+        scopes = await self._lookup_collection_scopes(workers, request_id)
         scopes += await self._lookup_kb_scopes(
             workers, request_id, user_id, viewer_role
         )
@@ -338,6 +501,25 @@ class UpdateAgentUseCase:
                 f"최대 허용: '{clamped}'"
             )
 
+    async def _lookup_collection_scopes(
+        self, workers: list[WorkerDefinition], request_id: str
+    ) -> list[str]:
+        """kb-rag-filter D7: kb_id 워커는 KB scope가 지배 — 컬렉션 조회 제외."""
+        names = [
+            w.tool_config["collection_name"]
+            for w in workers
+            if w.tool_config
+            and not w.tool_config.get("kb_id")
+            and w.tool_config.get("collection_name")
+        ]
+        scopes: list[str] = []
+        for name in names:
+            perm = await self._perm_repo.find_by_collection_name(
+                name, request_id
+            )
+            scopes.append(perm.scope.value if perm else "PERSONAL")
+        return scopes
+
     async def _lookup_kb_scopes(
         self,
         workers: list[WorkerDefinition],
@@ -345,7 +527,18 @@ class UpdateAgentUseCase:
         user_id: str,
         viewer_role: str,
     ) -> list[str]:
-        """kb-rag-filter D3/D7: kb_id 워커의 KB scope 수집.
+        """kb-rag-filter D3/D7: kb_id 워커의 KB scope 수집."""
+        kbs = await self._resolve_kbs(workers, request_id, user_id, viewer_role)
+        return [kb.scope.value for kb in kbs.values()]
+
+    async def _resolve_kbs(
+        self,
+        workers: list[WorkerDefinition],
+        request_id: str,
+        user_id: str,
+        viewer_role: str,
+    ) -> dict:
+        """kb-rag-filter D3: kb_id 수집 + 존재/읽기권한 검증.
 
         미존재 → ValueError(400), 읽기권한 없음 → PermissionError(403).
         """
@@ -355,7 +548,7 @@ class UpdateAgentUseCase:
             if w.tool_config and w.tool_config.get("kb_id")
         }
         if not kb_ids:
-            return []
+            return {}
         if self._kb_repo is None:
             raise ValueError(
                 "kb_id가 지정된 도구 설정에는 kb_repo 주입이 필요합니다"
@@ -370,7 +563,7 @@ class UpdateAgentUseCase:
             if role == UserRole.ADMIN
             else await self._resolve_department_ids(user_id, request_id)
         )
-        scopes: list[str] = []
+        kbs: dict = {}
         for kb_id in kb_ids:
             kb = await self._kb_repo.find_by_id(kb_id, request_id)
             if kb is None:
@@ -381,8 +574,18 @@ class UpdateAgentUseCase:
                 raise PermissionError(
                     f"No read access to knowledge base '{kb_id}'"
                 )
-            scopes.append(kb.scope.value)
-        return scopes
+            kbs[kb_id] = kb
+        return kbs
+
+    @staticmethod
+    def _canonicalize_kb_collections(
+        workers: list[WorkerDefinition], kbs: dict
+    ) -> None:
+        """kb-rag-filter D1: kb_id 워커의 collection_name을 물리 컬렉션으로 고정."""
+        for w in workers:
+            kb_id = w.tool_config.get("kb_id") if w.tool_config else None
+            if kb_id:
+                w.tool_config["collection_name"] = kbs[kb_id].collection_name
 
     @staticmethod
     def _owner_ref(user_id: str | None) -> int | None:

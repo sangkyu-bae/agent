@@ -207,3 +207,205 @@ class TestToolCatalogRepositoryDeactivate:
         count = await repo.deactivate_by_mcp_server("server-1", "req-1")
         assert count == 3
         session.flush.assert_awaited_once()
+
+
+class TestToolCatalogRepositoryCategoryMetadata:
+    """mcp-tool-category-routing §5 D-02 / FR-01·FR-03."""
+
+    @pytest.mark.asyncio
+    async def test_save_persists_category_and_limit(self):
+        repo, session = _make_repo()
+        entry = _make_entry("mcp:srv-1:scrape")
+        entry.category = "collect"
+        entry.max_tool_calls = 3
+
+        await repo.save(entry, "req-1")
+
+        model = session.add.call_args.args[0]
+        assert model.category == "collect"
+        assert model.max_tool_calls == 3
+
+    @pytest.mark.asyncio
+    async def test_save_defaults_to_unclassified(self):
+        """FR-14: 지정하지 않으면 NULL — 미분류(기존 react 경로)."""
+        repo, session = _make_repo()
+
+        await repo.save(_make_entry(), "req-1")
+
+        model = session.add.call_args.args[0]
+        assert model.category is None
+        assert model.max_tool_calls is None
+
+    @pytest.mark.asyncio
+    async def test_upsert_update_branch_never_touches_category(self):
+        """D-02 보존 계약: UPDATE SET 절에 category/max_tool_calls가 없어야 한다.
+
+        is_builtin과 동일한 근거 — 관리자 지정값이 부팅 sync의 upsert로
+        덮어써지지 않는 성질을 SQL 수준에서 고정한다.
+        """
+        repo, session = _make_repo()
+        now = datetime.now(timezone.utc)
+        existing_model = MagicMock()
+        existing_model.id = "tc-1"
+        existing_model.tool_id = "mcp:srv-1:scrape"
+        existing_model.source = "mcp"
+        existing_model.name = "old"
+        existing_model.description = "old"
+        existing_model.mcp_server_id = "srv-1"
+        existing_model.requires_env = None
+        existing_model.is_active = True
+        existing_model.is_builtin = False
+        existing_model.category = "collect"
+        existing_model.max_tool_calls = 3
+        existing_model.created_at = now
+        existing_model.updated_at = now
+
+        captured_stmts = []
+        call_count = 0
+
+        async def mock_execute(stmt):
+            nonlocal call_count
+            call_count += 1
+            captured_stmts.append(stmt)
+            if call_count == 1:
+                r = MagicMock()
+                r.scalar_one_or_none.return_value = existing_model
+                return r
+            r = MagicMock()
+            r.rowcount = 1
+            return r
+
+        session.execute = mock_execute
+
+        entry = _make_entry("mcp:srv-1:scrape")
+        entry.category = None  # sync가 넘기는 기본값이 와도
+        entry.max_tool_calls = None
+        await repo.upsert_by_tool_id(entry, "req-1")
+
+        update_stmt = captured_stmts[1]
+        set_columns = set(update_stmt.compile().params.keys())
+        assert "category" not in set_columns
+        assert "max_tool_calls" not in set_columns
+
+    @pytest.mark.asyncio
+    async def test_to_domain_maps_category_and_limit(self):
+        repo, session = _make_repo()
+        now = datetime.now(timezone.utc)
+        model = MagicMock()
+        model.id = "tc-1"
+        model.tool_id = "mcp:srv-1:scrape"
+        model.source = "mcp"
+        model.name = "scrape"
+        model.description = "d"
+        model.mcp_server_id = "srv-1"
+        model.requires_env = None
+        model.is_active = True
+        model.is_builtin = False
+        model.category = "collect"
+        model.max_tool_calls = 3
+        model.created_at = now
+        model.updated_at = now
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = model
+        session.execute = AsyncMock(return_value=mock_result)
+
+        entry = await repo.find_by_tool_id("mcp:srv-1:scrape", "req-1")
+
+        assert entry.category == "collect"
+        assert entry.max_tool_calls == 3
+
+
+class TestToolCatalogRepositoryUpdateMetadata:
+    @pytest.mark.asyncio
+    async def test_update_metadata_sets_only_requested_columns(self):
+        repo, session = _make_repo()
+        captured_stmts = []
+        call_count = 0
+        now = datetime.now(timezone.utc)
+        existing_model = MagicMock()
+        existing_model.id = "tc-1"
+        existing_model.tool_id = "mcp:srv-1:scrape"
+        existing_model.source = "mcp"
+        existing_model.name = "scrape"
+        existing_model.description = "d"
+        existing_model.mcp_server_id = "srv-1"
+        existing_model.requires_env = None
+        existing_model.is_active = True
+        existing_model.is_builtin = False
+        existing_model.category = "collect"
+        existing_model.max_tool_calls = None
+        existing_model.created_at = now
+        existing_model.updated_at = now
+
+        async def mock_execute(stmt):
+            nonlocal call_count
+            call_count += 1
+            captured_stmts.append(stmt)
+            r = MagicMock()
+            if call_count == 1:
+                r.rowcount = 1
+                return r
+            r.scalar_one_or_none.return_value = existing_model
+            return r
+
+        session.execute = mock_execute
+
+        result = await repo.update_metadata(
+            "mcp:srv-1:scrape", "req-1", category="collect",
+        )
+
+        set_columns = set(captured_stmts[0].compile().params.keys())
+        assert "category" in set_columns
+        # max_tool_calls는 요청에 없었으므로 SET 절에 없어야 한다(부분 갱신)
+        assert "max_tool_calls" not in set_columns
+        assert result is not None
+        assert result.category == "collect"
+
+    @pytest.mark.asyncio
+    async def test_update_metadata_can_clear_category(self):
+        """None 지정은 '변경 없음'이 아니라 '미분류로 되돌리기'다."""
+        repo, session = _make_repo()
+        captured_stmts = []
+        call_count = 0
+
+        async def mock_execute(stmt):
+            nonlocal call_count
+            call_count += 1
+            captured_stmts.append(stmt)
+            r = MagicMock()
+            if call_count == 1:
+                r.rowcount = 1
+                return r
+            r.scalar_one_or_none.return_value = None
+            return r
+
+        session.execute = mock_execute
+
+        await repo.update_metadata("mcp:srv-1:scrape", "req-1", category=None)
+
+        set_columns = set(captured_stmts[0].compile().params.keys())
+        assert "category" in set_columns
+
+    @pytest.mark.asyncio
+    async def test_update_metadata_returns_none_when_missing(self):
+        repo, session = _make_repo()
+        mock_result = MagicMock()
+        mock_result.rowcount = 0
+        session.execute = AsyncMock(return_value=mock_result)
+
+        result = await repo.update_metadata("nope", "req-1", category="collect")
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_update_metadata_noop_when_nothing_requested(self):
+        """변경 요청이 없으면 UPDATE를 실행하지 않고 현재 상태만 반환한다."""
+        repo, session = _make_repo()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        session.execute = AsyncMock(return_value=mock_result)
+
+        await repo.update_metadata("mcp:srv-1:scrape", "req-1")
+
+        # 조회 1회만 — UPDATE 미실행
+        assert session.execute.await_count == 1

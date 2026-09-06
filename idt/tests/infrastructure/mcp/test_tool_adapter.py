@@ -241,3 +241,42 @@ class TestMCPToolAdapterDiagnostics:
         assert "req-chain-001" in mock_ctx.call_args.args, (
             "create_session에 request_id가 전달되지 않아 로그 체인이 끊긴다"
         )
+
+
+class TestMCPToolAdapterInputSchemaPropagation:
+    """Design Ref: mcp-tool-category-routing module-2 —
+
+    어댑터의 args_schema는 모든 MCP 도구가 공유하는 제네릭 래퍼(MCPToolInput)라
+    도구별 실제 입력 스키마를 담지 못한다. collect 노드가 올바른 인자를
+    만들려면 서버가 준 inputSchema가 필요하므로 별도 필드로 보존한다.
+    """
+
+    def test_defaults_to_empty_schema(self, stdio_server_config):
+        from src.infrastructure.mcp.tool_adapter import MCPToolAdapter
+
+        adapter = MCPToolAdapter(
+            name="srv_scrape",
+            description="d",
+            server_config=stdio_server_config,
+            mcp_tool_name="scrape",
+        )
+        assert adapter.mcp_input_schema == {}
+
+    def test_carries_provided_schema(self, stdio_server_config):
+        from src.infrastructure.mcp.tool_adapter import MCPToolAdapter
+
+        schema = {"type": "object", "properties": {"url": {"type": "string"}}}
+        adapter = MCPToolAdapter(
+            name="srv_scrape",
+            description="d",
+            server_config=stdio_server_config,
+            mcp_tool_name="scrape",
+            mcp_input_schema=schema,
+        )
+        assert adapter.mcp_input_schema == schema
+
+    def test_generic_args_schema_is_unchanged(self):
+        """react 경로 호환: args_schema 계약은 그대로 유지한다."""
+        from src.infrastructure.mcp.tool_adapter import MCPToolAdapter, MCPToolInput
+
+        assert MCPToolAdapter.model_fields["args_schema"].default is MCPToolInput

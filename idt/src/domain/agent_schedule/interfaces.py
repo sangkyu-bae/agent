@@ -32,6 +32,17 @@ class ScheduleRepositoryInterface(ABC):
     async def count_by_agent(self, agent_id: str, request_id: str) -> int: ...
 
     @abstractmethod
+    async def list_by_user(
+        self, user_id: str, request_id: str
+    ) -> list[tuple[AgentSchedule, str | None]]:
+        """내 스케줄 정의 전체 — (schedule, agent_name) 쌍.
+
+        jobs-page-revamp: 작업함 '스케줄 작업' 탭은 에이전트를 가로질러 본다.
+        에이전트명은 표시용이며 에이전트 삭제 시 None.
+        """
+        ...
+
+    @abstractmethod
     async def update(self, schedule: AgentSchedule, request_id: str) -> None: ...
 
     @abstractmethod

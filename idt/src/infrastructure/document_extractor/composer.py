@@ -53,9 +53,11 @@ class DocumentComposer:
         conversation_block: str,
         owner_user_id: str,
         request_id: str,
+        worker_context_block: str = "",
     ) -> ComposeResult:
         values = await self._decide_slot_values(
-            llm, template, evidence_block, conversation_block, request_id
+            llm, template, evidence_block, conversation_block, request_id,
+            worker_context_block,
         )
         html, filled, unfilled = self._replace_tokens(template, values)
 
@@ -94,10 +96,15 @@ class DocumentComposer:
         evidence_block: str,
         conversation_block: str,
         request_id: str,
+        worker_context_block: str = "",
     ) -> dict:
         """LLM 1회(+재시도 1회)로 {key: value|null} 결정 (D6 계약)."""
+        # worker-context-injection §4.1 (GAP-01): 에이전트 지침·역할을 앞단에.
         messages = [
-            {"role": "system", "content": self._build_prompt(template)},
+            {
+                "role": "system",
+                "content": worker_context_block + self._build_prompt(template),
+            },
             {
                 "role": "user",
                 "content": (

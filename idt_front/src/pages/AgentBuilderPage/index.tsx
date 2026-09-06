@@ -24,6 +24,7 @@ import { DOCUMENT_EXTRACTOR_TOOL_ID } from '@/types/documentExtractor';
 import { DOCUMENT_GENERATOR_TOOL_ID } from '@/types/documentGenerator';
 import { PRESENTATION_GENERATOR_TOOL_ID } from '@/types/presentationGenerator';
 import { buildPresentationGeneratorRequest } from '@/utils/presentationGenerator';
+import { buildToolIdsForSave } from '@/utils/agentToolPayload';
 import { buildDocumentTemplateRequest } from '@/utils/documentTemplate';
 import { buildDocumentGenerationTypeRequest } from '@/utils/documentGenerator';
 import { composeDraftToForm } from '@/utils/composeDraftToForm';
@@ -262,6 +263,14 @@ const AgentBuilderPage = () => {
             // agent-builder-edit-mapping FR-5: 역조회 실패(미등록 모델 유지 상태)
             // 시 undefined 전송 = 모델 변경 안 함
             llm_model_id: models?.find((m) => m.model_name === form.model)?.id,
+            // agent-update-tool-editing D §5.1: 목표 상태 전체 교체.
+            // 빈 배열도 명시 전송(전부 해제) — 빌트인은 서버가 재주입하므로
+            // 상한(MAX_TOOLS) 왜곡을 막기 위해 여기서 걸러낸다.
+            tool_ids: buildToolIdsForSave(form.tools, catalogTools),
+            tool_configs:
+              Object.keys(form.toolConfigs).length > 0
+                ? form.toolConfigs
+                : undefined,
             sub_agent_configs: form.subAgents.map((s) => ({
               ref_agent_id: s.ref_agent_id,
               description: s.description,
@@ -289,8 +298,16 @@ const AgentBuilderPage = () => {
           },
         },
         {
-          onSuccess: () => {
-            setSaveResult({ type: 'success', message: '에이전트가 성공적으로 수정되었습니다.' });
+          onSuccess: (response) => {
+            // agent-update-tool-editing D §5.1: 도구 변경으로 공개 범위가
+            // 좁혀졌으면 사용자가 모르고 지나치지 않도록 함께 알린다.
+            const clampNotice = response?.visibility_clamped
+              ? ` 지식 범위 제한으로 공개 범위가 '${response.visibility}'로 조정되었습니다.`
+              : '';
+            setSaveResult({
+              type: 'success',
+              message: `에이전트가 성공적으로 수정되었습니다.${clampNotice}`,
+            });
           },
           onError: (error) => {
             setSaveResult({ type: 'error', message: error.message });

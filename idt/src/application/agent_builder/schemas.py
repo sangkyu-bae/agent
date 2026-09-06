@@ -155,6 +155,13 @@ class UpdateAgentRequest(BaseModel):
     temperature: float | None = Field(None, ge=0.0, le=2.0)
     # agent-recursion-limit D10: None = 반복 한도 변경 안 함
     max_iterations: int | None = Field(None, ge=10, le=1000)
+    # agent-update-tool-editing D §4.2: None = 도구 변경 안 함,
+    # [] = 사용자 선택 도구 전부 해제(빌트인은 규칙에 따라 재주입),
+    # [...] = 목표 상태 전체 교체. 카탈로그 표기(internal:x / mcp:srv:tool) 수용.
+    tool_ids: list[str] | None = None
+    # None = 설정 변경 안 함. 전달된 도구만 tool_config를 덮어쓰고, 나머지 유지
+    # 도구는 기존 워커의 tool_config를 승계한다. tool_ids 없이 단독 전송은 400.
+    tool_configs: dict[str, RagToolConfigRequest] | None = None
     # None = 서브에이전트 변경 안 함, [] = 모든 서브에이전트 제거
     sub_agent_configs: list[SubAgentConfigRequest] | None = None
     # agent-skill-toggle: None = 스킬 변경 안 함, [] = 전부 해제, [...] = 목표 상태
@@ -176,6 +183,11 @@ class UpdateAgentResponse(BaseModel):
     name: str
     system_prompt: str
     updated_at: str
+    # agent-update-tool-editing D §4.2: 도구 변경으로 KB/컬렉션 scope clamp가
+    # 일어났는지 알린다. 기존 호출부 무회귀를 위해 전부 기본값을 갖는다.
+    visibility: str = "private"
+    visibility_clamped: bool = False
+    max_visibility: str | None = None
 
 
 class DocumentGenerationTypeInfo(BaseModel):

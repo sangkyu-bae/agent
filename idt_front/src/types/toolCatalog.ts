@@ -1,3 +1,19 @@
+/** mcp-tool-category-routing §3.1: 백엔드 ToolCategoryPolicy.ALLOWED와 1:1 */
+export const TOOL_CATEGORIES = ['search', 'collect', 'analysis', 'action'] as const;
+
+export type ToolCategory = (typeof TOOL_CATEGORIES)[number];
+
+/** 카테고리 표시 라벨 — 관리자 화면 셀렉트/배지 공용 */
+export const TOOL_CATEGORY_LABELS: Record<ToolCategory, string> = {
+  search: '검색',
+  collect: '수집',
+  analysis: '분석',
+  action: '실행',
+};
+
+export const TOOL_CALL_LIMIT_MIN = 1;
+export const TOOL_CALL_LIMIT_MAX = 20;
+
 export interface CatalogTool {
   tool_id: string;
   source: 'internal' | 'mcp';
@@ -8,6 +24,13 @@ export interface CatalogTool {
   requires_env: string[];
   /** builtin-tools: 에이전트 생성 시 자동 주입되는 빌트인 여부 (관리자 토글, 백엔드 상시 반환) */
   is_builtin: boolean;
+  /**
+   * mcp-tool-category-routing: 워커 노드 분류.
+   * null = 미분류 → 기존 react 경로. 관리자가 지정한 도구만 동작이 바뀐다.
+   */
+  category: ToolCategory | null;
+  /** 워커 1회 실행당 도구 호출 상한. null이면 정책 기본값(2회) */
+  max_tool_calls: number | null;
 }
 
 export interface ToolCatalogResponse {
@@ -45,4 +68,18 @@ export interface ToolSyncResult {
   ok: boolean;
   synced_count: number;
   error_hint: string | null;
+}
+
+// mcp-tool-category-routing §4.2: 분류·호출 상한 지정 (PATCH /api/v1/tool-catalog/metadata)
+// 필드를 생략하면 미변경, 명시적 null은 '미분류/기본값으로 되돌리기'다.
+export interface ToolMetadataRequest {
+  tool_id: string;
+  category?: ToolCategory | null;
+  max_tool_calls?: number | null;
+}
+
+export interface ToolMetadataResponse {
+  tool_id: string;
+  category: ToolCategory | null;
+  max_tool_calls: number | null;
 }

@@ -8,6 +8,7 @@ import pytest
 
 from src.application.agent_builder.create_agent_use_case import CreateAgentUseCase
 from src.application.agent_builder.schemas import CreateAgentRequest
+from src.application.agent_builder.worker_skeleton_builder import normalize_tool_id
 from src.domain.llm_model.entity import LlmModel
 from src.domain.mcp_registry.schemas import MCPServerRegistration, MCPTransportType
 
@@ -210,7 +211,8 @@ class TestCreateAgentWithMcpToolIds:
 
     def test_normalize_tool_id_formats(self):
         """internal 접두사만 벗기고, MCP 카탈로그 형식은 보존한다."""
-        norm = CreateAgentUseCase._normalize_tool_id
+        # agent-update-tool-editing: 정규화 규칙은 worker_skeleton_builder 로 이동
+        norm = normalize_tool_id
         assert norm("internal:excel_export") == "excel_export"
         assert norm("excel_export") == "excel_export"
         assert norm("mcp_srv-1") == "mcp_srv-1"  # 레거시 서버 단위 보존

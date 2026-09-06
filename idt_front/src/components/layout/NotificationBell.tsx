@@ -1,22 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  useJobList,
+  useJobHistory,
   useMarkAllSeen,
   useMarkSeen,
   useUnseenCount,
 } from '@/hooks/useBackgroundJobs';
-import { chatSessionPath, isJobFinished } from '@/types/backgroundJob';
-import type { BackgroundJob } from '@/types/backgroundJob';
+import {
+  JOB_STATUS_LABEL,
+  chatSessionPath,
+  isJobFinished,
+} from '@/types/backgroundJob';
+import type { JobHistoryItem } from '@/types/backgroundJob';
 
 // background-jobs S8: 헤더 벨 — 미확인 완료/실패 배지 + 최근 작업 드롭다운 (D11)
-
-const STATUS_LABEL: Record<string, string> = {
-  queued: '대기 중',
-  running: '실행 중',
-  success: '완료',
-  failed: '실패',
-};
+// jobs-page-revamp: 목록이 통합 이력으로 바뀌었으나 배지(unseen-count)는 수동
+// job 만 세므로, 드롭다운도 type=manual 로 고정해 숫자와 목록을 일치시킨다.
 
 const statusBadgeClass = (status: string): string => {
   if (status === 'success') return 'bg-emerald-50 text-emerald-600';
@@ -30,7 +29,7 @@ const NotificationBell = () => {
   const rootRef = useRef<HTMLDivElement>(null);
 
   const { data: unseen } = useUnseenCount();
-  const { data: jobs } = useJobList({ limit: 20 });
+  const { data: jobs } = useJobHistory({ type: 'manual', limit: 20 });
   const markSeen = useMarkSeen();
   const markAllSeen = useMarkAllSeen();
 
@@ -38,7 +37,7 @@ const NotificationBell = () => {
 
   // 드롭다운은 최근 완료/실패 5건만 — 진행중 혼입 방지 (Design §5-3)
   const recentFinished = useMemo(
-    () => (jobs ?? []).filter((j) => isJobFinished(j.status)).slice(0, 5),
+    () => (jobs?.items ?? []).filter((j) => isJobFinished(j.status)).slice(0, 5),
     [jobs],
   );
 
@@ -52,7 +51,7 @@ const NotificationBell = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const goToJob = (job: BackgroundJob) => {
+  const goToJob = (job: JobHistoryItem) => {
     if (job.seen_at === null && isJobFinished(job.status)) {
       markSeen.mutate({ jobId: job.id });
     }
@@ -115,11 +114,11 @@ const NotificationBell = () => {
                   <span
                     className={`mt-0.5 shrink-0 rounded-md px-1.5 py-0.5 text-[10.5px] font-semibold ${statusBadgeClass(job.status)}`}
                   >
-                    {STATUS_LABEL[job.status] ?? job.status}
+                    {JOB_STATUS_LABEL[job.status] ?? job.status}
                   </span>
                   <span className="min-w-0">
                     <span className="block truncate text-[13px] text-zinc-700">
-                      {job.query}
+                      {job.title}
                     </span>
                     {job.seen_at === null &&
                       (job.status === 'success' || job.status === 'failed') && (

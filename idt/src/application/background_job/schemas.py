@@ -3,7 +3,12 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from src.domain.background_job.entity import BackgroundJob
+from src.application.agent_schedule.schemas import (
+    ScheduleResponse,
+    ScheduleSpecPayload,
+)
+from src.domain.agent_schedule.entity import AgentSchedule
+from src.domain.background_job.entity import BackgroundJob, JobHistoryItem
 
 
 class EnqueueJobRequest(BaseModel):
@@ -55,12 +60,97 @@ class JobResponse(BaseModel):
         )
 
 
+class JobHistoryResponse(BaseModel):
+    """작업 기록 탭의 한 행 — 수동 job 과 스케줄 실행 공통 (jobs-page-revamp §4.2)."""
+
+    id: str
+    type: str  # manual | schedule
+    occurred_at: datetime
+    title: str
+    status: str
+    agent_id: str
+    agent_name: str | None
+    session_id: str | None
+    error_message: str | None
+    seen_at: datetime | None
+    started_at: datetime | None
+    finished_at: datetime | None
+    deletable: bool
+
+    @classmethod
+    def from_item(cls, item: JobHistoryItem) -> "JobHistoryResponse":
+        return cls(
+            id=item.id,
+            type=item.type,
+            occurred_at=item.occurred_at,
+            title=item.title,
+            status=item.status,
+            agent_id=item.agent_id,
+            agent_name=item.agent_name,
+            session_id=item.session_id,
+            error_message=item.error_message,
+            seen_at=item.seen_at,
+            started_at=item.started_at,
+            finished_at=item.finished_at,
+            deletable=item.deletable,
+        )
+
+
+class JobListResponse(BaseModel):
+    """페이지네이션 응답 — total 없이는 '1 / N 페이지'를 그릴 수 없다 (FR-06)."""
+
+    items: list[JobHistoryResponse]
+    total: int
+
+
+class CleanupJobsResponse(BaseModel):
+    deleted: int
+
+
 class UnseenCountResponse(BaseModel):
     count: int
 
 
 class SeenAllResponse(BaseModel):
     updated: int
+
+
+class MyScheduleResponse(BaseModel):
+    """작업함 '스케줄 작업' 탭 — 내 스케줄 정의 (jobs-page-revamp FR-15).
+
+    관리(수정·토글·삭제)는 기존 /agents/{id}/schedules 계약을 그대로 쓰므로
+    agent_id 를 함께 내려 프론트가 그 경로를 조립할 수 있게 한다.
+    """
+
+    id: str
+    agent_id: str
+    # 작업함 표시용 에이전트명 — 에이전트 삭제 시 None
+    agent_name: str | None = None
+    name: str
+    spec: ScheduleSpecPayload
+    instruction: str
+    enabled: bool
+    timezone: str
+    next_run_at: str | None
+    last_run_at: str | None
+
+    @classmethod
+    def from_entity(
+        cls, schedule: AgentSchedule, agent_name: str | None
+    ) -> "MyScheduleResponse":
+        base = ScheduleResponse.from_entity(schedule)
+        return cls(
+            id=base.id,
+            agent_id=base.agent_id,
+            agent_name=agent_name,
+            name=base.name,
+            spec=base.spec,
+            instruction=base.instruction,
+            enabled=base.enabled,
+            timezone=base.timezone,
+            next_run_at=base.next_run_at,
+            last_run_at=base.last_run_at,
+        )
 
 
 class MyScheduleRunResponse(BaseModel):

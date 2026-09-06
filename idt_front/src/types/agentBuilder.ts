@@ -104,6 +104,13 @@ export interface UpdateBuilderAgentRequest {
   visibility?: 'private' | 'department' | 'public';
   department_id?: string;
   temperature?: number;
+  // agent-update-tool-editing D §4.2: undefined = 도구 변경 안 함,
+  // [] = 사용자 선택 도구 전부 해제(빌트인은 서버가 규칙대로 재주입),
+  // [...] = 목표 상태 전체 교체. 카탈로그 표기(internal:x / mcp:srv:tool).
+  tool_ids?: string[];
+  // undefined = 설정 변경 안 함. 전달된 도구만 덮어쓰고 나머지 유지 도구는
+  // 기존 tool_config 를 승계한다. tool_ids 없이 단독 전송은 서버가 422 거부.
+  tool_configs?: Record<string, RagToolConfig>;
   // undefined = 변경 안 함, [] = 모든 서브에이전트 제거
   sub_agent_configs?: SubAgentConfigRequest[];
   // agent-skill-toggle: undefined = 변경 안 함, [] = 전부 해제, [...] = 목표 상태
@@ -127,6 +134,11 @@ export interface UpdateBuilderAgentResponse {
   name: string;
   system_prompt: string;
   updated_at: string;
+  // agent-update-tool-editing D §4.2: 도구 변경으로 공개 범위가 좁혀졌는지.
+  // 구 서버 응답 호환을 위해 optional.
+  visibility?: string;
+  visibility_clamped?: boolean;
+  max_visibility?: string | null;
 }
 
 // ── Form (프론트엔드 전용) ─────────────────────

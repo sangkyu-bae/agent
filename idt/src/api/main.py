@@ -118,6 +118,9 @@ from src.api.routes.background_job_router import (
     get_mark_seen_use_case,
     get_mark_all_seen_use_case,
     get_list_my_schedule_runs_use_case,
+    get_delete_job_use_case,
+    get_cleanup_jobs_use_case,
+    get_list_my_schedules_use_case,
 )
 from src.api.routes.agent_webhook_router import (
     router as agent_webhook_router,
@@ -172,6 +175,7 @@ from src.infrastructure.document_extractor.composer import DocumentComposer
 from src.infrastructure.document_extractor.document_conversion_adapter import (
     DocumentConversionAdapter,
 )
+from src.infrastructure.document_font.factory import create_html_font_embedder
 from src.infrastructure.document_extractor.document_template_repository import (
     DocumentTemplateRepository,
 )
@@ -205,6 +209,7 @@ from src.api.routes.tool_catalog_router import (
     router as tool_catalog_router,
     get_list_tool_catalog_use_case,
     get_set_builtin_use_case,
+    get_update_tool_metadata_use_case,
     get_sync_mcp_tools_use_case,
 )
 from src.api.routes.middleware_catalog_router import (
@@ -873,6 +878,10 @@ def create_document_extractor_factories():
         logger=app_logger,
         llm_html_max_chars=settings.document_extractor_llm_html_max_chars,
     )
+    # fix-doc-generator-korean-font GAP-03 — 임베더는 폰트 파일·cmap 캐시를
+    # 인스턴스에 들고 있다. 요청마다 새로 만들면 캐시가 항상 cold 라 변환 1건당
+    # 2.7MB 폰트를 4회 읽는다(~240ms). 팩토리 밖에서 1회만 만들어 공유한다.
+    font_embedder = create_html_font_embedder(settings, app_logger)
 
     def extract_factory(session: AsyncSession = Depends(get_session)):
         adapter = DocumentConversionAdapter(
@@ -881,6 +890,8 @@ def create_document_extractor_factories():
                 session=session, logger=app_logger, cipher=_mcp_cipher()
             ),
             logger=app_logger,
+            # fix-doc-generator-korean-font §11.1 — html→doc 변환 시 한글 폰트 보장
+            font_embedder=font_embedder,
         )
         return ExtractDocumentUseCase(
             attachment_store=_attachment_store,
@@ -2716,6 +2727,9 @@ def create_agent_builder_factories():
         mcp_tool_loader=_mcp_tool_loader,
         mcp_repository=_mcp_runtime_repo,
         logger=app_logger,
+        # fix-doc-generator-korean-font §11.1 — generator·composer 가 이 인스턴스를
+        # 공유하므로, 여기 한 번의 주입으로 두 경로가 모두 커버된다.
+        font_embedder=create_html_font_embedder(settings, app_logger),
     )
     _dt_composer = DocumentComposer(
         conversion_adapter=_dt_conversion_adapter,
@@ -2769,9 +2783,21 @@ def create_agent_builder_factories():
         input_max_chars=settings.document_generator_llm_input_max_chars,
     )
 
+    # ★ mcp-tool-category-routing §5 D-08: 도구 카테고리·호출 상한 조회.
+    # 컴파일러는 앱 싱글톤이라 per-request 세션이 없다 — 세션 스코프 어댑터 주입.
+    from src.infrastructure.tool_catalog.session_scoped import (
+        SessionScopedToolCatalogRepository,
+    )
+
+    _tool_catalog_runtime_repo = SessionScopedToolCatalogRepository(
+        session_factory=get_session_factory(), logger=app_logger,
+    )
+
     workflow_compiler = WorkflowCompiler(
         tool_factory=tool_factory, llm_factory=_llm_factory, logger=app_logger,
         hooks=DefaultHooks(),
+        # ★ mcp-tool-category-routing §5 D-01/D-09: 카테고리 해석 + 호출 상한
+        tool_catalog_repository=_tool_catalog_runtime_repo,
         excel_analysis_workflow_getter=get_configured_excel_analysis_workflow,
         chart_max_count=settings.chart_max_count,
         pipeline_llm_model=_build_search_pipeline_llm_model(),
@@ -2897,6 +2923,14 @@ def create_agent_builder_factories():
             llm_model_repo=_make_llm_model_repo(session),
             # builtin-middleware D5: middleware_types 수정 검증
             middleware_catalog_repo=_make_middleware_catalog_repo(session),
+            # agent-update-tool-editing D §2.3: 도구 재구성 — 빌트인 재주입 +
+            # mcp_* 메타 해석 (create 와 동일 세션 — 세션 분리 금지 규칙)
+            tool_catalog_repo=ToolCatalogRepository(
+                session=session, logger=app_logger
+            ),
+            mcp_server_repo=MCPServerRepository(
+                session=session, logger=app_logger, cipher=_mcp_cipher()
+            ),
         )
 
     # agent-schedule Design §6.2: RunAgentUseCase 조립 본문을 함수로 추출해
@@ -3046,6 +3080,9 @@ def create_agent_schedule_factories(build_run_agent_uc, outbound_dispatcher=None
         UpdateScheduleUseCase,
     )
     from src.infrastructure.agent_schedule.run_sink import DbScheduleRunSink
+    from src.infrastructure.agent_schedule.schedule_repository import (
+        ScheduleRepository,
+    )
     from src.infrastructure.agent_schedule.schedule_repository import (
         ScheduleRepository,
     )
@@ -3227,10 +3264,17 @@ def create_background_job_factories(
     from src.application.background_job.list_my_schedule_runs_use_case import (
         ListMyScheduleRunsUseCase,
     )
+    from src.application.background_job.list_my_schedules_use_case import (
+        ListMySchedulesUseCase,
+    )
+    from src.application.background_job.delete_use_cases import (
+        CleanupJobsUseCase,
+        DeleteJobUseCase,
+    )
     from src.application.background_job.query_use_cases import (
         CountUnseenUseCase,
         GetJobUseCase,
-        ListJobsUseCase,
+        ListJobHistoryUseCase,
         MarkAllSeenUseCase,
         MarkSeenUseCase,
     )
@@ -3283,7 +3327,13 @@ def create_background_job_factories(
         )
 
     def list_f(session: AsyncSession = Depends(get_session)):
-        return ListJobsUseCase(_make_job_repo(session), app_logger)
+        return ListJobHistoryUseCase(_make_job_repo(session), app_logger)
+
+    def delete_f(session: AsyncSession = Depends(get_session)):
+        return DeleteJobUseCase(_make_job_repo(session), app_logger)
+
+    def cleanup_f(session: AsyncSession = Depends(get_session)):
+        return CleanupJobsUseCase(_make_job_repo(session), app_logger)
 
     def get_f(session: AsyncSession = Depends(get_session)):
         return GetJobUseCase(_make_job_repo(session), app_logger)
@@ -3303,6 +3353,11 @@ def create_background_job_factories(
             app_logger,
         )
 
+    def my_schedules_f(session: AsyncSession = Depends(get_session)):
+        return ListMySchedulesUseCase(
+            ScheduleRepository(session=session, logger=app_logger), app_logger
+        )
+
     worker = BackgroundJobWorker(
         session_factory=session_factory,
         job_repo_builder=_make_job_repo,
@@ -3319,7 +3374,7 @@ def create_background_job_factories(
 
     return (
         enqueue_f, list_f, get_f, unseen_f, seen_f, seen_all_f,
-        schedule_runs_f, worker,
+        schedule_runs_f, delete_f, cleanup_f, my_schedules_f, worker,
     )
 
 
@@ -4178,7 +4233,16 @@ def create_tool_catalog_factories():
         repo = ToolCatalogRepository(session=session, logger=app_logger)
         return SetBuiltinToolUseCase(repository=repo, logger=app_logger)
 
-    return list_factory, sync_factory, set_builtin_factory
+    def update_metadata_factory(session: AsyncSession = Depends(get_session)):
+        # mcp-tool-category-routing §4.2 (FR-13): 관리자 분류·상한 지정
+        from src.application.tool_catalog.update_metadata_use_case import (
+            UpdateToolMetadataUseCase,
+        )
+
+        repo = ToolCatalogRepository(session=session, logger=app_logger)
+        return UpdateToolMetadataUseCase(repository=repo, logger=app_logger)
+
+    return list_factory, sync_factory, set_builtin_factory, update_metadata_factory
 
 
 def create_middleware_catalog_factories():
@@ -4982,7 +5046,8 @@ def create_app() -> FastAPI:
     global _background_job_worker
     (
         _bj_enqueue_f, _bj_list_f, _bj_get_f, _bj_unseen_f,
-        _bj_seen_f, _bj_seen_all_f, _bj_sch_runs_f, _background_job_worker,
+        _bj_seen_f, _bj_seen_all_f, _bj_sch_runs_f,
+        _bj_delete_f, _bj_cleanup_f, _bj_my_sch_f, _background_job_worker,
     ) = create_background_job_factories(
         _build_run_agent_uc,
         outbound_dispatcher=_wh_dispatcher,
@@ -4995,6 +5060,9 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_mark_seen_use_case] = _bj_seen_f
     app.dependency_overrides[get_mark_all_seen_use_case] = _bj_seen_all_f
     app.dependency_overrides[get_list_my_schedule_runs_use_case] = _bj_sch_runs_f
+    app.dependency_overrides[get_delete_job_use_case] = _bj_delete_f
+    app.dependency_overrides[get_cleanup_jobs_use_case] = _bj_cleanup_f
+    app.dependency_overrides[get_list_my_schedules_use_case] = _bj_my_sch_f
 
     # document-template-extractor Design §6: extract/refine/files DI
     _de_extract_f, _de_refine_f = create_document_extractor_factories()
@@ -5017,10 +5085,14 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_remove_user_department_use_case] = _dept_remove_f
 
     # Tool Catalog DI
-    _tc_list_f, _tc_sync_f, _tc_builtin_f = create_tool_catalog_factories()
+    (
+        _tc_list_f, _tc_sync_f, _tc_builtin_f, _tc_meta_f,
+    ) = create_tool_catalog_factories()
     app.dependency_overrides[get_list_tool_catalog_use_case] = _tc_list_f
     app.dependency_overrides[get_sync_mcp_tools_use_case] = _tc_sync_f
     app.dependency_overrides[get_set_builtin_use_case] = _tc_builtin_f
+    # mcp-tool-category-routing §4.2 (FR-13)
+    app.dependency_overrides[get_update_tool_metadata_use_case] = _tc_meta_f
 
     # Middleware Catalog DI (builtin-middleware D4)
     _mw_list_f, _mw_flags_f = create_middleware_catalog_factories()

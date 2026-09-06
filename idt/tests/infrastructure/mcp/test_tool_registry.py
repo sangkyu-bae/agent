@@ -232,3 +232,64 @@ class TestMCPToolRegistryDiagnostics:
         assert kwargs["tool_count"] == 2
         assert kwargs["tool_names"] == ["create_issue", "list_issues"]
         assert kwargs["request_id"] == "req-043"
+
+
+class TestMCPToolRegistryInputSchema:
+    """Design Ref: mcp-tool-category-routing module-2 —
+    서버가 준 inputSchema를 어댑터까지 전달한다 (collect 인자 생성의 근거)."""
+
+    @pytest.mark.asyncio
+    async def test_input_schema_is_propagated_to_adapter(self, single_stdio_config):
+        from src.infrastructure.mcp.tool_registry import MCPToolRegistry
+
+        schema = {
+            "type": "object",
+            "properties": {"url": {"type": "string"}},
+            "required": ["url"],
+        }
+        mock_mcp_tool = MagicMock()
+        mock_mcp_tool.name = "scrape"
+        mock_mcp_tool.description = "Scrape a page"
+        mock_mcp_tool.inputSchema = schema
+
+        mock_session = AsyncMock()
+        mock_session.list_tools = AsyncMock(
+            return_value=MagicMock(tools=[mock_mcp_tool])
+        )
+
+        with patch(
+            "src.infrastructure.mcp.tool_registry.MCPClientFactory.create_session"
+        ) as mock_ctx:
+            mock_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_ctx.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            registry = MCPToolRegistry(single_stdio_config)
+            tools = await registry.get_tools(request_id="req-001")
+
+        assert tools[0].mcp_input_schema == schema
+
+    @pytest.mark.asyncio
+    async def test_missing_input_schema_degrades_to_empty(self, single_stdio_config):
+        """스키마를 주지 않는 서버도 있다 — 예외 대신 빈 dict."""
+        from src.infrastructure.mcp.tool_registry import MCPToolRegistry
+
+        mock_mcp_tool = MagicMock()
+        mock_mcp_tool.name = "scrape"
+        mock_mcp_tool.description = "Scrape a page"
+        mock_mcp_tool.inputSchema = None
+
+        mock_session = AsyncMock()
+        mock_session.list_tools = AsyncMock(
+            return_value=MagicMock(tools=[mock_mcp_tool])
+        )
+
+        with patch(
+            "src.infrastructure.mcp.tool_registry.MCPClientFactory.create_session"
+        ) as mock_ctx:
+            mock_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_ctx.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            registry = MCPToolRegistry(single_stdio_config)
+            tools = await registry.get_tools(request_id="req-001")
+
+        assert tools[0].mcp_input_schema == {}

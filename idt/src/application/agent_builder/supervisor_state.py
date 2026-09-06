@@ -24,6 +24,11 @@ class SupervisorState(TypedDict):
     forced_worker: str
     skipped_workers: list[str]
 
+    # worker-context-injection §3.1: supervisor가 선택한 워커에게 내리는 작업 지시.
+    # 워커는 supervisor_prompt를 보지 못하므로 '지금 무엇을 하는가'를 여기로 받는다.
+    # 빈 문자열이면 _wrap_worker가 기존 범용 문구로 폴백한다.
+    worker_task: str
+
     # agent-recursion-limit D5: 반복 한도 도달 플래그.
     # supervisor 가드가 세우면 route_to_worker_or_final이 final_answer로 우회하고
     # final_answer는 안내 지시를, run_agent_use_case는 payload 플래그를 부착한다.

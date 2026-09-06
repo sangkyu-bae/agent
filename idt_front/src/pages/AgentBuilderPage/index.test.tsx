@@ -712,3 +712,212 @@ describe('AgentBuilderPage 위저드 핸드오프', () => {
     );
   });
 });
+
+// ── agent-update-tool-editing D §5: 수정 경로 도구 편집 (F-01/F-02/F-04) ──
+
+describe('AgentBuilderPage 도구 편집 (agent-update-tool-editing)', () => {
+  const editHandlers = (
+    onPatch: (body: Record<string, unknown>) => void,
+    detailOver: Record<string, unknown> = {},
+    patchResponse: Record<string, unknown> = {},
+  ) =>
+    server.use(
+      http.get('*/api/v1/tool-catalog', () => HttpResponse.json(CATALOG)),
+      http.get('*/api/v1/llm-models', () => HttpResponse.json(LLM_MODELS)),
+      http.get('*/api/v1/agents', () =>
+        HttpResponse.json({ agents: [EDIT_SUMMARY], total: 1, page: 1, size: 20 }),
+      ),
+      http.get('*/api/v1/agents/a-9', () =>
+        HttpResponse.json({ ...EDIT_DETAIL, ...detailOver }),
+      ),
+      http.patch('*/api/v1/agents/a-9', async ({ request }) => {
+        onPatch((await request.json()) as Record<string, unknown>);
+        return HttpResponse.json({
+          agent_id: 'a-9',
+          name: '수정용 봇',
+          system_prompt: '기존 지침',
+          updated_at: '2026-09-06T00:00:00Z',
+          ...patchResponse,
+        });
+      }),
+    );
+
+  const openEdit = async (user: ReturnType<typeof userEvent.setup>) => {
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: '수정용 봇 수정' }));
+    await waitFor(() =>
+      expect(screen.getByLabelText('에이전트 이름')).toHaveValue('수정용 봇'),
+    );
+  };
+
+  it('F-01: 수정 저장 시 tool_ids 를 카탈로그 표기로 전송한다', async () => {
+    let captured: Record<string, unknown> | null = null;
+    editHandlers((b) => { captured = b; }, {
+      tool_ids: ['tavily_search'],
+      workers: [
+        {
+          tool_id: 'tavily_search',
+          worker_id: 'tavily_search_worker',
+          description: '웹 검색',
+          sort_order: 0,
+          tool_config: null,
+          worker_type: 'tool',
+          ref_agent_id: null,
+          ref_agent_name: null,
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    await openEdit(user);
+
+    await user.click(screen.getByRole('button', { name: '저장' }));
+
+    await waitFor(() => expect(captured).not.toBeNull());
+    expect(captured!.tool_ids).toEqual(['internal:tavily_search']);
+  });
+
+  it('F-01b: 도구가 없으면 빈 배열을 보낸다 (전부 해제 — undefined 와 구분)', async () => {
+    let captured: Record<string, unknown> | null = null;
+    editHandlers((b) => { captured = b; });
+    const user = userEvent.setup();
+    await openEdit(user);
+
+    await user.click(screen.getByRole('button', { name: '저장' }));
+
+    await waitFor(() => expect(captured).not.toBeNull());
+    expect(captured!.tool_ids).toEqual([]);
+  });
+
+  it('F-03: 빌트인은 tool_ids 에서 제외된다 (서버 재주입 + 도구 상한 제외)', async () => {
+    let captured: Record<string, unknown> | null = null;
+    editHandlers((b) => { captured = b; }, {
+      tool_ids: ['tavily_search', 'wiki_read'],
+      workers: [
+        {
+          tool_id: 'tavily_search',
+          worker_id: 'tavily_search_worker',
+          description: '웹 검색',
+          sort_order: 0,
+          tool_config: null,
+          worker_type: 'tool',
+          ref_agent_id: null,
+          ref_agent_name: null,
+        },
+        {
+          tool_id: 'wiki_read',
+          worker_id: 'wiki_read_worker',
+          description: '위키',
+          sort_order: 1,
+          tool_config: null,
+          worker_type: 'tool',
+          ref_agent_id: null,
+          ref_agent_name: null,
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    await openEdit(user);
+
+    await user.click(screen.getByRole('button', { name: '저장' }));
+
+    await waitFor(() => expect(captured).not.toBeNull());
+    expect(captured!.tool_ids).toEqual(['internal:tavily_search']);
+  });
+
+  it('F-04: 응답이 clamp 를 알리면 안내 문구에 포함한다', async () => {
+    editHandlers(() => {}, {}, {
+      visibility: 'private',
+      visibility_clamped: true,
+      max_visibility: 'private',
+    });
+    const user = userEvent.setup();
+    await openEdit(user);
+
+    await user.click(screen.getByRole('button', { name: '저장' }));
+
+    expect(
+      await screen.findByText(/공개 범위가 'private'로 조정되었습니다/),
+    ).toBeInTheDocument();
+  });
+
+  it('F-04b: clamp 가 없으면 기본 성공 문구만 노출한다', async () => {
+    editHandlers(() => {});
+    const user = userEvent.setup();
+    await openEdit(user);
+
+    await user.click(screen.getByRole('button', { name: '저장' }));
+
+    expect(
+      await screen.findByText('에이전트가 성공적으로 수정되었습니다.'),
+    ).toBeInTheDocument();
+  });
+});
+
+describe('AgentBuilderPage 도구 설정 전송 (agent-update-tool-editing F-02)', () => {
+  const RAG_CATALOG = {
+    tools: [
+      ...CATALOG.tools,
+      {
+        tool_id: 'internal:internal_document_search',
+        source: 'internal',
+        name: '내부 문서 검색',
+        description: 'RAG 검색',
+        mcp_server_id: null,
+        mcp_server_name: null,
+        requires_env: [],
+        is_builtin: false,
+      },
+    ],
+  };
+
+  it('RAG 설정을 카탈로그 표기 키로 tool_configs 에 실어 보낸다', async () => {
+    let captured: Record<string, unknown> | null = null;
+    server.use(
+      http.get('*/api/v1/tool-catalog', () => HttpResponse.json(RAG_CATALOG)),
+      http.get('*/api/v1/llm-models', () => HttpResponse.json(LLM_MODELS)),
+      http.get('*/api/v1/agents', () =>
+        HttpResponse.json({ agents: [EDIT_SUMMARY], total: 1, page: 1, size: 20 }),
+      ),
+      http.get('*/api/v1/agents/a-9', () =>
+        HttpResponse.json({
+          ...EDIT_DETAIL,
+          tool_ids: ['internal_document_search'],
+          workers: [
+            {
+              tool_id: 'internal_document_search',
+              worker_id: 'internal_document_search_worker',
+              description: 'RAG',
+              sort_order: 0,
+              tool_config: { top_k: 9, search_mode: 'hybrid' },
+              worker_type: 'tool',
+              ref_agent_id: null,
+              ref_agent_name: null,
+            },
+          ],
+        }),
+      ),
+      http.patch('*/api/v1/agents/a-9', async ({ request }) => {
+        captured = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({
+          agent_id: 'a-9',
+          name: '수정용 봇',
+          system_prompt: '기존 지침',
+          updated_at: '2026-09-06T00:00:00Z',
+        });
+      }),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: '수정용 봇 수정' }));
+    await waitFor(() =>
+      expect(screen.getByLabelText('에이전트 이름')).toHaveValue('수정용 봇'),
+    );
+
+    await user.click(screen.getByRole('button', { name: '저장' }));
+
+    await waitFor(() => expect(captured).not.toBeNull());
+    expect(captured!.tool_ids).toEqual(['internal:internal_document_search']);
+    const configs = captured!.tool_configs as Record<string, { top_k: number }>;
+    expect(configs['internal:internal_document_search'].top_k).toBe(9);
+  });
+});

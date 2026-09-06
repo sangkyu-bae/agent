@@ -8,11 +8,11 @@ from src.application.background_job.errors import JobNotFoundError
 from src.application.background_job.query_use_cases import (
     CountUnseenUseCase,
     GetJobUseCase,
-    ListJobsUseCase,
+    ListJobHistoryUseCase,
     MarkAllSeenUseCase,
     MarkSeenUseCase,
 )
-from src.domain.background_job.entity import BackgroundJob
+from src.domain.background_job.entity import BackgroundJob, JobHistoryItem
 
 _NOW = datetime(2026, 8, 11, 3, 0)
 
@@ -38,19 +38,72 @@ def _job(job_id="j1", user_id="u1", status="success") -> BackgroundJob:
     )
 
 
-class TestListJobs:
-    @pytest.mark.asyncio
-    async def test_maps_entities_to_responses(self):
-        repo = MagicMock()
-        repo.list_by_user = AsyncMock(
-            return_value=[(_job("j1"), "리서치 봇"), (_job("j2"), None)]
+class TestListJobHistory:
+    def _item(self, item_id="j1", item_type="manual"):
+        return JobHistoryItem(
+            id=item_id,
+            type=item_type,
+            occurred_at=_NOW,
+            title="시장 조사해줘",
+            status="success",
+            agent_id="a1",
+            agent_name="리서치 봇",
+            session_id="sess-1",
+            error_message=None,
+            seen_at=None,
+            started_at=_NOW,
+            finished_at=_NOW,
         )
-        uc = ListJobsUseCase(repo, MagicMock())
-        items = await uc.execute("u1", None, 20, 0, "req-1")
-        assert [i.id for i in items] == ["j1", "j2"]
-        assert items[0].agent_name == "리서치 봇"
-        assert items[1].agent_name is None
-        repo.list_by_user.assert_awaited_once_with("u1", None, 20, 0, "req-1")
+
+    def _repo(self, items=None, total=0):
+        repo = MagicMock()
+        repo.list_history = AsyncMock(return_value=items or [])
+        repo.count_history = AsyncMock(return_value=total)
+        return repo
+
+    @pytest.mark.asyncio
+    async def test_returns_items_with_total(self):
+        repo = self._repo([self._item("j1"), self._item("r1", "schedule")], 42)
+        uc = ListJobHistoryUseCase(repo, MagicMock())
+        res = await uc.execute("u1", "all", "all", "all", 20, 0, "req-1")
+        assert [i.id for i in res.items] == ["j1", "r1"]
+        assert res.total == 42
+
+    @pytest.mark.asyncio
+    async def test_deletable_flag_follows_type(self):
+        """FR-11 — 스케줄 실행 행에는 휴지통을 노출하지 않는다."""
+        repo = self._repo([self._item("j1"), self._item("r1", "schedule")])
+        uc = ListJobHistoryUseCase(repo, MagicMock())
+        res = await uc.execute("u1", "all", "all", "all", 20, 0, "req-1")
+        assert res.items[0].deletable is True
+        assert res.items[1].deletable is False
+
+    @pytest.mark.asyncio
+    async def test_period_converted_to_lower_bound(self):
+        """FR-09 — 'all' 이 아니면 하한 시각이 repository 로 전달된다."""
+        repo = self._repo()
+        uc = ListJobHistoryUseCase(repo, MagicMock())
+        await uc.execute("u1", "all", "all", "today", 20, 0, "req-1")
+        assert repo.list_history.call_args.kwargs["since_utc"] is not None
+
+    @pytest.mark.asyncio
+    async def test_period_all_has_no_lower_bound(self):
+        repo = self._repo()
+        uc = ListJobHistoryUseCase(repo, MagicMock())
+        await uc.execute("u1", "all", "all", "all", 20, 0, "req-1")
+        assert repo.list_history.call_args.kwargs["since_utc"] is None
+
+    @pytest.mark.asyncio
+    async def test_count_uses_same_filters_as_list(self):
+        """total 이 목록과 다른 조건으로 세지면 페이지 수가 틀어진다."""
+        repo = self._repo()
+        uc = ListJobHistoryUseCase(repo, MagicMock())
+        await uc.execute("u1", "done", "manual", "week", 20, 40, "req-1")
+        list_kwargs = repo.list_history.call_args.kwargs
+        count_kwargs = repo.count_history.call_args.kwargs
+        for key in ("status_group", "history_type", "since_utc"):
+            assert list_kwargs[key] == count_kwargs[key]
+        assert list_kwargs["limit"] == 20 and list_kwargs["offset"] == 40
 
 
 class TestGetJob:

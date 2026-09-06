@@ -6,7 +6,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.domain.tool_catalog.entity import ToolCatalogEntry
-from src.domain.tool_catalog.interfaces import ToolCatalogRepositoryInterface
+from src.domain.tool_catalog.interfaces import (
+    UNSET,
+    ToolCatalogRepositoryInterface,
+)
 from src.infrastructure.tool_catalog.models import ToolCatalogModel
 
 
@@ -29,6 +32,10 @@ class ToolCatalogRepository(ToolCatalogRepositoryInterface):
                 requires_env=entry.requires_env or None,
                 is_active=entry.is_active,
                 is_builtin=entry.is_builtin,
+                # mcp-tool-category-routing §3.1: INSERT 분기만 관리자 지정값을
+                # 영속한다 (is_builtin D1과 동형). 기본은 NULL = 미분류.
+                category=entry.category,
+                max_tool_calls=entry.max_tool_calls,
                 created_at=entry.created_at or now,
                 updated_at=entry.updated_at or now,
             )
@@ -49,6 +56,9 @@ class ToolCatalogRepository(ToolCatalogRepositoryInterface):
                 now = datetime.now(timezone.utc)
                 # builtin-tools D2: is_builtin은 SET 절에 절대 포함하지 않는다 —
                 # 관리자 토글값이 부팅 sync에 덮어써지지 않는 보존 계약.
+                # mcp-tool-category-routing §5 D-02 (FR-03): category /
+                # max_tool_calls도 같은 이유로 SET 절에 넣지 않는다. 보존은
+                # 코드를 '추가하지 않음'으로 성립하므로 테스트가 계약을 고정한다.
                 stmt = (
                     update(ToolCatalogModel)
                     .where(ToolCatalogModel.tool_id == entry.tool_id)
@@ -143,6 +153,51 @@ class ToolCatalogRepository(ToolCatalogRepositoryInterface):
             )
             raise
 
+    async def update_metadata(
+        self,
+        tool_id: str,
+        request_id: str,
+        *,
+        category: str | None = UNSET,
+        max_tool_calls: int | None = UNSET,
+    ) -> ToolCatalogEntry | None:
+        """mcp-tool-category-routing §4.2: 분류·호출 상한 부분 갱신.
+
+        생략한 인자는 SET 절에 넣지 않는다(부분 갱신). 명시적 None은
+        '미분류로 되돌리기'이므로 SET 절에 포함한다 — UNSET 센티널이 둘을
+        가른다. 값 검증은 도메인 정책이 상위(UseCase)에서 수행한다.
+        """
+        self._logger.info(
+            "ToolCatalog update_metadata", request_id=request_id, tool_id=tool_id,
+        )
+        try:
+            values: dict = {}
+            if category is not UNSET:
+                values["category"] = category
+            if max_tool_calls is not UNSET:
+                values["max_tool_calls"] = max_tool_calls
+            if not values:
+                # 변경 요청이 없으면 UPDATE를 실행하지 않는다(불필요한 쓰기 방지).
+                return await self.find_by_tool_id(tool_id, request_id)
+
+            values["updated_at"] = datetime.now(timezone.utc)
+            stmt = (
+                update(ToolCatalogModel)
+                .where(ToolCatalogModel.tool_id == tool_id)
+                .values(**values)
+            )
+            result = await self._session.execute(stmt)
+            if result.rowcount == 0:
+                return None
+            await self._session.flush()
+            return await self.find_by_tool_id(tool_id, request_id)
+        except Exception as e:
+            self._logger.error(
+                "ToolCatalog update_metadata failed",
+                exception=e, request_id=request_id, tool_id=tool_id,
+            )
+            raise
+
     async def deactivate_by_mcp_server(
         self, mcp_server_id: str, request_id: str
     ) -> int:
@@ -181,6 +236,8 @@ class ToolCatalogRepository(ToolCatalogRepositoryInterface):
             requires_env=model.requires_env or [],
             is_active=model.is_active,
             is_builtin=model.is_builtin,
+            category=model.category,
+            max_tool_calls=model.max_tool_calls,
             created_at=model.created_at,
             updated_at=model.updated_at,
         )

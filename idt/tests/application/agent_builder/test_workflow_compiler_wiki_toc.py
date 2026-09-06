@@ -218,7 +218,10 @@ class TestTocInactive:
             compiler, _workflow(["wiki_read"]), agent_id="agent_1",
         )
         assert sup_prompt == "당신은 AI 에이전트입니다."
-        assert mock_react.call_args.kwargs.get("system_prompt") is None
+        # worker-context-injection §4.1: 워커 컨텍스트 블록은 항상 주입되지만
+        # 목차 블록·위키 지시는 목차가 비면 들어가지 않는다.
+        prompt = mock_react.call_args.kwargs.get("system_prompt")
+        assert prompt is not None and TOC_BLOCK not in prompt
 
     @pytest.mark.asyncio
     async def test_empty_toc_block_no_injection(self):
@@ -229,4 +232,7 @@ class TestTocInactive:
         )
         provider.render_block.assert_awaited_once()
         assert sup_prompt == "당신은 AI 에이전트입니다."
-        assert mock_react.call_args.kwargs.get("system_prompt") is None
+        # worker-context-injection §4.1: 워커 컨텍스트 블록은 항상 주입되지만
+        # 목차 블록·위키 지시는 목차가 비면 들어가지 않는다.
+        prompt = mock_react.call_args.kwargs.get("system_prompt")
+        assert prompt is not None and TOC_BLOCK not in prompt
