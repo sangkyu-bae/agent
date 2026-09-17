@@ -51,3 +51,6 @@ class WikiTreeItem:
     source_type: str
     path: str | None
     updated_at: datetime | None = None
+    # wiki-guided-routing D1: 프롬프트 목차 전용 본문 발췌(SQL 절단). 트리 API에는
+    # 노출하지 않는다(라우터가 필드를 명시 매핑). None = 미조회.
+    excerpt: str | None = None

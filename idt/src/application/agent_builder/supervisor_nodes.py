@@ -39,6 +39,78 @@ def _render_attachment_block(attachments: list[dict] | None) -> str:
     )
 
 
+def _current_turn_messages(messages: list) -> list:
+    """마지막 사용자 메시지 이후의 메시지들 — 이번 턴 워커 산출물 판정용."""
+    for idx in range(len(messages) - 1, -1, -1):
+        msg = messages[idx]
+        role = msg.get("role") if isinstance(msg, dict) else getattr(msg, "type", "")
+        if role in ("user", "human"):
+            return messages[idx + 1:]
+    return list(messages)
+
+
+def _wiki_read_this_turn(messages: list, wiki_worker_id: str) -> bool:
+    """이번 턴에 wiki 워커 산출물이 있는가 — 재주입분(이전 턴 스냅샷)은 제외."""
+    if not wiki_worker_id:
+        return False
+    for msg in _current_turn_messages(messages):
+        if getattr(msg, "name", None) != wiki_worker_id:
+            continue
+        if not AnalysisSnapshotPolicy.is_reinjected(getattr(msg, "content", "")):
+            return True
+    return False
+
+
+def _render_worker_error_block(state, wiki_worker_id: str) -> str:
+    """직전 수집 워커 실패 안내 블록 (wiki-guided-routing D4). 오류 없으면 ''.
+
+    Design Ref: D4 — 실패 신호는 결정적(state.last_worker_error), 그 다음 행동
+    (위키 재확인 → 없으면 되묻기)은 LLM 판단. URL·식별자 추측 재시도를 막는다.
+    Plan SC: FR-05.
+    """
+    err = state.get("last_worker_error", "") or ""
+    if not err:
+        return ""
+    last_worker = state.get("last_worker_id", "") or "직전 워커"
+    lines = [
+        "\n\n[직전 수집 실패]",
+        f"직전 워커({last_worker})의 도구 호출이 실패했습니다: {err}",
+    ]
+    if wiki_worker_id and not _wiki_read_this_turn(state.get("messages", []), wiki_worker_id):
+        lines.append(
+            f"- 위키 목차에 관련 지침(대상 URL·절차)이 있는지 먼저 {wiki_worker_id}로 "
+            f"확인하세요."
+        )
+    lines.append(
+        "- 지침에도 대상이 없으면 URL·식별자를 추측해 재시도하지 말고 'FINISH'를 "
+        "선택하고, answer에 어떤 사이트(URL)를 대상으로 할지 사용자에게 묻는 문장을 "
+        "쓰세요."
+    )
+    lines.append("- 같은 인자로 같은 워커를 다시 부르지 마세요.")
+    return "\n".join(lines)
+
+
+def _render_empty_result_block(state) -> str:
+    """수집 성공 + 유효 데이터 부재 안내 블록. 신호 없으면 ''.
+
+    Design Ref: supervisor-early-finish-fix §4.3 (D-03). Plan SC: FR-05.
+
+    그래프 계약 ②(목록 프레이밍 금지)에 따라 워커·도구 이름을 나열하지 않는다 —
+    화이트리스트는 방어 지시를 이기고 과차단을 부른다. '남아 있다면'이라는
+    조건부 서술로만 적어, 오탐일 때 LLM이 곧바로 FINISH를 재선택할 수 있게 한다.
+    """
+    reason = state.get("last_worker_empty", "") or ""
+    if not reason:
+        return ""
+    return "\n".join([
+        "\n\n[수집 결과 확인 필요]",
+        f"직전 워커는 정상 실행됐지만 유효한 데이터가 확인되지 않았습니다: {reason}",
+        "- 조작(검색 실행·조건 적용 등)이 선행돼야 데이터가 나타나는 페이지일 수 있습니다.",
+        "- 아직 시도하지 않은 방법이 남아 있다면 FINISH 대신 그 방법을 먼저 시도하세요.",
+        "- 이미 충분히 시도했다면 FINISH를 선택하고, 무엇이 확인되지 않았는지 answer에 밝히세요.",
+    ])
+
+
 # 인벤토리 항목 요약 head 절단 길이(자) — 항목당 1줄 유지 (토큰 절약).
 _ENTRY_HEAD_MAX_CHARS = 80
 
@@ -155,6 +227,10 @@ def build_initial_state(
         "forced_worker": "",
         "skipped_workers": [],
         "limit_reached": False,
+        "last_worker_error": "",
+        # supervisor-early-finish-fix D-02 / D-05
+        "last_worker_empty": "",
+        "finish_challenge_pending": False,
         "quality_gate_result": "",
         "attachments": attachments or [],
         "worker_task": "",
@@ -198,6 +274,9 @@ def create_supervisor_node(
     analysis_worker_ids: list[str] | None = None,
     viz_policy: VisualizationRoutingPolicy | None = None,
     docgen_guidance_block: str = "",
+    # wiki-guided-routing D3/D4: 빈 문자열이면 무영향(위키 미등록 에이전트 바이트 동일).
+    wiki_guidance_block: str = "",
+    wiki_worker_id: str = "",
 ):
     worker_descriptions = "\n".join(
         f"- {w.worker_id}: {w.description}" for w in workers
@@ -211,12 +290,28 @@ def create_supervisor_node(
             # limit_reached는 라우팅(final_answer 우회)·안내 지시·payload 플래그의 신호.
             logger.warning("max_iterations reached",
                            iteration_count=state["iteration_count"])
-            return {"next_worker": "__end__", "limit_reached": True}
+            # supervisor-early-finish-fix D-05: 한도 가드도 되물음 기회를 명시적으로
+            # 소진한다. limit_reached가 route에서 우선하므로 현재는 무해하지만,
+            # 그 암묵 의존을 남기지 않는다 (§2.2 불변식).
+            return {
+                "next_worker": "__end__",
+                "limit_reached": True,
+                "last_worker_empty": "",
+                "finish_challenge_pending": False,
+            }
 
         if state["token_usage"] >= state["token_limit"]:
             logger.warning("token_limit reached",
                            token_usage=state["token_usage"])
-            return {"next_worker": "__end__"}
+            # supervisor-early-finish-fix D-05 (Gap-06): 이 가드는 D5 결정에 따라
+            # limit_reached를 세우지 않는다(테스트로 고정). 따라서 pending이 남으면
+            # route가 supervisor로 되돌리고 같은 가드가 다시 걸려 무한 루프가 된다.
+            # iteration_count도 이 경로에선 증가하지 않아 한도 가드가 막지 못한다.
+            return {
+                "next_worker": "__end__",
+                "last_worker_empty": "",
+                "finish_challenge_pending": False,
+            }
 
         forced = hooks.force_worker(state)
         if forced:
@@ -227,6 +322,10 @@ def create_supervisor_node(
                 "forced_worker": forced,
                 "worker_task": "",
                 "iteration_count": state["iteration_count"] + 1,
+                # supervisor-early-finish-fix D-05: 강제 라우팅으로 결정을 건너뛰면
+                # 되물음 기회는 소멸한다 — 플래그가 워커 hop을 건너 잔류하지 않도록.
+                "last_worker_empty": "",
+                "finish_challenge_pending": False,
             }
 
         skipped = hooks.skip_workers(state)
@@ -239,6 +338,10 @@ def create_supervisor_node(
         viz_block = _render_viz_guidance_block(
             state["messages"], analysis_worker_ids or [], viz_policy,
         )
+        # supervisor-early-finish-fix §6.1: 오류가 있으면 빈 결과 블록은 내지
+        # 않는다 — 두 블록이 동시에 뜨면 지시가 충돌한다.
+        error_block = _render_worker_error_block(state, wiki_worker_id)
+        empty_block = "" if error_block else _render_empty_result_block(state)
 
         decision_prompt = (
             f"{supervisor_prompt}\n\n"
@@ -247,7 +350,12 @@ def create_supervisor_node(
             f"{data_block}"
             f"{viz_block}"
             # doc-generator D6: 문서 생성 라우팅 판단 기준 (빈 문자열이면 무영향)
-            f"{docgen_guidance_block}\n\n"
+            f"{docgen_guidance_block}"
+            # wiki-guided-routing D3/D4: 위키 지침 우선 기준 + 직전 수집 실패 안내
+            f"{wiki_guidance_block}"
+            f"{error_block}"
+            # supervisor-early-finish-fix D-03: 수집 성공 + 데이터 부재 안내
+            f"{empty_block}\n\n"
             f"다음 중 선택하세요:\n"
             f"- 워커 호출이 필요하면 해당 worker_id를 선택\n"
             f"- 처리 가능한 워커가 사용 가능 목록에 있으면 거부하지 말고 그 워커를 선택\n"
@@ -284,7 +392,15 @@ def create_supervisor_node(
                 "supervisor LLM decision failed, falling back to __end__",
                 exception=e,
             )
-            return {"next_worker": "__end__"}
+            # supervisor-early-finish-fix D-05: 결정 실패는 되물음 대상이 아니다.
+            # 플래그를 소진하지 않으면 route가 다시 supervisor로 돌려보내고
+            # 같은 실패가 반복돼 무한 루프가 된다 (실측: 회귀 3건).
+            return {
+                "next_worker": "__end__",
+                "last_worker_error": "",
+                "last_worker_empty": "",
+                "finish_challenge_pending": False,
+            }
 
         # M3 (AGENT-OBS-003): reasoning을 step output_summary로 노출.
         # SupervisorDecision.reasoning은 이미 required 필드라 추가 LLM 토큰 비용 없음.
@@ -303,6 +419,11 @@ def create_supervisor_node(
                     "worker_task": "",
                     "iteration_count": state["iteration_count"] + 1,
                     "_step_output_summary": step_summary,
+                    "last_worker_error": "",
+                    # supervisor-early-finish-fix D-05: 조기 return도 플래그를
+                    # 소진한다 — 모든 종료 경로에서 1회 상한이 성립해야 한다.
+                    "last_worker_empty": "",
+                    "finish_challenge_pending": False,
                 }
         elif next_worker in skipped:
             next_worker = "__end__"
@@ -319,6 +440,13 @@ def create_supervisor_node(
             "worker_task": decision.task if routed_to_worker else "",
             "iteration_count": state["iteration_count"] + 1,
             "_step_output_summary": step_summary,
+            # D4: 실패 안내 블록은 결정 1회에만 — 소비 후 리셋
+            "last_worker_error": "",
+            # supervisor-early-finish-fix D-02/D-05: 빈 결과 블록도 결정 1회에만.
+            # 신호를 리셋하면서 되물음 기회를 세운다. 재진입 시 empty_block이
+            # 비므로 pending은 False로만 갈 수 있다 — 1회 상한이 여기서 보장된다.
+            "last_worker_empty": "",
+            "finish_challenge_pending": bool(empty_block),
         }
 
     return supervisor_node
@@ -399,6 +527,16 @@ def route_to_worker_or_final(state: SupervisorState) -> str:
     final_answer로 우회 — 답변 없이 END 직행하는 경로를 차단한다.
     """
     next_worker = state["next_worker"]
+    # supervisor-early-finish-fix D-05: 빈 결과 미해소 상태의 첫 FINISH를 1회
+    # 되돌린다. 특정 워커를 강제하지 않고 재결정 기회만 준다 (그래프 계약 ③).
+    # D-09: 한도 도달은 되물음보다 우선 — 종료를 막지 않는다.
+    # Plan SC: FR-06, FR-07
+    if (
+        next_worker == "__end__"
+        and state.get("finish_challenge_pending")
+        and not state.get("limit_reached")
+    ):
+        return "supervisor"
     if next_worker == "__end__" and (
         state.get("last_worker_id") or state.get("limit_reached")
     ):

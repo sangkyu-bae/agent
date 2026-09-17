@@ -236,3 +236,91 @@ class TestTocInactive:
         # 목차 블록·위키 지시는 목차가 비면 들어가지 않는다.
         prompt = mock_react.call_args.kwargs.get("system_prompt")
         assert prompt is not None and TOC_BLOCK not in prompt
+
+
+# ── wiki-guided-routing D3: 위키 지침 처리 기준 블록 ────────────────────
+
+
+def _wiki_worker(worker_id="wiki_read_worker") -> WorkerDefinition:
+    return WorkerDefinition(
+        tool_id="wiki_read", worker_id=worker_id, description="위키 열람", sort_order=0,
+    )
+
+
+def _scrape_worker() -> WorkerDefinition:
+    return WorkerDefinition(
+        tool_id="mcp:srv:scrape_url", worker_id="scrape_worker", description="스크래핑",
+        sort_order=1,
+    )
+
+
+class TestRenderWikiGuidanceBlock:
+    def test_wiki_plus_other_worker_renders_block(self):
+        compiler, _ = _make_compiler()
+        block = compiler._render_wiki_guidance_block(
+            [_wiki_worker(), _scrape_worker()], TOC_BLOCK
+        )
+        assert block.startswith("\n\n[위키 지침 처리 기준]")
+        assert "wiki_read_worker" in block
+        assert "외부에서 자료를 수집" in block
+        assert "관련 항목이 없으면" in block
+
+    def test_wiki_only_returns_empty(self):
+        compiler, _ = _make_compiler()
+        assert compiler._render_wiki_guidance_block([_wiki_worker()], TOC_BLOCK) == ""
+
+    def test_empty_toc_returns_empty(self):
+        compiler, _ = _make_compiler()
+        assert compiler._render_wiki_guidance_block(
+            [_wiki_worker(), _scrape_worker()], ""
+        ) == ""
+
+    def test_no_wiki_worker_returns_empty(self):
+        compiler, _ = _make_compiler()
+        assert compiler._render_wiki_guidance_block([_scrape_worker()], TOC_BLOCK) == ""
+
+
+class TestSupervisorNodeReceivesWikiKwargs:
+    async def _sup_kwargs(self, compiler, workflow, agent_id):
+        async def _noop_node(state):
+            return {}
+
+        with patch(
+            "src.application.agent_builder.workflow_compiler.create_agent",
+            MagicMock(side_effect=lambda *a, **k: _noop_node),
+        ), patch(
+            "src.application.agent_builder.workflow_compiler.create_supervisor_node",
+            MagicMock(return_value=_noop_node),
+        ) as mock_sup:
+            await compiler.compile(
+                workflow, _make_llm_model(), "req-1", agent_id=agent_id,
+            )
+        return mock_sup.call_args.kwargs
+
+    @pytest.mark.asyncio
+    async def test_wiki_and_scrape_pass_guidance_and_worker_id(self):
+        compiler, _ = _make_compiler()
+        kwargs = await self._sup_kwargs(
+            compiler, _workflow(["wiki_read", "tavily_search"]), "agent-1"
+        )
+        assert "[위키 지침 처리 기준]" in kwargs["wiki_guidance_block"]
+        assert kwargs["wiki_worker_id"] == "worker_0"
+
+    @pytest.mark.asyncio
+    async def test_no_wiki_passes_empty(self):
+        compiler, _ = _make_compiler(toc_block=None)
+        kwargs = await self._sup_kwargs(
+            compiler, _workflow(["tavily_search"]), "agent-1"
+        )
+        assert kwargs["wiki_guidance_block"] == ""
+        assert kwargs["wiki_worker_id"] == ""
+
+    @pytest.mark.asyncio
+    async def test_wiki_worker_without_toc_passes_empty_worker_id(self):
+        """위키 문서 0건(목차 빈 문자열)이면 실패 블록의 위키 안내도 꺼진다 (G-06)."""
+        compiler, _ = _make_compiler(toc_block="")
+        kwargs = await self._sup_kwargs(
+            compiler, _workflow(["wiki_read", "tavily_search"]), "agent-1"
+        )
+        assert kwargs["wiki_guidance_block"] == ""
+        assert kwargs["wiki_worker_id"] == ""

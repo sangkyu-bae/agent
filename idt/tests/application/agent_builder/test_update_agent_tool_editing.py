@@ -590,3 +590,114 @@ async def test_sub_agent_configs_and_tool_ids_together():
     saved = _saved_workers(repository)
     assert [w.worker_type for w in saved] == ["tool", "tool", "sub_agent"]
     assert saved[2].sort_order == 2
+
+
+# --- wiki-guided-routing D5: Tool Guidelines 섹션 재생성 -------------------
+
+
+_PROMPT = (
+    "리드 문단\n\n"
+    "## Tool Guidelines\n"
+    "- Tavily 웹 검색 (internal:tavily_search): 옛 설명\n\n"
+    "## Important Notes\n- 사용자가 편집한 줄"
+)
+
+
+def _saved_prompt(repository) -> str:
+    return repository.update.call_args[0][0].system_prompt
+
+
+@pytest.mark.asyncio
+async def test_d5_tool_change_regenerates_tool_guidelines_section_only():
+    agent = _make_agent([_tool("tavily_search")])
+    agent.system_prompt = _PROMPT
+    use_case, repository, _, _ = _make_use_case(agent)
+
+    await use_case.execute(
+        agent.id,
+        UpdateAgentRequest(tool_ids=["internal:tavily_search", "internal:excel_export"]),
+        "req-1",
+    )
+
+    prompt = _saved_prompt(repository)
+    assert "## Tool Guidelines" in prompt
+    assert "(internal:excel_export)" in prompt
+    assert "(internal:tavily_search)" in prompt
+    assert "옛 설명" not in prompt
+    assert prompt.startswith("리드 문단\n\n")
+    assert prompt.endswith("## Important Notes\n- 사용자가 편집한 줄")
+
+
+@pytest.mark.asyncio
+async def test_d5_removed_tool_disappears_from_guidelines():
+    agent = _make_agent([_tool("tavily_search"), _tool("excel_export", 1)])
+    agent.system_prompt = _PROMPT
+    use_case, repository, _, _ = _make_use_case(agent)
+
+    await use_case.execute(
+        agent.id, UpdateAgentRequest(tool_ids=["internal:excel_export"]), "req-1"
+    )
+
+    prompt = _saved_prompt(repository)
+    assert "(internal:tavily_search)" not in prompt
+    assert "(internal:excel_export)" in prompt
+
+
+@pytest.mark.asyncio
+async def test_d5_builtin_and_mcp_tools_included_with_catalog_ids():
+    agent = _make_agent([_tool("tavily_search")])
+    agent.system_prompt = _PROMPT
+    use_case, repository, _, _ = _make_use_case(agent, builtins=[_builtin("wiki_read")])
+
+    await use_case.execute(
+        agent.id, UpdateAgentRequest(tool_ids=["internal:tavily_search", MCP_TOOL_ID]), "req-1"
+    )
+
+    prompt = _saved_prompt(repository)
+    assert f"- fetch ({MCP_TOOL_ID}):" in prompt
+    assert "(internal:wiki_read)" in prompt
+
+
+@pytest.mark.asyncio
+async def test_d5_prompt_without_heading_is_untouched():
+    agent = _make_agent([_tool("tavily_search")])
+    agent.system_prompt = "사용자가 도구 섹션을 지운 프롬프트"
+    use_case, repository, _, _ = _make_use_case(agent)
+
+    await use_case.execute(
+        agent.id, UpdateAgentRequest(tool_ids=["internal:excel_export"]), "req-1"
+    )
+
+    assert _saved_prompt(repository) == "사용자가 도구 섹션을 지운 프롬프트"
+
+
+@pytest.mark.asyncio
+async def test_d5_request_prompt_wins_when_sent_with_tool_ids():
+    agent = _make_agent([_tool("tavily_search")])
+    agent.system_prompt = _PROMPT
+    use_case, repository, _, _ = _make_use_case(agent)
+
+    await use_case.execute(
+        agent.id,
+        UpdateAgentRequest(
+            system_prompt="새 리드\n\n## Tool Guidelines\n- 임시\n\n## Workflow\n1. 단계",
+            tool_ids=["internal:excel_export"],
+        ),
+        "req-1",
+    )
+
+    prompt = _saved_prompt(repository)
+    assert prompt.startswith("새 리드\n\n## Tool Guidelines\n")
+    assert "(internal:excel_export)" in prompt and "- 임시" not in prompt
+    assert prompt.endswith("## Workflow\n1. 단계")
+
+
+@pytest.mark.asyncio
+async def test_d5_no_tool_ids_leaves_prompt_untouched():
+    agent = _make_agent([_tool("tavily_search")])
+    agent.system_prompt = _PROMPT
+    use_case, repository, _, _ = _make_use_case(agent)
+
+    await use_case.execute(agent.id, UpdateAgentRequest(name="새 이름"), "req-1")
+
+    assert _saved_prompt(repository) == _PROMPT

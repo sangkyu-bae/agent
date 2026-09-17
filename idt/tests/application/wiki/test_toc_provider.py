@@ -34,7 +34,7 @@ class _SessionCtx:
         return False
 
 
-def _make(items=None, raise_exc=False):
+def _make(items=None, raise_exc=False, excerpt_chars=0):
     counter = {"opened": 0, "closed": 0}
 
     def session_factory():
@@ -53,6 +53,7 @@ def _make(items=None, raise_exc=False):
         max_items=50,
         max_bytes=4000,
         logger=logger,
+        excerpt_chars=excerpt_chars,
     )
     return provider, repo, counter, logger
 
@@ -73,6 +74,20 @@ class TestRenderBlock:
     async def test_empty_items_returns_empty_string(self):
         provider, _, _, _ = _make(items=[])
         assert await provider.render_block("agent_1", "r") == ""
+
+    @pytest.mark.asyncio
+    async def test_excerpt_chars_forwarded_to_repository(self):
+        """wiki-guided-routing D1: provider가 발췌 글자 수를 저장소에 전달한다."""
+        provider, repo, _, _ = _make(items=[_item("w1")], excerpt_chars=120)
+        await provider.render_block("agent_1", "r")
+        assert repo.list_searchable_tree_items.await_args.kwargs.get("excerpt_chars") == 120
+
+    @pytest.mark.asyncio
+    async def test_default_excerpt_chars_not_forwarded(self):
+        """발췌 미사용(0)이면 kwarg를 넘기지 않는다 — 구 시그니처 페이크 무회귀."""
+        provider, repo, _, _ = _make(items=[_item("w1")])
+        await provider.render_block("agent_1", "r")
+        assert "excerpt_chars" not in repo.list_searchable_tree_items.await_args.kwargs
 
     @pytest.mark.asyncio
     async def test_repo_failure_returns_empty_and_warns(self):

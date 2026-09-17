@@ -34,6 +34,24 @@ class SupervisorState(TypedDict):
     # final_answer는 안내 지시를, run_agent_use_case는 payload 플래그를 부착한다.
     limit_reached: bool
 
+    # wiki-guided-routing D4: 직전 워커의 도구 오류 요약(ToolErrorPolicy). 워커 노드가
+    # 매번 덮어쓰고(성공 시 ""), supervisor는 비어 있지 않을 때만 "[직전 수집 실패]"
+    # 블록을 렌더한 뒤 ""로 리셋한다 — 블록은 실패 직후 결정 1회에만 나타난다.
+    last_worker_error: str
+
+    # supervisor-early-finish-fix D-02: 직전 수집 워커의 '빈 결과' 사유 요약.
+    # last_worker_error 동형 — 워커가 매번 덮어쓰고(정상 시 ""), supervisor가
+    # "[수집 결과 확인 필요]" 블록을 렌더한 뒤 ""로 리셋한다.
+    # 도구는 성공했으나 유효 데이터가 없는 상태로, 도구 오류와 구분된다.
+    last_worker_empty: str
+
+    # supervisor-early-finish-fix D-05: FINISH 되물음 1회 기회 보유 플래그.
+    # supervisor가 빈 결과 블록을 렌더할 때 True, 재진입 시 False로 소진된다.
+    # route_to_worker_or_final이 읽어 __end__를 supervisor로 되돌린다.
+    # 카운터가 아니라 플래그인 이유: 신호 리셋과 짝지어 1회 상한이 구조적으로
+    # 보장되기 때문 (Design §2.2).
+    finish_challenge_pending: bool
+
     quality_gate_result: str
 
     # analysis-node-agent: 분석 노드 입력용 첨부(엑셀 파일 경로 등).

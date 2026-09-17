@@ -79,3 +79,9 @@ idt/test-docs/
 
 # 소개/포트폴리오 자료 (로컬 전용, 커밋 금지)
 docs/intro/
+
+# 사내 발표 덱 (로컬 전용, 커밋 금지)
+docs/presentations/
+.claude/commands/Present.md
+.claude/agents/presentation-builder.md
+scripts/render_pdf.py

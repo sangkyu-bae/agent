@@ -127,3 +127,63 @@ class TestToolNormToggle:
             render_worker_context_block,
         )
         assert render_worker_context_block("", "", [], include_tool_norm=False) == ""
+
+
+class TestCapabilityDenialNorm:
+    """Design Ref: supervisor-early-finish-fix §1.2 D-08 / Plan SC: FR-01.
+
+    워커는 자기 도구 하나만 바인딩된다(1 tool = 1 worker). 그 범위를 에이전트
+    전체 능력으로 착각해 '그 기능은 제공되지 않습니다'라고 단언하면, 그 문장이
+    supervisor 결정 컨텍스트에 남아 조기 FINISH를 유발한다 (트레이스 01a0a82b).
+    """
+
+    def test_norm_forbids_denying_agent_wide_capability(self):
+        from src.application.agent_run.prompt_rendering import (
+            render_worker_context_block,
+        )
+        block = render_worker_context_block("", "", [])
+        assert "범위 밖" in block
+        assert "다른 워커" in block
+
+    def test_denial_norm_is_part_of_tool_usage_norm(self):
+        """규범 토글을 끄면 함께 빠진다 — 도구 없는 노드는 대상이 아니다."""
+        from src.application.agent_run.prompt_rendering import (
+            render_worker_context_block,
+        )
+        block = render_worker_context_block(
+            "프롬프트", "역할", [], include_tool_norm=False,
+        )
+        assert "범위 밖" not in block
+
+    def test_norm_mandates_passing_tool_results_through(self):
+        """회귀(트레이스 01a0ae68): 워커가 도구 결과를 전달하지 않고
+        '이 워커의 범위 밖입니다'만 반환해 supervisor가 도구 실패로 오인했다.
+        전달 의무가 범위 밖 표기보다 먼저 와야 한다.
+        """
+        from src.application.agent_run.prompt_rendering import (
+            render_worker_context_block,
+        )
+        block = render_worker_context_block("", "", [])
+        assert "빠짐없이 답변에 그대로 실으세요" in block
+        # 전달 지시가 '범위 밖' 표기 지시보다 앞에 온다.
+        assert (
+            block.index("빠짐없이 답변에 그대로 실으세요")
+            < block.index("'이 워커의 범위 밖'이라고 덧붙이세요")
+        )
+
+    def test_norm_avoids_absolute_only_framing(self):
+        """'A라고만 하라'는 절대 프레이밍이 전달 의무를 덮어쓴다 — 금지."""
+        from src.application.agent_run.prompt_rendering import (
+            render_worker_context_block,
+        )
+        block = render_worker_context_block("", "", [])
+        assert "범위 밖'이라고만" not in block
+
+    def test_norm_does_not_enumerate_capabilities(self):
+        """그래프 계약 ② — 목록 프레이밍 금지. 할 수 있는 것을 나열하지 않는다."""
+        from src.application.agent_run.prompt_rendering import (
+            render_worker_context_block,
+        )
+        block = render_worker_context_block("", "", [])
+        for forbidden in ("browser_click", "browser_open", "scrape_url"):
+            assert forbidden not in block

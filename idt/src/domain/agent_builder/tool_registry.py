@@ -80,7 +80,8 @@ TOOL_REGISTRY: dict[str, ToolMeta] = {
         description=(
             "이 에이전트가 보유한 승인 지식 위키 문서의 본문을 열람합니다. "
             "시스템 프롬프트의 [에이전트 지식 위키 목차]에서 문서 id를 골라 전달하세요. "
-            "최근 결정사항, 정리된 지식, 축적된 판단 기준 확인에 사용하세요."
+            "최근 결정사항, 정리된 지식, 축적된 판단 기준, 그리고 어떤 출처·URL·"
+            "절차로 작업할지 정한 지침 확인에 사용하세요."
         ),
         requires_env=[],
         # wiki-agentic-navigation D6: search/analysis 미지정 → react agent 워커 경로
@@ -92,7 +93,8 @@ TOOL_REGISTRY: dict[str, ToolMeta] = {
         description=(
             "이 에이전트 지식 위키의 폴더를 열어 하위 폴더 요약과 문서 목록(id 포함)을 "
             "조회합니다. 시스템 프롬프트의 [에이전트 지식 위키 지도]에서 관련 폴더 경로를 "
-            "골라 전달하세요. 빈 경로는 최상위 목록을 반환합니다."
+            "골라 전달하세요. 빈 경로는 최상위 목록을 반환합니다. "
+            "작업 지침 문서를 찾을 때도 사용합니다."
         ),
         requires_env=[],
         # wiki-folder-summaries D4: category 미지정 → react agent 워커 경로.

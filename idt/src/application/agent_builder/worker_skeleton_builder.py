@@ -7,7 +7,10 @@ CreateAgentUseCase 가 갖고 있던 워커 빌드 private 메서드를 행위�
 from __future__ import annotations
 
 from src.application.agent_builder.schemas import RagToolConfigRequest
-from src.domain.agent_builder.rag_tool_config import sanitize_tool_name
+from src.domain.agent_builder.rag_tool_config import (
+    clamp_llm_name,
+    sanitize_tool_name,
+)
 from src.domain.agent_builder.schemas import WorkerDefinition, WorkflowSkeleton
 from src.domain.agent_builder.tool_registry import get_tool_meta
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
@@ -34,8 +37,12 @@ def make_worker_id(tool_id: str) -> str:
     Design Ref: §10.4 — 추출 전에는 tool_ids 경로만 sanitize를 거치고
     configs·빌트인 경로는 f-string 을 직접 썼다. 공용 빌더에서는 이 함수
     하나로 통일한다 (MCP 콜론 포함 ID 안전).
+
+    fix-worker-id-name-length: AIMessage.name 으로 OpenAI 에 전송되므로 64자를
+    넘으면 400 — 해시 접미사로 결정적 절단한다.
     """
-    return sanitize_tool_name(f"{tool_id}_worker", fallback="mcp_worker")
+    sanitized = sanitize_tool_name(f"{tool_id}_worker", fallback="mcp_worker")
+    return clamp_llm_name(sanitized)
 
 
 class WorkerSkeletonBuilder:

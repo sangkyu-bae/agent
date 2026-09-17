@@ -590,3 +590,67 @@ def test_domain_layer_has_no_forbidden_imports():
                 if banned in stripped:
                     offenders.append(f"{path.name}: {stripped}")
     assert offenders == [], offenders
+
+
+# ── wiki-guided-routing D5: Tool Guidelines 섹션 한정 교체 ──────────────
+
+
+_PROMPT_WITH_TOOLS = (
+    "리드 문단입니다.\n\n"
+    "## Role and Identity\n범용 에이전트\n\n"
+    "## Tool Guidelines\n"
+    "- 옛도구 (internal:old_tool): 예전 설명\n"
+    "  주의: 옛 주의\n\n"
+    "## Important Notes\n- 사용자가 직접 편집한 줄\n- 한국어로 답한다"
+)
+
+
+class TestReplaceToolSection:
+    def test_replaces_only_tool_block_and_preserves_others(self):
+        out = P.replace_tool_section(
+            _PROMPT_WITH_TOOLS,
+            (_guide("internal:new_tool", "새도구", when="새 설명", how=""),),
+        )
+        assert "옛도구" not in out and "옛 주의" not in out
+        assert "- 새도구 (internal:new_tool): 새 설명" in out
+        head, tail = out.split("## Tool Guidelines")
+        assert head == "리드 문단입니다.\n\n## Role and Identity\n범용 에이전트\n\n"
+        assert tail.endswith(
+            "\n\n## Important Notes\n- 사용자가 직접 편집한 줄\n- 한국어로 답한다"
+        )
+
+    def test_no_heading_returns_prompt_unchanged(self):
+        prompt = "## Role and Identity\n범용\n\n## Important Notes\n- 편집"
+        assert P.replace_tool_section(prompt, (_guide("internal:x"),)) == prompt
+
+    def test_empty_guides_removes_block(self):
+        out = P.replace_tool_section(_PROMPT_WITH_TOOLS, ())
+        assert "## Tool Guidelines" not in out
+        assert out == (
+            "리드 문단입니다.\n\n## Role and Identity\n범용 에이전트\n\n"
+            "## Important Notes\n- 사용자가 직접 편집한 줄\n- 한국어로 답한다"
+        )
+
+    def test_tool_block_at_end_is_replaced_without_trailing_newline(self):
+        prompt = "리드\n\n## Tool Guidelines\n- a (internal:a): 설명"
+        out = P.replace_tool_section(prompt, (_guide("internal:b", "b", when="설명b", how=""),))
+        assert out == "리드\n\n## Tool Guidelines\n- b (internal:b): 설명b"
+
+    def test_only_first_heading_is_replaced(self):
+        prompt = (
+            "## Tool Guidelines\n- a (internal:a): 1\n\n"
+            "## Workflow\n1. x\n\n"
+            "## Tool Guidelines\n- 사용자가 붙인 중복 섹션"
+        )
+        out = P.replace_tool_section(prompt, (_guide("internal:b", "b", when="2", how=""),))
+        assert out.count("## Tool Guidelines") == 2
+        assert "- b (internal:b): 2" in out
+        assert "사용자가 붙인 중복 섹션" in out
+        assert "- a (internal:a): 1" not in out
+
+    def test_deterministic(self):
+        guides = (_guide("internal:b", "b", when="2", how=""),)
+        assert (
+            P.replace_tool_section(_PROMPT_WITH_TOOLS, guides)
+            == P.replace_tool_section(_PROMPT_WITH_TOOLS, guides)
+        )

@@ -36,7 +36,10 @@ from src.domain.agent_builder.policies import (
     VisibilityPolicy,
 )
 from src.domain.agent_builder.schemas import WorkerDefinition
+from src.domain.agent_builder.tool_registry import TOOL_REGISTRY
 from src.domain.auth.entities import UserRole
+from src.domain.prompt_composer.policies import PromptAssemblyPolicy
+from src.domain.prompt_composer.schemas import ToolGuide
 from src.domain.collection.permission_interfaces import (
     CollectionPermissionRepositoryInterface,
 )
@@ -58,6 +61,44 @@ class _ClampResult:
 
 
 _NO_CLAMP = _ClampResult()
+
+
+def _catalog_tool_id(stored_tool_id: str) -> str:
+    """agent_tool 저장 표기 → 카탈로그 표기 (`internal:{id}` / `mcp:...` 그대로)."""
+    if stored_tool_id.startswith("mcp"):
+        return stored_tool_id
+    return f"internal:{stored_tool_id}"
+
+
+def _tool_guides_from_workers(workers: list[WorkerDefinition]) -> tuple[ToolGuide, ...]:
+    """도구 워커 → `## Tool Guidelines` 항목 (wiki-guided-routing D5).
+
+    폴백 프롬프트의 형식(`- name (tool_id): description`)과 동일하게, when에만
+    카탈로그 설명을 싣고 how/caution은 비운다(구분자째 생략됨).
+    내부 도구 이름은 레지스트리, MCP는 `mcp:{srv}:{tool}`의 마지막 조각을 쓴다.
+    """
+    guides: list[ToolGuide] = []
+    for w in workers:
+        if w.worker_type != "tool" or not w.tool_id:
+            continue
+        meta = TOOL_REGISTRY.get(w.tool_id)
+        name = meta.name if meta is not None else w.tool_id.split(":")[-1]
+        guides.append(ToolGuide(
+            tool_id=_catalog_tool_id(w.tool_id), name=name, when=w.description or "",
+        ))
+    return tuple(guides)
+
+
+def _sync_tool_guidelines(agent, tool_workers: list[WorkerDefinition]) -> None:
+    """저장 프롬프트의 `## Tool Guidelines` 블록만 현재 워커로 재생성한다.
+
+    Design Ref: wiki-guided-routing D5 — 이 시점의 system_prompt는 apply_update가
+    이미 반영한 값(요청에 함께 오면 요청값)이다. 헤딩이 없으면 무변경.
+    Plan SC: FR-06
+    """
+    agent.system_prompt = PromptAssemblyPolicy.replace_tool_section(
+        agent.system_prompt, _tool_guides_from_workers(tool_workers)
+    )
 
 
 class UpdateAgentUseCase:
@@ -280,6 +321,7 @@ class UpdateAgentUseCase:
 
         agent.replace_tool_workers(tool_workers)
         agent.flow_hint = skeleton.flow_hint
+        _sync_tool_guidelines(agent, tool_workers)
 
         removed = set(previous) - {w.tool_id for w in tool_workers}
         await self._cleanup_removed_tool_deps(agent, removed, request_id)
