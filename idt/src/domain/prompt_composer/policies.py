@@ -116,6 +116,29 @@ class PromptAssemblyPolicy:
         )
         return "\n\n".join(b for b in blocks if b).rstrip()
 
+    # ── 섹션 한정 교체 (wiki-guided-routing D5) ──────────────────────────
+
+    @staticmethod
+    def replace_tool_section(prompt: str, guides: tuple[ToolGuide, ...]) -> str:
+        """저장된 프롬프트의 `## Tool Guidelines` 블록만 교체한다.
+
+        Design Ref: wiki-guided-routing D5 — 도구 편집 시 저장 프롬프트의 도구 목록만
+        현재 워커와 정합시키고, 사용자가 편집한 다른 섹션은 바이트 그대로 둔다.
+
+        - 헤딩이 없으면 입력 그대로 (사용자가 섹션을 지운 프롬프트 존중).
+        - 블록 범위 = 헤딩 줄부터 다음 `## ` 헤딩 직전(또는 끝)까지. 첫 헤딩만 교체.
+        - guides가 비면 블록을 제거한다 (`assemble`의 빈 섹션 생략 규칙과 동일).
+        - 결정적: 시간·랜덤 미사용.
+        """
+        start = _find_heading(prompt, _H_TOOLS)
+        if start is None:
+            return prompt
+        end = _next_heading_after(prompt, start + len(_H_TOOLS))
+        head = prompt[:start].rstrip()
+        tail = prompt[end:].lstrip() if end is not None else ""
+        parts = [p for p in (head, _tool_block(guides), tail) if p]
+        return "\n\n".join(parts).rstrip()
+
     # ── 환각 폐기 ───────────────────────────────────────────────────────
 
     @staticmethod
@@ -223,6 +246,25 @@ class PromptAssemblyPolicy:
 
 
 # ── 조립 헬퍼 (함수 길이 40줄 규칙 · if 중첩 2단 규칙) ───────────────────────
+
+
+def _find_heading(prompt: str, heading: str) -> int | None:
+    """줄 시작에 위치한 헤딩의 첫 오프셋. 없으면 None."""
+    pos = prompt.find(heading)
+    while pos != -1:
+        at_line_start = pos == 0 or prompt[pos - 1] == "\n"
+        line_end = prompt.find("\n", pos)
+        line = prompt[pos: line_end if line_end != -1 else len(prompt)]
+        if at_line_start and line.rstrip() == heading:
+            return pos
+        pos = prompt.find(heading, pos + 1)
+    return None
+
+
+def _next_heading_after(prompt: str, offset: int) -> int | None:
+    """offset 이후 줄 시작의 `## ` 헤딩 오프셋. 없으면 None(블록이 끝까지)."""
+    pos = prompt.find("\n## ", offset)
+    return None if pos == -1 else pos + 1
 
 
 def _text_block(header: str, body: str) -> str:

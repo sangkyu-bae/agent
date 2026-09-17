@@ -7,7 +7,7 @@ ES(BM25) 색인은 현재 검색 경로(벡터)에서 미사용 → 후속 도�
 """
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.application.repositories.wiki_repository import WikiArticleRepository as _Interface
@@ -77,6 +77,27 @@ def _to_entity(model: WikiArticleModel) -> WikiArticle:
         updated_at=model.updated_at,
         path=model.path,
     )
+
+
+def _toc_columns(excerpt_chars: int) -> list:
+    """프롬프트 목차용 경량 컬럼 목록 (wiki-guided-routing D1).
+
+    excerpt_chars > 0이면 본문 앞부분을 SQL SUBSTRING으로만 잘라 `excerpt`로 싣는다.
+    content 컬럼 자체는 SELECT하지 않는다 (경량 계약 유지).
+    """
+    columns = [
+        WikiArticleModel.id,
+        WikiArticleModel.title,
+        WikiArticleModel.status,
+        WikiArticleModel.source_type,
+        WikiArticleModel.path,
+        WikiArticleModel.updated_at,
+    ]
+    if excerpt_chars > 0:
+        columns.append(
+            func.substring(WikiArticleModel.content, 1, excerpt_chars).label("excerpt")
+        )
+    return columns
 
 
 class WikiArticleRepository(MySQLBaseRepository[WikiArticleModel], _Interface):
@@ -163,23 +184,21 @@ class WikiArticleRepository(MySQLBaseRepository[WikiArticleModel], _Interface):
         return await self._hydrate_searchable(ids, now, request_id)
 
     async def list_searchable_tree_items(
-        self, agent_id: str, now: datetime, request_id: str
+        self, agent_id: str, now: datetime, request_id: str,
+        excerpt_chars: int = 0,
     ) -> list[WikiTreeItem]:
         """프롬프트 목차용: 승인+미만료만, 갱신 내림차순, 본문 미조회.
 
         wiki-agentic-navigation D7 — WHERE 절은 entity.is_searchable(now)의
         SQL 미러. 의미 변경 시 양쪽 동기 수정
         (test_wiki_repository_toc가 쿼리 문자열로 고정).
+
+        Design Ref: wiki-guided-routing D1 — excerpt_chars > 0이면 본문 앞부분을
+        SQL SUBSTRING으로만 잘라 온다. content 컬럼 자체는 여전히 SELECT하지 않는다
+        (경량 계약 유지).
         """
         stmt = (
-            select(
-                WikiArticleModel.id,
-                WikiArticleModel.title,
-                WikiArticleModel.status,
-                WikiArticleModel.source_type,
-                WikiArticleModel.path,
-                WikiArticleModel.updated_at,
-            )
+            select(*_toc_columns(excerpt_chars))
             .where(
                 WikiArticleModel.agent_id == agent_id,
                 WikiArticleModel.status == WikiStatus.APPROVED.value,
@@ -195,6 +214,7 @@ class WikiArticleRepository(MySQLBaseRepository[WikiArticleModel], _Interface):
             WikiTreeItem(
                 id=r.id, title=r.title, status=r.status,
                 source_type=r.source_type, path=r.path, updated_at=r.updated_at,
+                excerpt=getattr(r, "excerpt", None),
             )
             for r in rows
         ]

@@ -13,6 +13,7 @@ from src.application.agent_builder.worker_skeleton_builder import (
     make_worker_id,
     normalize_tool_id,
 )
+from src.domain.agent_builder.rag_tool_config import MAX_LLM_NAME_LENGTH
 from src.domain.agent_builder.schemas import WorkerDefinition
 from src.domain.mcp_registry.schemas import MCPServerRegistration, MCPTransportType
 from src.domain.tool_catalog.entity import ToolCatalogEntry
@@ -256,3 +257,23 @@ async def test_build_builtin_workers_sort_order_continues_after_existing():
     workers = await builder.build_builtin_workers(existing, None, "req-1")
 
     assert workers[0].sort_order == 2
+
+
+def test_make_worker_id_is_clamped_to_llm_name_limit():
+    """worker_id는 AIMessage.name으로 OpenAI에 전송되므로 64자를 넘으면 400.
+
+    `mcp_{uuid}_` 접두부 41자 + `_worker` 7자가 고정이라 도구명이 17자만 넘어도
+    초과한다 (실사례: get_product_rates → 65자).
+    """
+    tool_id = f"mcp:{MCP_SERVER_ID}:get_product_rates"
+    worker_id = make_worker_id(tool_id)
+    assert len(worker_id) <= MAX_LLM_NAME_LENGTH
+    assert ":" not in worker_id
+    assert worker_id == make_worker_id(tool_id)
+
+
+def test_make_worker_id_short_ids_unchanged():
+    """상한 이하 id는 기존 저장값과 동일해야 한다 (기존 에이전트 호환)."""
+    assert make_worker_id(f"mcp:{MCP_SERVER_ID}:fetch") == (
+        f"mcp_{MCP_SERVER_ID}_fetch_worker"
+    )

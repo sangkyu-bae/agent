@@ -289,6 +289,82 @@ class ToolCallBudgetPolicy:
         return max_tool_calls
 
 
+class ToolErrorPolicy:
+    """react 워커 트레이스의 도구 오류 식별 — 결정적 신호만 담당 (wiki-guided-routing D4).
+
+    Design Ref: D4 — 도구 오류(ToolMessage)는 워커 내부 트레이스에만 남고 supervisor
+    state에는 LLM이 쓴 문장만 올라간다. 확실한 신호(오류 status·오류 접두어)는 여기서
+    결정적으로 뽑고, 그 후 판단(위키 재확인·되묻기)은 LLM이 한다.
+    LangChain 타입을 참조하지 않는다 — type/status/content 속성만 duck typing.
+    """
+
+    # langchain-mcp-adapters 오류 응답 형식(실측: 런 8ccc097f, 153bebce).
+    ERROR_PREFIXES: tuple[str, ...] = ("Error executing tool",)
+    MAX_SUMMARY_CHARS = 200
+
+    @classmethod
+    def summarize(cls, messages: list) -> str:
+        """첫 도구 오류의 요약(첫 줄, 상한 절단). 없으면 ''."""
+        for msg in messages or ():
+            if getattr(msg, "type", None) != "tool":
+                continue
+            content = getattr(msg, "content", "")
+            text = content if isinstance(content, str) else str(content)
+            if cls._is_error(getattr(msg, "status", None), text):
+                return text.splitlines()[0][: cls.MAX_SUMMARY_CHARS] if text else "error"
+        return ""
+
+    @classmethod
+    def _is_error(cls, status, text: str) -> bool:
+        if status == "error":
+            return True
+        return text.lstrip().startswith(cls.ERROR_PREFIXES)
+
+
+class EmptyResultPolicy:
+    """수집 산출의 '유효 데이터 부재' 판정 — 결정적 신호만 담당.
+
+    Design Ref: supervisor-early-finish-fix §3.2 (D-07).
+
+    ToolErrorPolicy와 같은 역할 분담: 확실한 신호는 여기서 결정적으로 뽑고,
+    '그래서 무엇을 할 것인가'는 supervisor LLM이 판단한다(그래프 계약 ③).
+    도구 성공(오류 아님) + 유효 데이터 없음을 오류와 구분해 식별한다.
+    LangChain 타입을 참조하지 않는다 — 문자열만 받는다.
+
+    판정 재현율 주의: 네비게이션이 긴 페이지는 본문 길이가 충분해 1차(구조적)로
+    잡히지 않고 2차(패턴)로만 잡힌다(실측: 트레이스 01a0a82b). 그래서 패턴은
+    코드 상수가 아니라 설정값으로 주입받는다.
+    """
+
+    MAX_SUMMARY_CHARS = 120
+    # 1차 구조적 신호 — 산출이 이보다 짧으면 수집 자체가 비었다고 본다.
+    MIN_BODY_CHARS = 200
+
+    _REASON_NO_BODY = "수집 산출이 비어 있음"
+    _REASON_NO_DATA = "수집 산출에 유효 데이터 영역이 없음"
+
+    @classmethod
+    def detect(cls, body, patterns) -> str:
+        """빈 결과면 사유 요약을, 아니면 ''을 돌려준다.
+
+        Args:
+            body: 워커 산출 본문. str이 아니면 판정을 생략한다(§6.1).
+            patterns: 빈 결과 보조 문구. None/빈 튜플이면 1차만 동작한다.
+
+        Returns:
+            사유 요약(MAX_SUMMARY_CHARS 이내). 정상이면 ''.
+            수집 원문을 담지 않는다 — 외부 콘텐츠의 지시문 승격 방지(§7).
+        """
+        if not isinstance(body, str):
+            return ""
+        if len(body.strip()) < cls.MIN_BODY_CHARS:
+            return cls._REASON_NO_BODY[: cls.MAX_SUMMARY_CHARS]
+        for pattern in patterns or ():
+            if pattern and pattern in body:
+                return cls._REASON_NO_DATA[: cls.MAX_SUMMARY_CHARS]
+        return ""
+
+
 class UpdateAgentPolicy:
     @classmethod
     def validate_update(cls, status: str, system_prompt: str | None) -> None:

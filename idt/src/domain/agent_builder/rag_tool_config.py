@@ -1,4 +1,5 @@
 """RagToolConfig: RAG 도구 커스텀 설정 Value Object + 검증 정책."""
+import hashlib
 import re
 from dataclasses import dataclass, field
 from typing import Literal
@@ -7,6 +8,27 @@ SearchMode = Literal["hybrid", "vector_only", "bm25_only"]
 
 _VALID_SEARCH_MODES = {"hybrid", "vector_only", "bm25_only"}
 _TOOL_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
+
+# OpenAI 가 messages[].name / tools[].function.name 에 두는 상한. worker_id 는
+# 두 자리 모두에 노출되므로 이 값을 넘기면 LLM 호출 단계에서 400 이 난다.
+MAX_LLM_NAME_LENGTH = 64
+# 초과분을 잘라낸 뒤 붙이는 해시 접미사 길이("_" 제외).
+_LLM_NAME_HASH_LEN = 4
+
+
+def clamp_llm_name(name: str) -> str:
+    """LLM 노출 이름을 MAX_LLM_NAME_LENGTH 이하로 결정적으로 줄인다.
+
+    fix-worker-id-name-length: `mcp_{uuid}_` 접두부 41자 + `_worker` 7자가
+    고정이라 MCP 도구명이 17자만 넘어도 worker_id 가 상한을 넘는다. 단순 절단은
+    접두부가 같은 도구끼리 충돌하므로 원본 전체의 해시를 접미사로 붙여 갈라낸다.
+    상한 이하 이름은 그대로 돌려줘 기존 저장값과의 호환을 지킨다.
+    """
+    if len(name) <= MAX_LLM_NAME_LENGTH:
+        return name
+    digest = hashlib.sha1(name.encode("utf-8")).hexdigest()[:_LLM_NAME_HASH_LEN]
+    head = name[: MAX_LLM_NAME_LENGTH - _LLM_NAME_HASH_LEN - 1]
+    return f"{head}_{digest}"
 
 
 def sanitize_tool_name(name: str, fallback: str = "unnamed_tool") -> str:

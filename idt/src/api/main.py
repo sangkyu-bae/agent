@@ -2232,6 +2232,19 @@ def _analysis_snapshot_excluded_tools() -> frozenset[str]:
     )
 
 
+def _empty_result_patterns() -> tuple[str, ...]:
+    """supervisor-early-finish-fix D-07: 빈 결과 판정 보조 문구 (콤마 구분 설정).
+
+    application/domain은 config를 직접 import하지 않는다 — 여기서 정규화해
+    WorkflowCompiler 생성자로 주입한다 (agent_timezone과 동일 규약).
+    """
+    return tuple(
+        p.strip()
+        for p in settings.empty_result_patterns.split(",")
+        if p.strip()
+    )
+
+
 # retrieval-observability §4.5: RunTracker lazy singleton.
 # agent_run(create_agent_builder_factories)과 general_chat factory가 동일 인스턴스를
 # 공유한다 — 상태 없는 파사드(session_factory만 보유)라 공유 안전.
@@ -2679,6 +2692,7 @@ def create_agent_builder_factories():
         folder_repo_builder=_wiki_folder_repo_builder,
         folder_enabled=settings.wiki_folder_summaries_enabled,
         folder_threshold=settings.wiki_folder_mode_threshold,
+        excerpt_chars=settings.wiki_toc_excerpt_chars,
     )
 
     # MCP 워커(tool_id="mcp_{uuid}") 실행 의존.
@@ -2820,6 +2834,8 @@ def create_agent_builder_factories():
         middleware_provider=get_middleware_provider(),
         # ★ runtime-datetime-context D3: [현재 날짜] 블록 기준 타임존
         agent_timezone=settings.agent_timezone,
+        # ★ supervisor-early-finish-fix D-07: 빈 결과 판정 보조 문구
+        empty_result_patterns=_empty_result_patterns(),
     )
 
     # DB-001 §10.2: session 은 Depends(get_session) 으로 주입.

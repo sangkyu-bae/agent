@@ -215,6 +215,62 @@ class TestRenderWikiTocBlockLimits:
         assert "생략" not in block
 
 
+class TestRenderWikiTocBlockExcerpt:
+    """wiki-guided-routing D1/D2: 목차 줄 발췌 + 지침 프레이밍."""
+
+    def _item_with(self, excerpt):
+        return WikiTreeItem(
+            id="w1", title="작업요청시 경로참조", status="approved",
+            source_type="human", path="경로", updated_at=_NOW, excerpt=excerpt,
+        )
+
+    def test_excerpt_appended_to_line(self):
+        block = render_wiki_toc_block(
+            [self._item_with("금리 정보를 원할시 https://www.fsb.or.kr/ratedepo_0100.act")],
+            max_items=50, max_bytes=4000,
+        )
+        line = next(l for l in block.splitlines() if l.startswith("- (id: w1)"))
+        assert line.endswith("— 금리 정보를 원할시 https://www.fsb.or.kr/ratedepo_0100.act")
+        assert "갱신 2026-07-23" in line
+
+    def test_excerpt_newlines_collapsed_to_single_space(self):
+        block = render_wiki_toc_block(
+            [self._item_with("첫 줄\n\n둘째   줄\t셋째 ")], max_items=50, max_bytes=4000,
+        )
+        assert "— 첫 줄 둘째 줄 셋째\n" in block
+
+    def test_none_or_blank_excerpt_is_byte_identical_to_legacy(self):
+        legacy = render_wiki_toc_block([_toc_item()], max_items=50, max_bytes=4000)
+        with_none = render_wiki_toc_block(
+            [WikiTreeItem(id="w1", title="한도 산정 기준", status="approved",
+                          source_type="human", path="여신/한도", updated_at=_NOW,
+                          excerpt=None)],
+            max_items=50, max_bytes=4000,
+        )
+        with_blank = render_wiki_toc_block(
+            [WikiTreeItem(id="w1", title="한도 산정 기준", status="approved",
+                          source_type="human", path="여신/한도", updated_at=_NOW,
+                          excerpt="  \n ")],
+            max_items=50, max_bytes=4000,
+        )
+        assert legacy == with_none == with_blank
+
+    def test_excerpt_counts_toward_byte_budget(self):
+        items = [
+            WikiTreeItem(id=f"w{i}", title=f"문서{i}", status="approved",
+                         source_type="human", path=None, updated_at=_NOW,
+                         excerpt="가" * 120)
+            for i in range(20)
+        ]
+        small = render_wiki_toc_block(items, max_items=50, max_bytes=800)
+        assert "(id: w0)" in small and "(id: w19)" not in small
+        assert "생략" in small
+
+    def test_header_frames_wiki_as_instruction_source(self):
+        block = render_wiki_toc_block([_toc_item()], max_items=50, max_bytes=4000)
+        assert "작업 절차" in block and "URL" in block
+
+
 # ── runtime-datetime-context D1: render_datetime_block ──────────────
 
 

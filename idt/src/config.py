@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     # wiki-agentic-navigation D8: 프롬프트 목차 상한 (초과 시 최신순 절단)
     wiki_toc_max_items: int = 50
     wiki_toc_max_bytes: int = 4000
+    # wiki-guided-routing D1: 목차 줄에 붙이는 본문 발췌 글자 수 (0 = 발췌 없음).
+    # 소비 지점: src/application/wiki/toc_provider.py (저장소 SUBSTRING 인자로 전달)
+    #            → src/application/agent_run/prompt_rendering.py:_toc_line (표시)
+    wiki_toc_excerpt_chars: int = 120
     # wiki-folder-summaries D5: 폴더 요약 계층 (기본 off — V053 배포 선행 필요)
     wiki_folder_summaries_enabled: bool = False
     wiki_folder_mode_threshold: int = 30
@@ -94,6 +98,19 @@ class Settings(BaseSettings):
     #   → src/application/agent_run/prompt_rendering.py:render_datetime_block(tz)
     # application 레이어는 이 설정을 직접 import하지 않는다 (kwarg 주입만).
     agent_timezone: str = "Asia/Seoul"
+
+    # Supervisor Early Finish (supervisor-early-finish-fix Design §3.3, D-07)
+    # 수집 워커 산출의 '빈 결과' 판정 보조 문구 (콤마 구분).
+    # 사이트·언어별 표현은 데이터로 관리한다 — 코어에 하드코딩하지 않는다.
+    # 소비 지점: src/api/main.py 가 tuple로 정규화해 WorkflowCompiler 생성자에
+    #   empty_result_patterns= 으로 주입 → EmptyResultPolicy.detect(patterns=...)
+    # application/domain 레이어는 이 설정을 직접 import하지 않는다 (kwarg 주입만).
+    # 과탐 주의: 짧은 상위 문자열("데이터가 없습니다")은 무관한 문맥까지 잡으므로
+    # 넣지 않는다. 필요한 표현은 배포 없이 환경변수로 추가한다.
+    empty_result_patterns: str = (
+        "등록된 데이터가 없습니다,검색 결과가 없습니다,"
+        "조회된 데이터가 없습니다,조회 결과가 없습니다"
+    )
 
     # Analysis
     analysis_max_retries: int = 3

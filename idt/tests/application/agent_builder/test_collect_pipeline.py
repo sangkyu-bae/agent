@@ -537,3 +537,29 @@ class TestCollectFunctionLength:
         ]
 
         assert over == [], f"기존 모듈 위반: {over}"
+
+
+# ── wiki-guided-routing D4: collect 노드 last_worker_error ─────────────────
+
+
+class TestCollectLastWorkerError:
+    @pytest.mark.asyncio
+    async def test_tool_failure_sets_last_worker_error(self):
+        tool = FakeTool(raises=RuntimeError("down"))
+        llm = FakeLLM(structured_outputs=[_args_out({"url": "https://a.kr/x"})])
+        result = await _make_node(tool, llm)(_state())
+        assert result["last_worker_error"].startswith("수집 실패")
+
+    @pytest.mark.asyncio
+    async def test_blocked_argument_sets_last_worker_error(self):
+        tool = FakeTool()
+        llm = FakeLLM(structured_outputs=[_args_out({"url": "https://example.com/x"})])
+        result = await _make_node(tool, llm)(_state())
+        assert result["last_worker_error"] != ""
+
+    @pytest.mark.asyncio
+    async def test_success_sets_empty_error(self):
+        tool = FakeTool()
+        llm = FakeLLM(structured_outputs=[_args_out({"url": "https://a.kr/x"})])
+        result = await _make_node(tool, llm)(_state())
+        assert result["last_worker_error"] == ""

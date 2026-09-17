@@ -29,9 +29,13 @@ from src.application.agent_builder.search_pipeline import (
 )
 from src.application.agent_builder.supervisor_state import SupervisorState
 from src.application.agent_run.step_tracking import STEP_OUTPUT_SUMMARY_KEY
+from src.domain.agent_builder.rag_tool_config import clamp_llm_name
 from src.domain.agent_builder.policies import CollectPipelinePolicy
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.domain.mcp.tool_argument_policy import ToolArgumentPolicy
+
+# wiki-guided-routing D4: state.last_worker_error 요약 상한 (ToolErrorPolicy와 동일).
+_WORKER_ERROR_MAX_CHARS = 200
 
 # 대화 맥락 직렬화 한도 — search_pipeline과 같은 기준(D5).
 _CONTEXT_MAX_MESSAGES = 6
@@ -269,16 +273,19 @@ async def _maybe_compress(
 class _BodyOutcome:
     """분기 판정 결과 — 본문과 관측 필드를 함께 나른다."""
 
-    __slots__ = ("body", "invoked", "compressed", "blocked_value", "llm_chars")
+    __slots__ = ("body", "invoked", "compressed", "blocked_value", "llm_chars", "failed")
 
     def __init__(
         self, body: str, invoked: bool, compressed: bool,
         blocked_value: str | None = None, llm_chars: int = 0,
+        failed: bool = False,
     ) -> None:
         self.body = body
         self.invoked = invoked
         self.compressed = compressed
         self.blocked_value = blocked_value
+        # wiki-guided-routing D4: 도구 호출이 예외로 끝났는가 (state.last_worker_error 신호)
+        self.failed = failed
         self.llm_chars = llm_chars
 
 
@@ -309,12 +316,23 @@ async def _resolve_body(
 
     ok, text = await _invoke_once(tool, plan.arguments, logger)
     if not ok:
-        return _BodyOutcome(text, True, False)
+        return _BodyOutcome(text, True, False, failed=True)
 
     text, chars, compressed = await _maybe_compress(
         llm, policy, question, text, logger, user_context=context_block,
     )
     return _BodyOutcome(text, True, compressed, llm_chars=chars)
+
+
+def _worker_error_of(outcome: _BodyOutcome) -> str:
+    """도구 실패·인자 차단 → state.last_worker_error 신호 (wiki-guided-routing D4).
+
+    결정적 신호만 올린다(성공·근거 부족은 ""). 그 다음 판단(위키 재확인·되묻기)은
+    supervisor LLM이 한다. Plan SC: FR-05.
+    """
+    if outcome.failed or outcome.blocked_value is not None:
+        return outcome.body[:_WORKER_ERROR_MAX_CHARS]
+    return ""
 
 
 # ── 노드 팩토리 ──────────────────────────────────────────────────
@@ -369,7 +387,7 @@ def create_collect_node(
         # FR-08: 어떤 분기에서도 근거 메시지 규약을 따른다 — 하류
         # analysis / final_answer / quality_gate가 수정 없이 소비한다.
         result_msg = AIMessage(
-            content=format_search_result(worker_id, outcome.body), name=worker_id,
+            content=format_search_result(worker_id, outcome.body), name=clamp_llm_name(worker_id),
         )
         summary = (
             f"grounded={plan.ok} blocked={outcome.blocked_value is not None} "
@@ -382,6 +400,7 @@ def create_collect_node(
             "last_worker_id": worker_id,
             "token_usage": state["token_usage"] + (len(outcome.body) + llm_chars) // 4,
             STEP_OUTPUT_SUMMARY_KEY: summary,
+            "last_worker_error": _worker_error_of(outcome),
         }
 
     return collect_node

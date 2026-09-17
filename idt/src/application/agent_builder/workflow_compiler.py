@@ -15,6 +15,7 @@ from src.application.agent_builder.search_pipeline import (
 )
 from src.application.deep_search.workflow import create_deep_search_node
 from src.domain.deep_search.policies import DeepSearchBudgetPolicy
+from src.domain.agent_builder.rag_tool_config import clamp_llm_name
 from src.application.agent_builder.supervisor_hooks import (
     AttachmentRoutingHooks,
     DefaultHooks,
@@ -70,11 +71,13 @@ from src.domain.agent_builder.interfaces import AgentDefinitionRepositoryInterfa
 from src.domain.agent_builder.policies import (
     CircularReferencePolicy,
     CollectPipelinePolicy,
+    EmptyResultPolicy,
     IterationLimitPolicy,
     NestingDepthPolicy,
     QualityGatePolicy,
     SearchPipelinePolicy,
     ToolCallBudgetPolicy,
+    ToolErrorPolicy,
 )
 from src.domain.agent_builder.schemas import SupervisorConfig, WorkerDefinition, WorkflowDefinition
 from src.domain.agent_builder.tool_registry import get_tool_meta
@@ -96,17 +99,26 @@ if TYPE_CHECKING:
 # search_pipeline 모듈로 이동(메시지 규약 단일 출처). 본 모듈은 alias import로 사용.
 
 # wiki-agentic-navigation D1: wiki_read 워커 react agent에 목차와 함께 주입되는 지시.
+# wiki-guided-routing D2: 지침(URL·절차)은 그대로 옮겨 적게 한다 — 수퍼바이저가
+# 다음 워커의 task에 그 값을 실을 수 있어야 한다.
+_WIKI_INSTRUCTION_VERBATIM = (
+    "본문에 URL·절차 같은 작업 지침이 있으면 그 값을 그대로 옮겨 적으세요"
+    "(요약·변형 금지). "
+)
+
 _WIKI_WORKER_INSTRUCTION = (
     "위 목차에서 질문과 관련된 문서 id를 골라 wiki_read 도구로 본문을 열람하고, "
     "열람한 본문에 근거해 답하세요. "
-    "관련 문서가 없으면 '위키에서 확인되지 않습니다'라고 답하세요.\n"
+    + _WIKI_INSTRUCTION_VERBATIM
+    + "관련 문서가 없으면 '위키에서 확인되지 않습니다'라고 답하세요.\n"
 )
 
 # wiki-folder-summaries D6: 폴더 모드 워커 지시 — 지도→wiki_list→wiki_read 체인.
 _WIKI_FOLDER_WORKER_INSTRUCTION = (
     "위 지도에서 질문과 관련된 폴더를 wiki_list 도구로 열어 문서 id를 찾고, "
     "wiki_read 도구로 본문을 열람한 뒤 답하세요. "
-    "목록에 없는 내용은 추측하지 말고, 관련 문서가 없으면 "
+    + _WIKI_INSTRUCTION_VERBATIM
+    + "목록에 없는 내용은 추측하지 말고, 관련 문서가 없으면 "
     "'위키에서 확인되지 않습니다'라고 답하세요.\n"
 )
 
@@ -124,6 +136,43 @@ _FALLBACK_WORKER_INSTRUCTION = (
     "위 대화 맥락과 이전 단계 결과를 참고하여 "
     "당신의 역할에 해당하는 작업을 수행하세요."
 )
+
+
+def _wiki_worker_id(workers: list[WorkerDefinition]) -> str:
+    """wiki_read 워커의 worker_id. 없으면 ''. (wiki-guided-routing D3/D4)"""
+    for w in workers:
+        if w.worker_type == "tool" and w.tool_id == "wiki_read":
+            return w.worker_id
+    return ""
+
+
+def _with_empty_signal(fn, patterns):
+    """수집 워커 노드에 '빈 결과' 신호 주입 데코레이터.
+
+    Design Ref: supervisor-early-finish-fix §4.2 (D-06). Plan SC: FR-04.
+
+    react / collect / search / deep-search 4개 팩토리를 노드 등록 루프 한 지점에서
+    덮는다. _wrap_step은 tracker·callback·run_id가 하나라도 없으면 원본 함수를
+    그대로 반환하므로(추적 미배선 경로) 신호 배선에 쓸 수 없다 — 그래서 별도.
+
+    신호는 state 채널로만 올린다. 메시지를 추가하면 워커 산출물=AIMessage 1건
+    규약이 깨져 고아 tool 메시지 400을 부른다 (그래프 계약 ①).
+    """
+    async def wrapped(state):
+        out = await fn(state)
+        if not isinstance(out, dict):
+            return out
+        # 오류가 이미 잡혔으면 빈 결과 판정을 건너뛴다 — 블록 2개 동시 렌더 방지(§6.1).
+        if out.get("last_worker_error"):
+            out["last_worker_empty"] = ""
+            return out
+        messages = out.get("messages") or []
+        body = getattr(messages[-1], "content", None) if messages else None
+        # 정상일 때도 항상 덮어쓴다 — 이전 턴 신호가 잔류하지 않도록.
+        out["last_worker_empty"] = EmptyResultPolicy.detect(body, patterns)
+        return out
+
+    return wrapped
 
 
 def _blocked_step_summary(messages: list) -> str:
@@ -274,6 +323,10 @@ class WorkflowCompiler:
         tool_catalog_repository=None,
         *,
         agent_timezone: str | None = None,
+        # supervisor-early-finish-fix D-07: 빈 결과 판정 보조 문구.
+        # config를 직접 import하지 않고 main.py가 정규화해 주입한다
+        # (agent_timezone과 동일 규약). None이면 구조적 신호만 동작한다.
+        empty_result_patterns: tuple[str, ...] | None = None,
     ) -> None:
         self._tool_factory = tool_factory
         self._llm_factory = llm_factory
@@ -317,6 +370,8 @@ class WorkflowCompiler:
         # runtime-datetime-context D3: [현재 날짜] 블록 기준 타임존 (main.py가
         # settings.agent_timezone 주입). None이면 블록 생략 — 기존 동작·테스트 무회귀.
         self._agent_timezone = agent_timezone
+        # supervisor-early-finish-fix D-07: 미주입이면 빈 튜플 — 구조적 신호만 동작.
+        self._empty_result_patterns = tuple(empty_result_patterns or ())
 
     async def compile(
         self,
@@ -407,6 +462,13 @@ class WorkflowCompiler:
             # collect 한정 — search는 REGISTRY 분류라 관리자 지정 없이 동작이
             # 바뀌므로 제외한다(module-3 개정, FR-14 취지 보존).
             collect_worker_ids: list[str] = []
+            # supervisor-early-finish-fix D-06 / 열린질문 Q-01 확정:
+            # '빈 결과' 판정 대상 = 외부에서 자료를 수집하는 워커만.
+            # 제외 — sub_agent·생성 노드(문서/발표/엑셀)·analysis: 빈 산출이
+            #   정상일 수 있어 오탐을 만든다.
+            # 제외 — wiki 워커: 지식 열람이라 본문이 짧은 것이 정상이고(구조적
+            #   신호 오탐), 실패 처리는 이미 [직전 수집 실패] 경로가 담당한다.
+            empty_signal_worker_ids: set[str] = set()
             # Analysis Gap-01 (FR-12): 워커별로 실제 적용된 도구 호출 상한.
             # _wrap_worker가 '상한 도달' 판정에 쓴다. wiki 분기(D-06)는 상한이
             # 없으므로 담지 않는다 — None이면 횟수만 기록된다.
@@ -584,6 +646,8 @@ class WorkflowCompiler:
                         )
                     )
                     function_node_ids.add(worker_def.worker_id)
+                    # D-06: search/collect는 수집이 목적 — 판정 대상.
+                    empty_signal_worker_ids.add(worker_def.worker_id)
                     if category == "collect":
                         collect_worker_ids.append(worker_def.worker_id)
                 else:
@@ -612,7 +676,8 @@ class WorkflowCompiler:
                                 )
                         worker_agent = create_agent(
                             model=llm, tools=wiki_tools,
-                            name=worker_def.worker_id,
+                            # name → 모델 산출 AIMessage.name (OpenAI 64자 상한)
+                            name=clamp_llm_name(worker_def.worker_id),
                             # §D5 + worker-context-injection §4.1:
                             # 날짜 → 워커 컨텍스트 → 목차 → 기존 지시
                             system_prompt=(
@@ -646,11 +711,17 @@ class WorkflowCompiler:
                                 budget[0].run_limit
                             )
                         worker_agent = create_agent(
-                            model=llm, tools=worker_tools, name=worker_def.worker_id,
+                            model=llm, tools=worker_tools,
+                            # name → 모델 산출 AIMessage.name (OpenAI 64자 상한)
+                            name=clamp_llm_name(worker_def.worker_id),
                             middleware=_instantiate(middleware_plan) + budget,
                             **worker_kwargs,
                         )
                     worker_map[worker_def.worker_id] = worker_agent
+                    # D-06: 미분류 react 워커는 외부 도구로 수집한다 — 판정 대상.
+                    # wiki 워커는 지식 열람이라 제외 (Q-01).
+                    if worker_def.tool_id not in ("wiki_read", "wiki_list"):
+                        empty_signal_worker_ids.add(worker_def.worker_id)
 
             # final-answer-node D2: answer_agent 가상 워커 방식 제거 —
             # 최종 답변은 supervisor의 선택이 아닌 라우팅(route_to_worker_or_final)이 보장.
@@ -698,6 +769,16 @@ class WorkflowCompiler:
                 # doc-generator D6: 문서 생성 라우팅 판단 기준 (강제 아님)
                 docgen_guidance_block=self._render_docgen_guidance_block(
                     workflow.workers, catalog_meta
+                ),
+                # wiki-guided-routing D3/D4: 위키 지침 우선 기준(조건부) + 실패 폴백용
+                # wiki 워커 id. 목차가 없거나 wiki 워커가 없으면 둘 다 빈 문자열.
+                wiki_guidance_block=self._render_wiki_guidance_block(
+                    workers_for_supervisor, wiki_toc_block
+                ),
+                # G-06: 빌트인 wiki_read는 문서 0건 에이전트에도 있다 — 목차가 없으면
+                # 실패 블록의 "위키 확인" 안내도 꺼야 하므로 id를 넘기지 않는다.
+                wiki_worker_id=(
+                    _wiki_worker_id(workers_for_supervisor) if wiki_toc_block else ""
                 ),
             )
             quality_gate_fn = create_quality_gate_node(
@@ -754,24 +835,23 @@ class WorkflowCompiler:
 
             for worker_id, worker_agent in worker_map.items():
                 if worker_id in function_node_ids:
-                    graph.add_node(
-                        worker_id,
-                        _wrap_step(worker_id, NodeType.WORKER, worker_agent),
-                    )
+                    node_fn = worker_agent
                 else:
-                    graph.add_node(
-                        worker_id,
-                        _wrap_step(
-                            worker_id,
-                            NodeType.WORKER,
-                            # Analysis Gap-01 (FR-12): 이 워커에 적용된 상한을
-                            # 함께 넘겨 '상한 도달' 여부까지 이력에 남긴다.
-                            self._wrap_worker(
-                                worker_id, worker_agent,
-                                tool_call_limit=worker_run_limits.get(worker_id),
-                            ),
-                        ),
+                    # Analysis Gap-01 (FR-12): 이 워커에 적용된 상한을
+                    # 함께 넘겨 '상한 도달' 여부까지 이력에 남긴다.
+                    node_fn = self._wrap_worker(
+                        worker_id, worker_agent,
+                        tool_call_limit=worker_run_limits.get(worker_id),
                     )
+                # supervisor-early-finish-fix D-06: 수집 워커 4개 팩토리를 여기
+                # 한 지점에서 덮는다. _wrap_step 안쪽에 둬야 추적 미배선 경로
+                # (tracker None → 원본 반환)에서도 신호가 살아남는다.
+                if worker_id in empty_signal_worker_ids:
+                    node_fn = _with_empty_signal(node_fn, self._empty_result_patterns)
+                graph.add_node(
+                    worker_id,
+                    _wrap_step(worker_id, NodeType.WORKER, node_fn),
+                )
 
             # final-answer-node D4: 최상위(depth=0) 그래프에만 최종 답변 노드 등록.
             # sub_agent는 원시 결과를 부모에게 그대로 반환(토큰 이중 정제 방지).
@@ -824,6 +904,10 @@ class WorkflowCompiler:
             if depth == 0:
                 # FINISH 시 워커 실행 이력이 있으면 final_answer 필수 경유 (D1).
                 route_map["final_answer"] = "final_answer"
+                # supervisor-early-finish-fix D-05: 되물음 1회 경로(자기순환).
+                # 상한은 finish_challenge_pending 수명주기가 보장한다 — supervisor가
+                # 재진입 시 플래그를 소진하므로 두 번째 FINISH는 통과한다.
+                route_map["supervisor"] = "supervisor"
                 graph.add_conditional_edges(
                     "supervisor", route_to_worker_or_final, route_map,
                 )
@@ -1047,7 +1131,7 @@ class WorkflowCompiler:
         종료 직전 이 노드를 구조적으로 경유시킨다 (depth=0 한정, END 직행).
 
         FIX-ANSWER-NODE-MULTITURN-CONTEXT 계승:
-        워커 산출물 AIMessage(name=worker_id)는 system prompt의 컨텍스트 블록과
+        워커 산출물 AIMessage(name=<worker_id>)는 system prompt의 컨텍스트 블록과
         중복되므로 messages 본체에서 제외하고, 나머지 대화 맥락은 모두 LLM에 전달.
 
         charts 비파괴: state["charts"]는 읽기 전용 메타 참조만 하고 반환 dict에
@@ -1260,7 +1344,7 @@ class WorkflowCompiler:
             from langchain_core.messages import AIMessage
 
             return {
-                "messages": [AIMessage(content=content, name=worker_id)],
+                "messages": [AIMessage(content=content, name=clamp_llm_name(worker_id))],
                 "last_worker_id": worker_id,
                 "token_usage": state["token_usage"] + len(content) // 4,
             }
@@ -1349,7 +1433,7 @@ class WorkflowCompiler:
             from langchain_core.messages import AIMessage
 
             return {
-                "messages": [AIMessage(content=content, name=worker_id)],
+                "messages": [AIMessage(content=content, name=clamp_llm_name(worker_id))],
                 "last_worker_id": worker_id,
                 "token_usage": state["token_usage"] + len(content) // 4,
             }
@@ -1461,7 +1545,7 @@ class WorkflowCompiler:
             from langchain_core.messages import AIMessage
 
             return {
-                "messages": [AIMessage(content=content, name=worker_id)],
+                "messages": [AIMessage(content=content, name=clamp_llm_name(worker_id))],
                 "last_worker_id": worker_id,
                 "token_usage": state["token_usage"] + len(content) // 4,
             }
@@ -1570,7 +1654,7 @@ class WorkflowCompiler:
             from langchain_core.messages import AIMessage
 
             return {
-                "messages": [AIMessage(content=content, name=worker_id)],
+                "messages": [AIMessage(content=content, name=clamp_llm_name(worker_id))],
                 "last_worker_id": worker_id,
                 "token_usage": state["token_usage"] + len(content) // 4,
             }
@@ -1637,6 +1721,40 @@ class WorkflowCompiler:
 
         return presentation_generator_node
 
+    def _render_wiki_guidance_block(
+        self, workers: list[WorkerDefinition], wiki_toc_block: str
+    ) -> str:
+        """위키 지침 우선 판단 기준 블록 (wiki-guided-routing D3 — 강제 아님).
+
+        주입 조건: 목차 블록이 렌더됐고, wiki_read 워커가 있으며, 그 외 tool 워커가
+        1개 이상. 위키 미등록 에이전트의 결정 프롬프트는 바이트 동일하게 유지된다.
+        목록 프레이밍 금지([[supervisor-graph-contracts]] §2): "관련 항목이 보이면"
+        조건부로만 적고, 없으면 적용하지 않는다고 명시한다.
+        Plan SC: FR-04.
+        """
+        wiki_worker = _wiki_worker_id(workers)
+        if not wiki_toc_block or not wiki_worker:
+            return ""
+        others = [
+            w for w in workers
+            if w.worker_type == "tool" and w.worker_id != wiki_worker
+        ]
+        if not others:
+            return ""
+        return "\n".join([
+            "\n\n[위키 지침 처리 기준]",
+            (
+                "- 시스템 프롬프트의 [에이전트 지식 위키 목차]에 이번 요청과 관련된 "
+                "항목(주제·출처·절차)이 보이면, 외부에서 자료를 수집하는 워커를 부르기 "
+                f"전에 먼저 {wiki_worker}로 그 문서를 열람하세요."
+            ),
+            (
+                "- 열람한 지침에 URL·경로·절차가 적혀 있으면, 다음 워커의 task에 그 값을 "
+                "그대로 적으세요. 지침이 있는데 다른 URL을 추측해 쓰지 마세요."
+            ),
+            "- 목차에 관련 항목이 없으면 이 기준은 적용하지 않습니다.",
+        ])
+
     def _render_docgen_guidance_block(
         self, workers: list[WorkerDefinition], catalog_meta: dict | None = None
     ) -> str:
@@ -1691,7 +1809,7 @@ class WorkflowCompiler:
     def _split_fill_context(messages: list) -> tuple[str, str]:
         """누적 state.messages → (근거 블록, 대화 블록) 분리 (GB2).
 
-        근거 = 상류 워커 산출물(AIMessage name=worker_id 규약), 대화 = 나머지.
+        근거 = 상류 워커 산출물(AIMessage name=<worker_id> 규약), 대화 = 나머지.
         """
         worker_outputs = [m for m in messages if _is_worker_output(m)]
         conversation = [m for m in messages if not _is_worker_output(m)]
@@ -1731,7 +1849,7 @@ class WorkflowCompiler:
 
         - attachments에 엑셀이 있고 getter가 주입돼 있으면 ExcelAnalysisWorkflow 래핑 호출.
         - 그 외에는 직전 검색결과(있으면)/전체 대화 문맥(없으면)을 질문 기준으로 LLM 분석.
-        분석 결과만 AIMessage(name=worker_id)로 반환하고 supervisor로 복귀(quality_gate 경유).
+        분석 결과만 AIMessage(name=<worker_id>)로 반환하고 supervisor로 복귀(quality_gate 경유).
         """
         logger = self._logger
         get_excel_wf = self._excel_analysis_workflow_getter
@@ -1773,7 +1891,7 @@ class WorkflowCompiler:
 
             token_delta = len(analysis_text) // 4
             result = {
-                "messages": [AIMessage(content=analysis_text, name=worker_id)],
+                "messages": [AIMessage(content=analysis_text, name=clamp_llm_name(worker_id))],
                 "last_worker_id": worker_id,
                 "token_usage": state["token_usage"] + token_delta,
             }
@@ -1899,7 +2017,7 @@ class WorkflowCompiler:
                     last.content if hasattr(last, "content") else str(last)
                 )
 
-            answer_msg = AIMessage(content=answer_content, name=worker_id)
+            answer_msg = AIMessage(content=answer_content, name=clamp_llm_name(worker_id))
             token_delta = (
                 len(answer_content) // 4 if isinstance(answer_content, str) else 0
             )
@@ -1913,6 +2031,10 @@ class WorkflowCompiler:
             # react agent 내부 트레이스에만 남아 실행 이력에서 보이지 않는다.
             # 내부 트레이스가 state로 유출되기 전에 여기서 요약만 건져 올린다.
             blocked_summary = _blocked_step_summary(result_messages)
+            # Design Ref: wiki-guided-routing D4 — 도구 오류도 트레이스에만 남는다.
+            # 결정적 신호(오류 status·접두어)만 state로 올리고 판단은 supervisor LLM에.
+            # Plan SC: FR-05
+            out["last_worker_error"] = ToolErrorPolicy.summarize(result_messages)
             # Design Ref: Analysis Gap-01 (FR-12) — 상한 도달은 langchain
             # 내부에서 처리돼 이력에 남지 않는다. 횟수를 함께 실어 이번
             # 사이클의 지표(호출 몇 회로 줄었는가)를 측정 가능하게 한다.
@@ -1968,7 +2090,7 @@ class WorkflowCompiler:
                 answer_content = last.content if hasattr(last, "content") else str(last)
 
             from langchain_core.messages import AIMessage
-            answer_msg = AIMessage(content=answer_content, name=worker_id)
+            answer_msg = AIMessage(content=answer_content, name=clamp_llm_name(worker_id))
             sub_token_usage = result.get("token_usage", 0)
 
             return {

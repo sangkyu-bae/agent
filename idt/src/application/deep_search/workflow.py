@@ -28,6 +28,7 @@ from src.application.deep_search.nodes import (
     safe_search,
 )
 from src.application.deep_search.rendering import SUMMARY_MAX_CHARS, render_summary
+from src.domain.agent_builder.rag_tool_config import clamp_llm_name
 from src.domain.deep_search.policies import DeepSearchBudgetPolicy
 from src.domain.deep_search.schemas import DeepSearchState, StopReason
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
@@ -179,7 +180,7 @@ def create_deep_search_node(
             body, summary = await _legacy_fallback(deps, question)
 
         message = AIMessage(
-            content=format_search_result(worker_id, body), name=worker_id,
+            content=format_search_result(worker_id, body), name=clamp_llm_name(worker_id),
         )
         return {
             "messages": [message],

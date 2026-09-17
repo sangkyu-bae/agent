@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 
 from src.application.agent_builder.supervisor_state import SupervisorState
 from src.application.agent_run.step_tracking import STEP_OUTPUT_SUMMARY_KEY
+from src.domain.agent_builder.rag_tool_config import clamp_llm_name
 from src.domain.agent_builder.policies import SearchPipelinePolicy
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 
@@ -44,7 +45,7 @@ def format_search_result(worker_id: str, body: str) -> str:
 def is_search_result(msg) -> bool:
     """search 워커가 추가한 검색결과 AIMessage 식별.
 
-    search 노드는 AIMessage(name=worker_id, content="[... 검색결과]\\n...") 형태로 추가.
+    search 노드는 AIMessage(name=<worker_id>, content="[... 검색결과]\\n...") 형태로 추가.
     final_answer_node / analysis_node가 컨텍스트 블록을 분류할 때 공용 사용.
     """
     if isinstance(msg, dict):
@@ -57,7 +58,7 @@ def is_search_result(msg) -> bool:
 def is_worker_output(msg) -> bool:
     """워커 노드가 생성한 AIMessage 식별.
 
-    search/analysis/sub_agent 노드는 모두 AIMessage(name=worker_id) 규약을 따른다.
+    search/analysis/sub_agent 노드는 모두 AIMessage(name=<worker_id>) 규약을 따른다.
     """
     if isinstance(msg, dict):
         return False
@@ -347,7 +348,7 @@ def create_search_pipeline_node(
         )
 
         result_msg = AIMessage(
-            content=format_search_result(worker_id, result_str), name=worker_id,
+            content=format_search_result(worker_id, result_str), name=clamp_llm_name(worker_id),
         )
         summary = (
             f"query='{loop.query}' attempts={loop.attempts} "

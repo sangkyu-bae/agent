@@ -29,6 +29,7 @@ class WikiTocProvider:
         folder_repo_builder=None,  # (session) -> WikiFolderSummaryRepository | None
         folder_enabled: bool = False,
         folder_threshold: int = 30,
+        excerpt_chars: int = 0,  # wiki-guided-routing D1 (settings.wiki_toc_excerpt_chars)
     ) -> None:
         self._session_factory = session_factory
         self._repo_builder = repo_builder
@@ -38,12 +39,19 @@ class WikiTocProvider:
         self._folder_repo_builder = folder_repo_builder
         self._folder_enabled = folder_enabled
         self._folder_threshold = folder_threshold
+        self._excerpt_chars = excerpt_chars
 
     async def render_block(self, agent_id: str, request_id: str) -> str:
         try:
             async with self._session_factory() as session:
+                # wiki-guided-routing D1: 발췌 미사용(0)이면 kwarg 자체를 넘기지
+                # 않는다 — 구 시그니처 구현체/페이크 무회귀.
+                extra = (
+                    {"excerpt_chars": self._excerpt_chars}
+                    if self._excerpt_chars > 0 else {}
+                )
                 items = await self._repo_builder(session).list_searchable_tree_items(
-                    agent_id, datetime.now(timezone.utc), request_id
+                    agent_id, datetime.now(timezone.utc), request_id, **extra
                 )
                 folder_block = await self._try_folder_block(
                     session, agent_id, items, request_id

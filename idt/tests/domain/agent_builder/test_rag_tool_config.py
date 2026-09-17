@@ -2,8 +2,10 @@
 import pytest
 
 from src.domain.agent_builder.rag_tool_config import (
+    MAX_LLM_NAME_LENGTH,
     RagToolConfig,
     RagToolConfigPolicy,
+    clamp_llm_name,
     sanitize_tool_name,
 )
 
@@ -239,3 +241,33 @@ class TestSanitizeToolName:
 
     def test_default_fallback_stays_unnamed(self):
         assert sanitize_tool_name("내부 문서 검색") == "unnamed_tool"
+
+
+class TestClampLlmName:
+    """OpenAI messages[].name / function.name 64자 상한 (fix-worker-id-name-length)."""
+
+    def test_short_name_unchanged(self):
+        assert clamp_llm_name("tavily_search_worker") == "tavily_search_worker"
+
+    def test_exact_limit_unchanged(self):
+        name = "a" * MAX_LLM_NAME_LENGTH
+        assert clamp_llm_name(name) == name
+
+    def test_over_limit_is_clamped_to_limit(self):
+        name = "mcp_5c007b42-f417-426b-af7d-45819f175575_get_product_rates_worker"
+        assert len(name) == 65
+        assert len(clamp_llm_name(name)) == MAX_LLM_NAME_LENGTH
+
+    def test_clamp_is_deterministic(self):
+        name = "x" * 90
+        assert clamp_llm_name(name) == clamp_llm_name(name)
+
+    def test_distinct_long_names_stay_distinct(self):
+        prefix = "mcp_5c007b42-f417-426b-af7d-45819f175575_"
+        a = clamp_llm_name(prefix + "get_product_rates_by_region_worker")
+        b = clamp_llm_name(prefix + "get_product_rates_by_branch_worker")
+        assert a != b
+
+    def test_clamped_name_keeps_allowed_charset(self):
+        name = "mcp_5c007b42-f417-426b-af7d-45819f175575_" + "n" * 40
+        assert sanitize_tool_name(clamp_llm_name(name)) == clamp_llm_name(name)

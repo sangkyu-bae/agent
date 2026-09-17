@@ -179,3 +179,35 @@ class TestFinalAnswerToolDefense:
 
         sent = mock_llm.ainvoke.call_args[0][0]
         assert all(_role_of(m) != "tool" for m in sent)
+
+
+# ── wiki-guided-routing D4: 도구 오류 → state.last_worker_error ──────────
+
+
+class TestWrapWorkerToolError:
+    @pytest.mark.asyncio
+    async def test_tool_error_in_trace_sets_last_worker_error(self):
+        compiler = _make_compiler()
+        trace = [
+            HumanMessage(content="금리 표"),
+            AIMessage(content="", name="worker_0",
+                      tool_calls=[{"name": "scrape_url", "args": {"url": "https://x"}, "id": "c1"}]),
+            ToolMessage(
+                content="Error executing tool scrape_url: Connection error [Errno -2]",
+                tool_call_id="c1", name="scrape_url", status="error",
+            ),
+            AIMessage(content="접속이 되지 않아 가져오지 못했습니다.", name="worker_0"),
+        ]
+        wrapped = compiler._wrap_worker("worker_0", _react_agent_returning(trace))
+        result = await wrapped({"messages": [HumanMessage(content="금리 표")], "token_usage": 0})
+
+        assert result["last_worker_error"].startswith("Error executing tool scrape_url")
+        # 트레이스 유출 계약은 그대로 — AIMessage 1건
+        assert len(result["messages"]) == 1
+
+    @pytest.mark.asyncio
+    async def test_success_trace_sets_empty_error(self):
+        compiler = _make_compiler()
+        wrapped = compiler._wrap_worker("worker_0", _react_agent_returning(_trace_messages()))
+        result = await wrapped({"messages": [HumanMessage(content="X가 뭐야?")], "token_usage": 0})
+        assert result["last_worker_error"] == ""

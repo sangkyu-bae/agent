@@ -10,6 +10,7 @@ supervisor-overblock-fix D1/D2:
   권한 검증·필터링은 도구 3단 방어(USE_RAG_SEARCH 차단 + visibility 필터)가 담당.
 - 심사 위임 가드 문구로 교체: 거부·차단 금지 + 미검색 정보는 '확인되지 않습니다'.
 """
+import re
 from datetime import UTC, datetime
 
 from src.application.wiki.schemas import WikiTreeItem
@@ -77,6 +78,22 @@ _TOOL_USAGE_NORM = (
     "대화 내용, 이전 단계 결과, 이전 도구 응답에 근거가 없으면 도구를 호출하지 말고\n"
     "무엇이 확인되지 않았는지 답변에 밝히세요.\n"
     "데이터를 정재만 할뿐 어떠한 작업을 하지 마세요. 상위에서 노드에서 이를 책임집니다.\n"
+    # Design Ref: supervisor-early-finish-fix §1.2 D-08 / Plan SC: FR-01
+    # 워커는 도구 1개만 바인딩된다. 그 범위를 에이전트 전체 능력으로 착각한
+    # '불가' 선언이 supervisor 결정 컨텍스트에 남아 조기 종료를 유발한다.
+    # 그래프 계약 ②(목록 프레이밍 금지)에 따라 할 수 있는 것을 나열하지 않는다.
+    #
+    # 실측 회귀(트레이스 01a0ae68, 2026-09-17): 초안이 "'이 워커의 범위 밖'이라고만
+    # 밝히세요"였는데, 바로 위 '데이터를 정재만 할뿐' 규범과 결합되어 워커가 도구
+    # 결과 전달까지 생략하고 그 문구만 반환했다(4개 워커 전부). supervisor는 이를
+    # 도구 실패로 오인했다. → 전달 의무를 먼저 못 박고, 범위 밖 표기는 '덧붙이는'
+    # 부가 행위로 격하한다. 'A라고만 하라'류 절대 프레이밍을 쓰지 말 것.
+    # '생략'이라는 낱말은 프롬프트 절단 안내('…에이전트 지침 일부 생략')와 겹쳐
+    # 기존 테스트가 오탐한다 — 같은 뜻을 다른 낱말로 쓴다.
+    "도구로 얻은 결과는 빠짐없이 답변에 그대로 실으세요.\n"
+    "도구 결과를 전달한 뒤, 당신의 도구로 수행할 수 없는 부분이 남았으면 그 부분만\n"
+    "'이 워커의 범위 밖'이라고 덧붙이세요.\n"
+    "에이전트 전체가 그 기능을 갖고 있지 않다고 단정하지 마세요 — 다른 워커가 수행할 수 있습니다.\n"
 )
 
 
@@ -172,19 +189,40 @@ def render_user_context_block(ctx: AuthContext | None) -> str:
     )
 
 
+# wiki-guided-routing D2: 위키는 정리된 지식뿐 아니라 "작업 절차·출처 URL·처리 경로"
+# 같은 지침의 저장소이기도 하다 — 이 문장이 없으면 LLM이 지침 문서를 열람 대상으로
+# 보지 않는다(실측: 런 8ccc097f, 목차 제목만으로는 '금리'와 연결하지 못함).
+_TOC_GUIDANCE_LINE = (
+    "정리된 지식뿐 아니라 작업 절차·참조할 출처 URL·처리 경로 같은 지침도 "
+    "여기에 있습니다.\n"
+)
+
 _TOC_HEADER = (
     "[에이전트 지식 위키 목차]\n"
-    "이 에이전트가 보유한 승인 지식 문서 목록입니다 (최신 갱신순).\n"
-    "문서의 상세 내용이 필요하면 wiki_read 도구에 아래 id를 전달해 본문을 열람하세요.\n"
+    "이 에이전트가 보유한 승인 지식 문서 목록입니다 (최신 갱신순). "
+    + _TOC_GUIDANCE_LINE
+    + "문서의 상세 내용이 필요하면 wiki_read 도구에 아래 id를 전달해 본문을 열람하세요.\n"
     "목차만으로 답하지 말고, 인용이 필요하면 반드시 본문을 열람한 뒤 답하세요.\n\n"
 )
 _TOC_FOOTER = "---\n\n"
+
+_WS_RE = re.compile(r"\s+")
+
+
+def _normalize_excerpt(excerpt: str | None) -> str:
+    """개행·연속 공백을 단일 공백으로, 양끝 공백 제거. None/공백만이면 ''."""
+    if not excerpt:
+        return ""
+    return _WS_RE.sub(" ", excerpt).strip()
 
 
 def _toc_line(item: WikiTreeItem) -> str:
     updated = item.updated_at.strftime("%Y-%m-%d") if item.updated_at else "-"
     location = f"{item.path}/{item.title}" if item.path else item.title
-    return f"- (id: {item.id}) {location} — 갱신 {updated}\n"
+    # Design Ref: wiki-guided-routing D1 — 발췌가 없으면 기존 출력과 바이트 동일.
+    excerpt = _normalize_excerpt(getattr(item, "excerpt", None))
+    tail = f" — {excerpt}" if excerpt else ""
+    return f"- (id: {item.id}) {location} — 갱신 {updated}{tail}\n"
 
 
 def render_wiki_toc_block(
@@ -234,7 +272,8 @@ WIKI_FOLDER_HEADER_TAG = "[에이전트 지식 위키 지도]"
 
 _FOLDER_HEADER = (
     f"{WIKI_FOLDER_HEADER_TAG}\n"
-    "이 에이전트의 승인 지식은 아래 폴더로 정리되어 있습니다.\n"
+    "이 에이전트의 승인 지식은 아래 폴더로 정리되어 있습니다. "
+    + _TOC_GUIDANCE_LINE +
     "관련 폴더를 wiki_list 도구로 열어 문서 목록을 확인하고, "
     "문서는 wiki_read 도구로 본문을 열람하세요.\n"
     "지도만으로 답하지 말고, 인용이 필요하면 반드시 본문을 열람한 뒤 답하세요.\n\n"

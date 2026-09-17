@@ -1262,3 +1262,46 @@ class TestDatetimeContext:
             await compiler.compile(_make_workflow(), _make_llm_model(), "req-1")
         assert captured["prompt"].startswith(self._MARK)
         assert captured["prompt"].endswith("당신은 AI 에이전트입니다.")
+
+
+class TestWorkerAgentNameClamp:
+    @pytest.mark.asyncio
+    async def test_create_agent_name_is_clamped_to_llm_limit(self):
+        """fix-worker-id-name-length: create_agent(name=)은 모델 산출 AIMessage.name이 된다.
+
+        워커가 도구를 부른 뒤 모델을 재호출하면 직전 AIMessage.name이 함께
+        전송되므로 65자 worker_id는 OpenAI 400(string_above_max_length)을 낸다.
+        저장된 worker_id(그래프 노드명·라우팅 키)는 그대로 두고 LLM 노출명만 줄인다.
+        """
+        from src.domain.agent_builder.rag_tool_config import MAX_LLM_NAME_LENGTH
+
+        long_id = "mcp_5c007b42-f417-426b-af7d-45819f175575_get_product_rates_worker"
+        assert len(long_id) == 65
+        tool_factory = MagicMock()
+        tool_factory.create_all_async = AsyncMock(return_value=[])
+        tool_factory.create.return_value = MagicMock()
+        llm_factory = MagicMock(spec=LLMFactoryInterface)
+        llm_factory.create.return_value = MagicMock()
+        compiler = WorkflowCompiler(
+            tool_factory=tool_factory, llm_factory=llm_factory, logger=MagicMock(),
+        )
+        workers = [
+            WorkerDefinition(
+                tool_id="python_code_executor", worker_id=long_id,
+                description="긴 id 워커", sort_order=0, category="action",
+            ),
+        ]
+        workflow = WorkflowDefinition(
+            supervisor_prompt="프롬프트", workers=workers, flow_hint="test",
+        )
+        with patch(
+            "src.application.agent_builder.workflow_compiler.create_agent",
+            return_value=MagicMock(),
+        ) as mock_create_agent:
+            compiled = await compiler.compile(workflow, _make_llm_model(), "req-name")
+
+        assert compiled is not None
+        assert mock_create_agent.call_count == 1
+        passed_name = mock_create_agent.call_args.kwargs["name"]
+        assert len(passed_name) <= MAX_LLM_NAME_LENGTH
+        assert passed_name.startswith("mcp_5c007b42-f417-426b-af7d-45819f175575_get_product_rates")

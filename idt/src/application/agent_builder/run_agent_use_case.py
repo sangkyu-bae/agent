@@ -50,6 +50,7 @@ from src.application.repositories.conversation_summary_repository import (
     ConversationSummaryRepository,
 )
 from src.domain.agent_builder.interfaces import AgentDefinitionRepositoryInterface
+from src.domain.agent_builder.rag_tool_config import clamp_llm_name
 from src.domain.agent_builder.policies import (
     AccessCheckInput,
     IterationLimitPolicy,
@@ -917,7 +918,8 @@ class RunAgentUseCase:
             return messages
         injected = [
             AIMessage(
-                name=item.get("origin", ""),
+                # 저장된 origin 은 상한 도입 전 65자 worker_id 일 수 있다.
+                name=clamp_llm_name(item.get("origin", "")),
                 content=format_search_result(
                     item.get("origin", ""),
                     self._snapshot_policy.render_reinjection_body(snap, item),
