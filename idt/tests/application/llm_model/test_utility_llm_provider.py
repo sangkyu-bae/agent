@@ -421,7 +421,13 @@ class TestObservability:
         self, provider: UtilityLLMProvider, counting_repo: CountingRepository,
         mock_logger: Any,
     ) -> None:
-        """P14: base_url 있는 모델 해석 시 로그에 base_url 이 포함된다."""
+        """P14: base_url 있는 모델 해석 시 로그에 base_url 이 포함된다.
+
+        prompt-fallback-visibility FR-00c — 해석 로그가 debug → **info** 로
+        올라갔다. 기본 로그 설정(INFO)에서 안 보이던 탓에 기본 모델 교체가
+        2주간 관측되지 않았기 때문이다. base_url 을 남긴다는 P14 의 계약 자체는
+        그대로다.
+        """
         counting_repo._by_id["d"] = _model(
             "d", "gemma-3-27b", is_default=True, base_url="http://npu:8000/v1"
         )
@@ -430,7 +436,7 @@ class TestObservability:
 
         logged = [
             call.kwargs
-            for call in mock_logger.debug.call_args_list
+            for call in mock_logger.info.call_args_list
             if "base_url" in call.kwargs
         ]
         assert logged, "해석 로그에 base_url 이 없다"

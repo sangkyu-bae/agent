@@ -480,3 +480,58 @@ def test_repository_source_has_no_transaction_calls(method):
         / "src" / "infrastructure" / "prompt_composer" / "repository.py"
     ).read_text(encoding="utf-8")
     assert f".{method}()" not in source
+
+
+# ── PromptRepository: 버전 단건 조회 (prompt-fallback-visibility §4-4) ─────
+# 에이전트 저장 게이트가 degraded 여부를 DB 에서 재조회한다. 클라이언트가 보내는
+# degraded 플래그를 믿지 않기 위한 조회라, 소유권 검사를 **내장**해야 한다.
+
+
+async def test_find_version_returns_own_version(session):
+    repo = PromptRepository(session)
+    sid = await repo.create_session(_USER, "요청", None)
+    vid, _ = await repo.append_version(
+        sid, _prompt(assembled="원본", degraded=True), None, ("t1",)
+    )
+
+    found = await repo.find_version(vid, _USER)
+
+    assert found is not None
+    assert found.degraded is True
+    assert found.assembled == "원본"
+    assert found.reason == "timeout"
+
+
+async def test_find_version_hides_other_users_version(session):
+    """타인 소유는 None — 게이트는 '근거 없음'으로 보고 통과시킨다 (FR-02)."""
+    repo = PromptRepository(session)
+    sid = await repo.create_session(_USER, "요청", None)
+    vid, _ = await repo.append_version(sid, _prompt(), None, ("t1",))
+
+    assert await repo.find_version(vid, _OTHER) is None
+
+
+async def test_find_version_returns_none_for_missing_id(session):
+    repo = PromptRepository(session)
+    assert await repo.find_version("no-such-version", _USER) is None
+
+
+async def test_find_version_returns_exact_version_not_latest(session):
+    """같은 세션에 여러 버전이 있어도 요청한 그 버전을 돌려준다.
+
+    위저드가 받은 version_id 는 특정 생성 1회를 가리킨다. 최신 버전으로
+    바꿔치기하면 "다시 생성" 전후를 구분하지 못한다.
+    """
+    repo = PromptRepository(session)
+    sid = await repo.create_session(_USER, "요청", None)
+    v1, _ = await repo.append_version(
+        sid, _prompt(assembled="첫 생성", degraded=True), None, ("t1",)
+    )
+    await repo.append_version(
+        sid, _prompt(assembled="재생성", degraded=False), None, ("t1",)
+    )
+
+    found = await repo.find_version(v1, _USER)
+
+    assert found.assembled == "첫 생성"
+    assert found.degraded is True

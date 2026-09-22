@@ -158,6 +158,16 @@ class LLMPromptGeneratorAdapter:
             )
         )
 
+    def _active_model_name(self) -> str:
+        """이번 호출이 실제로 쓰는 모델명 (FR-00d).
+
+        `llm_provider` 가 해석해준 모델이 우선이다 — `PROMPT_COMPOSER_MODEL` 은
+        provider 가 None 을 돌려줬을 때만 쓰이는 3순위 폴백이라(DR-9),
+        설정값만 찍으면 실제와 어긋난다.
+        """
+        name = getattr(self._cached_llm, "model_name", None)
+        return str(name) if name else self._config.PROMPT_COMPOSER_MODEL
+
     async def _resolve_chain(self) -> PromptChain:
         """호출 시점에 유효한 chain (DR-9)."""
         if self._explicit_chain is not None:
@@ -171,6 +181,14 @@ class LLMPromptGeneratorAdapter:
                     self._cached_llm = llm
                     self._cached_chain = self._build_chain_from(llm)
                 return self._cached_chain
+            # Design Ref: pipeline-langsmith-tracing §3-3 — UtilityLLMProvider 는
+            # 어떤 실패든 None 을 돌려주므로(utility_llm_provider.py:69-82) 여기
+            # 폴백이 무로그였다. 그 결과 "설정한 모델이 아닌 PROMPT_COMPOSER_MODEL
+            # 로 돌고 있다"는 사실이 관측되지 않는다.
+            self._logger.warning(
+                "Utility LLM unavailable — falling back to PROMPT_COMPOSER_MODEL",
+                model=self._config.PROMPT_COMPOSER_MODEL,
+            )
         if self._chain is None:
             self._chain = self._build_chain()
         return self._chain
@@ -280,11 +298,16 @@ class LLMPromptGeneratorAdapter:
     ) -> tuple[PromptSections, bool, str, int]:
         """생성 실패 → 규칙기반 폴백 섹션 (Design E1~E4)."""
         log = self._logger.warning if warn else self._logger.error
+        # prompt-fallback-visibility FR-00d — 모델·예산이 없으면 "LLM 이 느렸다"와
+        # "예산이 짧다"를 구분할 수 없다. 2026-09 에 기본 모델이 추론 모델로
+        # 바뀌어 100% 타임아웃이 났는데, 원인 규명에 DB 포렌식이 필요했다.
         log(
             f"prompt generation {reason}, fallback=degraded",
             exception=exception,
             request_id=request_id,
             latency_ms=_elapsed_ms(started),
+            model=self._active_model_name(),
+            timeout_sec=self._config.PROMPT_COMPOSER_TIMEOUT_SEC,
         )
         sections = PromptAssemblyPolicy.fallback_sections(metas, user_request)
         return sections, True, reason, _elapsed_ms(started)

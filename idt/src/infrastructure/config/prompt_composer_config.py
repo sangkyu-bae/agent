@@ -20,7 +20,18 @@ class PromptComposerConfig(BaseSettings):
 
     PROMPT_COMPOSER_MODEL: str = "gpt-4o-mini"
     PROMPT_COMPOSER_TEMPERATURE: float = 0.2
-    PROMPT_COMPOSER_TIMEOUT_SEC: float = 20.0
+    # prompt-fallback-visibility FR-00b — 20.0 → 30.0.
+    #
+    # 실측(2026-09-21, 도구 3개 동일 입력 × 3회):
+    #   gpt-4o-mini  4.48 / 6.31 / 6.37 s
+    #   gpt-5.1     21.06 / 21.97 / 22.52 s   ← 최소값조차 20s 초과
+    # 운영 관측(prompt_version): 성공 건 최대 14.5s, 중앙값 ~9s.
+    #
+    # 30s 로 잡은 이유는 두 가지다.
+    #  1) 실전 최대(14.5s)의 2배 여유.
+    #  2) 관리자가 기본 LLM 을 추론 모델로 바꿔도(= 보조 모델 미설정 시 그대로
+    #     전파된다) 22.5s 를 흡수한다 — 같은 사고의 2차 안전망.
+    PROMPT_COMPOSER_TIMEOUT_SEC: float = 30.0
     # 프롬프트에 실을 도구 메타 상한. 초과분은 절단하고 warning 로그를 남긴다 (R7).
     PROMPT_COMPOSER_MAX_TOOLS: int = 50
     # 킬스위치. False 면 main.py 가 라우터를 등록하지 않는다.

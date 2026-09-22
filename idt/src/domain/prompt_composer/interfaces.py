@@ -90,6 +90,16 @@ class PromptRepositoryPort(Protocol):
         """
         ...
 
+    async def find_version(self, version_id: str, user_id: str) -> object | None:
+        """버전 단건 — **소유자 일치**만 반환, 타인·미존재는 None.
+
+        prompt-fallback-visibility §4-4: 에이전트 저장 게이트가 degraded 여부를
+        DB 에서 재조회하는 데 쓴다. 반환 객체는 최소한 `degraded` / `assembled` /
+        `reason` 을 가진다. `list_versions` 와 달리 소유권 검사를 **내장**한다 —
+        호출부(CreateAgentUseCase)는 세션을 먼저 조회할 이유가 없다.
+        """
+        ...
+
     async def bind_agent(
         self, session_id: str, user_id: str, agent_id: str
     ) -> str | None:

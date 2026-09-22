@@ -184,6 +184,28 @@ class PromptRepository:
         current = await self._session.scalar(stmt)
         return (current or 0) + 1
 
+    async def find_version(
+        self, version_id: str, user_id: str
+    ) -> PromptVersionModel | None:
+        """버전 단건 — 소유자 일치만 반환 (prompt-fallback-visibility §4-4).
+
+        `prompt_session.user_id` 조인으로 소유권을 **쿼리 안에서** 확인한다.
+        에이전트 저장 게이트가 클라이언트의 degraded 주장을 믿지 않고 DB 로
+        재확인하는 용도라, 타인 버전 id 를 넘겨 판정을 비트는 경로를 막는다.
+        """
+        stmt = (
+            select(PromptVersionModel)
+            .join(
+                PromptSessionModel,
+                PromptSessionModel.id == PromptVersionModel.session_id,
+            )
+            .where(
+                PromptVersionModel.id == version_id,
+                PromptSessionModel.user_id == user_id,
+            )
+        )
+        return await self._session.scalar(stmt)
+
     async def list_versions(self, session_id: str) -> list[PromptVersionModel]:
         """최신 버전부터 반환한다 (Design §4.2)."""
         stmt = (
