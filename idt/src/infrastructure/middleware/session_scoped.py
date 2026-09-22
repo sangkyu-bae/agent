@@ -82,3 +82,14 @@ class SessionScopedAgentMiddlewareRepository(AgentMiddlewareRepositoryInterface)
             return await AgentMiddlewareRepository(
                 session, self._logger
             ).list_by_agent(agent_id, request_id)
+
+    async def upsert_config(self, *args, **kwargs):
+        """approval-gate Check G3 — 쓰기는 per-request 세션 경로 전용.
+
+        이 어댑터는 런타임 조립(MiddlewareProvider)용 읽기 전용이다.
+        SessionScopedMiddlewareCatalogRepository.update_flags 와 같은 규약:
+        매 호출 새 세션이라 호출측 트랜잭션에 참여하지 못한다.
+        """
+        raise NotImplementedError(
+            "쓰기는 per-request 세션 경로(에이전트 설정 API) 전용"
+        )

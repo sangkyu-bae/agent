@@ -46,6 +46,9 @@ class SyncInternalToolsUseCase:
                         # builtin-tools D1: INSERT 시드 전용 — UPDATE 분기는
                         # is_builtin을 건드리지 않으므로(D2) 기존 행에는 무영향.
                         is_builtin=meta.builtin_default,
+                        # approval-gate Check G10: is_builtin 과 같은 시드 계약 —
+                        # INSERT 에만 실리고 upsert UPDATE 는 건드리지 않는다.
+                        requires_approval=meta.requires_approval_default,
                         # Design Ref: mcp-tool-category-routing §5 D-02 (FR-03) —
                         # category / max_tool_calls는 관리자 지정값이므로 sync가
                         # 값을 싣지 않는다(기본 None). 내부 도구의 분류는

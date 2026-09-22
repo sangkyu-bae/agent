@@ -237,6 +237,17 @@ export const queryKeys = {
       [...queryKeys.agentSchedules.all, 'runs', agentId, scheduleId] as const,
   },
 
+  // ── Approval Gate (approval-gate) ──────────────────────
+  approvals: {
+    all: ['approvals'] as const,
+    list: (params: { statuses?: string[]; page?: number; size?: number }) =>
+      [...queryKeys.approvals.all, 'list', params] as const,
+    detail: (approvalId: string) =>
+      [...queryKeys.approvals.all, 'detail', approvalId] as const,
+    gateSettings: (agentId: string) =>
+      [...queryKeys.approvals.all, 'gateSettings', agentId] as const,
+  },
+
   // ── Background Jobs (background-jobs) ──────────────────
   backgroundJobs: {
     all: ['backgroundJobs'] as const,

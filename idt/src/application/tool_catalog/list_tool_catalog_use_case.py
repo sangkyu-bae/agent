@@ -34,6 +34,7 @@ class ListToolCatalogUseCase:
                         # mcp-tool-category-routing §4.1 (FR-13):
                         # 관리자 화면이 현재 분류·상한을 보고 고칠 수 있어야 한다.
                         category=e.category,
+                        requires_approval=e.requires_approval,
                         max_tool_calls=e.max_tool_calls,
                     )
                     for e in entries

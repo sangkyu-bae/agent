@@ -299,3 +299,127 @@ describe('AdminMcpServersPage — 도구 동기화 (mcp-tool-auto-sync)', () => 
     expect(screen.queryByText(/도구 동기화 실패/)).not.toBeInTheDocument();
   });
 });
+
+describe('AdminMcpServersPage — 기본 승인 필요 플래그 (approval-gate-phase2 D-07)', () => {
+  const CHECKBOX = '이 서버의 도구는 기본으로 승인 필요';
+
+  it('U-1: 등록 모달의 체크박스는 기본 꺼짐이다', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Naver Search');
+    await user.click(screen.getByRole('button', { name: '서버 등록' }));
+    expect(screen.getByRole('checkbox', { name: CHECKBOX })).not.toBeChecked();
+    expect(screen.getByText(/새로 동기화되는 도구에만 적용/)).toBeInTheDocument();
+  });
+
+  it('U-2: 체크 후 등록하면 default_requires_approval=true 를 보낸다', async () => {
+    let captured: Record<string, unknown> | null = null;
+    server.use(
+      http.post('*/api/v1/mcp-registry', async ({ request }) => {
+        captured = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ id: 'srv-new' }, { status: 201 });
+      }),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Naver Search');
+    await user.click(screen.getByRole('button', { name: '서버 등록' }));
+    await user.type(screen.getByPlaceholderText('예: Naver Search'), 'My Mail');
+    await user.type(screen.getByPlaceholderText('서버에 대한 설명'), '메일');
+    await user.type(
+      screen.getByPlaceholderText('https://server.example.com/mcp'),
+      'https://mail.example.com/sse',
+    );
+    await user.click(screen.getByRole('checkbox', { name: CHECKBOX }));
+    await user.click(screen.getByRole('button', { name: '등록' }));
+
+    await waitFor(() => expect(captured).not.toBeNull());
+    expect(captured).toMatchObject({ default_requires_approval: true });
+  });
+
+  it('U-3: 플래그가 켜진 서버의 수정 모달은 체크된 채 열린다', async () => {
+    server.use(
+      http.get('*/api/v1/mcp-registry', () =>
+        HttpResponse.json({
+          items: [
+            {
+              id: 'srv-mail', user_id: '1', name: 'Mail MCP', description: '메일',
+              endpoint: 'https://mail/sse', transport: 'sse', input_schema: null,
+              is_active: true, default_requires_approval: true, tool_id: 'mcp_srv-mail',
+              created_at: '2026-09-21T00:00:00Z', updated_at: '2026-09-21T00:00:00Z',
+              auth_config: null, server_config: null,
+            },
+          ],
+          total: 1,
+        }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Mail MCP');
+    await user.click(screen.getByRole('button', { name: '수정' }));
+    expect(screen.getByRole('checkbox', { name: CHECKBOX })).toBeChecked();
+  });
+
+  it('U-4: 수정에서 체크를 해제하고 저장하면 false 를 보낸다', async () => {
+    let putBody: Record<string, unknown> | null = null;
+    server.use(
+      http.get('*/api/v1/mcp-registry', () =>
+        HttpResponse.json({
+          items: [
+            {
+              id: 'srv-mail', user_id: '1', name: 'Mail MCP', description: '메일',
+              endpoint: 'https://mail/sse', transport: 'sse', input_schema: null,
+              is_active: true, default_requires_approval: true, tool_id: 'mcp_srv-mail',
+              created_at: '2026-09-21T00:00:00Z', updated_at: '2026-09-21T00:00:00Z',
+              auth_config: null, server_config: null,
+            },
+          ],
+          total: 1,
+        }),
+      ),
+      http.put('*/api/v1/mcp-registry/:id', async ({ request }) => {
+        putBody = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ id: 'srv-mail', name: 'Mail MCP' });
+      }),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Mail MCP');
+    await user.click(screen.getByRole('button', { name: '수정' }));
+    await user.click(screen.getByRole('checkbox', { name: CHECKBOX }));
+    await user.click(screen.getByRole('button', { name: '저장' }));
+
+    await waitFor(() => expect(putBody).not.toBeNull());
+    expect(putBody).toMatchObject({ default_requires_approval: false });
+  });
+
+  it('U-5: 목록에서 플래그가 켜진 서버에만 "승인 기본" 뱃지가 보인다', async () => {
+    server.use(
+      http.get('*/api/v1/mcp-registry', () =>
+        HttpResponse.json({
+          items: [
+            {
+              id: 'a', user_id: '1', name: 'Mail MCP', description: '메일',
+              endpoint: 'https://mail/sse', transport: 'sse', input_schema: null,
+              is_active: true, default_requires_approval: true, tool_id: 'mcp_a',
+              created_at: '2026-09-21T00:00:00Z', updated_at: '2026-09-21T00:00:00Z',
+              auth_config: null, server_config: null,
+            },
+            {
+              id: 'b', user_id: '1', name: 'Search MCP', description: '검색',
+              endpoint: 'https://s/sse', transport: 'sse', input_schema: null,
+              is_active: true, default_requires_approval: false, tool_id: 'mcp_b',
+              created_at: '2026-09-21T00:00:00Z', updated_at: '2026-09-21T00:00:00Z',
+              auth_config: null, server_config: null,
+            },
+          ],
+          total: 2,
+        }),
+      ),
+    );
+    renderPage();
+    await screen.findByText('Search MCP');
+    expect(screen.getAllByText('승인 기본')).toHaveLength(1);
+  });
+});

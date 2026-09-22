@@ -40,6 +40,16 @@ class MiddlewareBuilder:
                     middleware_type=a.middleware_type.value,
                 )
             except Exception as e:
+                # approval-gate Design §6.2 (fail-closed): 안전 기능은 조용히
+                # 빠지지 않는다. 나머지는 편의 기능이라 없다고 실행을 막을
+                # 이유가 없지만, 게이트가 빠지면 승인 없이 부작용이 실행된다.
+                if a.middleware_type is MiddlewareType.APPROVAL_GATE:
+                    self._logger.error(
+                        "Approval gate build failed — aborting agent compile",
+                        request_id=request_id,
+                        exception=e,
+                    )
+                    raise
                 self._logger.warning(
                     "Middleware build skipped",
                     request_id=request_id,
@@ -69,6 +79,25 @@ class MiddlewareBuilder:
         return ToolCallLimitMiddleware(
             run_limit=run_limit, exit_behavior="continue",
         )
+
+    @staticmethod
+    def build_approval_gate(*, tool_id: str, worker_id: str):
+        """approval-gate Design §2.1 — 워커별 승인 게이트 미들웨어.
+
+        build_tool_call_budget 과 같은 계열의 정적 팩토리다. 게이트는 "이
+        워커의 도구가 승인 대상인가" 를 알아야 하는데, _build_one 은
+        AppliedMiddleware(config) 만 받아 도구를 모른다. 그래서 공통 경로가
+        아니라 컴파일러가 워커마다 호출한다.
+
+        langchain v1 클래스 참조를 이 모듈 밖으로 새게 하지 않기 위한
+        팩토리다(D8 격리 계약) — 컴파일러는 인스턴스만 받는다.
+
+        Returns:
+            ApprovalGateMiddleware 인스턴스 (워커마다 새로 만들 것 — D6)
+        """
+        from src.application.approval.gate_middleware import ApprovalGateMiddleware
+
+        return ApprovalGateMiddleware(tool_id=tool_id, worker_id=worker_id)
 
     @staticmethod
     def _build_one(a: AppliedMiddleware, fallback_models: list):
@@ -101,6 +130,15 @@ class MiddlewareBuilder:
                     raise ValueError("no resolvable fallback models")
                 return ModelFallbackMiddleware(
                     fallback_models[0], *fallback_models[1:]
+                )
+            case MiddlewareType.APPROVAL_GATE:
+                # approval-gate Design §2.1: 게이트는 워커별로 조립된다
+                # (build_approval_gate). 공통 경로로 새면 도구를 모른 채 모든
+                # 워커에 붙어 무해한 워커까지 막는다. build() 가 이 예외를
+                # 재전파하므로 컴파일이 실패한다 — fail-closed 가 의도다.
+                raise ValueError(
+                    "approval_gate is assembled per-worker via "
+                    "build_approval_gate(); it must not reach _build_one"
                 )
             case _:
                 raise ValueError(

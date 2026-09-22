@@ -305,3 +305,70 @@ class TestLifecycle:
         job_repo.claim_queued = AsyncMock(side_effect=RuntimeError("DB down"))
         await worker.tick_once()  # 예외 미전파 (루프 생존)
         assert worker.status()["last_error"] is not None
+
+
+class TestApprovalTick:
+    """approval-gate Check G5 — 예약 집행을 주기적으로 부르는 주체.
+
+    이전에는 /internal/approvals/tick 을 외부 cron 이 치지 않으면 scheduled
+    건이 영원히 집행되지 않았다. 스케줄 tick 과 같은 워커 루프에 합류시킨다.
+    """
+
+    @staticmethod
+    def _worker_with_approval(interval=0.0, runner=None):
+        worker, *_ = _make_worker()
+        if runner is None:
+            runner = MagicMock()
+            runner.run = AsyncMock(return_value=MagicMock(executed_count=1))
+        worker._approval_tick_runner = runner
+        worker._approval_tick_interval = interval
+        return worker, runner
+
+    @pytest.mark.asyncio
+    async def test_tick_마다_승인_집행을_돌린다(self):
+        worker, runner = self._worker_with_approval()
+        await worker.tick_once()
+        await asyncio.sleep(0)  # 생성된 태스크 1회 진행
+        await worker._approval_task
+        runner.run.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_주기_미만이면_건너뛴다(self):
+        worker, runner = self._worker_with_approval(interval=3600.0)
+        await worker.tick_once()
+        await worker._approval_task
+        await worker.tick_once()  # 같은 시각 — 주기 미경과
+        assert runner.run.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_직전_tick_미완이면_중복_실행하지_않는다(self):
+        """single-flight — 집행이 길어져도 겹쳐 돌면 이중 집행 위험."""
+        gate = asyncio.Event()
+        runner = MagicMock()
+
+        async def _slow(request_id):
+            await gate.wait()
+
+        runner.run = _slow
+        worker, _ = self._worker_with_approval(runner=runner)
+        await worker.tick_once()
+        first = worker._approval_task
+        await worker.tick_once()
+        assert worker._approval_task is first
+        gate.set()
+        await first
+
+    @pytest.mark.asyncio
+    async def test_러너_미주입이면_아무것도_하지_않는다(self):
+        """무회귀 — 기존 배선에서는 승인 tick 이 없다."""
+        worker, *_ = _make_worker()
+        await worker.tick_once()
+        assert getattr(worker, "_approval_task", None) is None
+
+    @pytest.mark.asyncio
+    async def test_러너_예외가_워커를_죽이지_않는다(self):
+        runner = MagicMock()
+        runner.run = AsyncMock(side_effect=RuntimeError("DB 장애"))
+        worker, _ = self._worker_with_approval(runner=runner)
+        await worker.tick_once()
+        await worker._approval_task  # 예외가 태스크 밖으로 새지 않는다

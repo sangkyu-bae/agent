@@ -35,8 +35,12 @@ class UpdateToolMetadataUseCase:
         *,
         category: str | None = UNSET,
         max_tool_calls: int | None = UNSET,
+        requires_approval: bool = UNSET,
     ) -> ToolCatalogEntry:
-        """분류·호출 상한을 부분 갱신한다.
+        """분류·호출 상한·승인 필요 여부를 부분 갱신한다.
+
+        requires_approval (approval-gate Check G2): 관리자가 게이트를 켜는
+        유일한 쓰기 경로. sync(upsert)는 이 컬럼을 건드리지 않는다.
 
         Args:
             tool_id: 카탈로그 tool_id
@@ -61,6 +65,13 @@ class UpdateToolMetadataUseCase:
                 ToolCategoryPolicy.validate(category)
             if max_tool_calls is not UNSET:
                 ToolCategoryPolicy.validate_tool_call_limit(max_tool_calls)
+            # NOT NULL 컬럼이라 category 의 null(=미분류) 같은 '되돌리기'가 없다.
+            if requires_approval is not UNSET and not isinstance(
+                requires_approval, bool
+            ):
+                raise ValueError(
+                    f"requires_approval must be true/false, got {requires_approval!r}"
+                )
 
             existing = await self._repository.find_by_tool_id(tool_id, request_id)
             if existing is None:
@@ -73,6 +84,7 @@ class UpdateToolMetadataUseCase:
             updated = await self._repository.update_metadata(
                 tool_id, request_id,
                 category=category, max_tool_calls=max_tool_calls,
+                requires_approval=requires_approval,
             )
             if updated is None:
                 # 조회 직후 삭제된 경쟁 상황 — 404로 수렴시킨다.
@@ -82,6 +94,7 @@ class UpdateToolMetadataUseCase:
                 "UpdateToolMetadataUseCase done",
                 request_id=request_id, tool_id=tool_id,
                 category=updated.category, max_tool_calls=updated.max_tool_calls,
+                requires_approval=updated.requires_approval,
             )
             return updated
         except (ValueError, LookupError):

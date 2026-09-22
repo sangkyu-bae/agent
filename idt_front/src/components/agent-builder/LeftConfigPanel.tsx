@@ -16,6 +16,8 @@ import SubAgentManagerModal from './SubAgentManagerModal';
 import { useSkills } from '@/hooks/useSkills';
 import { useMiddlewareCatalog } from '@/hooks/useMiddlewareCatalog';
 import type { MiddlewareCatalogItem } from '@/types/middleware';
+import ApprovalGateSettingsPanel from '@/components/agent/ApprovalGateSettingsPanel';
+import { SEPARATELY_MANAGED_MIDDLEWARE_TYPES } from '@/types/approval';
 import { useCollections } from '@/hooks/useRagToolConfig';
 import { useKnowledgeBases } from '@/hooks/useKnowledgeBases';
 import { MAX_ATTACHED_SKILLS } from '@/constants/agentSkill';
@@ -496,6 +498,18 @@ const LeftConfigPanel = ({
             onToggle={onMiddlewareToggle}
           />
         </CollapsibleSection>
+
+        {/* approval-gate Check G3 / FR-22: 승인 게이트 — 에이전트가 저장된 뒤에만
+            설정할 수 있다(설정 API 가 agent_id 를 요구). 생성 모드에선 안내만. */}
+        <CollapsibleSection title="승인 게이트">
+          {agentId ? (
+            <ApprovalGateSettingsPanel agentId={agentId} />
+          ) : (
+            <p className="text-[12.5px] text-zinc-400">
+              에이전트를 저장한 뒤 승인 게이트를 설정할 수 있습니다.
+            </p>
+          )}
+        </CollapsibleSection>
       </div>
       )}
 
@@ -592,7 +606,13 @@ export const MiddlewareSection = ({
   excludedBuiltinMiddlewares,
   onToggle,
 }: MiddlewareSectionProps) => {
-  const active = (catalog ?? []).filter((m) => m.is_active);
+  // approval-gate Check G3: approval_gate 는 전용 패널이 관리한다. 여기서도
+  // 토글하게 두면 에이전트 저장과 전용 API 가 같은 행을 두고 다툰다.
+  const active = (catalog ?? []).filter(
+    (m) =>
+      m.is_active &&
+      !SEPARATELY_MANAGED_MIDDLEWARE_TYPES.includes(m.middleware_type),
+  );
   // create: 빌트인·강제만 노출 (비빌트인 선택은 수정 폼에서 — Design §12.2)
   const visible = isEditMode
     ? active

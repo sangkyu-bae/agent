@@ -126,6 +126,11 @@ class CreateAgentRequest(BaseModel):
     # builtin-middleware D5: 빌트인 미들웨어 수동 opt-out (생성 폼 전용 —
     # 채팅 초안 경로는 이 필드를 만들 수 없어 빌트인이 항상 스냅샷된다).
     exclude_builtin_middleware_types: list[str] | None = None
+    # prompt-fallback-visibility FR-01: 위저드가 생성한 프롬프트 버전 id.
+    # 서버가 이 id 로 prompt_version 을 **재조회**해 degraded 여부를 판정한다
+    # (클라이언트가 보내는 degraded 플래그는 믿지 않는다 — Design D2).
+    # 미전달이면 게이트 skip — 수동 생성·Fix 경로·API 직접 사용은 무영향 (FR-06).
+    prompt_version_id: str | None = Field(None, max_length=36)
 
 
 class CreateAgentResponse(BaseModel):

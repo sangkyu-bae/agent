@@ -263,6 +263,18 @@ export const API_ENDPOINTS = {
   /** 완료된 작업 일괄 정리 (jobs-page-revamp FR-05) */
   JOBS_CLEANUP: '/api/v1/jobs/cleanup',
   JOB_DETAIL: (jobId: string) => `/api/v1/jobs/${jobId}`,
+
+  // Approval Gate (approval-gate Design §4.1)
+  APPROVALS: '/api/v1/approvals',
+  APPROVAL_DETAIL: (approvalId: string) => `/api/v1/approvals/${approvalId}`,
+  APPROVAL_APPROVE: (approvalId: string) =>
+    `/api/v1/approvals/${approvalId}/approve`,
+  APPROVAL_REJECT: (approvalId: string) =>
+    `/api/v1/approvals/${approvalId}/reject`,
+  APPROVAL_SEEN: (approvalId: string) => `/api/v1/approvals/${approvalId}/seen`,
+  /** 에이전트별 승인 게이트 설정 (approval-gate Check G3) */
+  AGENT_APPROVAL_GATE: (agentId: string) =>
+    `/api/v1/agents/${agentId}/approval-gate`,
   JOB_SEEN: (jobId: string) => `/api/v1/jobs/${jobId}/seen`,
   /** 내 스케줄 정의 전체 (jobs-page-revamp FR-15) — 관리는 AGENT_SCHEDULE_* 사용 */
   MY_SCHEDULES: '/api/v1/schedules',

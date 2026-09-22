@@ -249,3 +249,62 @@ describe('AdminToolsPage 카테고리·호출 상한 (mcp-tool-category-routing 
     ).toBeInTheDocument();
   });
 });
+
+describe('AdminToolsPage 승인 필요 토글 (approval-gate Check G2)', () => {
+  it('승인 필요 스위치를 렌더한다 (기본 꺼짐)', async () => {
+    useCatalog();
+    renderPage();
+    await screen.findByText('Tavily 웹 검색');
+    expect(
+      screen.getByRole('switch', { name: 'Tavily 웹 검색 승인 필요' }),
+    ).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('토글하면 metadata PATCH 로 requires_approval 반전값만 보낸다', async () => {
+    useCatalog();
+    let captured: Record<string, unknown> | null = null;
+    server.use(
+      http.patch('*/api/v1/tool-catalog/metadata', async ({ request }) => {
+        captured = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({
+          tool_id: captured.tool_id,
+          category: null,
+          max_tool_calls: null,
+          requires_approval: captured.requires_approval,
+        });
+      }),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Tavily 웹 검색');
+
+    await user.click(
+      screen.getByRole('switch', { name: 'Tavily 웹 검색 승인 필요' }),
+    );
+    await waitFor(() => expect(captured).not.toBeNull());
+    // 부분 갱신 — 분류·상한이 딸려 나가면 관리자 설정을 덮는다.
+    expect(captured).toEqual({
+      tool_id: 'internal:tavily_search',
+      requires_approval: true,
+    });
+  });
+
+  it('실패하면 에러 배너를 표시한다', async () => {
+    useCatalog();
+    server.use(
+      http.patch('*/api/v1/tool-catalog/metadata', () =>
+        HttpResponse.json({ detail: '권한이 없습니다' }, { status: 403 }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Tavily 웹 검색');
+
+    await user.click(
+      screen.getByRole('switch', { name: 'Tavily 웹 검색 승인 필요' }),
+    );
+    expect(
+      await screen.findByText(/권한이 없습니다|승인 필요 설정 변경에 실패했습니다/),
+    ).toBeInTheDocument();
+  });
+});

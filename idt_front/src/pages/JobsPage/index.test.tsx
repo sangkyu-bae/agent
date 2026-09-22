@@ -18,6 +18,12 @@ const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
 }));
 
+// approval-gate: 승인 대기 탭이 추가되며 JobsPage 가 useApprovals 를 쓴다.
+// 이 테스트는 훅 모킹 방식이라(QueryClientProvider 없음) 함께 모킹한다.
+vi.mock('@/hooks/useApprovals', () => ({
+  useApprovals: () => ({ data: undefined, isLoading: false, isError: false }),
+}));
+
 vi.mock('@/hooks/useBackgroundJobs', () => ({
   useJobHistory: mocks.useJobHistory,
   useMySchedules: mocks.useMySchedules,

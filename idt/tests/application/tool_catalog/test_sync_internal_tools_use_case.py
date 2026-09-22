@@ -169,3 +169,32 @@ class TestSyncInternalTools:
         await uc.execute("req")
         touched = {c.args[0].tool_id for c in repo.upsert_by_tool_id.call_args_list}
         assert "mcp:srv:tool" not in touched
+
+
+class TestRequiresApprovalSeed:
+    """approval-gate Check G10 — ToolMeta.requires_approval_default 가 신규 INSERT 시드로 실린다."""
+
+    @pytest.mark.asyncio
+    async def test_기본값이_엔트리에_실린다(self):
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from src.application.tool_catalog.sync_internal_tools_use_case import (
+            SyncInternalToolsUseCase,
+        )
+        from src.domain.agent_builder.schemas import ToolMeta
+
+        meta = ToolMeta(
+            tool_id="email_send", name="메일", description="d",
+            requires_approval_default=True,
+        )
+        repo = MagicMock()
+        repo.upsert_by_tool_id = AsyncMock(side_effect=lambda e, r: e)
+        repo.list_active = AsyncMock(return_value=[])  # 비활성화 대상 조회
+        uc = SyncInternalToolsUseCase(repository=repo, logger=MagicMock())
+        with patch(
+            "src.application.tool_catalog.sync_internal_tools_use_case.get_all_tools",
+            return_value=[meta],
+        ):
+            await uc.execute("req-1")
+        entry = repo.upsert_by_tool_id.await_args.args[0]
+        assert entry.requires_approval is True

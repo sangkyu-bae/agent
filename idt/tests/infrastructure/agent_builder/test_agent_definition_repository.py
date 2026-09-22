@@ -180,3 +180,70 @@ class TestAgentDefinitionRepositoryUpdate:
         assert len(mock_model.tools) == 2
         tool_ids = {t.tool_id for t in mock_model.tools}
         assert tool_ids == {"tavily_search", "excel_export"}
+
+
+class TestMiddlewareSyncPreservesConfig:
+    """approval-gate Check G3 — 에이전트 수정이 미들웨어 설정을 지우면 안 된다.
+
+    _sync_middleware 는 delete 후 재삽입이라 이전에는 모든 행이 config=None
+    으로 다시 쓰였다. 두 가지로 막는다:
+      1) 폼이 관리하는 타입은 유지되는 한 기존 config 를 옮겨 심는다.
+      2) 전용 API 소유 타입(approval_gate)은 폼 동기화가 아예 건드리지 않는다.
+    """
+
+    @staticmethod
+    def _existing(session, rows):
+        existing = MagicMock()
+        existing.scalars.return_value.all.return_value = [
+            MagicMock(middleware_type=t, config=c) for t, c in rows
+        ]
+        session.execute = AsyncMock(return_value=existing)
+
+    @pytest.mark.asyncio
+    async def test_유지되는_폼_타입의_config는_보존된다(self):
+        repo, session = _make_repo()
+        self._existing(session, [("model_retry", {"max_retries": 1})])
+        await repo._sync_middleware("ag1", ["model_retry"])
+        added = session.add.call_args_list[0].args[0]
+        assert added.config == {"max_retries": 1}
+
+    @pytest.mark.asyncio
+    async def test_빠진_폼_타입은_config와_함께_사라진다(self):
+        repo, session = _make_repo()
+        self._existing(session, [("model_retry", {"max_retries": 1})])
+        await repo._sync_middleware("ag1", ["tool_retry"])
+        added = [c.args[0].middleware_type for c in session.add.call_args_list]
+        assert added == ["tool_retry"]
+
+    @pytest.mark.asyncio
+    async def test_신규_타입은_config_None(self):
+        repo, session = _make_repo()
+        self._existing(session, [])
+        await repo._sync_middleware("ag1", ["model_retry"])
+        assert session.add.call_args_list[0].args[0].config is None
+
+    @pytest.mark.asyncio
+    async def test_승인게이트는_폼_목록에_있어도_재삽입하지_않는다(self):
+        """전용 API 소유 — 폼이 재삽입하면 행이 중복되거나 config 가 초기화된다."""
+        repo, session = _make_repo()
+        self._existing(session, [("approval_gate", {"execute_after": "0 0 * * *"})])
+        await repo._sync_middleware("ag1", ["model_retry", "approval_gate"])
+        added = [c.args[0].middleware_type for c in session.add.call_args_list]
+        assert added == ["model_retry"]
+
+    @pytest.mark.asyncio
+    async def test_승인게이트는_폼_목록에_없어도_삭제하지_않는다(self):
+        """폼 목록에서 빠졌다는 이유로 전용 API 설정이 지워지면 안 된다."""
+        from sqlalchemy.dialects import mysql
+
+        repo, session = _make_repo()
+        self._existing(session, [("approval_gate", {"execute_after": "0 0 * * *"})])
+        await repo._sync_middleware("ag1", ["model_retry"])
+        delete_stmts = [
+            c.args[0] for c in session.execute.call_args_list
+            if "DELETE" in str(c.args[0].compile(dialect=mysql.dialect())).upper()
+        ]
+        sql = str(delete_stmts[0].compile(
+            dialect=mysql.dialect(), compile_kwargs={"literal_binds": True}
+        ))
+        assert "NOT IN" in sql.upper() and "approval_gate" in sql

@@ -72,6 +72,10 @@ export interface CreateBuilderAgentRequest {
   presentation_generator?: PresentationGeneratorConfigRequest;
   // agent-settings-tab D5: supervisor 반복 한도 (백엔드 기본 25, 범위 10~1000)
   max_iterations?: number;
+  // prompt-fallback-visibility FR-01: 위저드가 생성한 프롬프트 버전 id.
+  // 서버가 이 id 로 prompt_version 을 재조회해 degraded + 미편집이면 422 로 거부한다.
+  // 미전달이면 게이트 skip (수동 생성·Fix 경로). 배선은 module-2.
+  prompt_version_id?: string | null;
 }
 
 export interface CreateBuilderAgentResponse {

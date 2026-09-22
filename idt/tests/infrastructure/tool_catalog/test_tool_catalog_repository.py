@@ -409,3 +409,102 @@ class TestToolCatalogRepositoryUpdateMetadata:
 
         # 조회 1회만 — UPDATE 미실행
         assert session.execute.await_count == 1
+
+
+class TestRequiresApprovalPreservation:
+    """approval-gate Design §3.3 (FR-02) — is_builtin D2 와 동형의 보존 계약.
+
+    sync(upsert) 가 관리자 토글을 덮으면 켜 둔 승인 게이트가 부팅 한 번에
+    조용히 꺼진다. 보존은 '코드를 추가하지 않음' 으로 성립하므로 테스트가
+    계약을 고정한다.
+    """
+
+    @pytest.mark.asyncio
+    async def test_save_carries_requires_approval(self):
+        repo, session = _make_repo()
+        entry = _make_entry("internal:email_send")
+        entry.requires_approval = True
+        await repo.save(entry, "req-1")
+        model = session.add.call_args[0][0]
+        assert model.requires_approval is True
+
+    @pytest.mark.asyncio
+    async def test_upsert_update_branch_never_touches_requires_approval(self):
+        repo, session = _make_repo()
+        now = datetime.now(timezone.utc)
+        existing_model = MagicMock()
+        existing_model.id = "tc-1"
+        existing_model.tool_id = "internal:email_send"
+        existing_model.source = "internal"
+        existing_model.name = "old"
+        existing_model.description = "old"
+        existing_model.mcp_server_id = None
+        existing_model.requires_env = None
+        existing_model.is_active = True
+        existing_model.is_builtin = False
+        existing_model.requires_approval = True  # 관리자가 켜 둔 상태
+        existing_model.created_at = now
+        existing_model.updated_at = now
+
+        captured_stmts = []
+        call_count = 0
+
+        async def mock_execute(stmt):
+            nonlocal call_count
+            call_count += 1
+            captured_stmts.append(stmt)
+            if call_count == 1:
+                r = MagicMock()
+                r.scalar_one_or_none.return_value = existing_model
+                return r
+            r = MagicMock()
+            r.rowcount = 1
+            return r
+
+        session.execute = mock_execute
+
+        entry = _make_entry("internal:email_send")
+        entry.requires_approval = False  # sync 가 기본값을 넘겨도
+        await repo.upsert_by_tool_id(entry, "req-1")
+
+        update_stmt = captured_stmts[1]
+        set_columns = set(update_stmt.compile().params.keys())
+        assert "requires_approval" not in set_columns
+
+    @pytest.mark.asyncio
+    async def test_update_metadata_can_toggle_requires_approval(self):
+        """관리자 토글의 유일한 쓰기 경로."""
+        repo, session = _make_repo()
+        captured_stmts = []
+
+        async def mock_execute(stmt):
+            captured_stmts.append(stmt)
+            r = MagicMock()
+            r.rowcount = 1
+            r.scalar_one_or_none.return_value = None
+            return r
+
+        session.execute = mock_execute
+        await repo.update_metadata(
+            "internal:email_send", "req-1", requires_approval=True
+        )
+        set_columns = set(captured_stmts[0].compile().params.keys())
+        assert "requires_approval" in set_columns
+
+    @pytest.mark.asyncio
+    async def test_update_metadata_omission_does_not_touch_it(self):
+        """category 만 바꿀 때 승인 플래그가 딸려 나가면 안 된다."""
+        repo, session = _make_repo()
+        captured_stmts = []
+
+        async def mock_execute(stmt):
+            captured_stmts.append(stmt)
+            r = MagicMock()
+            r.rowcount = 1
+            r.scalar_one_or_none.return_value = None
+            return r
+
+        session.execute = mock_execute
+        await repo.update_metadata("internal:email_send", "req-1", category="action")
+        set_columns = set(captured_stmts[0].compile().params.keys())
+        assert "requires_approval" not in set_columns

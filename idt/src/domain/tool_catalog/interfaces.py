@@ -53,6 +53,9 @@ class ToolCatalogRepositoryInterface(ABC):
         *,
         category: str | None = _UNSET,
         max_tool_calls: int | None = _UNSET,
+        # approval-gate Design §3.3 (FR-02): 승인 필요 여부 관리자 토글.
+        # sync(upsert)는 이 컬럼을 건드리지 않으므로 여기가 유일한 쓰기 경로다.
+        requires_approval: bool = _UNSET,
     ) -> ToolCatalogEntry | None:
         """Design Ref: mcp-tool-category-routing §4.2 — 분류·호출 상한 부분 갱신.
 

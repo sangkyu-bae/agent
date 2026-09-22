@@ -68,6 +68,14 @@ const AdminToolsPage = () => {
     );
   };
 
+  // approval-gate Check G2: 게이트를 켜는 관리자 경로 (전에는 DB 직접 UPDATE 뿐)
+  const handleApprovalToggle = (tool: CatalogTool) => {
+    submitMetadata(
+      { tool_id: tool.tool_id, requires_approval: !tool.requires_approval },
+      '승인 필요 설정 변경에 실패했습니다.',
+    );
+  };
+
   const handleToggle = (tool: CatalogTool) => {
     if (pendingToolId) return;
     setError(null);
@@ -126,6 +134,7 @@ const AdminToolsPage = () => {
                 <th className="px-5 py-3">설명</th>
                 <th className="px-5 py-3">분류</th>
                 <th className="px-5 py-3 text-center">호출 상한</th>
+                <th className="px-5 py-3 text-center">승인 필요</th>
                 <th className="px-5 py-3 text-center">빌트인</th>
               </tr>
             </thead>
@@ -174,6 +183,25 @@ const AdminToolsPage = () => {
                       onBlur={(e) => handleLimitCommit(tool, e.target.value)}
                       className="w-16 rounded-lg border border-zinc-200 bg-white px-2 py-1 text-center text-[12.5px] text-zinc-700 focus:border-violet-400 focus:outline-none"
                     />
+                  </td>
+                  <td className="px-5 py-3.5 text-center">
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={!!tool.requires_approval}
+                      aria-label={`${tool.name} 승인 필요`}
+                      title="켜면 이 도구를 호출하기 전에 사람의 승인을 받습니다"
+                      onClick={() => handleApprovalToggle(tool)}
+                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                        tool.requires_approval ? 'bg-violet-600' : 'bg-zinc-300'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                          tool.requires_approval ? 'translate-x-[18px]' : 'translate-x-[3px]'
+                        }`}
+                      />
+                    </button>
                   </td>
                   <td className="px-5 py-3.5 text-center">
                     <button

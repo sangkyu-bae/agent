@@ -65,5 +65,14 @@ class ToolCatalogModel(Base):
             "관리자 지정, sync 보존"
         ),
     )
+    # approval-gate Design §3.3 (V072): DDL COMMENT와 동일 문구 유지.
+    requires_approval: Mapped[bool] = mapped_column(
+        default=False,
+        nullable=False,
+        comment=(
+            "1이면 이 도구 호출 전 사람 승인 필요 (런타임 SoT, 관리자 토글). "
+            "기본 0 이라 기존 도구는 무영향"
+        ),
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

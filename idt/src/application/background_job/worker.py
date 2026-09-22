@@ -53,6 +53,9 @@ class BackgroundJobWorker:
         outbound_dispatcher=None,
         poll_interval_sec: float = 5.0,
         schedule_tick_interval_sec: float = 30.0,
+        # approval-gate Check G5: 예약 집행 tick (미주입 시 비활성 — 무회귀).
+        approval_tick_runner=None,
+        approval_tick_interval_sec: float = 60.0,
         max_concurrency: int = 2,
         enabled: bool = True,
         now_fn: Callable[[], datetime] = _utc_now,
@@ -67,6 +70,10 @@ class BackgroundJobWorker:
         self._logger = logger
         self._poll_interval = poll_interval_sec
         self._schedule_tick_interval = schedule_tick_interval_sec
+        self._approval_tick_runner = approval_tick_runner
+        self._approval_tick_interval = approval_tick_interval_sec
+        self._approval_task: Optional[asyncio.Task] = None
+        self._last_approval_tick: Optional[datetime] = None
         self._max_concurrency = max_concurrency
         self._enabled = enabled
         self._now_fn = now_fn
@@ -135,6 +142,7 @@ class BackgroundJobWorker:
         self._last_tick_at = self._now_fn()
         try:
             self._maybe_tick_schedules()
+            self._maybe_tick_approvals()
             await self._claim_and_spawn()
             self._last_error = None
         except Exception as e:
@@ -189,6 +197,39 @@ class BackgroundJobWorker:
                 "background worker schedule tick failed",
                 exception=e,
                 request_id=request_id,
+            )
+
+    # ── 승인 예약 집행 틱 (approval-gate Check G5) ───────────────
+
+    def _maybe_tick_approvals(self) -> None:
+        """스케줄 틱과 같은 single-flight + 주기 제어.
+
+        이전에는 외부 cron 이 /internal/approvals/tick 을 치지 않으면 scheduled
+        건이 영원히 집행되지 않았다. 직전 틱이 끝나지 않았으면 겹쳐 돌리지
+        않는다 — claim_due 의 행 잠금이 있지만, 겹칠 이유 자체를 없앤다.
+        """
+        if self._approval_tick_runner is None:
+            return
+        if self._approval_task is not None and not self._approval_task.done():
+            return
+        now = self._now_fn()
+        if (
+            self._last_approval_tick is not None
+            and (now - self._last_approval_tick).total_seconds()
+            < self._approval_tick_interval
+        ):
+            return
+        self._last_approval_tick = now
+        self._approval_task = asyncio.create_task(self._run_approval_tick())
+
+    async def _run_approval_tick(self) -> None:
+        request_id = f"worker-approval-{uuid.uuid4()}"
+        try:
+            await self._approval_tick_runner.run(request_id)
+        except Exception as e:
+            self._logger.error(
+                "background worker approval tick failed",
+                exception=e, request_id=request_id,
             )
 
     # ── job claim·실행 (D2·D3·D8) ─────────────────────────────────

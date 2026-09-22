@@ -36,6 +36,9 @@ class ToolCatalogRepository(ToolCatalogRepositoryInterface):
                 # 영속한다 (is_builtin D1과 동형). 기본은 NULL = 미분류.
                 category=entry.category,
                 max_tool_calls=entry.max_tool_calls,
+                # approval-gate D§3.3: INSERT 분기만 시드를 영속한다
+                # (is_builtin D1 동형). UPDATE 분기는 보존 계약상 제외.
+                requires_approval=entry.requires_approval,
                 created_at=entry.created_at or now,
                 updated_at=entry.updated_at or now,
             )
@@ -160,6 +163,7 @@ class ToolCatalogRepository(ToolCatalogRepositoryInterface):
         *,
         category: str | None = UNSET,
         max_tool_calls: int | None = UNSET,
+        requires_approval: bool = UNSET,
     ) -> ToolCatalogEntry | None:
         """mcp-tool-category-routing §4.2: 분류·호출 상한 부분 갱신.
 
@@ -176,6 +180,10 @@ class ToolCatalogRepository(ToolCatalogRepositoryInterface):
                 values["category"] = category
             if max_tool_calls is not UNSET:
                 values["max_tool_calls"] = max_tool_calls
+            # approval-gate D§3.3: 관리자 토글의 유일한 쓰기 경로.
+            # sync(upsert)는 이 컬럼을 건드리지 않는다 (보존 계약).
+            if requires_approval is not UNSET:
+                values["requires_approval"] = requires_approval
             if not values:
                 # 변경 요청이 없으면 UPDATE를 실행하지 않는다(불필요한 쓰기 방지).
                 return await self.find_by_tool_id(tool_id, request_id)
@@ -238,6 +246,7 @@ class ToolCatalogRepository(ToolCatalogRepositoryInterface):
             is_builtin=model.is_builtin,
             category=model.category,
             max_tool_calls=model.max_tool_calls,
+            requires_approval=model.requires_approval,
             created_at=model.created_at,
             updated_at=model.updated_at,
         )

@@ -10,6 +10,7 @@ from src.domain.agent_builder.interfaces import AgentDefinitionRepositoryInterfa
 from src.domain.agent_builder.schemas import AgentDefinition, WorkerDefinition
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.infrastructure.agent_builder.models import AgentDefinitionModel, AgentToolModel
+from src.domain.middleware.entities import SEPARATELY_MANAGED_MIDDLEWARE_TYPES
 from src.infrastructure.middleware.models import AgentMiddlewareModel
 from src.infrastructure.agent_builder.subscription_model import UserAgentSubscriptionModel
 
@@ -162,16 +163,23 @@ class AgentDefinitionRepository(AgentDefinitionRepositoryInterface):
             )
 
     def _insert_middleware_rows(
-        self, agent_id: str, middleware_types: list[str]
+        self,
+        agent_id: str,
+        middleware_types: list[str],
+        preserved: dict[str, dict | None] | None = None,
     ) -> None:
-        """스냅샷 행 생성 — 순서는 전달 리스트 순서(카탈로그 sort_order 반영)."""
+        """스냅샷 행 생성 — 순서는 전달 리스트 순서(카탈로그 sort_order 반영).
+
+        preserved: 유지되는 타입의 기존 config (approval-gate Check G3).
+        """
+        preserved = preserved or {}
         for i, mw_type in enumerate(middleware_types):
             self._session.add(
                 AgentMiddlewareModel(
                     id=str(uuid.uuid4()),
                     agent_id=agent_id,
                     middleware_type=mw_type,
-                    config=None,
+                    config=preserved.get(mw_type),
                     sort_order=i,
                     created_at=datetime.now(timezone.utc),
                 )
@@ -180,14 +188,40 @@ class AgentDefinitionRepository(AgentDefinitionRepositoryInterface):
     async def _sync_middleware(
         self, agent_id: str, middleware_types: list[str]
     ) -> None:
-        """builtin-middleware D5: 전체 교체 (delete 후 재삽입 — _sync_workers 대칭)."""
+        """builtin-middleware D5: 전체 교체 (delete 후 재삽입 — _sync_workers 대칭).
+
+        approval-gate Check G3 — **config 보존 계약**: 목록에 남는 타입은
+        기존 config 를 그대로 옮겨 심는다. 이전에는 모든 행이 config=None 으로
+        재삽입돼, 에이전트를 한 번 수정하면 에이전트별 게이트 설정(execute_after
+        등)이 조용히 사라졌다. 목록에서 빠진 타입의 config 는 함께 사라진다.
+        """
+        preserved = await self._load_middleware_configs(agent_id)
+        # 전용 API 소유 타입(approval_gate)은 폼 동기화 대상에서 제외한다 —
+        # 삭제도 재삽입도 하지 않아 그 행과 config 가 그대로 남는다.
         await self._session.execute(
             delete(AgentMiddlewareModel).where(
-                AgentMiddlewareModel.agent_id == agent_id
+                AgentMiddlewareModel.agent_id == agent_id,
+                AgentMiddlewareModel.middleware_type.notin_(
+                    SEPARATELY_MANAGED_MIDDLEWARE_TYPES
+                ),
             )
         )
         await self._session.flush()
-        self._insert_middleware_rows(agent_id, middleware_types)
+        form_managed = [
+            t for t in middleware_types
+            if t not in SEPARATELY_MANAGED_MIDDLEWARE_TYPES
+        ]
+        self._insert_middleware_rows(agent_id, form_managed, preserved)
+
+    async def _load_middleware_configs(
+        self, agent_id: str
+    ) -> dict[str, dict | None]:
+        result = await self._session.execute(
+            select(AgentMiddlewareModel).where(
+                AgentMiddlewareModel.agent_id == agent_id
+            )
+        )
+        return {m.middleware_type: m.config for m in result.scalars().all()}
 
     async def list_by_user(
         self, user_id: str, request_id: str

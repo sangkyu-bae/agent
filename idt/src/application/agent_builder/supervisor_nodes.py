@@ -527,6 +527,13 @@ def route_to_worker_or_final(state: SupervisorState) -> str:
     final_answer로 우회 — 답변 없이 END 직행하는 경로를 차단한다.
     """
     next_worker = state["next_worker"]
+    # approval-gate Design §2.1 ③: 승인 대기가 잡히면 즉시 종료한다.
+    # final_answer 를 태우지 않는 이유 — 초안은 사람이 승인 화면에서 볼
+    # 것이지 LLM 이 요약할 것이 아니고, 요약을 태우면 "완료했습니다" 같은
+    # 오해 소지 문구가 나갈 수 있다. 되물음·한도보다 우선한다: 게이트가
+    # 걸린 런은 더 돌 이유가 없다.
+    if next_worker == "__end__" and state.get("approval_pending"):
+        return "__end__"
     # supervisor-early-finish-fix D-05: 빈 결과 미해소 상태의 첫 FINISH를 1회
     # 되돌린다. 특정 워커를 강제하지 않고 재결정 기회만 준다 (그래프 계약 ③).
     # D-09: 한도 도달은 되물음보다 우선 — 종료를 막지 않는다.

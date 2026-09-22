@@ -59,6 +59,12 @@ class SyncMcpToolsUseCase:
                         name=tool_name,
                         description=tool.description or "",
                         is_active=True,
+                        # approval-gate-phase2 D-07: 서버 등록의 플래그가
+                        # "신규 엔트리" 의 초기값이 된다. 기존 엔트리는
+                        # repository UPDATE 분기가 이 컬럼을 SET 하지 않아
+                        # 관리자 값이 보존된다 (category D-02 와 같은 계약).
+                        requires_approval=server.default_requires_approval
+                        is True,
                     )
                     await self._tool_catalog_repo.upsert_by_tool_id(entry, request_id)
                     count += 1
