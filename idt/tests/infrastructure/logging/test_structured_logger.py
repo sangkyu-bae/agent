@@ -197,3 +197,108 @@ class TestStructuredLogger:
         parsed = json.loads(output.split("\n")[0])
         assert parsed["error_type"] == "ValueError"
         assert parsed["error_message"] == "no traceback"
+
+
+class TestStructuredLoggerContextInjection:
+    """ContextVar 로그 컨텍스트 자동 주입 테스트."""
+
+    @pytest.fixture(autouse=True)
+    def _clean_context(self):
+        from src.infrastructure.logging.log_context import clear
+
+        clear()
+        yield
+        clear()
+
+    @pytest.fixture
+    def logger(self):
+        stream = StringIO()
+        handler = logging.StreamHandler(stream)
+        handler.setLevel(logging.DEBUG)
+        handler.setFormatter(StructuredFormatter())
+        structured_logger = StructuredLogger(
+            name="test_context_logger", level=logging.DEBUG
+        )
+        structured_logger._logger.handlers.clear()
+        structured_logger._logger.addHandler(handler)
+        return structured_logger, stream
+
+    def test_bound_context_appears_in_log(self, logger):
+        from src.infrastructure.logging.log_context import bind
+
+        structured_logger, stream = logger
+        bind(request_id="req-123", endpoint="/api/v1/agents/run", method="POST")
+        structured_logger.info("Something happened")
+
+        parsed = json.loads(stream.getvalue())
+        assert parsed["request_id"] == "req-123"
+        assert parsed["endpoint"] == "/api/v1/agents/run"
+        assert parsed["method"] == "POST"
+
+    def test_no_context_means_no_injected_fields(self, logger):
+        structured_logger, stream = logger
+        structured_logger.info("No context here")
+
+        parsed = json.loads(stream.getvalue())
+        assert "request_id" not in parsed
+        assert "endpoint" not in parsed
+
+    def test_explicit_kwargs_win_over_context(self, logger):
+        from src.infrastructure.logging.log_context import bind
+
+        structured_logger, stream = logger
+        bind(request_id="ctx-req")
+        structured_logger.info("Explicit wins", request_id="explicit-req")
+
+        parsed = json.loads(stream.getvalue())
+        assert parsed["request_id"] == "explicit-req"
+
+    def test_context_injected_for_all_levels(self, logger):
+        from src.infrastructure.logging.log_context import bind
+
+        structured_logger, stream = logger
+        bind(request_id="req-lvl")
+        structured_logger.debug("d")
+        structured_logger.warning("w")
+        structured_logger.error("e")
+
+        lines = [l for l in stream.getvalue().splitlines() if l.strip()]
+        for line in lines:
+            assert json.loads(line)["request_id"] == "req-lvl"
+
+    def test_extra_context_fields_are_injected(self, logger):
+        from src.infrastructure.logging.log_context import bind
+
+        structured_logger, stream = logger
+        bind(request_id="req-1", agent_run_id="run-42")
+        structured_logger.info("With extra")
+
+        parsed = json.loads(stream.getvalue())
+        assert parsed["agent_run_id"] == "run-42"
+
+    def test_context_field_colliding_with_logrecord_is_prefixed(self, logger):
+        """LogRecord 예약어와 충돌하는 컨텍스트 필드도 안전하게 처리된다."""
+        from src.infrastructure.logging.log_context import bind
+
+        structured_logger, stream = logger
+        bind(request_id="req-1", module="my_module")
+        structured_logger.info("Reserved key in context")
+
+        parsed = json.loads(stream.getvalue())
+        assert parsed["ctx_module"] == "my_module"
+
+
+class TestStructuredLoggerIsEnabledFor:
+    """is_enabled_for() — 비싼 로그 페이로드 계산을 건너뛰기 위한 가드."""
+
+    def test_debug_enabled_when_level_is_debug(self):
+        logger = StructuredLogger(name="test_enabled_debug", level=logging.DEBUG)
+        assert logger.is_enabled_for(logging.DEBUG) is True
+
+    def test_debug_disabled_when_level_is_info(self):
+        logger = StructuredLogger(name="test_enabled_info", level=logging.INFO)
+        assert logger.is_enabled_for(logging.DEBUG) is False
+
+    def test_info_enabled_when_level_is_info(self):
+        logger = StructuredLogger(name="test_enabled_info2", level=logging.INFO)
+        assert logger.is_enabled_for(logging.INFO) is True
