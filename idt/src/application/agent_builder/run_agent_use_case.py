@@ -49,6 +49,13 @@ from src.application.repositories.conversation_repository import (
 from src.application.repositories.conversation_summary_repository import (
     ConversationSummaryRepository,
 )
+from src.domain.approval.entity import (
+    ApprovalRequest,
+    GateSettings,
+    ResumeSnapshot,
+)
+from src.domain.approval.policies import ApprovalPolicy
+from src.infrastructure.approval.snapshot import SnapshotSerializer
 from src.domain.agent_builder.interfaces import AgentDefinitionRepositoryInterface
 from src.domain.agent_builder.rag_tool_config import clamp_llm_name
 from src.domain.agent_builder.policies import (
@@ -82,10 +89,7 @@ from src.domain.conversation.value_objects import (
 from src.domain.llm.message_content import coerce_message_text
 from src.domain.llm_model.interfaces import LlmModelRepositoryInterface
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
-from src.infrastructure.langsmith.langsmith import (
-    langsmith,
-    make_agent_run_tracer,
-)
+from src.infrastructure.langsmith.langsmith import make_agent_run_tracer
 from src.infrastructure.langsmith.trace_extractor import TraceExtractor
 from src.infrastructure.llm.usage_callback import UsageCallback
 from src.infrastructure.persistence.repositories.conversation_repository import (
@@ -127,6 +131,11 @@ class _StreamState:
     charts: list = field(default_factory=list)
     # analysis-source-preservation: analysis_node가 방출한 원천 데이터 채널.
     analysis_source: list = field(default_factory=list)
+    # approval-gate Design §2.1 ④: 게이트가 차단한 도구 호출 신호 (limit_reached 동형).
+    approval_pending: dict = field(default_factory=dict)
+    # approval-gate Design §3.1(v0.2): 재개용 최종 SupervisorState 스냅샷.
+    # 최상위 chain_end 출력이 전체 상태다 — 워커 진입 후크가 없어 최종 상태를 쓴다.
+    final_state: dict = field(default_factory=dict)
 
 
 def _effective_model_id(agent: Any, request: RunAgentRequest) -> str:
@@ -194,8 +203,17 @@ class RunAgentUseCase:
         session_factory: Optional[async_sessionmaker[AsyncSession]] = None,
         agent_skill_repo: Optional[AgentSkillRepositoryInterface] = None,
         snapshot_policy: Optional[AnalysisSnapshotPolicy] = None,
+        # approval-gate Design §2.1 ④: session -> ApprovalRepository 팩토리.
+        # 미주입이면 적재를 건너뛴다 (기존 호출자 무회귀).
+        approval_repo_factory=None,
+        approval_gate_config: Optional[dict] = None,
+        # Check G4: (session, agent_id, request_id) -> 게이트 config
+        approval_gate_config_resolver=None,
     ) -> None:
         self._repository = repository
+        self._approval_repo_factory = approval_repo_factory
+        self._approval_gate_config = approval_gate_config
+        self._approval_gate_config_resolver = approval_gate_config_resolver
         self._llm_model_repository = llm_model_repository
         self._compiler = compiler
         self._logger = logger
@@ -234,7 +252,10 @@ class RunAgentUseCase:
             (예외 시 ANSWER 대신 RUN_FAILED, generator는 정상 종료)
         """
         seq = _SeqCounter()
-        langsmith(project_name="agent-run")
+        # pipeline-langsmith-tracing FR-07: 전역 `langsmith()` 제거.
+        # `_build_graph_config` 의 per-run tracer(make_agent_run_tracer)가 이미
+        # 프로젝트를 지정하므로 기능 손실이 없고, 전역을 켜면 이후 다른 경로의
+        # run 까지 'agent-run' 으로 흘러간다.
         self._logger.info(
             "RunAgentUseCase.stream start",
             request_id=request_id, agent_id=agent_id,
@@ -304,7 +325,18 @@ class RunAgentUseCase:
                 analysis_data=snapshot,
                 persist=request.persist_conversation,
             )
+            # approval-gate Design §2.1 ④: 게이트가 걸렸으면 승인 요청을 영속한다.
+            # 답변 이벤트보다 먼저 — 사용자가 "승인 대기" 문구를 본 시점에는
+            # 이미 대기함에 건이 있어야 한다.
+            approval_id = await self._persist_approval_if_pending(
+                agent=agent, state=state, run_id=run_id,
+                request=request, request_id=request_id,
+                session_id=session_id,
+            )
             answer_payload: dict = {"answer": answer, "tools_used": tools_used}
+            if approval_id:
+                answer_payload["approval_pending"] = True
+                answer_payload["approval_id"] = approval_id
             # agent-recursion-limit D7: True일 때만 부착 (charts 선례와 동형).
             if state.limit_reached:
                 answer_payload["limit_reached"] = True
@@ -743,6 +775,234 @@ class RunAgentUseCase:
             {"node_name": name, "node_type": _node_type_for(name).value},
         )
 
+    async def resume_from_snapshot(
+        self, approval, *, outcome: str, request_id: str
+    ) -> str:
+        """approval-gate Design §2.1 — 승인/거절 결과를 주입해 런을 이어 돌린다.
+
+        RunResumerInterface 구현. 재개 실행이 여기 있는 이유는 compile 이
+        관측성(tracker/run_id)·스킬 주입·모델 오버라이드까지 아우르기
+        때문이다 — 별도 UseCase 가 복제하면 재개 런에서만 조용히 빠진다.
+
+        재개 불가 사유(정의 변경·스키마 불일치·깨진 스냅샷)는 예외로 올리지
+        않는다: 집행은 이미 끝났으므로 재개 실패가 집행을 무효로 만들면 안 된다.
+        """
+        agent = await self._repository.find_by_id(approval.agent_id, request_id)
+        if agent is None:
+            self._logger.warning(
+                "resume skipped — agent not found",
+                request_id=request_id, approval_id=approval.id,
+            )
+            return ""
+        if not self._can_resume(agent, approval, request_id):
+            return ""
+        try:
+            state = self._restore_state(approval, outcome)
+        except Exception as e:
+            self._logger.error(
+                "resume snapshot restore failed",
+                request_id=request_id, approval_id=approval.id, exception=e,
+            )
+            return ""
+        answer = await self._resume_graph(state, agent, request_id)
+        await self._save_resumed_answer(approval, answer, request_id)
+        self._logger.info(
+            "run resumed", request_id=request_id, approval_id=approval.id,
+        )
+        return answer
+
+    async def _save_resumed_answer(
+        self, approval, answer: str, request_id: str
+    ) -> None:
+        """재개 답변을 원래 대화 세션에 저장한다.
+
+        Check G1: 이전에는 session_id 를 "" 로 넘겨 SessionId 가 ValueError 를
+        던졌고, 호출측이 그 예외를 삼켜 최종 답변이 조용히 유실됐다.
+        세션·요청자 신원이 없으면(구버전 행, 웹훅 런) 저장만 건너뛰고
+        답변은 반환한다 — 답변 자체를 잃는 것보다 낫다.
+        """
+        if not approval.session_id or not approval.requested_by:
+            self._logger.warning(
+                "resumed answer not persisted — missing session or requester",
+                request_id=request_id, approval_id=approval.id,
+                has_session=bool(approval.session_id),
+                has_requester=bool(approval.requested_by),
+            )
+            return
+        await self._save_assistant_message(
+            answer, approval.requested_by, approval.session_id,
+            approval.agent_id, charts=None, analysis_data=None, persist=True,
+        )
+
+    def _can_resume(self, agent, approval, request_id: str) -> bool:
+        """스키마 버전 + 에이전트 정의 대조 (FR-14).
+
+        승인 시점에도 검사하지만, 예약 집행은 그 사이에 며칠이 흐른다 —
+        집행 직전에 다시 본다.
+        """
+        if not SnapshotSerializer.is_supported(approval.snapshot.schema_version):
+            self._logger.warning(
+                "resume skipped — snapshot schema mismatch",
+                request_id=request_id, approval_id=approval.id,
+                version=approval.snapshot.schema_version,
+            )
+            return False
+        if getattr(agent, "updated_at", None) != approval.snapshot.agent_updated_at:
+            self._logger.warning(
+                "resume skipped — agent definition changed",
+                request_id=request_id, approval_id=approval.id,
+            )
+            return False
+        return True
+
+    @staticmethod
+    def _restore_state(approval, outcome: str) -> dict:
+        """스냅샷 복원 + 결과 주입 + 종결 신호 초기화.
+
+        approval_pending·next_worker 를 비우지 않으면 재진입 즉시 라우팅이
+        다시 __end__ 로 빠져 런이 한 발도 못 나간다.
+        """
+        state = SnapshotSerializer.loads(approval.snapshot.state_json)
+        state["messages"] = list(state.get("messages") or []) + [
+            AIMessage(
+                content=outcome,
+                name=clamp_llm_name(approval.worker_id or "approval"),
+            )
+        ]
+        state["approval_pending"] = {}
+        state["next_worker"] = ""
+        state["finish_challenge_pending"] = False
+        return state
+
+    async def _resume_graph(self, state: dict, agent, request_id: str) -> str:
+        """복원 상태로 그래프를 1회 실행하고 최종 답변을 돌려준다."""
+        llm_model = await self._llm_model_repository.find_by_id(
+            agent.llm_model_id, request_id
+        )
+        if llm_model is None:
+            raise ValueError(f"LLM 모델 없음: {agent.llm_model_id}")
+        workflow = agent.to_workflow_definition()
+        workflow = await self._inject_attached_skills(workflow, agent, request_id)
+        graph = await self._compiler.compile(
+            workflow=workflow,
+            llm_model=llm_model,
+            temperature=agent.temperature,
+            request_id=request_id,
+            supervisor_config=SupervisorConfig(
+                max_iterations=agent.max_iterations
+            ),
+            depth=0,
+            visited={agent.id},
+            tracker=self._tracker,
+            include_user_context=agent.include_user_context,
+            agent_id=agent.id,
+        )
+        result = await graph.ainvoke(state)
+        answer, _ = self._parse_result(result)
+        return answer
+
+    async def _persist_approval_if_pending(
+        self, *, agent, state, run_id, request, request_id: str,
+        session_id: str | None = None,
+    ) -> str | None:
+        """approval-gate Design §2.1 ④ — 게이트 신호를 ApprovalRequest 로 영속.
+
+        신호가 없으면 아무것도 하지 않는다(게이트 미적용 런은 완전 무회귀).
+        리포지토리 팩토리가 미주입이면 경고 후 건너뛴다 — 기존 호출자
+        (테스트·구버전 배선)가 깨지지 않게 하는 additive 계약.
+
+        영속 실패를 삼키지 않는 이유: 게이트는 이미 도구를 차단했으므로,
+        여기서 실패하면 사용자는 "승인 대기" 를 보는데 대기함에는 아무것도
+        없는 상태가 된다. 조용한 유실보다 런 실패가 낫다.
+        """
+        pending = state.approval_pending
+        if not pending:
+            return None
+        if self._approval_repo_factory is None:
+            self._logger.warning(
+                "approval pending but repository not wired — skipped",
+                request_id=request_id, agent_id=agent.id,
+            )
+            return None
+
+        payload, truncated = SnapshotSerializer.dumps_with_limit(
+            state.final_state or {"messages": state.final_messages}
+        )
+        if truncated:
+            self._logger.warning(
+                "resume snapshot truncated", request_id=request_id,
+                agent_id=agent.id,
+            )
+        # Check G4: 게이트 설정 해석과 적재를 같은 세션·트랜잭션에서 한다
+        # (한 UseCase 안에서 저장소마다 다른 세션을 쓰지 않는다 — CLAUDE.md).
+        async with self._session_factory() as session:
+            async with session.begin():
+                gate_config = await self._resolve_gate_config(
+                    session, agent.id, request_id
+                )
+                approval = self._build_approval(
+                    agent=agent, pending=pending, snapshot_json=payload,
+                    run_id=run_id, request=request, request_id=request_id,
+                    gate_config=gate_config,
+                )
+                # Check G1: 재개 답변을 원래 대화로 되돌려 놓기 위해 세션 보존.
+                approval.session_id = session_id
+                repo = self._approval_repo_factory(session)
+                await repo.create(approval, request_id)
+        self._logger.info(
+            "approval request persisted", request_id=request_id,
+            approval_id=approval.id, tool_id=approval.tool_id,
+        )
+        return approval.id
+
+    async def _resolve_gate_config(
+        self, session, agent_id: str, request_id: str
+    ) -> dict:
+        """Check G4 — 해당 에이전트의 게이트 설정(카탈로그 default ∪ 에이전트 override).
+
+        이전에는 생성자 상수를 읽었고 main.py 가 넘기지 않아 만료가 항상
+        168h 였다. 리졸버는 승인 쪽 _GateConfigReader 와 같은 해석 함수를
+        공유한다(MergePolicy 단일 출처). 미주입이면 생성자 값 → 도메인 기본.
+        """
+        resolver = getattr(self, "_approval_gate_config_resolver", None)
+        if resolver is not None:
+            return await resolver(session, agent_id, request_id) or {}
+        return getattr(self, "_approval_gate_config", None) or {}
+
+    def _build_approval(
+        self, *, agent, pending: dict, snapshot_json: str, run_id, request,
+        request_id: str, gate_config: dict | None = None,
+    ):
+        now = _utcnow()
+        worker_id = pending.get("worker_id", "")
+        gate = GateSettings.from_config(gate_config or {}, is_enforced=False)
+        return ApprovalRequest(
+            id=str(uuid.uuid4()),
+            run_id=run_id.value if run_id is not None else "",
+            agent_id=agent.id,
+            requested_by=request.user_id,
+            worker_id=worker_id,
+            tool_id=pending.get("tool_id", ""),
+            tool_args=pending.get("tool_args") or {},
+            draft=pending.get("draft", ""),
+            status="pending",
+            idempotency_key=ApprovalPolicy.build_idempotency_key(
+                run_id=run_id.value if run_id is not None else request_id,
+                worker_id=worker_id or "unknown",
+                tool_call_id=pending.get("tool_call_id") or request_id,
+            ),
+            snapshot=ResumeSnapshot(
+                schema_version=SnapshotSerializer.SCHEMA_VERSION,
+                agent_updated_at=agent.updated_at,
+                worker_id=worker_id,
+                state_json=snapshot_json,
+            ),
+            expires_at=ApprovalPolicy.resolve_expires_at(now, gate.expires_hours),
+            request_id=request_id,
+            created_at=now,
+            updated_at=now,
+        )
+
     def _map_chain_end(
         self, name: str, data: dict, node_names: set[str],
         seq: _SeqCounter, run_id: Optional[RunId], state: _StreamState,
@@ -761,6 +1021,13 @@ class RunAgentUseCase:
         # analysis-source-preservation: analysis_node output의 원천 데이터 캡처.
         if isinstance(output, dict) and output.get("analysis_source"):
             state.analysis_source = list(output["analysis_source"])
+        # approval-gate Design §2.1 ④: 게이트 신호 + 재개 스냅샷 캡처.
+        # truthy일 때만 갱신 — 뒤따르는 빈 델타가 유효 신호를 덮지 않는다
+        # (charts 캡처와 동형). 스냅샷은 messages를 가진 최신 출력을 쓴다.
+        if isinstance(output, dict) and output.get("approval_pending"):
+            state.approval_pending = dict(output["approval_pending"])
+        if isinstance(output, dict) and "messages" in output:
+            state.final_state = dict(output)
 
         if name not in node_names:
             return None

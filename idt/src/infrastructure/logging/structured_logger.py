@@ -14,6 +14,7 @@ _LOGRECORD_RESERVED_KEYS: frozenset[str] = frozenset(
 
 from src.domain.logging.interfaces import LoggerInterface
 from src.infrastructure.logging.formatters import get_formatter
+from src.infrastructure.logging.log_context import get_context_fields
 
 
 def _resolve_log_level() -> int:
@@ -104,6 +105,20 @@ class StructuredLogger(LoggerInterface):
         """
         self._log(logging.CRITICAL, message, exception=exception, **kwargs)
 
+    def is_enabled_for(self, level: int) -> bool:
+        """해당 레벨의 로그가 실제로 출력되는지 확인한다.
+
+        로그 페이로드 구성이 비싼 호출부(예: DB 쿼리 리스너)에서
+        불필요한 계산을 건너뛰기 위한 가드.
+
+        Args:
+            level: logging 레벨 정수
+
+        Returns:
+            출력되면 True
+        """
+        return self._logger.isEnabledFor(level)
+
     def _log(
         self,
         level: int,
@@ -113,15 +128,19 @@ class StructuredLogger(LoggerInterface):
     ) -> None:
         """내부 로그 기록 메서드.
 
+        ContextVar에 바인딩된 로그 컨텍스트(request_id / endpoint / ...)를
+        자동으로 병합한다. 호출부가 명시한 kwargs가 컨텍스트보다 우선한다.
+
         Args:
             level: 로그 레벨
             message: 로그 메시지
             exception: 예외 객체
             **kwargs: 추가 컨텍스트 정보
         """
+        merged = {**get_context_fields(), **kwargs}
         extra = {
             (f"ctx_{k}" if k in _LOGRECORD_RESERVED_KEYS else k): v
-            for k, v in kwargs.items()
+            for k, v in merged.items()
         }
 
         # stacklevel=3: _log -> info/error/etc -> 실제 호출 위치

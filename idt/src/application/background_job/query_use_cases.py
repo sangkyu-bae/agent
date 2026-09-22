@@ -80,14 +80,38 @@ class GetJobUseCase:
 
 class CountUnseenUseCase:
     def __init__(
-        self, job_repo: BackgroundJobRepositoryInterface, logger: LoggerInterface
+        self,
+        job_repo: BackgroundJobRepositoryInterface,
+        logger: LoggerInterface,
+        # approval-gate Design §5.5: 승인 대기 건수 합산 (미주입 시 0 — 무회귀).
+        approval_counter=None,
     ) -> None:
         self._job_repo = job_repo
         self._logger = logger
+        self._approval_counter = approval_counter
 
     async def execute(self, user_id: str, request_id: str) -> UnseenCountResponse:
-        count = await self._job_repo.count_unseen(user_id, request_id)
-        return UnseenCountResponse(count=count)
+        jobs = await self._job_repo.count_unseen(user_id, request_id)
+        approvals = await self._count_approvals(user_id, request_id)
+        # count 는 총합 — 기존 소비자의 의미를 바꾸지 않는다.
+        return UnseenCountResponse(
+            count=jobs + approvals, jobs=jobs, approvals=approvals
+        )
+
+    async def _count_approvals(self, user_id: str, request_id: str) -> int:
+        """승인 대기 집계 실패가 벨 배지 전체를 죽이지 않게 한다."""
+        if self._approval_counter is None:
+            return 0
+        try:
+            return await self._approval_counter.count_unseen(
+                user_id=user_id, request_id=request_id
+            )
+        except Exception as e:
+            self._logger.warning(
+                "approval unseen count failed — treated as 0",
+                request_id=request_id, exception=e,
+            )
+            return 0
 
 
 class MarkSeenUseCase:

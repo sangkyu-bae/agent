@@ -66,7 +66,7 @@ from src.domain.visualization.interfaces import (
 )
 from src.domain.visualization.policies import VisualizationRoutingPolicy
 from src.domain.visualization.schemas import VizDecision
-from src.infrastructure.langsmith.langsmith import langsmith
+from src.infrastructure.langsmith.langsmith import make_general_chat_tracer
 from src.infrastructure.persistence.repositories.conversation_repository import (
     SQLAlchemyConversationMessageRepository,
 )
@@ -312,7 +312,8 @@ class GeneralChatUseCase:
           (예외 시 ANSWER/DONE 대신 CHAT_FAILED, generator 정상 종료)
         """
         seq = _SeqCounter()
-        langsmith(project_name="general-chat")
+        # pipeline-langsmith-tracing FR-06: 전역 `langsmith()` 제거.
+        # 프로젝트 지정은 astream_events config 의 per-run tracer 가 맡는다.
         self._logger.info(
             "GeneralChatUseCase.stream start",
             request_id=request_id, user_id=request.user_id,
@@ -426,8 +427,17 @@ class GeneralChatUseCase:
             state = _ChatStreamState()
             # D4: callback 부착 시 general_chat LLM 호출도 ai_llm_call에 기록.
             stream_kwargs: dict = {"version": "v2"}
-            if callback is not None:
-                stream_kwargs["config"] = {"callbacks": [callback]}
+            # pipeline-langsmith-tracing §4-2(편차) — 전역 os.environ 대신
+            # per-run tracer 를 callbacks 선두에 얹는다. `astream_events` 는
+            # yield 를 가로지르므로 컨텍스트 매니저(scoped_tracing)를 쓸 수 없다.
+            # 키가 없으면 None 이라 기존 동작과 동일하다.
+            callbacks = [
+                cb
+                for cb in (make_general_chat_tracer(tags=["general-chat"]), callback)
+                if cb is not None
+            ]
+            if callbacks:
+                stream_kwargs["config"] = {"callbacks": callbacks}
             async for raw in agent.astream_events(
                 {"messages": context}, **stream_kwargs,
             ):

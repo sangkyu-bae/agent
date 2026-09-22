@@ -23,6 +23,11 @@ class RegisterMCPServerRequest(BaseModel):
         default=None,
         description="다운스트림 서버 config {'NAVER_CLIENT_ID', ...}",
     )
+    # approval-gate-phase2 D-07. 생략 시 False — 기존 클라이언트 하위 호환.
+    default_requires_approval: bool = Field(
+        default=False,
+        description="이 서버의 도구가 카탈로그에 처음 등록될 때 승인 필요로 시작할지",
+    )
 
 
 class UpdateMCPServerRequest(BaseModel):
@@ -34,6 +39,8 @@ class UpdateMCPServerRequest(BaseModel):
     transport: str | None = None
     auth_config: dict | None = None
     server_config: dict | None = None
+    # None = 미변경. 바꿔도 이미 동기화된 도구에는 소급하지 않는다 (FR-16).
+    default_requires_approval: bool | None = None
 
 
 class ToolSyncResultResponse(BaseModel):
@@ -58,6 +65,7 @@ class MCPServerResponse(BaseModel):
     transport: str
     input_schema: dict | None
     is_active: bool
+    default_requires_approval: bool = False
     tool_id: str
     created_at: datetime
     updated_at: datetime
@@ -109,6 +117,7 @@ def to_response(entity, tool_sync=None) -> MCPServerResponse:
         transport=entity.transport.value,
         input_schema=entity.input_schema,
         is_active=entity.is_active,
+        default_requires_approval=entity.default_requires_approval,
         tool_id=entity.tool_id,
         created_at=entity.created_at,
         updated_at=entity.updated_at,

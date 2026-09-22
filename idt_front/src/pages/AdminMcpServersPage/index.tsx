@@ -29,6 +29,7 @@ interface FormState {
   endpoint: string;
   transport: McpTransport;
   is_active: boolean;
+  default_requires_approval: boolean;
   apiKey: string;
   profile: string;
   headersText: string;
@@ -41,6 +42,9 @@ const emptyForm: FormState = {
   endpoint: '',
   transport: 'sse',
   is_active: true,
+  // approval-gate-phase2 D-07: API 기본과 같이 꺼짐 — 조회용 서버가 대부분이라
+  // 켜짐 기본이면 단독 워커 제약에 걸린다.
+  default_requires_approval: false,
   apiKey: '',
   profile: '',
   headersText: '',
@@ -53,6 +57,7 @@ const fromServer = (s: McpServer): FormState => ({
   endpoint: s.endpoint,
   transport: s.transport,
   is_active: s.is_active,
+  default_requires_approval: s.default_requires_approval ?? false,
   // 시크릿은 마스킹되어 오므로 빈 값으로 시작 (변경 시에만 입력)
   apiKey: '',
   profile: '',
@@ -148,6 +153,7 @@ const McpServerFormModal = ({
         endpoint: form.endpoint.trim(),
         transport: form.transport,
         is_active: form.is_active,
+        default_requires_approval: form.default_requires_approval,
       };
       // 시크릿: 입력된 경우에만 전송 (빈 값 = 기존 유지)
       if (authConfig) data.auth_config = authConfig;
@@ -161,6 +167,7 @@ const McpServerFormModal = ({
         transport: form.transport,
         auth_config: authConfig ?? null,
         server_config: serverConfig ?? null,
+        default_requires_approval: form.default_requires_approval,
       });
     }
   };
@@ -248,6 +255,26 @@ const McpServerFormModal = ({
                 활성
               </label>
             )}
+          </div>
+
+          {/* approval-gate-phase2 D-07: 신규 카탈로그 엔트리의 승인 초기값 */}
+          <div className="rounded-xl border border-zinc-100 bg-zinc-50/60 p-4">
+            <label className="flex items-start gap-2 text-[13px] text-zinc-700">
+              <input
+                type="checkbox"
+                checked={form.default_requires_approval}
+                aria-label="이 서버의 도구는 기본으로 승인 필요"
+                onChange={(e) => set('default_requires_approval', e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-violet-600"
+              />
+              <span>
+                <span className="font-medium">이 서버의 도구는 기본으로 승인 필요</span>
+                <span className="mt-1 block text-[12px] text-zinc-500">
+                  발송·변경·삭제처럼 되돌릴 수 없는 도구가 있는 서버는 켜세요.
+                  새로 동기화되는 도구에만 적용됩니다 — 이미 등록된 도구는 도구 관리 화면에서 바꿉니다.
+                </span>
+              </span>
+            </label>
           </div>
 
           {/* 시크릿 영역 */}
@@ -616,6 +643,11 @@ const AdminMcpServersPage = () => {
                     >
                       {srv.is_active ? '활성' : '비활성'}
                     </span>
+                    {srv.default_requires_approval && (
+                      <span className="ml-1.5 rounded-md bg-amber-50 px-2 py-1 text-[11.5px] font-medium text-amber-700">
+                        승인 기본
+                      </span>
+                    )}
                   </td>
                   <td className="px-5 py-4">
                     <div className="flex justify-end gap-2">

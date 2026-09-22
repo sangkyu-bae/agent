@@ -22,5 +22,9 @@ class ToolCatalogEntry:
     category: str | None = None
     # 워커 1회 실행당 도구 호출 상한. None = ToolCallBudgetPolicy 기본값.
     max_tool_calls: int | None = None
+    # approval-gate Design §3.3 (FR-02): 이 도구 호출 전 사람 승인이 필요한가.
+    # is_builtin/category 와 동일하게 관리자 지정값이며 sync 가 덮어쓰지 않는다.
+    # 기본 False 라 기존 도구 10종은 게이트 대상이 아니다 (무회귀).
+    requires_approval: bool = False
     created_at: datetime | None = None
     updated_at: datetime | None = None

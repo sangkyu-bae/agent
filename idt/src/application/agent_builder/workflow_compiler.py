@@ -16,6 +16,10 @@ from src.application.agent_builder.search_pipeline import (
 from src.application.deep_search.workflow import create_deep_search_node
 from src.domain.deep_search.policies import DeepSearchBudgetPolicy
 from src.domain.agent_builder.rag_tool_config import clamp_llm_name
+from src.domain.agent_builder.policies import GatedWorkerPolicy
+from src.domain.approval.entity import GateSettings
+from src.domain.approval.policies import ApprovalPolicy, ApprovalSignalPolicy
+from src.domain.middleware.entities import MiddlewareType
 from src.application.agent_builder.supervisor_hooks import (
     AttachmentRoutingHooks,
     DefaultHooks,
@@ -31,6 +35,8 @@ from src.application.agent_builder.supervisor_nodes import (
 )
 from src.application.agent_builder.supervisor_state import SupervisorState
 from src.application.agent_builder.worker_run_cap_hooks import WorkerRunCapHooks
+from src.application.approval.gate_interface import ApprovalGateInterface
+from src.application.approval.gate_middleware import StatelessGate
 from src.application.middleware.middleware_builder import MiddlewareBuilder
 from src.application.agent_run.auth_context import get_current_auth_context
 from src.application.agent_run.prompt_rendering import (
@@ -128,6 +134,47 @@ def _instantiate(middleware_plan) -> list:
     if middleware_plan is None:
         return []
     return middleware_plan.instantiate()
+
+
+def _gate_settings(middleware_plan):
+    """approval-gate Design §2.2 — 적용 목록에서 게이트 설정을 꺼낸다.
+
+    게이트가 적용 목록에 없으면 None → 어떤 워커도 게이트를 달지 않는다.
+    is_enforced 는 AppliedMiddleware 가 실어 주므로 mode="off" 를 이길 수
+    있다 (관리자 강제).
+    """
+    if middleware_plan is None:
+        return None
+    applied = getattr(middleware_plan, "applied", None) or []
+    entry = next(
+        (a for a in applied if a.middleware_type is MiddlewareType.APPROVAL_GATE),
+        None,
+    )
+    if entry is None:
+        return None
+    return GateSettings.from_config(entry.config, is_enforced=entry.is_enforced)
+
+
+def _extract_approval_pending(result_messages: list, worker_id: str) -> dict:
+    """approval-gate Design §2.1 ② — 워커 트레이스 → SupervisorState 승격.
+
+    ToolErrorPolicy.summarize 와 같은 계열이다: react agent 내부 트레이스는
+    state 로 유출되지 않으므로(worker-toolmessage-leak-fix D1), 사라지기 전에
+    여기서 신호만 건져 올린다.
+
+    worker_id 는 마커에도 담기지만 래퍼가 아는 값을 권위로 삼는다.
+    빈 dict = 신호 없음 (last_worker_error 의 빈 문자열과 동형).
+    """
+    signal = ApprovalSignalPolicy.extract(result_messages)
+    if signal is None:
+        return {}
+    return {
+        "tool_id": signal.tool_id,
+        "tool_args": signal.tool_args,
+        "draft": signal.draft,
+        "tool_call_id": signal.tool_call_id,
+        "worker_id": worker_id,
+    }
 
 
 # worker-context-injection §4.1: supervisor가 task를 주지 못한 경우(강제 라우팅·
@@ -298,6 +345,11 @@ _SEARCH_MODES = frozenset({LEGACY_SEARCH_MODE, DEEP_SEARCH_MODE})
 class WorkflowCompiler:
     """WorkflowDefinition → Custom StateGraph CompiledGraph 동적 컴파일."""
 
+    # approval-gate Check G9: 게이트 구현 교체 지점 (기본 StatelessGate).
+    # 인스턴스별로 바꾸려면 compiler.approval_gate = InterruptGate() 로 덮는다.
+    approval_gate: "ApprovalGateInterface" = StatelessGate()
+
+
     def __init__(
         self,
         tool_factory: ToolFactory,
@@ -451,6 +503,13 @@ class WorkflowCompiler:
             # Design Ref: mcp-tool-category-routing §5 D-09 —
             # 도구 카테고리·호출 상한은 compile()당 1회만 조회한다.
             catalog_meta = await self._load_catalog_metadata(request_id)
+
+            # approval-gate Design §2.2: 게이트 발동은 두 축의 합성이다.
+            #   도구 축 = tool_catalog.requires_approval ("무엇이 위험한가")
+            #   에이전트 축 = 적용 미들웨어 ∪ enforced ("누가 통제받는가")
+            # 둘 다 compile()당 1회만 해석하고 워커 루프에서 조합한다.
+            gate_settings = _gate_settings(middleware_plan)
+            gated_tool_ids = GatedWorkerPolicy.collect_gated_tool_ids(catalog_meta)
 
             worker_map: dict[str, object] = {}
             # search/analysis 처럼 LLM 래핑 없이 직접 실행되는 "함수형 노드" id 집합.
@@ -687,7 +746,14 @@ class WorkflowCompiler:
                             # mcp-tool-category-routing §5 D-06: wiki 분기는
                             # 호출 상한 예외 — 폴더 모드가 지도→wiki_list→
                             # wiki_read로 최소 2회를 쓰는 기존 워크플로우를 지킨다.
-                            middleware=_instantiate(middleware_plan),
+                            middleware=(
+                                _instantiate(middleware_plan)
+                                + self._approval_gate_middleware(
+                                    worker_def=worker_def,
+                                    gate_settings=gate_settings,
+                                    gated_tool_ids=gated_tool_ids,
+                                )
+                            ),
                         )
                     else:
                         # §D5 (FR-05b) + worker-context-injection §4.1 (FR-02):
@@ -714,7 +780,15 @@ class WorkflowCompiler:
                             model=llm, tools=worker_tools,
                             # name → 모델 산출 AIMessage.name (OpenAI 64자 상한)
                             name=clamp_llm_name(worker_def.worker_id),
-                            middleware=_instantiate(middleware_plan) + budget,
+                            middleware=(
+                                _instantiate(middleware_plan)
+                                + budget
+                                + self._approval_gate_middleware(
+                                    worker_def=worker_def,
+                                    gate_settings=gate_settings,
+                                    gated_tool_ids=gated_tool_ids,
+                                )
+                            ),
                             **worker_kwargs,
                         )
                     worker_map[worker_def.worker_id] = worker_agent
@@ -1010,6 +1084,35 @@ class WorkflowCompiler:
         )
 
         return self._wrap_sub_agent(worker_def.worker_id, sub_graph)
+
+    def _approval_gate_middleware(
+        self, *, worker_def, gate_settings, gated_tool_ids: set[str]
+    ) -> list:
+        """approval-gate Design §2.2 — 워커별 게이트 부착 판정.
+
+        _tool_call_budget_middleware 와 같은 계열(워커별 인스턴스 목록 반환).
+        발동 조건은 ApprovalPolicy.should_gate 단일 지점이 판정한다.
+
+        조립 실패를 잡지 않는 이유(fail-closed, Design §6.2): 게이트가 있어야
+        하는데 없는 상태로 그래프가 돌면 승인 없이 부작용이 실행된다.
+        """
+        if not ApprovalPolicy.should_gate(
+            tool_requires_approval=worker_def.tool_id in gated_tool_ids,
+            gate=gate_settings,
+        ):
+            return []
+        self._logger.info(
+            "approval gate attached",
+            worker_id=worker_def.worker_id,
+            tool_id=worker_def.tool_id,
+        )
+        # Check G9: Protocol(ApprovalGateInterface)을 경유한다 — B(interrupt)
+        # 전환 시 approval_gate 만 교체하면 된다.
+        return [
+            self.approval_gate.build_for_worker(
+                tool_id=worker_def.tool_id, worker_id=worker_def.worker_id
+            )
+        ]
 
     async def _load_catalog_metadata(self, request_id: str) -> dict:
         """도구 카탈로그 메타를 compile()당 1회 배치 조회한다 (D-09).
@@ -2038,6 +2141,12 @@ class WorkflowCompiler:
             # Design Ref: Analysis Gap-01 (FR-12) — 상한 도달은 langchain
             # 내부에서 처리돼 이력에 남지 않는다. 횟수를 함께 실어 이번
             # 사이클의 지표(호출 몇 회로 줄었는가)를 측정 가능하게 한다.
+            # approval-gate Design §2.1 ②: 게이트가 차단한 도구 호출의 신호를
+            # 내부 트레이스가 사라지기 전에 건져 올린다. 비어 있으면 {} 이므로
+            # 게이트 미적용 워커는 기존과 동일한 출력이다.
+            out["approval_pending"] = _extract_approval_pending(
+                result_messages, worker_id
+            )
             call_summary = _tool_call_step_summary(result_messages, tool_call_limit)
             if call_summary:
                 logger.info(

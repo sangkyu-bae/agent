@@ -5,6 +5,7 @@ import JobFilterBar from './JobFilterBar';
 import JobHistoryTable from './JobHistoryTable';
 import JobPagination from './JobPagination';
 import ScheduleDefinitionTable from './ScheduleDefinitionTable';
+import ApprovalTable from './ApprovalTable';
 import {
   extractJobError,
   invalidateMySchedules,
@@ -19,6 +20,8 @@ import {
   useDeleteSchedule,
   useToggleScheduleEnabled,
 } from '@/hooks/useAgentSchedules';
+import { useApprovals } from '@/hooks/useApprovals';
+import { ACTIVE_APPROVAL_STATUSES } from '@/types/approval';
 import {
   DEFAULT_JOB_FILTERS,
   JOB_PAGE_SIZE,
@@ -34,11 +37,13 @@ import type {
 // jobs-page-revamp S2: 작업함 — 통합 작업 기록 테이블 + 필터 + 정리 (Design §5)
 // Design Ref: §2.0 Option C — 정렬·페이징·총건수는 서버가 계산하고 여기선 그린다.
 
-type TabKey = 'history' | 'schedules';
+type TabKey = 'history' | 'schedules' | 'approvals';
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'history', label: '작업 기록' },
   { key: 'schedules', label: '스케줄 작업' },
+  // approval-gate Design §5.1: 사람이 결정해야 할 것 — 배지로 건수 노출
+  { key: 'approvals', label: '승인 대기' },
 ];
 
 const JobsPage = () => {
@@ -53,6 +58,13 @@ const JobsPage = () => {
   const [notice, setNotice] = useState<string | null>(null);
   const [scheduleTarget, setScheduleTarget] = useState<MySchedule | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  // approval-gate Design §5.4: 탭 배지 건수. 목록과 같은 쿼리라
+  // 탭을 열면 캐시가 재사용된다.
+  const { data: approvalPage } = useApprovals({
+    statuses: ACTIVE_APPROVAL_STATUSES,
+  });
+  const approvalCount = approvalPage?.pagination.total ?? 0;
 
   const params = useMemo(
     () => ({ ...filters, limit: JOB_PAGE_SIZE, offset }),
@@ -192,6 +204,14 @@ const JobsPage = () => {
               }`}
             >
               {label}
+              {key === 'approvals' && approvalCount > 0 && (
+                <span
+                  className="ml-1.5 rounded-full bg-violet-600 px-1.5 py-0.5 text-[11px] font-semibold text-white"
+                  aria-label={`승인 대기 ${approvalCount}건`}
+                >
+                  {approvalCount}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -206,7 +226,11 @@ const JobsPage = () => {
         )}
 
         <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white">
-          {tab === 'history' ? (
+          {tab === 'approvals' ? (
+            <div className="p-4">
+              <ApprovalTable />
+            </div>
+          ) : tab === 'history' ? (
             <>
               <JobFilterBar filters={filters} onChange={changeFilters} />
               <JobHistoryTable

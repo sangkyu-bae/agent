@@ -52,6 +52,12 @@ class SupervisorState(TypedDict):
     # 보장되기 때문 (Design §2.2).
     finish_challenge_pending: bool
 
+    # approval-gate Design §2.1 ②: 워커 트레이스에서 건져 올린 승인 요청 신호.
+    # last_worker_error 동형이지만 리셋하지 않는다 — 이 신호는 런을 끝내는
+    # 종결 신호라서, supervisor 재진입 시 소진할 기회가 없다.
+    # 빈 dict = 없음. RunAgentUseCase 가 최종 state 에서 읽어 영속한다.
+    approval_pending: dict
+
     quality_gate_result: str
 
     # analysis-node-agent: 분석 노드 입력용 첨부(엑셀 파일 경로 등).

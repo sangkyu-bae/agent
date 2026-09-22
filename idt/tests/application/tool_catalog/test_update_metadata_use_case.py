@@ -169,3 +169,43 @@ class TestUpdateToolMetadataNotFound:
     async def test_lookup_error_is_not_value_error(self):
         """두 예외가 겹치면 라우터가 400/404를 가릴 수 없다."""
         assert not issubclass(LookupError, ValueError)
+
+
+class TestRequiresApprovalToggle:
+    """approval-gate Check G2 — 관리자가 게이트를 켤 유일한 쓰기 경로.
+
+    이 경로가 없으면 tool_catalog.requires_approval 을 DB 로 직접 UPDATE
+    하지 않는 한 게이트가 발동할 방법이 없었다.
+    """
+
+    @pytest.mark.asyncio
+    async def test_켜기가_리포지토리로_전달된다(self):
+        uc, repo = _make_uc()
+        await uc.execute(MCP_TOOL_ID, "req-1", requires_approval=True)
+        assert repo.update_metadata.await_args.kwargs["requires_approval"] is True
+
+    @pytest.mark.asyncio
+    async def test_끄기도_전달된다(self):
+        uc, repo = _make_uc()
+        await uc.execute(MCP_TOOL_ID, "req-1", requires_approval=False)
+        assert repo.update_metadata.await_args.kwargs["requires_approval"] is False
+
+    @pytest.mark.asyncio
+    async def test_생략하면_UNSET으로_건드리지_않는다(self):
+        """category 만 바꿀 때 승인 플래그가 딸려 바뀌면 안 된다."""
+        uc, repo = _make_uc()
+        await uc.execute(MCP_TOOL_ID, "req-1", category="collect")
+        assert repo.update_metadata.await_args.kwargs["requires_approval"] is UNSET
+
+    @pytest.mark.asyncio
+    async def test_null은_거부한다(self):
+        """NOT NULL 컬럼 — '되돌리기' 의미가 없다 (category 의 null 과 다름)."""
+        uc, _ = _make_uc()
+        with pytest.raises(ValueError):
+            await uc.execute(MCP_TOOL_ID, "req-1", requires_approval=None)
+
+    @pytest.mark.asyncio
+    async def test_bool이_아니면_거부한다(self):
+        uc, _ = _make_uc()
+        with pytest.raises(ValueError):
+            await uc.execute(MCP_TOOL_ID, "req-1", requires_approval="yes")

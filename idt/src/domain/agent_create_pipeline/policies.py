@@ -274,3 +274,41 @@ class PipelinePolicy:
     def clamp_round(round_: int, max_rounds: int) -> int:
         """클라이언트 신고 round 재clamp — stateless-hitl 위키 패턴."""
         return max(0, min(round_, max_rounds))
+
+
+class DegradedPromptPolicy:
+    """degraded 프롬프트의 무편집 저장 판정 (prompt-fallback-visibility §4-1).
+
+    `PipelinePolicy.clamp_prompt` 와 같은 모듈에 두는 이유: 판정이 clamp 규칙에
+    **반드시** 의존하는데(§7-1), `domain/agent_builder/policies.py` 에 두면 그
+    stdlib-only 모듈에 intent·tool_selection 도메인 의존을 끌어들인다.
+    """
+
+    @staticmethod
+    def blocks(
+        *, version_degraded: bool, stored_assembled: str, submitted_prompt: str
+    ) -> bool:
+        """degraded 버전을 **편집 없이** 그대로 저장하려는가.
+
+        편집 여부는 저장본과 제출본의 대조로만 판정한다 — 저장 시점에는
+        편집본(`source='human'`) 버전이 아직 없다 (Design §2-3 / D3).
+
+        Plan §7-2 "폴백 문자열 매칭 금지"와 다르다: 폴백 **상수**가 아니라
+        이 세션이 생성한 **그 버전**과 대조한다. 한 글자 수정이 "편집함"이
+        되는 것은 의도된 동작이다 (FR-05).
+        """
+        if not version_degraded:
+            return False
+        return _normalize(stored_assembled) == _normalize(submitted_prompt)
+
+
+def _normalize(prompt: str) -> str:
+    """비교 전 정규화 — 위저드가 받은 값과 DB 원본을 같은 조건에 놓는다.
+
+    Design §7-1 (최대 위험): 위저드 응답은 `clamp_prompt()` 를 거친 값이고
+    DB 의 `assembled` 는 원본이다. 양쪽에 **같은** clamp 를 적용하지 않으면
+    상한 초과 프롬프트에서 항상 "편집함"으로 오판해 게이트가 무력화된다.
+    앞뒤 공백은 textarea 왕복 차이일 뿐 편집 의도가 아니다 (T-05).
+    """
+    clamped, _ = PipelinePolicy.clamp_prompt(prompt)
+    return clamped.strip()

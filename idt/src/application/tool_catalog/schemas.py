@@ -15,6 +15,8 @@ class ToolCatalogItemResponse(BaseModel):
     # None = 미분류 → 기존 react 경로 (FR-14). 필드 추가만이므로 기존 소비자 무영향.
     category: str | None = None
     max_tool_calls: int | None = None
+    # approval-gate Check G2: 관리자 화면이 현재 상태를 그리려면 필요하다.
+    requires_approval: bool = False
 
 
 class ToolCatalogListResponse(BaseModel):
@@ -55,9 +57,14 @@ class ToolMetadataRequest(BaseModel):
     max_tool_calls: int | None = Field(
         default=None, description="워커 1회 실행당 도구 호출 상한. null이면 기본값",
     )
+    # approval-gate Check G2: 생략하면 미변경. null 은 유스케이스가 400 으로 거부.
+    requires_approval: bool | None = Field(
+        default=None, description="true 면 이 도구 호출 전 사람 승인 필요",
+    )
 
 
 class ToolMetadataResponse(BaseModel):
     tool_id: str
     category: str | None = None
     max_tool_calls: int | None = None
+    requires_approval: bool = False

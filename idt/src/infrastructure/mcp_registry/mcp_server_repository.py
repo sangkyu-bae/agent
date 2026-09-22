@@ -26,6 +26,7 @@ def _to_model(
         auth_config_enc=auth_enc,
         server_config_enc=server_enc,
         is_active=entity.is_active,
+        default_requires_approval=entity.default_requires_approval,
         created_at=entity.created_at,
         updated_at=entity.updated_at,
     )
@@ -52,6 +53,9 @@ def _to_entity(
         updated_at=model.updated_at,
         auth_config=auth_config,
         server_config=server_config,
+        # 명시적으로 True 일 때만 켠다 — 값이 비어 있으면 기존 동작(False).
+        default_requires_approval=getattr(model, "default_requires_approval", None)
+        is True,
     )
 
 

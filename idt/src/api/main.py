@@ -97,9 +97,20 @@ from src.api.routes.agent_builder_router import (
     get_detach_skill_use_case,
     get_list_attached_skills_use_case,
 )
+from src.api.routes.approval_router import (
+    router as approval_router,
+    internal_router as approval_internal_router,
+    agent_gate_router as approval_agent_gate_router,
+    get_gate_settings_use_case,
+    get_decide_approval_use_case,
+    get_list_approvals_use_case,
+    get_execute_due_approvals_use_case,
+    verify_scheduler_token as approval_verify_scheduler_token,
+)
 from src.api.routes.agent_schedule_router import (
     router as agent_schedule_router,
     trigger_router as agent_schedule_trigger_router,
+    verify_scheduler_token as schedule_verify_scheduler_token,
     get_create_schedule_use_case,
     get_list_schedules_use_case,
     get_get_schedule_use_case,
@@ -2888,6 +2899,11 @@ def create_agent_builder_factories():
         )
         return AgentMiddlewareRepository(session=session, logger=app_logger)
 
+    def _make_prompt_version_reader(session: AsyncSession):
+        from src.infrastructure.prompt_composer.repository import PromptRepository
+
+        return PromptRepository(session)
+
     def create_uc_factory(session: AsyncSession = Depends(get_session)):
         return CreateAgentUseCase(
             repository=_make_repo(session),
@@ -2916,6 +2932,10 @@ def create_agent_builder_factories():
             ),
             # builtin-middleware D5: 빌트인 미들웨어 스냅샷 (동일 세션)
             middleware_catalog_repo=_make_middleware_catalog_repo(session),
+            # prompt-fallback-visibility module-1: degraded 프롬프트 저장 게이트.
+            # 동일 세션 편승 — DB-001 "한 UseCase 안에서 repository 별 서로 다른
+            # 세션 사용 금지". 조회 전용이라 트랜잭션에 쓰기를 더하지 않는다.
+            prompt_version_reader=_make_prompt_version_reader(session),
         )
 
     def update_uc_factory(session: AsyncSession = Depends(get_session)):
@@ -2976,6 +2996,10 @@ def create_agent_builder_factories():
             agent_skill_repo=_make_agent_skill_repo(session),
             # analysis-data-continuity D8: 분석 데이터 스냅샷 영속·재주입
             snapshot_policy=_make_analysis_snapshot_policy(),
+            # approval-gate Design §2.1 ④: 게이트 발동 시 승인 요청 적재.
+            approval_repo_factory=_make_approval_repo,
+            # Check G4: 만료·타임존을 에이전트별 게이트 설정에서 해석
+            approval_gate_config_resolver=_resolve_approval_gate_config,
         )
 
     def run_uc_factory(session: AsyncSession = Depends(get_session)):
@@ -3063,6 +3087,189 @@ def create_agent_builder_factories():
         _cost_calculator,  # M4 — share singleton for pricing PATCH invalidate
         _build_run_agent_uc,  # agent-schedule: 트리거 UC 와 공유
     )
+
+
+async def _resolve_approval_gate_config(
+    session: AsyncSession, agent_id: str, request_id: str
+) -> dict:
+    """approval-gate 게이트 config 해석 — 적재(RunAgentUseCase)와 승인
+    (DecideApprovalUseCase)이 공유하는 **단일 출처** (Check G4).
+
+    카탈로그 default_config ∪ 에이전트 override 를 MergePolicy 로 병합한다.
+    게이트가 적용 목록에 없으면 빈 dict (도메인 기본값이 쓰인다).
+    """
+    from src.domain.middleware.entities import MiddlewareType
+    from src.domain.middleware.policies import MiddlewareMergePolicy
+    from src.infrastructure.middleware.repository import (
+        AgentMiddlewareRepository,
+        MiddlewareCatalogRepository,
+    )
+
+    logger = get_app_logger()
+    catalog = await MiddlewareCatalogRepository(session, logger).list_all(request_id)
+    records = await AgentMiddlewareRepository(session, logger).list_by_agent(
+        agent_id, request_id
+    )
+    applied = MiddlewareMergePolicy.merge(records, catalog)
+    gate = next(
+        (a for a in applied if a.middleware_type is MiddlewareType.APPROVAL_GATE),
+        None,
+    )
+    return dict(gate.config) if gate is not None else {}
+
+
+def _make_approval_repo(session: AsyncSession):
+    """approval_request 리포지토리 팩토리 — RunAgentUseCase 적재용."""
+    from src.infrastructure.approval.repository import ApprovalRepository
+
+    return ApprovalRepository(session=session, logger=get_app_logger())
+
+
+def _build_approval_executor(app_logger):
+    """승인된 도구의 실제 집행기 (approval-gate-phase2 Design §2.1, §11.4).
+
+    폴백 집행기를 두지 않는다 — 받을 집행기가 없는 도구는 failed 로 끝나야
+    한다 (Plan SC-2). 새 부작용 도구는 ActionExecutorInterface 구현체를
+    목록에 더한다.
+
+    서버 등록은 세션 스코프 저장소로 조회한다: 예약 집행 tick 에는 요청
+    세션이 없다 (tool-and-mcp §3). cipher 는 런타임 MCP 저장소와 같은 값.
+    """
+    from src.infrastructure.approval.composite_executor import (
+        CompositeActionExecutor,
+    )
+    from src.infrastructure.approval.mcp_executor import (
+        McpActionExecutor,
+        build_execution_client,
+    )
+    from src.infrastructure.config.approval_execution_config import (
+        ApprovalExecutionConfig,
+    )
+
+    config = ApprovalExecutionConfig()
+    timeout = config.get_timeout()
+    mcp_executor = McpActionExecutor(
+        server_repo=SessionScopedMcpServerRepository(
+            session_factory=get_session_factory(),
+            logger=app_logger,
+            cipher=_mcp_cipher(),
+        ),
+        client_factory=lambda registration: build_execution_client(
+            registration, timeout=timeout, logger=app_logger
+        ),
+        max_output_chars=config.APPROVAL_EXEC_OUTPUT_MAX_CHARS,
+        logger=app_logger,
+    )
+    return CompositeActionExecutor(executors=[mcp_executor], logger=app_logger)
+
+
+def create_approval_factories(build_run_agent_uc):
+    """approval-gate DI (Design §2.1 / §4).
+
+    승인·거절·목록은 요청 스코프(세션 보유), tick 은 싱글턴(session_factory 만)
+    — agent_schedule 트리거와 동형이다 (DB-001).
+
+    resumer 로 RunAgentUseCase 를 넘긴다: 재개 실행은 compile 지식을 가진
+    쪽에 두고 approval 은 RunResumerInterface 로만 의존한다 (Design §7.3 v0.2).
+    """
+    from src.application.approval.decide_use_case import DecideApprovalUseCase
+    from src.application.approval.execute_scheduler import (
+        ExecuteDueApprovalsUseCase,
+    )
+    from src.application.approval.list_use_case import ListApprovalsUseCase
+    from src.infrastructure.approval.repository import ApprovalRepository
+    from src.infrastructure.middleware.repository import (
+        AgentMiddlewareRepository,
+        MiddlewareCatalogRepository,
+    )
+
+    app_logger = get_app_logger()
+    executor = _build_approval_executor(app_logger)
+
+    def _approval_repo(session: AsyncSession):
+        return ApprovalRepository(session=session, logger=app_logger)
+
+    def _agent_repo(session: AsyncSession):
+        return AgentDefinitionRepository(session=session, logger=app_logger)
+
+    class _GateConfigReader:
+        """승인 시 execute_after·timezone 을 읽는다.
+
+        적재 쪽과 같은 _resolve_approval_gate_config 에 위임한다 (Check G4) —
+        두 곳이 다르게 해석하면 적재 때와 승인 때의 만료·시각이 어긋난다.
+        """
+
+        def __init__(self, session: AsyncSession) -> None:
+            self._session = session
+
+        async def resolve_gate_config(self, agent_id: str, request_id: str) -> dict:
+            return await _resolve_approval_gate_config(
+                self._session, agent_id, request_id
+            )
+
+    def decide_f(session: AsyncSession = Depends(get_session)):
+        return DecideApprovalUseCase(
+            approval_repo=_approval_repo(session),
+            agent_repo=_agent_repo(session),
+            executor=executor,
+            gate_config_reader=_GateConfigReader(session),
+            logger=app_logger,
+            resumer=build_run_agent_uc(session),
+        )
+
+    def list_f(session: AsyncSession = Depends(get_session)):
+        return ListApprovalsUseCase(
+            approval_repo=_approval_repo(session),
+            agent_repo=_agent_repo(session),
+            logger=app_logger,
+        )
+
+    class _TickRunner:
+        """tick 싱글턴 — 요청마다 새 세션을 열어 한 트랜잭션으로 처리한다.
+
+        claim_due 의 FOR UPDATE SKIP LOCKED 잠금이 이 트랜잭션 동안 유지돼야
+        다중 워커 중복 집행이 막힌다 (Design §2.1 3차 저지선).
+        """
+
+        async def run(self, request_id: str):
+            session_factory = get_session_factory()
+            async with session_factory() as session:
+                async with session.begin():
+                    uc = ExecuteDueApprovalsUseCase(
+                        approval_repo=_approval_repo(session),
+                        executor=executor,
+                        logger=app_logger,
+                        resumer=build_run_agent_uc(session),
+                    )
+                    return await uc.run(request_id)
+
+    tick_runner = _TickRunner()
+
+    def tick_f():
+        return tick_runner
+
+    def approval_repo_factory(session):
+        """RunAgentUseCase 적재용 — 세션을 받아 리포지토리를 만든다."""
+        return ApprovalRepository(session=session, logger=app_logger)
+
+    def gate_settings_f(session: AsyncSession = Depends(get_session)):
+        """approval-gate Check G3 — 에이전트별 게이트 설정 입구."""
+        from src.application.approval.gate_settings_use_case import (
+            ApprovalGateSettingsUseCase,
+        )
+
+        return ApprovalGateSettingsUseCase(
+            agent_repo=_agent_repo(session),
+            catalog_repo=MiddlewareCatalogRepository(
+                session=session, logger=app_logger
+            ),
+            agent_middleware_repo=AgentMiddlewareRepository(
+                session=session, logger=app_logger
+            ),
+            logger=app_logger,
+        )
+
+    return decide_f, list_f, tick_f, approval_repo_factory, gate_settings_f
 
 
 def create_agent_schedule_factories(build_run_agent_uc, outbound_dispatcher=None):
@@ -3267,7 +3474,8 @@ def create_agent_webhook_factories(build_run_agent_uc):
 
 
 def create_background_job_factories(
-    build_run_agent_uc, outbound_dispatcher=None, schedule_trigger_uc=None
+    build_run_agent_uc, outbound_dispatcher=None, schedule_trigger_uc=None,
+    approval_tick_runner=None,
 ):
     """background-jobs DI (Design §4-5): 요청-스코프 팩토리 + 워커 싱글턴.
 
@@ -3355,7 +3563,19 @@ def create_background_job_factories(
         return GetJobUseCase(_make_job_repo(session), app_logger)
 
     def unseen_f(session: AsyncSession = Depends(get_session)):
-        return CountUnseenUseCase(_make_job_repo(session), app_logger)
+        # approval-gate Design §5.5: 벨 배지에 승인 대기 건수 합산.
+        from src.application.approval.list_use_case import ListApprovalsUseCase
+        from src.infrastructure.approval.repository import ApprovalRepository
+
+        approval_counter = ListApprovalsUseCase(
+            approval_repo=ApprovalRepository(session=session, logger=app_logger),
+            agent_repo=AgentDefinitionRepository(session=session, logger=app_logger),
+            logger=app_logger,
+        )
+        return CountUnseenUseCase(
+            _make_job_repo(session), app_logger,
+            approval_counter=approval_counter,
+        )
 
     def seen_f(session: AsyncSession = Depends(get_session)):
         return MarkSeenUseCase(_make_job_repo(session), app_logger)
@@ -3386,6 +3606,9 @@ def create_background_job_factories(
         schedule_tick_interval_sec=settings.background_schedule_tick_interval_sec,
         max_concurrency=settings.background_job_max_concurrency,
         enabled=settings.background_worker_enabled,
+        # approval-gate Check G5: 외부 cron 없이도 예약 집행이 돌도록 합류
+        approval_tick_runner=approval_tick_runner,
+        approval_tick_interval_sec=settings.approval_executor_tick_seconds,
     )
 
     return (
@@ -5057,6 +5280,21 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_list_schedule_runs_use_case] = _sch_list_runs_f
     app.dependency_overrides[get_trigger_due_schedules_use_case] = _sch_trigger_f
 
+    # Approval Gate DI (approval-gate Design §2.1 / §4)
+    (
+        _ap_decide_f, _ap_list_f, _ap_tick_f, _ap_repo_factory,
+        _ap_gate_settings_f,
+    ) = create_approval_factories(_build_run_agent_uc)
+    app.dependency_overrides[get_gate_settings_use_case] = _ap_gate_settings_f
+    app.dependency_overrides[get_decide_approval_use_case] = _ap_decide_f
+    app.dependency_overrides[get_list_approvals_use_case] = _ap_list_f
+    app.dependency_overrides[get_execute_due_approvals_use_case] = _ap_tick_f
+    # internal tick 은 스케줄 트리거와 같은 토큰 검증을 쓴다 — 인증 없이
+    # 집행을 트리거할 수 있으면 게이트가 무의미해진다.
+    app.dependency_overrides[approval_verify_scheduler_token] = (
+        schedule_verify_scheduler_token
+    )
+
     # Background Job DI (background-jobs Design §4-5)
     # 스케줄 DI 이후 — 워커의 내장 스케줄러 틱(D1)이 트리거 싱글턴을 공유한다.
     global _background_job_worker
@@ -5068,6 +5306,8 @@ def create_app() -> FastAPI:
         _build_run_agent_uc,
         outbound_dispatcher=_wh_dispatcher,
         schedule_trigger_uc=_sch_trigger_f(),
+        # approval-gate Check G5: 승인 팩토리의 tick 싱글턴을 워커가 공유
+        approval_tick_runner=_ap_tick_f(),
     )
     app.dependency_overrides[get_enqueue_job_use_case] = _bj_enqueue_f
     app.dependency_overrides[get_list_jobs_use_case] = _bj_list_f
@@ -5628,6 +5868,9 @@ def create_app() -> FastAPI:
     app.include_router(agent_builder_router)
     app.include_router(agent_schedule_router)
     app.include_router(agent_schedule_trigger_router)
+    app.include_router(approval_router)
+    app.include_router(approval_internal_router)
+    app.include_router(approval_agent_gate_router)
     app.include_router(background_job_router)
     app.include_router(agent_webhook_router)
     app.include_router(webhook_public_router)

@@ -13,6 +13,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from src.domain.logging.interfaces import LoggerInterface
+from src.infrastructure.logging.log_context import bind, reset
 
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
@@ -41,6 +42,9 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         """요청 처리 및 로깅.
 
+        요청 컨텍스트를 ContextVar에 바인딩하여, 하위 계층(UseCase / Repository /
+        DB 쿼리 리스너)이 request_id를 직접 전달받지 않아도 로그에 출처가 실리게 한다.
+
         Args:
             request: HTTP 요청
             call_next: 다음 미들웨어/핸들러 호출 함수
@@ -48,10 +52,34 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         Returns:
             HTTP 응답
         """
-        # request_id 생성
-        request_id = str(uuid.uuid4())
+        # 상위 서비스가 보낸 추적 ID가 있으면 이어받고, 없으면 새로 생성
+        request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
         request.state.request_id = request_id
 
+        # 로그 컨텍스트 바인딩 (call_next 이전에 해야 하위로 전파됨)
+        context_token = bind(
+            request_id=request_id,
+            method=request.method,
+            endpoint=request.url.path,
+        )
+        try:
+            return await self._dispatch_logged(request, call_next, request_id)
+        finally:
+            reset(context_token)
+
+    async def _dispatch_logged(
+        self, request: Request, call_next: Callable, request_id: str
+    ) -> Response:
+        """요청/응답 로깅 본문 (컨텍스트 바인딩된 상태에서 실행).
+
+        Args:
+            request: HTTP 요청
+            call_next: 다음 미들웨어/핸들러 호출 함수
+            request_id: 요청 추적 ID
+
+        Returns:
+            HTTP 응답
+        """
         # 시작 시간 기록
         start_time = time.perf_counter()
 

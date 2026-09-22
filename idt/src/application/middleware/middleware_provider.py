@@ -9,7 +9,11 @@ from src.application.middleware.middleware_builder import MiddlewareBuilder
 from src.domain.llm.interfaces import LLMFactoryInterface
 from src.domain.llm_model.interfaces import LlmModelRepositoryInterface
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
-from src.domain.middleware.entities import AppliedMiddleware, MiddlewareType
+from src.domain.middleware.entities import (
+    AgentMiddlewareRecord,
+    AppliedMiddleware,
+    MiddlewareType,
+)
 from src.domain.middleware.interfaces import (
     AgentMiddlewareRepositoryInterface,
     MiddlewareCatalogRepositoryInterface,
@@ -27,10 +31,23 @@ class MiddlewarePlan:
     request_id: str
 
     def instantiate(self) -> list:
-        if not self.applied:
+        """공통(워커 무관) 미들웨어 인스턴스 목록.
+
+        approval-gate Design §2.1: 승인 게이트는 "이 워커의 도구가 승인
+        대상인가" 를 알아야 하므로 공통 경로에서 제외하고, 컴파일러가
+        워커마다 MiddlewareBuilder.build_approval_gate 로 조립한다.
+        여기 남겨 두면 도구를 모른 채 모든 워커에 붙어 무해한 워커까지 막는다.
+        게이트 적용 여부·설정은 `applied` 를 직접 읽어 판단한다.
+        """
+        common = [
+            a
+            for a in self.applied
+            if a.middleware_type is not MiddlewareType.APPROVAL_GATE
+        ]
+        if not common:
             return []
         return self.builder.build(
-            self.applied, self.request_id, fallback_models=self.fallback_models
+            common, self.request_id, fallback_models=self.fallback_models
         )
 
 
@@ -65,21 +82,27 @@ class MiddlewareProvider:
           스냅샷을 알 수 없는 상태에서 사용자 opt-out을 무시하지 않기 위함.
         """
         catalog = await self._catalog_repo.list_all(request_id)
+        # approval-gate Design §3.4: merge 가 record.config 오버라이드를 읽으므로
+        # 타입 목록이 아니라 record 를 그대로 넘긴다. 에이전트 스냅샷이 없는
+        # 경로는 빈 config 의 가상 record 로 변환해 기존 동작을 보존한다.
         if agent_id is not None and self._agent_middleware_repo is not None:
             records = await self._agent_middleware_repo.list_by_agent(
                 agent_id, request_id
             )
-            snapshot_types = [r.middleware_type for r in records]
         elif default_builtin:
-            snapshot_types = [
-                e.middleware_type.value
+            records = [
+                AgentMiddlewareRecord(
+                    agent_id=agent_id or "",
+                    middleware_type=e.middleware_type.value,
+                    sort_order=e.sort_order,
+                )
                 for e in catalog
                 if e.is_builtin and e.is_active
             ]
         else:
-            snapshot_types = []
+            records = []
 
-        applied = MiddlewareMergePolicy.merge(snapshot_types, catalog)
+        applied = MiddlewareMergePolicy.merge(records, catalog)
         fallback_models = await self._resolve_fallback_models(applied, request_id)
 
         # FR-12: 적용 목록 관측 로그 (request_id 포함)

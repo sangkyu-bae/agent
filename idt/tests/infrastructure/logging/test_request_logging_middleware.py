@@ -424,3 +424,98 @@ class TestRequestLoggingMiddlewareResponseBody:
         if "response_body" in log:
             body_str = str(log["response_body"])
             assert len(body_str) <= 5000  # 로그에는 제한된 크기만
+
+
+class TestRequestLoggingMiddlewareContextBinding:
+    """요청 컨텍스트가 ContextVar에 바인딩되어 하위 로그로 전파되는지 검증."""
+
+    @pytest.fixture(autouse=True)
+    def _clean_context(self):
+        from src.infrastructure.logging.log_context import clear
+
+        clear()
+        yield
+        clear()
+
+    @pytest.fixture
+    def log_stream(self):
+        return StringIO()
+
+    @pytest.fixture
+    def logger(self, log_stream):
+        logger = StructuredLogger(name="test_ctx_middleware", level=logging.DEBUG)
+        logger._logger.handlers.clear()
+        handler = logging.StreamHandler(log_stream)
+        handler.setLevel(logging.DEBUG)
+        handler.setFormatter(StructuredFormatter())
+        logger._logger.addHandler(handler)
+        return logger
+
+    @pytest.fixture
+    def app(self, logger):
+        """엔드포인트 내부에서 request_id를 명시하지 않고 로그를 찍는 앱."""
+        from src.infrastructure.logging.log_context import get_context_fields
+
+        app = FastAPI()
+        app.add_middleware(RequestLoggingMiddleware, logger=logger)
+
+        @app.get("/deep")
+        async def deep_endpoint():
+            # DB 쿼리 리스너처럼, request_id를 모르는 하위 계층을 흉내낸다
+            logger.info("Inner work")
+            return {"ok": True, "seen": get_context_fields()}
+
+        return app
+
+    @pytest.fixture
+    def client(self, app):
+        return TestClient(app)
+
+    def _logs(self, log_stream):
+        return [
+            json.loads(line)
+            for line in log_stream.getvalue().splitlines()
+            if line.strip()
+        ]
+
+    def test_inner_log_carries_request_id(self, client, log_stream):
+        """request_id를 넘기지 않은 하위 로그에도 request_id가 자동으로 붙는다."""
+        client.get("/deep")
+        inner = [l for l in self._logs(log_stream) if l["message"] == "Inner work"]
+        assert len(inner) == 1
+        assert "request_id" in inner[0]
+
+    def test_inner_log_carries_endpoint_and_method(self, client, log_stream):
+        """하위 로그에 요청 경로/메서드가 붙어 출처를 알 수 있다."""
+        client.get("/deep")
+        inner = [l for l in self._logs(log_stream) if l["message"] == "Inner work"][0]
+        assert inner["endpoint"] == "/deep"
+        assert inner["method"] == "GET"
+
+    def test_inner_log_request_id_matches_response_header(self, client, log_stream):
+        """하위 로그의 request_id는 응답 헤더의 X-Request-ID와 같다."""
+        response = client.get("/deep")
+        inner = [l for l in self._logs(log_stream) if l["message"] == "Inner work"][0]
+        assert inner["request_id"] == response.headers["X-Request-ID"]
+
+    def test_incoming_request_id_header_is_reused(self, client, log_stream):
+        """클라이언트가 X-Request-ID를 보내면 그 값을 이어받는다."""
+        response = client.get("/deep", headers={"X-Request-ID": "upstream-req-1"})
+        assert response.headers["X-Request-ID"] == "upstream-req-1"
+        inner = [l for l in self._logs(log_stream) if l["message"] == "Inner work"][0]
+        assert inner["request_id"] == "upstream-req-1"
+
+    def test_context_is_cleared_after_request(self, client):
+        """요청이 끝나면 컨텍스트가 누수되지 않는다."""
+        from src.infrastructure.logging.log_context import get_context_fields
+
+        client.get("/deep")
+        assert get_context_fields() == {}
+
+    def test_two_requests_get_distinct_request_ids(self, client, log_stream):
+        """연속된 두 요청의 request_id는 서로 다르다."""
+        client.get("/deep")
+        client.get("/deep")
+        inner = [l for l in self._logs(log_stream) if l["message"] == "Inner work"]
+        assert len(inner) == 2
+        assert inner[0]["request_id"] != inner[1]["request_id"]

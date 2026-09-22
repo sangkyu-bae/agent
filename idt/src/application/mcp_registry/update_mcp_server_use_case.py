@@ -90,6 +90,7 @@ class UpdateMCPServerUseCase:
             transport=new_transport,
             auth_config=request.auth_config,
             server_config=request.server_config,
+            default_requires_approval=request.default_requires_approval,
         )
 
         saved = await self._repo.update(existing, request_id)

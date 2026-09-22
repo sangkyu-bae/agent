@@ -134,7 +134,7 @@ class UtilityLLMProvider(UtilityLLMProviderPort):
             return None
 
         await self._cache_set(key, model)
-        self._log_resolved(model, cache="L1_miss")
+        self._log_resolved(model, cache="L1_miss", source="utility")
         return model
 
     async def _resolve_default(self) -> LlmModel | None:
@@ -155,7 +155,7 @@ class UtilityLLMProvider(UtilityLLMProviderPort):
             return None
 
         await self._cache_set(_KEY_DEFAULT, model)
-        self._log_resolved(model, cache="L1_miss")
+        self._log_resolved(model, cache="L1_miss", source="default")
         return model
 
     # ── L2: 인스턴스 캐시 ───────────────────────────────────────────────
@@ -167,7 +167,9 @@ class UtilityLLMProvider(UtilityLLMProviderPort):
 
         cached = self._instances.get(key)
         if cached is not None:
-            self._log_resolved(model, cache="L2_hit")
+            # L2 히트는 호출마다 발생하므로 debug 로 둔다 (FR-00c 는 L1 미스만
+            # INFO 로 올린다 — 그쪽이 "모델이 바뀌었다"를 알려주는 지점이다).
+            self._log_instance_hit(model)
             return cached
 
         llm = self._llm_factory.create(model, temperature=temperature)
@@ -207,15 +209,42 @@ class UtilityLLMProvider(UtilityLLMProviderPort):
                 error=str(e),
             )
 
-    def _log_resolved(self, model: LlmModel, *, cache: str) -> None:
+    def _log_resolved(self, model: LlmModel, *, cache: str, source: str) -> None:
         # base_url 을 남기는 것이 self-host(NPU) 전환 실측의 근거다 (§6.2).
-        self._logger.debug(
+        #
+        # prompt-fallback-visibility FR-00c — 레벨이 debug 였던 탓에 기본 로그
+        # 설정(INFO)에서 한 줄도 보이지 않았다. 2026-09-04 에 기본 모델이 추론
+        # 모델로 바뀌어 프롬프트 생성이 2주간 100% 폴백으로 떨어졌는데도 "어떤
+        # 모델로 도는가"가 어디에도 없었다. 캐시 미스에서만 찍히므로(TTL 주기)
+        # INFO 로 올려도 양이 많지 않다.
+        #
+        # source: "utility" = UTILITY_LLM_MODEL_NAME 으로 명시된 모델
+        #         "default" = 미설정이라 관리자 기본 모델을 따라간 것 ← 위험 신호
+        self._logger.info(
             "Utility LLM resolved",
             request_id=_REQUEST_ID,
             model_name=model.model_name,
             provider=model.provider,
             base_url=model.base_url,
             cache=cache,
+            source=source,
+        )
+
+    def _log_instance_hit(self, model: LlmModel) -> None:
+        """L2 인스턴스 캐시 히트 — 호출마다 발생하므로 debug.
+
+        필드 집합은 `_log_resolved` 와 동일하게 유지한다(Check G5) — 같은
+        메시지명("Utility LLM resolved")으로 나가므로 스키마가 갈리면 로그
+        수집기에서 한쪽만 파싱된다. 이 경로는 해석 출처를 모르므로 "cached".
+        """
+        self._logger.debug(
+            "Utility LLM resolved",
+            request_id=_REQUEST_ID,
+            model_name=model.model_name,
+            provider=model.provider,
+            base_url=model.base_url,
+            cache="L2_hit",
+            source="cached",
         )
 
 

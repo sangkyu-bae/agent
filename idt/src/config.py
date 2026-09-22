@@ -2,7 +2,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    # env_file_encoding: utf-8-sig — .env 가 UTF-8 BOM 으로 저장돼 있으면
+    # "utf-8" 로는 **첫 키의 이름 앞에 BOM(﻿)이 붙어** 그 한 줄만 조용히
+    # 무시된다 (Check G6). BOM 없는 파일도 utf-8-sig 로 문제없이 읽힌다.
+    model_config = SettingsConfigDict(
+        env_file=".env", env_file_encoding="utf-8-sig", extra="ignore"
+    )
 
     # Database
     database_url: str = "mysql+asyncmy://user:password@localhost:3306/idt"
@@ -289,6 +294,9 @@ class Settings(BaseSettings):
     background_job_max_concurrency: int = 2
     # 내장 스케줄러 틱 주기 (D1) — 외부 cron 대체
     background_schedule_tick_interval_sec: float = 30.0
+    # approval-gate Check G5: 예약 집행 tick 주기(초). 워커 루프가 호출한다.
+    # 집행 지연 상한 = 이 값 (금리 00시 집행이면 최대 이만큼 늦어질 수 있다).
+    approval_executor_tick_seconds: float = 60.0
 
     # Application
     debug: bool = False

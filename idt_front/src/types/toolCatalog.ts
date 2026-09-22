@@ -31,6 +31,11 @@ export interface CatalogTool {
   category: ToolCategory | null;
   /** 워커 1회 실행당 도구 호출 상한. null이면 정책 기본값(2회) */
   max_tool_calls: number | null;
+  /**
+   * approval-gate Check G2: 이 도구 호출 전 사람 승인 필요 여부 (관리자 토글).
+   * 게이트는 이 값과 에이전트별 승인 게이트 설정이 모두 켜져야 발동한다.
+   */
+  requires_approval?: boolean;
 }
 
 export interface ToolCatalogResponse {
@@ -76,10 +81,13 @@ export interface ToolMetadataRequest {
   tool_id: string;
   category?: ToolCategory | null;
   max_tool_calls?: number | null;
+  /** approval-gate Check G2: 생략하면 미변경. null 은 서버가 400 으로 거부 */
+  requires_approval?: boolean;
 }
 
 export interface ToolMetadataResponse {
   tool_id: string;
   category: ToolCategory | null;
   max_tool_calls: number | null;
+  requires_approval?: boolean;
 }

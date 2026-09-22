@@ -41,6 +41,10 @@ class MCPServerRegistration:
     # transport별 인증/서버 config (평문, 앱 메모리 한정 — 저장 경계에서 암호화)
     auth_config: dict | None = field(default=None)
     server_config: dict | None = field(default=None)
+    # approval-gate-phase2 D-07: 이 서버의 도구가 카탈로그에 "처음" 들어올 때의
+    # requires_approval 초기값. 기존 엔트리에는 소급하지 않는다 — 그 값의
+    # 주인은 관리자(tool_catalog.requires_approval)다.
+    default_requires_approval: bool = False
 
     @property
     def tool_id(self) -> str:
@@ -72,6 +76,7 @@ class MCPServerRegistration:
         transport: "MCPTransportType | None" = None,
         auth_config: dict | None = None,
         server_config: dict | None = None,
+        default_requires_approval: bool | None = None,
     ) -> None:
         if name is not None:
             self.name = name
@@ -89,4 +94,6 @@ class MCPServerRegistration:
             self.auth_config = auth_config
         if server_config is not None:
             self.server_config = server_config
+        if default_requires_approval is not None:
+            self.default_requires_approval = default_requires_approval
         self.updated_at = updated_at

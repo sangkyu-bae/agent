@@ -140,7 +140,11 @@ export const JOB_STATUS_LABEL: Record<JobStatus, string> = {
 };
 
 export interface UnseenCountResponse {
+  /** 총 미확인 건수 (작업 + 승인). 기존 소비자는 이 값만 읽어도 된다. */
   count: number;
+  /** approval-gate Design §5.5: 분해 필드 — 필요한 화면만 나눠 표시한다. */
+  jobs?: number;
+  approvals?: number;
 }
 
 export interface SeenAllResponse {

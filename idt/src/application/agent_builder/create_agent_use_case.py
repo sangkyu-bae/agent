@@ -52,6 +52,11 @@ from src.domain.knowledge_base.interfaces import KnowledgeBaseRepositoryInterfac
 from src.domain.knowledge_base.policy import KnowledgeBasePolicy
 from src.domain.llm_model.interfaces import LlmModelRepositoryInterface
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
+from src.application.agent_builder.gated_worker_validation import (
+    validate_gated_workers,
+)
+from src.domain.agent_create_pipeline.policies import DegradedPromptPolicy
+from src.domain.prompt_composer.interfaces import PromptRepositoryPort
 from src.domain.tool_catalog.interfaces import ToolCatalogRepositoryInterface
 
 
@@ -74,6 +79,7 @@ class CreateAgentUseCase:
         kb_repo: KnowledgeBaseRepositoryInterface | None = None,
         tool_catalog_repo: "ToolCatalogRepositoryInterface | None" = None,
         middleware_catalog_repo=None,
+        prompt_version_reader: PromptRepositoryPort | None = None,
     ) -> None:
         self._repository = repository
         self._llm_model_repository = llm_model_repository
@@ -97,6 +103,9 @@ class CreateAgentUseCase:
         self._tool_catalog_repo = tool_catalog_repo
         # builtin-middleware D5: 빌트인 미들웨어 스냅샷용 (미주입 시 생략 — 무회귀)
         self._middleware_catalog_repo = middleware_catalog_repo
+        # prompt-fallback-visibility module-1: degraded 프롬프트 저장 게이트.
+        # 미주입 시 게이트 전체 비활성 — 파이프라인 _run_create·기존 호출부 무회귀.
+        self._prompt_version_reader = prompt_version_reader
         self._sub_agent_builder = SubAgentWorkerBuilder(repository, logger)
         # agent-update-tool-editing D §2.3: 워커 빌드 규칙은 update 경로와 공유한다
         self._skeleton_builder = WorkerSkeletonBuilder(
@@ -207,6 +216,11 @@ class CreateAgentUseCase:
             )
             all_workers = all_workers + builtin_workers
 
+            # Step 2.75 (approval-gate FR-05): 단독 워커 제약.
+            # 빌트인 주입 **후**에 검증한다 — 주입으로 제약이 깨질 수 있고,
+            # 주입 전에 통과시키면 실행 시점에야 문제가 드러난다.
+            await self._validate_gated_workers(all_workers, request_id)
+
             # Step 2.8 (builtin-middleware D5): 빌트인 미들웨어 스냅샷 —
             # exclude는 폼 전용 필드(채팅 초안 경로는 미사용 = LLM 우회 불가).
             middleware_types = await self._build_builtin_middleware(
@@ -217,6 +231,9 @@ class CreateAgentUseCase:
             # LLM 자동생성 제거 — 지침은 사용자 입력 또는 Fix 에이전트 초안 전담.
             AgentBuilderPolicy.validate_system_prompt(request.system_prompt or "")
             system_prompt = request.system_prompt
+
+            # Step 3.5 (prompt-fallback-visibility module-1): degraded 게이트.
+            await self._check_degraded_prompt(request, request_id)
 
             # Step 4: AgentDefinition 저장
             now = datetime.now(timezone.utc)
@@ -301,6 +318,61 @@ class CreateAgentUseCase:
                 "CreateAgentUseCase failed", exception=e, request_id=request_id
             )
             raise
+
+    async def _check_degraded_prompt(
+        self, request: CreateAgentRequest, request_id: str
+    ) -> None:
+        """degraded 프롬프트를 편집 없이 저장하려 하면 거부한다.
+
+        Design Ref: prompt-fallback-visibility §4-2 / Option C.
+        클라이언트 플래그를 믿지 않고 `prompt_version` 을 DB 에서 재조회한다.
+
+        게이트가 꺼지는 조건은 **전부 통과**다 — 관측성 결함이 에이전트 생성
+        실패로 번지면 안 된다 (Design §6):
+          · reader 미주입 / version_id 미전달 (FR-06)
+          · 조회 실패 · 없음 · 타인 소유 (FR-02)
+        """
+        if self._prompt_version_reader is None or not request.prompt_version_id:
+            return
+        version = await self._find_prompt_version(request, request_id)
+        if version is None:
+            return
+        if DegradedPromptPolicy.blocks(
+            version_degraded=bool(version.degraded),
+            stored_assembled=version.assembled or "",
+            submitted_prompt=request.system_prompt or "",
+        ):
+            # Plan SC: SC-02 — 라우터가 ValueError → 422 로 변환한다.
+            # FR-07: 사유를 실어 프론트가 안내할 수 있게 한다.
+            raise ValueError(
+                "자동 생성에 실패해 임시로 만들어진 프롬프트입니다 "
+                f"(사유: {version.reason or 'unknown'}). "
+                "다시 생성하거나 프롬프트를 직접 수정한 뒤 저장하세요."
+            )
+
+    async def _find_prompt_version(
+        self, request: CreateAgentRequest, request_id: str
+    ):
+        """버전 조회. 실패는 흡수하고 warning — 생성을 막지 않는다 (T-08)."""
+        try:
+            return await self._prompt_version_reader.find_version(
+                request.prompt_version_id, request.user_id
+            )
+        except Exception as e:
+            self._logger.warning(
+                "Prompt version lookup failed — degraded gate skipped",
+                request_id=request_id,
+                prompt_version_id=request.prompt_version_id,
+                exception=e,
+            )
+            return None
+
+    async def _validate_gated_workers(self, workers: list, request_id: str) -> None:
+        """approval-gate FR-05 — 수정 경로와 같은 공용 검증을 쓴다 (Check G10)."""
+        await validate_gated_workers(
+            self._tool_catalog_repo, workers, request_id, self._logger
+        )
+
     async def _build_builtin_middleware(
         self,
         exclude_types: list[str] | None,

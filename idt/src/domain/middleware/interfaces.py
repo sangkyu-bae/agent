@@ -41,3 +41,14 @@ class AgentMiddlewareRepositoryInterface(ABC):
         self, agent_id: str, request_id: str
     ) -> list[AgentMiddlewareRecord]:
         """에이전트 적용 스냅샷 (sort_order ASC)."""
+
+    @abstractmethod
+    async def upsert_config(
+        self, *, agent_id: str, middleware_type: str, config: dict,
+        request_id: str,
+    ) -> None:
+        """에이전트별 config 저장 — 행이 없으면 만든다(행 존재 = 적용).
+
+        approval-gate Check G3: 이전에는 config 를 쓸 입구가 없었다.
+        commit 은 호출측 트랜잭션이 소유한다 (DB-001).
+        """

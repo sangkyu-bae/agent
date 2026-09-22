@@ -42,6 +42,7 @@ from src.domain.intent.schemas import (
 )
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.domain.tool_selection.schemas import SelectionResult
+from src.infrastructure.langsmith.langsmith import pipeline_tracing
 
 _NEED_INPUT = "need_input"
 _NOT_REACHED = "not_reached"
@@ -184,7 +185,17 @@ class AgentCreatePipelineUseCase:
         """started 이벤트 → 실행 → elapsed 채워 completed 이벤트."""
         yield StageEvent("stage_started", StageRecord(stage, StageStatus.OK))
         start = time.monotonic()
-        record = await stage_fn(ctx)
+        # Design Ref: pipeline-langsmith-tracing §4-1 — 이 한 곳이 5단계를 모두
+        # 덮는다(`run()` 이 INTENT 와 runners 루프 양쪽에서 `_stage` 를 쓴다).
+        # §7-2: `with` 는 `await` 만 감싼다. 위아래 `yield` 를 가로지르면
+        # contextvar 가 소비자 컨텍스트로 샌다.
+        with pipeline_tracing(
+            stage,
+            request_id=ctx.request_id,
+            round_=ctx.round,
+            stop_after=ctx.stop,
+        ):
+            record = await stage_fn(ctx)
         record = replace(
             record, elapsed_ms=int((time.monotonic() - start) * 1000)
         )

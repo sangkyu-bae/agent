@@ -2,9 +2,10 @@
 
 commit/rollback 금지 (세션 소유자는 상위 — 프로젝트 공통 규칙).
 """
+import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
@@ -190,5 +191,46 @@ class AgentMiddlewareRepository(AgentMiddlewareRepositoryInterface):
                 "AgentMiddleware list_by_agent failed",
                 exception=e,
                 request_id=request_id,
+            )
+            raise
+
+    async def upsert_config(
+        self, *, agent_id: str, middleware_type: str, config: dict,
+        request_id: str,
+    ) -> None:
+        """approval-gate Check G3 — 에이전트별 config 저장.
+
+        uq_agent_middleware(agent_id, middleware_type) 가 한 행만 보장하므로
+        있으면 config 만 갱신하고, 없으면 적용 행을 새로 만든다.
+        sort_order 는 체인 순서에 영향이 없다(MergePolicy 가 카탈로그 순서로
+        정렬) — 끝에 붙인다.
+        """
+        try:
+            existing = (await self._session.execute(
+                select(AgentMiddlewareModel).where(
+                    AgentMiddlewareModel.agent_id == agent_id,
+                    AgentMiddlewareModel.middleware_type == middleware_type,
+                )
+            )).scalar_one_or_none()
+            if existing is not None:
+                existing.config = dict(config)
+            else:
+                count = (await self._session.execute(
+                    select(func.count()).select_from(AgentMiddlewareModel).where(
+                        AgentMiddlewareModel.agent_id == agent_id
+                    )
+                )).scalar() or 0
+                self._session.add(AgentMiddlewareModel(
+                    id=str(uuid.uuid4()), agent_id=agent_id,
+                    middleware_type=middleware_type, config=dict(config),
+                    sort_order=int(count),
+                    created_at=datetime.now(timezone.utc),
+                ))
+            await self._session.flush()
+        except Exception as e:
+            self._logger.error(
+                "AgentMiddleware upsert_config failed",
+                exception=e, request_id=request_id,
+                agent_id=agent_id, middleware_type=middleware_type,
             )
             raise

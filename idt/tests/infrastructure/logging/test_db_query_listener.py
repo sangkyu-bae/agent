@@ -282,3 +282,99 @@ class TestDBQueryListenerRegister:
             event_names = [c[0][1] for c in listen_calls]
             assert "before_cursor_execute" in event_names
             assert "after_cursor_execute" in event_names
+
+
+class TestDBQueryListenerLevelGuard:
+    """DEBUG 비활성 시 페이로드 계산을 건너뛰는 조기 반환 가드."""
+
+    def _make_conn(self):
+        conn = MagicMock()
+        conn.info = {}
+        return conn
+
+    def test_skips_logging_when_debug_disabled(self):
+        """DEBUG가 꺼져 있으면 logger.debug()를 호출하지 않는다."""
+        listener = DBQueryListener()
+        conn = self._make_conn()
+        listener._before_execute(conn, None, "SELECT 1", {}, None, False)
+
+        with patch("src.infrastructure.logging.db_query_listener.logger") as mock_logger:
+            mock_logger.is_enabled_for.return_value = False
+            listener._after_execute(conn, None, "SELECT 1", {}, None, False)
+            mock_logger.debug.assert_not_called()
+
+    def test_skips_param_masking_when_debug_disabled(self):
+        """DEBUG가 꺼져 있으면 파라미터 마스킹 비용도 발생하지 않는다."""
+        listener = DBQueryListener()
+        conn = self._make_conn()
+        listener._before_execute(conn, None, "SELECT 1", {}, None, False)
+
+        with patch(
+            "src.infrastructure.logging.db_query_listener.logger"
+        ) as mock_logger, patch(
+            "src.infrastructure.logging.db_query_listener._mask_sensitive_params"
+        ) as mock_mask:
+            mock_logger.is_enabled_for.return_value = False
+            listener._after_execute(conn, None, "SELECT 1", {"a": 1}, None, False)
+            mock_mask.assert_not_called()
+
+    def test_logs_when_debug_enabled(self):
+        """DEBUG가 켜져 있으면 정상적으로 로깅한다."""
+        listener = DBQueryListener()
+        conn = self._make_conn()
+        listener._before_execute(conn, None, "SELECT 1", {}, None, False)
+
+        with patch("src.infrastructure.logging.db_query_listener.logger") as mock_logger:
+            mock_logger.is_enabled_for.return_value = True
+            listener._after_execute(conn, None, "SELECT 1", {}, None, False)
+            mock_logger.debug.assert_called_once()
+
+
+class TestDBQueryListenerRequestAttribution:
+    """DB 쿼리 로그가 요청 컨텍스트를 실어 나르는지 (통합)."""
+
+    @pytest.fixture(autouse=True)
+    def _clean_context(self):
+        from src.infrastructure.logging.log_context import clear
+
+        clear()
+        yield
+        clear()
+
+    def test_query_log_carries_bound_request_context(self):
+        """bind된 request_id / endpoint가 DB Query 로그에 나타난다."""
+        import json
+        import logging as _logging
+        from io import StringIO
+
+        from src.infrastructure.logging import StructuredLogger
+        from src.infrastructure.logging.formatters import StructuredFormatter
+        from src.infrastructure.logging.log_context import bind
+
+        stream = StringIO()
+        handler = _logging.StreamHandler(stream)
+        handler.setLevel(_logging.DEBUG)
+        handler.setFormatter(StructuredFormatter())
+        real_logger = StructuredLogger(name="test_db_attr", level=_logging.DEBUG)
+        real_logger._logger.handlers.clear()
+        real_logger._logger.addHandler(handler)
+
+        listener = DBQueryListener()
+        conn = MagicMock()
+        conn.info = {}
+        sql = "SELECT agents.id FROM agents"
+
+        bind(request_id="req-db-1", endpoint="/api/v1/agents/run", method="POST")
+        listener._before_execute(conn, None, sql, {}, None, False)
+
+        with patch(
+            "src.infrastructure.logging.db_query_listener.logger", real_logger
+        ):
+            listener._after_execute(conn, None, sql, {}, None, False)
+
+        parsed = json.loads(stream.getvalue())
+        assert parsed["message"] == "DB Query"
+        assert parsed["request_id"] == "req-db-1"
+        assert parsed["endpoint"] == "/api/v1/agents/run"
+        assert parsed["method"] == "POST"
+        assert parsed["sql"] == sql

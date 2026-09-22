@@ -21,6 +21,9 @@ from src.application.agent_builder.schemas import (
     UpdateAgentResponse,
 )
 from src.application.agent_builder.sub_agent_worker_builder import SubAgentWorkerBuilder
+from src.application.agent_builder.gated_worker_validation import (
+    validate_gated_workers,
+)
 from src.application.agent_builder.worker_skeleton_builder import (
     WorkerSkeletonBuilder,
     make_worker_id,
@@ -121,6 +124,8 @@ class UpdateAgentUseCase:
         mcp_server_repo=None,
     ) -> None:
         self._repository = repository
+        # approval-gate Check G10: 단독 워커 제약 검증용 (미주입 시 생략 — 무회귀)
+        self._tool_catalog_repo = tool_catalog_repo
         self._perm_repo = perm_repo
         # kb-rag-filter D7: kb_id 워커 scope 검증용 (kb_id 워커 존재 시 주입 필수)
         self._kb_repo = kb_repo
@@ -312,6 +317,11 @@ class UpdateAgentUseCase:
             skeleton.workers, None, request_id
         )
         tool_workers = skeleton.workers + builtin_workers
+        # approval-gate Check G10: 생성 경로와 같은 단독 워커 제약. 없으면 생성
+        # 후 수정으로 게이트 도구를 다른 도구와 묶어 FR-05 를 우회할 수 있었다.
+        await validate_gated_workers(
+            self._tool_catalog_repo, tool_workers, request_id, self._logger
+        )
 
         # kb-rag-filter D1/D3/D7: 존재·권한 검증 → 물리 컬렉션 고정 → clamp
         kbs = await self._resolve_kbs(

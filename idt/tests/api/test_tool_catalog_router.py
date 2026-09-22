@@ -314,3 +314,51 @@ class TestUpdateToolMetadata:
         )
 
         assert res.status_code == 403
+
+
+class TestRequiresApprovalToggleRouter:
+    """approval-gate Check G2 — 관리자 게이트 토글 라우터 계약."""
+
+    _TOOL = "mcp:3f2a1b4c-0000-1111-2222-333344445555:scrape"
+
+    def _client_and_uc(self, requires_approval=True):
+        from src.api.routes.tool_catalog_router import (
+            get_update_tool_metadata_use_case,
+        )
+        from src.domain.tool_catalog.entity import ToolCatalogEntry
+
+        mock_uc = MagicMock()
+        mock_uc.execute = AsyncMock(return_value=ToolCatalogEntry(
+            id="tc-1", tool_id=self._TOOL, source="mcp", name="scrape",
+            description="d", requires_approval=requires_approval,
+        ))
+        client = _make_client({get_update_tool_metadata_use_case: lambda: mock_uc})
+        return client, mock_uc
+
+    def test_켜기가_전달되고_응답에_반영된다(self):
+        client, mock_uc = self._client_and_uc(requires_approval=True)
+        res = client.patch(
+            "/api/v1/tool-catalog/metadata",
+            json={"tool_id": self._TOOL, "requires_approval": True},
+        )
+        assert res.status_code == 200
+        assert res.json()["requires_approval"] is True
+        assert mock_uc.execute.await_args.kwargs["requires_approval"] is True
+
+    def test_생략하면_전달하지_않는다(self):
+        """category 만 바꿀 때 승인 플래그가 딸려 나가면 안 된다."""
+        client, mock_uc = self._client_and_uc()
+        client.patch(
+            "/api/v1/tool-catalog/metadata",
+            json={"tool_id": self._TOOL, "category": "action"},
+        )
+        assert "requires_approval" not in mock_uc.execute.await_args.kwargs
+
+    def test_null은_유스케이스가_400으로_거부한다(self):
+        client, mock_uc = self._client_and_uc()
+        mock_uc.execute = AsyncMock(side_effect=ValueError("must be true/false"))
+        res = client.patch(
+            "/api/v1/tool-catalog/metadata",
+            json={"tool_id": self._TOOL, "requires_approval": None},
+        )
+        assert res.status_code == 400

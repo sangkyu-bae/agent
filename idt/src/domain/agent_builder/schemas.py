@@ -31,6 +31,10 @@ class ToolMeta:
     # builtin-tools D1: tool_catalog 신규 INSERT 시드 전용 초기값.
     # 런타임 SoT는 tool_catalog.is_builtin(관리자 토글) — 기존 행에는 영향 없음.
     builtin_default: bool = False
+    # approval-gate D§3.3: builtin_default 와 동형. 런타임 SoT는
+    # tool_catalog.requires_approval(관리자 토글)이고 이 값은 신규 DB 시드 전용.
+    # 기본 False 이므로 기존 내부 도구 10종은 게이트 대상이 아니다 (무회귀).
+    requires_approval_default: bool = False
 
 
 @dataclass

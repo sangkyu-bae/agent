@@ -108,7 +108,16 @@ class CleanupJobsResponse(BaseModel):
 
 
 class UnseenCountResponse(BaseModel):
+    """벨 배지 미확인 건수.
+
+    approval-gate Design §5.5: `count` 의 의미(총 미확인)는 그대로 두고
+    분해 필드를 **추가**한다 — 기존 소비자(AppSidebar 등)를 깨지 않으면서
+    필요한 화면만 분해 표시할 수 있다.
+    """
+
     count: int
+    jobs: int = 0
+    approvals: int = 0
 
 
 class SeenAllResponse(BaseModel):

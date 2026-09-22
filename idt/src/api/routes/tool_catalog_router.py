@@ -85,7 +85,7 @@ async def update_tool_metadata(
     request_id = str(uuid.uuid4())
     changes = {
         field: getattr(body, field)
-        for field in ("category", "max_tool_calls")
+        for field in ("category", "max_tool_calls", "requires_approval")
         if field in body.model_fields_set
     }
     try:
@@ -99,6 +99,7 @@ async def update_tool_metadata(
         tool_id=updated.tool_id,
         category=updated.category,
         max_tool_calls=updated.max_tool_calls,
+        requires_approval=updated.requires_approval,
     )
 
 

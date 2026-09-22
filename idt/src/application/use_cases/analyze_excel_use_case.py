@@ -15,7 +15,10 @@ from src.domain.policies.analysis_policy import (
     AnalysisQualityThreshold,
     AnalysisRetryPolicy,
 )
-from src.infrastructure.langsmith.langsmith import langsmith
+from src.infrastructure.langsmith.langsmith import (
+    EXCEL_ANALYSIS_PROJECT_NAME,
+    scoped_tracing,
+)
 
 
 class AnalyzeExcelUseCase:
@@ -65,7 +68,6 @@ class AnalyzeExcelUseCase:
             AnalysisResult: 분석 결과
         """
         request_id = request_id or str(uuid.uuid4())
-        langsmith(project_name="excel-analysis-agent")
 
         self._logger.info(
             "Starting excel analysis",
@@ -99,7 +101,11 @@ class AnalyzeExcelUseCase:
                 "user_context_block": render_user_context_block(auth_ctx),
             }
 
-            final_state = await self._workflow.run(initial_state)
+            # pipeline-langsmith-tracing FR-06: 전역 os.environ 대신 호출
+            # 스코프로 한정한다. 단일 await 라 §7-2(yield 가로지르기 금지)에
+            # 걸리지 않는다. 키가 없으면 no-op.
+            with scoped_tracing(EXCEL_ANALYSIS_PROJECT_NAME):
+                final_state = await self._workflow.run(initial_state)
             result = self._build_result(final_state)
 
             self._logger.info(

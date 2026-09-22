@@ -434,3 +434,55 @@ class SubAgentAccessPolicy:
         if parent_owner_id == sub_agent_owner_id:
             return True
         return is_subscribed
+
+
+class GatedWorkerPolicy:
+    """approval-gate Plan FR-05 — 승인 게이트 도구의 단독 워커 제약.
+
+    Design Ref: §2.0 / §7.2. 승인 도구를 다른 도구와 같은 워커에 두면
+    react 루프 중간에 게이트가 걸려, 앞서 실행된 도구 결과가 재개 시
+    유실된다(재개 단위는 '워커 1홉'). 구성을 제약해 그 상황 자체를 없앤다 —
+    게이트는 항상 워커의 유일한 도구가 된다.
+
+    프롬프트로 타이르는 대신 생성 시점에 구조로 막는다
+    (위키 builtin-tools-optout-channel §4 와 같은 계열).
+    """
+
+    @staticmethod
+    def collect_gated_tool_ids(catalog_meta: dict | None) -> set[str]:
+        """카탈로그에서 승인 대상 tool_id 집합을 뽑는다.
+
+        카탈로그 미주입·조회 실패(None/빈 dict)면 빈 집합 — 이 사이클
+        이전과 동일하게 동작한다(mcp-tool-category-routing FR-14 취지).
+        """
+        return {
+            tool_id
+            for tool_id, entry in (catalog_meta or {}).items()
+            if getattr(entry, "requires_approval", False)
+        }
+
+    @staticmethod
+    def validate(workers: list, gated_tool_ids: set[str]) -> None:
+        """워커 구성 검증. 위반 시 ValueError.
+
+        빌트인 주입 **후**에 호출해야 한다 — 주입으로 제약이 깨질 수 있다.
+        """
+        if not gated_tool_ids:
+            return
+        by_worker: dict[str, list[str]] = {}
+        for worker in workers:
+            # 서브에이전트는 도구가 아니라 중첩 그래프다. 자체 게이트를
+            # 가지므로 이 제약의 대상이 아니다.
+            if getattr(worker, "worker_type", "tool") != "tool":
+                continue
+            by_worker.setdefault(worker.worker_id, []).append(worker.tool_id)
+
+        for worker_id, tool_ids in by_worker.items():
+            gated = [t for t in tool_ids if t in gated_tool_ids]
+            if gated and len(tool_ids) > 1:
+                raise ValueError(
+                    f"승인이 필요한 도구 {gated}는 워커 '{worker_id}'에 단독으로만 "
+                    f"배치할 수 있습니다 (현재 {tool_ids}). "
+                    f"수집 워커와 발송 워커를 분리하면 supervisor가 순차로 "
+                    f"라우팅합니다."
+                )

@@ -10,12 +10,27 @@ from enum import Enum
 
 
 class MiddlewareType(str, Enum):
-    """1차 빌트인 미들웨어 4종 (실행 안정성 축)."""
+    """1차 빌트인 미들웨어 4종 (실행 안정성 축) + 승인 게이트.
+
+    approval-gate Design §3.3: APPROVAL_GATE 는 안정성이 아니라 **안전** 축이라
+    조립 실패 시 정책이 다르다 — 나머지는 warning 후 스킵이지만 게이트는
+    예외를 재전파한다(fail-closed). MiddlewareBuilder.build 참조.
+    """
 
     MODEL_RETRY = "model_retry"
     TOOL_RETRY = "tool_retry"
     MODEL_FALLBACK = "model_fallback"
     MODEL_CALL_LIMIT = "model_call_limit"
+    APPROVAL_GATE = "approval_gate"
+
+
+# approval-gate Check G3: 전용 API 가 소유하는 미들웨어 타입.
+# 에이전트 폼 저장(_sync_middleware, 전체 교체)은 이 타입의 행을 삭제·재삽입하지
+# 않는다. 그렇지 않으면 전용 API 로 저장한 설정(execute_after 등)이 에이전트를
+# 한 번 수정할 때마다 폼 목록에 없다는 이유로 지워진다.
+SEPARATELY_MANAGED_MIDDLEWARE_TYPES: frozenset[str] = frozenset(
+    {MiddlewareType.APPROVAL_GATE.value}
+)
 
 
 @dataclass
@@ -47,8 +62,18 @@ class AgentMiddlewareRecord:
 
 @dataclass(frozen=True)
 class AppliedMiddleware:
-    """실행 조립용 VO — 스냅샷 ∪ enforced 병합 결과 (config는 카탈로그 해석)."""
+    """실행 조립용 VO — 스냅샷 ∪ enforced 병합 결과.
+
+    approval-gate Design §3.4: config 는 `카탈로그 default_config ∪ 에이전트
+    record.config`(record 우선) 다. 기존 4종은 record.config 가 비어 있어
+    default_config 그대로 — 무회귀.
+
+    `is_enforced` 를 싣는 이유: 승인 게이트가 런타임에 `mode="off"` 를
+    이겨야 하는데, 그 판정을 하려면 강제 여부를 알아야 한다. 기본값 False 라
+    기존 생성부는 수정이 필요 없다 (additive).
+    """
 
     middleware_type: MiddlewareType
     config: dict
     sort_order: int
+    is_enforced: bool = False

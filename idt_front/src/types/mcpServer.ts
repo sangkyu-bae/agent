@@ -18,6 +18,11 @@ export interface McpServer {
   transport: McpTransport;
   input_schema: Record<string, unknown> | null;
   is_active: boolean;
+  /**
+   * approval-gate-phase2 D-07: 이 서버의 도구가 카탈로그에 처음 등록될 때
+   * requires_approval 로 시작할지. 이미 동기화된 도구에는 소급하지 않는다.
+   */
+  default_requires_approval: boolean;
   tool_id: string;
   created_at: string;
   updated_at: string;
@@ -46,6 +51,7 @@ export interface RegisterMcpServerRequest {
   input_schema?: Record<string, unknown> | null;
   auth_config?: Record<string, unknown> | null;
   server_config?: Record<string, unknown> | null;
+  default_requires_approval?: boolean;
 }
 
 /** 백엔드 UpdateMCPServerRequest 매핑 (모든 필드 optional) */
@@ -58,6 +64,7 @@ export interface UpdateMcpServerRequest {
   input_schema?: Record<string, unknown> | null;
   auth_config?: Record<string, unknown> | null;
   server_config?: Record<string, unknown> | null;
+  default_requires_approval?: boolean;
 }
 
 /** 백엔드 MCPConnectionTestResponse 매핑 */

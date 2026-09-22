@@ -4,8 +4,13 @@ before_cursor_execute / after_cursor_execute 이벤트를 통해
 SQL, 바인딩 파라미터, 실행 시간(ms)을 DEBUG 레벨로 로깅한다.
 
 LOG_LEVEL=DEBUG 설정 시에만 출력됨 (INFO 이상 환경에서는 자동 비활성화).
+
+쿼리 출처(request_id / endpoint / method)는 log_context ContextVar에 바인딩된
+값을 StructuredLogger가 자동 주입한다. 리스너는 greenlet 안에서 실행되어
+호출부 스택 프레임이 보이지 않으므로, 출처 추적은 컨텍스트에 의존한다.
 """
 
+import logging
 import time
 from typing import Any
 
@@ -60,7 +65,14 @@ class DBQueryListener:
         context: Any,
         executemany: bool,
     ) -> None:
-        """쿼리 완료 후 SQL + 파라미터 + 응답 정보 + 실행 시간을 DEBUG 레벨로 로깅한다."""
+        """쿼리 완료 후 SQL + 파라미터 + 응답 정보 + 실행 시간을 DEBUG 레벨로 로깅한다.
+
+        DEBUG가 꺼진 환경에서는 페이로드를 구성하지 않고 즉시 반환한다
+        (모든 쿼리마다 파라미터를 복사하는 비용 제거).
+        """
+        if not logger.is_enabled_for(logging.DEBUG):
+            return
+
         start = conn.info.get("query_start_time")
         duration_ms = (
             round((time.perf_counter() - start) * 1000, 2) if start is not None else None
