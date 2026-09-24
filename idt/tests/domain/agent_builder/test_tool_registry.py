@@ -78,22 +78,24 @@ class TestToolRegistryCategory:
         meta = get_tool_meta("tavily_search")
         assert meta.category == "search"
 
-    def test_excel_export_is_action(self):
+    def test_excel_export_is_unclassified(self):
+        """action-category-compose-node D-01: 명시 지정 없음 → None(react/전용 노드)."""
         meta = get_tool_meta("excel_export")
-        assert meta.category == "action"
+        assert meta.category is None
 
-    def test_python_code_executor_is_action(self):
+    def test_python_code_executor_is_unclassified(self):
         meta = get_tool_meta("python_code_executor")
-        assert meta.category == "action"
+        assert meta.category is None
 
     def test_data_analysis_is_analysis(self):
         meta = get_tool_meta("data_analysis")
         assert meta.category == "analysis"
 
-    def test_document_extractor_is_action(self):
-        """document-template-extractor GA1: action 카테고리 + env 불필요."""
+    def test_document_extractor_is_unclassified(self):
+        """document-template-extractor GA1: env 불필요. 카테고리는 미지정(None) —
+        전용 생성 노드는 카테고리 해석 전에 분기되므로 값이 없어야 한다."""
         meta = get_tool_meta("document_extractor")
-        assert meta.category == "action"
+        assert meta.category is None
         assert meta.requires_env == []
 
     def test_wiki_read_is_not_search_or_analysis(self):

@@ -81,12 +81,14 @@ class ToolCategoryPolicy:
                 참조에 지정하려는 경우
         """
         cls.validate(category)
-        if category != cls.COLLECT:
+        # action-category-compose-node FR-03: action도 "작성 1회 → 도구 1회 호출"
+        # 단일샷 계약이라 collect와 같은 제약을 받는다.
+        if category not in (cls.COLLECT, cls.ACTION):
             return
         ref = parse_mcp_tool_id(tool_id)
         if ref is not None and ref.is_server_level:
             raise ValueError(
-                "collect category requires a single-tool reference "
+                f"{category} category requires a single-tool reference "
                 f"('mcp:<server>:<tool>' or an internal tool), got: {tool_id!r}"
             )
 

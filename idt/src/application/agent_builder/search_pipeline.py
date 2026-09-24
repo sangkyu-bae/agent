@@ -55,6 +55,56 @@ def is_search_result(msg) -> bool:
     return bool(name) and SEARCH_RESULT_MARKER in content
 
 
+# ── 초안 산출 규약 (action-category-compose-node §3.4 / D-06) ─────────
+# action 워커 산출은 AIMessage 1건이며 본문은 두 구획이다:
+#   "[<w> 초안]\n<draft>\n\n[<w> 집행결과]\n<outcome>"
+# search 규약과 같은 자리에 두는 이유: 워커 산출 식별 규칙의 단일 출처(D2).
+DRAFT_OUTPUT_MARKER = "초안"
+DRAFT_OUTCOME_MARKER = "집행결과"
+
+
+def format_draft_output(worker_id: str, draft: str, outcome: str) -> str:
+    """action 워커 산출 본문 규약 — is_draft_output / split_draft_output 과 쌍."""
+    return (
+        f"[{worker_id} {DRAFT_OUTPUT_MARKER}]\n{draft}\n\n"
+        f"[{worker_id} {DRAFT_OUTCOME_MARKER}]\n{outcome}"
+    )
+
+
+def is_draft_output(msg) -> bool:
+    """action 워커가 남긴 초안 메시지 식별 — 첫 줄이 "[<name> 초안]" 과 정확히 일치.
+
+    본문에 '초안' 단어가 있어도 오탐하지 않도록 name 과 첫 줄을 함께 본다.
+    """
+    if isinstance(msg, dict) or getattr(msg, "type", "") != "ai":
+        return False
+    name = getattr(msg, "name", None)
+    content = getattr(msg, "content", "")
+    if not name or not isinstance(content, str):
+        return False
+    first_line = content.split("\n", 1)[0]
+    return first_line == f"[{name} {DRAFT_OUTPUT_MARKER}]"
+
+
+def split_draft_output(msg) -> tuple[str, str, str] | None:
+    """초안 메시지 → (worker_id, draft, outcome). 초안 메시지가 아니면 None.
+
+    경계는 '마지막' "[<w> 집행결과]" 줄이다 — 초안 본문 안에 같은 줄이 있어도
+    구획이 깨지지 않는다.
+    """
+    if not is_draft_output(msg):
+        return None
+    worker_id = str(getattr(msg, "name"))
+    content: str = getattr(msg, "content")
+    head_line = f"[{worker_id} {DRAFT_OUTPUT_MARKER}]\n"
+    boundary = f"\n\n[{worker_id} {DRAFT_OUTCOME_MARKER}]\n"
+    body = content[len(head_line):]
+    idx = body.rfind(boundary)
+    if idx < 0:
+        return worker_id, body, ""
+    return worker_id, body[:idx], body[idx + len(boundary):]
+
+
 def is_worker_output(msg) -> bool:
     """워커 노드가 생성한 AIMessage 식별.
 

@@ -112,15 +112,25 @@ class TestUpdateToolMetadataValidation:
         repo.update_metadata.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_allows_non_collect_on_server_level_tool(self):
+    async def test_allows_search_on_server_level_tool(self):
         uc, repo = _make_uc(
             existing=_entry(tool_id=LEGACY_TOOL_ID),
-            updated=_entry(tool_id=LEGACY_TOOL_ID, category="action"),
+            updated=_entry(tool_id=LEGACY_TOOL_ID, category="search"),
         )
 
-        await uc.execute(LEGACY_TOOL_ID, "req-1", category="action")
+        await uc.execute(LEGACY_TOOL_ID, "req-1", category="search")
 
         repo.update_metadata.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_rejects_action_on_server_level_tool(self):
+        """action-category-compose-node FR-03: action도 단일 도구 참조만 허용."""
+        uc, repo = _make_uc(existing=_entry(tool_id=LEGACY_TOOL_ID))
+
+        with pytest.raises(ValueError):
+            await uc.execute(LEGACY_TOOL_ID, "req-1", category="action")
+
+        repo.update_metadata.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_rejects_out_of_range_tool_calls(self):

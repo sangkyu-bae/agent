@@ -159,3 +159,34 @@ class TestWorkerRunCapDelegation:
         hooks.skip_workers(_state([]))
 
         assert inner.skip_calls == 1
+
+
+# ── action-category-compose-node D-11 ────────────────────────────
+
+
+from src.application.agent_builder.search_pipeline import format_draft_output  # noqa: E402
+
+
+class TestActionWorkerRunCap:
+    def test_action_worker_is_skipped_after_draft_output(self):
+        """초안 규약 메시지도 '이번 턴에 실행됨'으로 센다 — 재개 런 이중 발송 방지 (SC-8)."""
+        inner = StubHooks()
+        hooks = WorkerRunCapHooks(inner, ["mailer"], logger=MagicMock())
+        state = _state([
+            HumanMessage(content="회신 보내줘"),
+            AIMessage(content=format_draft_output("mailer", "초안", "승인 대기"), name="mailer"),
+        ])
+
+        assert "mailer" in hooks.skip_workers(state)
+
+    def test_resumed_outcome_message_alone_does_not_count(self):
+        """재개 시 주입되는 평문 산출(AIMessage name=w)만으로는 실행으로 보지 않는다 —
+        판정 근거는 규약 메시지다. 초안 메시지는 스냅샷에 남아 있으므로 함께 복원된다."""
+        inner = StubHooks()
+        hooks = WorkerRunCapHooks(inner, ["mailer"], logger=MagicMock())
+        state = _state([
+            HumanMessage(content="회신 보내줘"),
+            AIMessage(content="메일 발송 성공", name="mailer"),
+        ])
+
+        assert "mailer" not in hooks.skip_workers(state)

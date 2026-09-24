@@ -486,3 +486,117 @@ class GatedWorkerPolicy:
                     f"수집 워커와 발송 워커를 분리하면 supervisor가 순차로 "
                     f"라우팅합니다."
                 )
+
+
+# ── action-category-compose-node ─────────────────────────────────
+
+
+class ActionArgumentPolicy:
+    """action 워커의 발송 인자 규칙 — 본문 키 해석·병합·요약.
+
+    Design Ref: action-category-compose-node §3.1 / D-04 / D-09.
+    순수 dict·str 규칙만 다룬다(외부 의존 없음).
+    """
+
+    # gate_middleware._DRAFT_KEYS 와 같은 순서 — 승인 화면의 초안 추출과 일치.
+    DRAFT_KEY_CANDIDATES: tuple[str, ...] = ("draft", "body", "content", "본문")
+
+    @classmethod
+    def resolve_draft_key(cls, configured: str, input_schema: dict | None) -> str:
+        """초안을 넣을 인자 키를 확정한다.
+
+        설정 키가 있으면 스키마에 존재해야 하고, 비어 있으면 후보 순서로
+        스키마에 있는 첫 키를 고른다. 둘 다 실패하면 ValueError —
+        compile 시 워커 격리 사유가 된다(D-09). 스키마를 모르면 키 이름을
+        추측하게 되므로 역시 실패로 본다.
+        """
+        properties = (input_schema or {}).get("properties")
+        if not isinstance(properties, dict) or not properties:
+            raise ValueError("도구 입력 스키마에 properties가 없어 본문 키를 정할 수 없습니다")
+        key = (configured or "").strip()
+        if key:
+            if key not in properties:
+                raise ValueError(
+                    f"설정된 draft_arg_key {key!r}가 도구 입력 스키마에 없습니다 "
+                    f"(스키마 키: {sorted(properties)})"
+                )
+            return key
+        for candidate in cls.DRAFT_KEY_CANDIDATES:
+            if candidate in properties:
+                return candidate
+        raise ValueError(
+            "draft_arg_key가 비어 있고 관례 키"
+            f"{list(cls.DRAFT_KEY_CANDIDATES)}도 스키마에 없습니다 "
+            f"(스키마 키: {sorted(properties)})"
+        )
+
+    @staticmethod
+    def merge(arguments: dict | None, draft_key: str, draft: str) -> dict:
+        """복사본에 arguments[draft_key] = draft. 마지막 덮어쓰기 — 초안이 이긴다 (D-04)."""
+        merged = dict(arguments or {})
+        merged[draft_key] = draft
+        return merged
+
+    @staticmethod
+    def summarize_keys(arguments: dict | None) -> list[str]:
+        """로그·스텝 요약용 키 목록. 값은 절대 싣지 않는다 (Plan FR-24/25)."""
+        return sorted(str(k) for k in (arguments or {}).keys())
+
+
+@dataclass(frozen=True)
+class DraftContext:
+    """final_answer 초안 보존 모드의 입력 — 마지막 초안과 그 집행 결과."""
+
+    worker_id: str
+    draft: str
+    outcome: str
+
+
+class FinalAnswerDraftPolicy:
+    """final_answer 초안 보존 모드 — 감지·블록·지시를 한 곳이 소유한다.
+
+    Design Ref: action-category-compose-node §3.1 / D-07 / Plan FR-17·FR-18.
+    이 클래스가 final_answer 초안 처리의 유일한 교체 지점이다. 예컨대
+    "초안은 LLM을 거치지 않고 프로그램적으로 삽입"으로 바꾸려면 이 정책만
+    바꾸고 노드는 그대로 둔다.
+    """
+
+    _EMPTY_DRAFT_NOTICE = "(작성된 초안 없음 — 아래 집행 결과의 사유를 그대로 전달하세요)"
+
+    @staticmethod
+    def detect(
+        draft_sections: list[tuple[str, str, str]],
+        later_outputs: dict[str, str] | None = None,
+    ) -> DraftContext | None:
+        """(worker_id, draft, outcome) 목록 → 마지막 초안 컨텍스트. 없으면 None.
+
+        later_outputs: worker_id → 초안 메시지 이후에 같은 워커 이름으로 들어온
+        산출(재개 시 _restore_state 가 주입한 집행 결과). 있으면 초안 메시지
+        안의 outcome("승인 대기…")보다 우선한다(D-07).
+        """
+        if not draft_sections:
+            return None
+        worker_id, draft, outcome = draft_sections[-1]
+        override = (later_outputs or {}).get(worker_id)
+        if override:
+            outcome = override
+        return DraftContext(worker_id=worker_id, draft=draft, outcome=outcome)
+
+    @classmethod
+    def render_block(cls, ctx: DraftContext) -> str:
+        """시스템 프롬프트에 붙일 블록. 초안은 한 글자도 바꾸지 않고 싣는다."""
+        draft = ctx.draft if ctx.draft.strip() else cls._EMPTY_DRAFT_NOTICE
+        return (
+            "[작성된 초안 — 원문 그대로 포함할 것]\n"
+            f"{draft}\n\n"
+            "[집행 결과]\n"
+            f"{ctx.outcome}"
+        )
+
+    @staticmethod
+    def instruction() -> str:
+        """user tail 지시 — 재작성 금지."""
+        return (
+            "위 [작성된 초안]을 한 글자도 고치지 말고 그대로 답변에 포함하고, "
+            "[집행 결과]를 사용자에게 보고하세요. 초안을 요약·수정·재작성하지 마세요."
+        )

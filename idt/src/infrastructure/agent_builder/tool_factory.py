@@ -1,4 +1,5 @@
 """ToolFactory: tool_id → LangChain BaseTool 인스턴스 생성."""
+import dataclasses
 from collections.abc import Callable
 from typing import Any
 
@@ -353,10 +354,16 @@ class ToolFactory:
         return {**rag_config.metadata_filter, "kb_id": rag_config.kb_id}
 
     def _parse_rag_config(self, tool_config: dict | None) -> RagToolConfig:
-        """tool_config dict → RagToolConfig 변환. None이면 기본값."""
+        """tool_config dict → RagToolConfig 변환. None이면 기본값.
+
+        action-category-compose-node GAP-I1: tool_config dict는 도구별 설정을
+        공유한다(draft_arg_key 등). RAG 파서는 자기 필드만 취해 다른 도구의
+        키가 섞여도 깨지지 않는다.
+        """
         if not tool_config:
             return RagToolConfig()
-        return RagToolConfig(**tool_config)
+        known = {f.name for f in dataclasses.fields(RagToolConfig)}
+        return RagToolConfig(**{k: v for k, v in tool_config.items() if k in known})
 
     def _resolve_score_threshold(self, rag_config: RagToolConfig) -> float:
         """벡터 코사인 컷오프 임계값 결정.

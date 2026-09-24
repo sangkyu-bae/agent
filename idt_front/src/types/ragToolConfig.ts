@@ -13,6 +13,8 @@ export interface RagToolConfig {
   use_routed_search?: boolean;
   /** kb-rag-filter: 논리 지식베이스 필터 opt-in — 설정 시 컬렉션은 KB의 것으로 자동 고정 */
   kb_id?: string;
+  /** action-category-compose-node: action 워커의 초안 인자 키 (미지정 시 body/content 등 관례 키 자동 탐색). RAG 도구는 무시 — 입력 폼은 후속 사이클 */
+  draft_arg_key?: string | null;
 }
 
 export type CollectionScope = 'PERSONAL' | 'DEPARTMENT' | 'PUBLIC';

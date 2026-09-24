@@ -21,6 +21,7 @@ category NULL 무변화 계약(FR-14)의 취지에 어긋난다. 이번 사이�
 """
 from __future__ import annotations
 
+from src.application.agent_builder.search_pipeline import is_draft_output
 from src.application.agent_builder.supervisor_hooks import (
     SupervisorHooks,
     is_current_turn_search_result,
@@ -74,9 +75,12 @@ class WorkerRunCapHooks:
         같은 판정 기준. 재주입분만 보고 워커를 막으면 이번 턴에는 수집을
         한 번도 못 하게 된다.
         """
+        # action-category-compose-node D-11: 초안 규약 메시지도 실행으로 센다.
+        # 재개 런은 스냅샷에서 초안 메시지를 복원하므로 같은 워커가 다시
+        # 초안을 쓰고 발송을 시도하는 경로가 여기서 막힌다 (Plan SC: SC-8).
         return {
             name
             for msg in (state.get("messages") or [])
-            if is_current_turn_search_result(msg)
+            if (is_current_turn_search_result(msg) or is_draft_output(msg))
             and (name := getattr(msg, "name", None))
         }

@@ -71,6 +71,11 @@ class RagToolConfigRequest(BaseModel):
     # kb-rag-filter: 논리 지식베이스 필터 opt-in — 지정 시 저장 UseCase가
     # 존재 검증 + 물리 컬렉션 고정(D1) + scope clamp(D7)를 수행한다.
     kb_id: str | None = None
+    # action-category-compose-node Plan FR-07 / Analysis GAP-I1: action 워커의
+    # 초안 인자 키. tool_config dict는 도구별 설정의 공용 자리라 이 스키마로
+    # 함께 실린다. None = 관례 키 자동 탐색(ActionArgumentPolicy). RAG 도구는
+    # 이 키를 무시한다(ToolFactory._parse_rag_config).
+    draft_arg_key: str | None = Field(None, max_length=100)
 
 
 class WorkerInfo(BaseModel):
