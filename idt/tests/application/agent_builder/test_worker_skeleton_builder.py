@@ -277,3 +277,24 @@ def test_make_worker_id_short_ids_unchanged():
     assert make_worker_id(f"mcp:{MCP_SERVER_ID}:fetch") == (
         f"mcp_{MCP_SERVER_ID}_fetch_worker"
     )
+
+
+# --- action-category-compose-node GAP-I1 (Plan FR-07) ----------------------
+
+
+@pytest.mark.asyncio
+async def test_build_from_tool_ids_carries_draft_arg_key_to_tool_config():
+    """action 워커 설정(draft_arg_key)이 기존 tool_configs 경로로 저장까지 도달한다."""
+    from src.domain.agent_builder.action_tool_config import ActionToolConfig
+
+    tool_id = "mcp:3f2a1b4c-0000-1111-2222-333344445555:send_mail"
+    configs = {tool_id: RagToolConfigRequest(draft_arg_key="body")}
+    skeleton = await _builder().build_from_tool_ids([tool_id], configs, "req-1")
+
+    stored = skeleton.workers[0].tool_config
+    assert stored["draft_arg_key"] == "body"
+    assert ActionToolConfig.from_tool_config(stored).draft_arg_key == "body"
+
+
+def test_rag_tool_config_request_draft_arg_key_defaults_to_none():
+    assert RagToolConfigRequest().draft_arg_key is None

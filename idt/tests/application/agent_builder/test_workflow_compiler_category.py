@@ -138,8 +138,20 @@ class TestCategoryResolutionPriority:
         assert compiler._resolve_category(worker, meta) == "collect"
 
     @pytest.mark.asyncio
-    async def test_unknown_mcp_tool_falls_back_to_action(self):
+    async def test_unknown_mcp_tool_falls_back_to_none(self):
+        """action-category-compose-node D-01: 미분류 MCP 도구는 None(react)."""
         compiler, _ = _make_compiler([])
+        worker = WorkerDefinition(
+            tool_id=MCP_TOOL_ID, worker_id="w1", description="d",
+        )
+        meta = await compiler._load_catalog_metadata("req-1")
+
+        assert compiler._resolve_category(worker, meta) is None
+
+    @pytest.mark.asyncio
+    async def test_explicit_action_in_catalog_is_preserved(self):
+        """명시 action은 폴백과 구분되어 그대로 전달된다."""
+        compiler, _ = _make_compiler([_entry(MCP_TOOL_ID, category="action")])
         worker = WorkerDefinition(
             tool_id=MCP_TOOL_ID, worker_id="w1", description="d",
         )
@@ -148,14 +160,14 @@ class TestCategoryResolutionPriority:
         assert compiler._resolve_category(worker, meta) == "action"
 
     def test_no_catalog_repo_behaves_as_before(self):
-        """D-08 / FR-14: 카탈로그 미주입이면 기존 2단계 해석 그대로."""
+        """D-08 / FR-14: 카탈로그 미주입이면 기존 2단계 해석 그대로 — 폴백은 None."""
         compiler, _ = _make_compiler()
         worker = WorkerDefinition(
             tool_id=MCP_TOOL_ID, worker_id="w1", description="d",
         )
 
-        assert compiler._resolve_category(worker) == "action"
-        assert compiler._resolve_category(worker, None) == "action"
+        assert compiler._resolve_category(worker) is None
+        assert compiler._resolve_category(worker, None) is None
 
     @pytest.mark.asyncio
     async def test_catalog_not_queried_when_repo_absent(self):

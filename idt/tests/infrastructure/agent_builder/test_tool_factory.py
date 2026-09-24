@@ -193,6 +193,16 @@ class TestToolFactoryRagConfig:
         tool = factory.create("excel_export", tool_config={"top_k": 10})
         assert tool.name == "excel_export"
 
+    def test_parse_rag_config_ignores_keys_of_other_tools(self):
+        """action-category-compose-node GAP-I1: tool_config dict는 도구별 설정을
+        공유하므로(draft_arg_key 등) RAG 파서는 자기 필드만 취한다."""
+        factory = _make_factory()
+        tool = factory.create(
+            "internal_document_search",
+            tool_config={"top_k": 7, "draft_arg_key": "body"},
+        )
+        assert tool.top_k == 7
+
 
 class TestToolFactoryRoutedSearch:
     """rag-routed-integration D2 — routed getter 주입·전달."""

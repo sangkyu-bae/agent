@@ -6,7 +6,9 @@ from typing import Literal
 from src.domain.agent_builder.policies import IterationLimitPolicy
 from src.domain.llm_model.entity import LlmModel
 
-ToolCategory = Literal["search", "action", "analysis"]
+# action-category-compose-node D-01: 허용값은 ToolCategoryPolicy.ALLOWED 와 같다.
+# None = 미분류(react 경로). "action"은 관리자가 명시 지정할 때만 의미를 가진다.
+ToolCategory = Literal["search", "collect", "analysis", "action"]
 
 
 @dataclass(frozen=True)
@@ -27,7 +29,10 @@ class ToolMeta:
     name: str
     description: str
     requires_env: list[str] = field(default_factory=list)
-    category: ToolCategory = "action"
+    # Design Ref: action-category-compose-node §2.1 (Plan FR-02) — 기본값 None.
+    # 이전 기본값 "action"은 사실상 '미분류' 버킷이었고, action 전용 노드가
+    # 생기면 미분류 도구 전체를 끌고 간다. 미분류는 None(react)으로 표현한다.
+    category: ToolCategory | None = None
     # builtin-tools D1: tool_catalog 신규 INSERT 시드 전용 초기값.
     # 런타임 SoT는 tool_catalog.is_builtin(관리자 토글) — 기존 행에는 영향 없음.
     builtin_default: bool = False

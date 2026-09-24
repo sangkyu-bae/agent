@@ -5,9 +5,15 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langchain.agents import create_agent
 from langgraph.graph import END, StateGraph
 
-from src.application.agent_builder.collect_pipeline import create_collect_node
+from src.application.agent_builder.action_pipeline import create_action_node
+from src.application.agent_builder.collect_pipeline import (
+    create_collect_node,
+    resolve_input_schema,
+)
 from src.application.agent_builder.message_normalization import ensure_user_tail
 from src.application.agent_builder.search_pipeline import (
+    is_draft_output as _is_draft_output,
+    split_draft_output as _split_draft_output,
     create_search_pipeline_node,
     is_search_result as _is_search_result,
     is_worker_output as _is_worker_output,
@@ -16,7 +22,12 @@ from src.application.agent_builder.search_pipeline import (
 from src.application.deep_search.workflow import create_deep_search_node
 from src.domain.deep_search.policies import DeepSearchBudgetPolicy
 from src.domain.agent_builder.rag_tool_config import clamp_llm_name
-from src.domain.agent_builder.policies import GatedWorkerPolicy
+from src.domain.agent_builder.action_tool_config import ActionToolConfig
+from src.domain.agent_builder.policies import (
+    ActionArgumentPolicy,
+    FinalAnswerDraftPolicy,
+    GatedWorkerPolicy,
+)
 from src.domain.approval.entity import GateSettings
 from src.domain.approval.policies import ApprovalPolicy, ApprovalSignalPolicy
 from src.domain.middleware.entities import MiddlewareType
@@ -315,6 +326,30 @@ def _tool_names(tools: list) -> list[str]:
     return names
 
 
+def _draft_context(worker_outputs: list):
+    """초안 메시지 → (DraftContext | None, 정책 블록에 흡수된 메시지 id 집합).
+
+    action-category-compose-node D-07: 초안 메시지 '이후'에 같은 워커 이름으로
+    들어온 비초안 산출(재개 시 주입된 집행 결과)은 outcome으로 채택하고, 역시
+    [워커 작업 결과]에서 뺀다.
+    """
+    sections: list[tuple[str, str, str]] = []
+    later_outputs: dict[str, str] = {}
+    absorbed: set[int] = set()
+    draft_names: set[str] = set()
+    for m in worker_outputs:
+        parsed = _split_draft_output(m)
+        if parsed is not None:
+            sections.append(parsed)
+            draft_names.add(parsed[0])
+            absorbed.add(id(m))
+        elif getattr(m, "name", None) in draft_names:
+            later_outputs[getattr(m, "name")] = str(getattr(m, "content", ""))
+            absorbed.add(id(m))
+    ctx = FinalAnswerDraftPolicy.detect(sections, later_outputs)
+    return ctx, (absorbed if ctx is not None else set())
+
+
 def _is_tool_message(msg) -> bool:
     """tool 역할 메시지 판정 — final_answer LLM 입력에서 제외 (고아 tool 400 방어)."""
     if isinstance(msg, dict):
@@ -521,6 +556,9 @@ class WorkflowCompiler:
             # collect 한정 — search는 REGISTRY 분류라 관리자 지정 없이 동작이
             # 바뀌므로 제외한다(module-3 개정, FR-14 취지 보존).
             collect_worker_ids: list[str] = []
+            # action-category-compose-node D-11: action 워커도 런당 1회 — 재개 런에서
+            # supervisor가 같은 워커를 다시 태워 이중 작성·이중 발송하는 경로 차단.
+            action_worker_ids: list[str] = []
             # supervisor-early-finish-fix D-06 / 열린질문 Q-01 확정:
             # '빈 결과' 판정 대상 = 외부에서 자료를 수집하는 워커만.
             # 제외 — sub_agent·생성 노드(문서/발표/엑셀)·analysis: 빈 산출이
@@ -685,6 +723,28 @@ class WorkflowCompiler:
                     tool_names=_tool_names(worker_tools),
                 )
 
+                # Design Ref: action-category-compose-node §2.1 / D-02·D-03·D-09·D-12 —
+                # 명시 action은 react가 아니라 '작성 1회 → 도구 1회 호출' 함수 노드.
+                # 본문 키를 정할 수 없으면 워커만 격리한다(§6.1 #1, fail-closed).
+                if category == "action":
+                    action_node = self._create_action_worker_node(
+                        worker_def, tool, llm, request_id=request_id,
+                        gated=self._should_gate_worker(
+                            worker_def, gate_settings, gated_tool_ids,
+                        ),
+                        user_context_block=user_context_block,
+                        datetime_block=datetime_block,
+                        worker_context_block=worker_context_block,
+                    )
+                    if action_node is None:
+                        failed_worker_ids.add(worker_def.worker_id)
+                        continue
+                    worker_map[worker_def.worker_id] = action_node
+                    function_node_ids.add(worker_def.worker_id)
+                    # D-12: 작성은 수집이 아니다 — empty_signal 판정 대상에서 제외.
+                    action_worker_ids.append(worker_def.worker_id)
+                    continue
+
                 if category in ("search", "collect"):
                     # deep-search-pipeline FR-13: 모드에 따라 legacy/deep 팩토리 선택.
                     # mcp-tool-category-routing §5 D-03 (FR-05): collect는 react
@@ -826,9 +886,10 @@ class WorkflowCompiler:
             # mcp-tool-category-routing §5 D-07 (FR-11): collect 워커 재라우팅 상한.
             # 위에서 정해진 훅을 감싸므로 첨부·시각화 강제 라우팅 판단은 보존된다.
             # collect 워커가 없으면 감싸지 않는다 — 기존 동작 그대로 (FR-14).
-            if collect_worker_ids:
+            capped_worker_ids = collect_worker_ids + action_worker_ids
+            if capped_worker_ids:
                 effective_hooks = WorkerRunCapHooks(
-                    effective_hooks, sorted(collect_worker_ids),
+                    effective_hooks, sorted(capped_worker_ids),
                     logger=self._logger,
                 )
 
@@ -1085,6 +1146,50 @@ class WorkflowCompiler:
 
         return self._wrap_sub_agent(worker_def.worker_id, sub_graph)
 
+    @staticmethod
+    def _should_gate_worker(
+        worker_def, gate_settings, gated_tool_ids: set[str]
+    ) -> bool:
+        """워커 게이트 판정의 단일 지점 (action-category-compose-node D-03).
+
+        react 워커의 미들웨어 부착과 action 노드의 gated 플래그가 같은 함수를
+        써야 판정이 어긋나 무승인 발송이 생기는 경로가 없다.
+        """
+        return ApprovalPolicy.should_gate(
+            tool_requires_approval=worker_def.tool_id in gated_tool_ids,
+            gate=gate_settings,
+        )
+
+    def _create_action_worker_node(
+        self, worker_def, tool, llm, *, request_id: str, gated: bool,
+        user_context_block: str, datetime_block: str, worker_context_block: str,
+    ):
+        """action 워커 노드 생성. 본문 키를 정할 수 없으면 None (호출자가 격리).
+
+        Design Ref: action-category-compose-node §2.1 / D-09 — 도구는 compile에서
+        이미 로드됐으므로 스키마 검증도 여기서 한다. 첫 실행 때 조용히 실패하는
+        것보다 즉시 격리·로그가 낫다.
+        """
+        config = ActionToolConfig.from_tool_config(worker_def.tool_config)
+        try:
+            draft_key = ActionArgumentPolicy.resolve_draft_key(
+                config.draft_arg_key, resolve_input_schema(tool)
+            )
+        except ValueError as e:
+            self._logger.error(
+                "action worker isolated: draft key unresolved",
+                request_id=request_id, worker_id=worker_def.worker_id,
+                tool_id=worker_def.tool_id, exception=e,
+            )
+            return None
+        return create_action_node(
+            worker_id=worker_def.worker_id, tool=tool, tool_id=worker_def.tool_id,
+            llm=llm, pipeline_llm=self._resolve_pipeline_llm(llm),
+            draft_key=draft_key, gated=gated, logger=self._logger,
+            user_context_block=user_context_block, datetime_block=datetime_block,
+            worker_context_block=worker_context_block,
+        )
+
     def _approval_gate_middleware(
         self, *, worker_def, gate_settings, gated_tool_ids: set[str]
     ) -> list:
@@ -1096,10 +1201,7 @@ class WorkflowCompiler:
         조립 실패를 잡지 않는 이유(fail-closed, Design §6.2): 게이트가 있어야
         하는데 없는 상태로 그래프가 돌면 승인 없이 부작용이 실행된다.
         """
-        if not ApprovalPolicy.should_gate(
-            tool_requires_approval=worker_def.tool_id in gated_tool_ids,
-            gate=gate_settings,
-        ):
+        if not self._should_gate_worker(worker_def, gate_settings, gated_tool_ids):
             return []
         self._logger.info(
             "approval gate attached",
@@ -1147,14 +1249,19 @@ class WorkflowCompiler:
 
     def _resolve_category(
         self, worker_def: WorkerDefinition, catalog_meta: dict | None = None
-    ) -> str:
+    ) -> str | None:
         """카테고리 결정 (FR-04).
 
         우선순위: agent_tool.category → tool_catalog.category
-                  → TOOL_REGISTRY → 기본값 "action"
+                  → TOOL_REGISTRY → None(미분류)
 
         catalog_meta가 없으면(미주입·조회 실패) 카탈로그 단계를 건너뛰어
         이 사이클 이전과 동일하게 동작한다 (FR-14).
+
+        Design Ref: action-category-compose-node §2.1 (Plan FR-01) — 미분류는
+        None(react). 이전 폴백 "action"은 사실상 미분류 버킷이었고, action
+        전용 노드가 생기면 미분류 워커 전체를 끌고 간다. "action"은 명시
+        지정(agent_tool·tool_catalog·TOOL_REGISTRY)으로만 나온다.
         """
         if worker_def.category is not None:
             return worker_def.category
@@ -1165,7 +1272,7 @@ class WorkflowCompiler:
             meta = get_tool_meta(worker_def.tool_id)
             return meta.category
         except ValueError:
-            return "action"
+            return None
 
     def _tool_call_budget_middleware(
         self, tool_id: str, catalog_meta: dict | None, is_wiki_branch: bool,
@@ -1249,9 +1356,13 @@ class WorkflowCompiler:
                 getattr(m, "content", "")
                 for m in worker_outputs if _is_search_result(m)
             ]
+            # action-category-compose-node FR-17/D-07: 초안 워커 산출은 정책 블록으로
+            # 한 번만 싣는다 — [워커 작업 결과]에 중복 게재하지 않는다.
+            draft_ctx, draft_related = _draft_context(worker_outputs)
             work_results = [
                 f"[{getattr(m, 'name', '')}]\n{getattr(m, 'content', '')}"
-                for m in worker_outputs if not _is_search_result(m)
+                for m in worker_outputs
+                if not _is_search_result(m) and id(m) not in draft_related
             ]
             # worker-toolmessage-leak-fix D2: tool 역할 메시지는 선행 tool_calls
             # 짝이 필터로 깨질 수 있어 제외 — OpenAI는 고아 tool에 400을 반환.
@@ -1278,6 +1389,13 @@ class WorkflowCompiler:
                     f"답변에서 차트를 자연스럽게 언급하세요.\n"
                     f"{_summarize_charts(charts)}"
                 )
+            draft_instruction = ""
+            if draft_ctx is not None:
+                # FR-18: 모드·블록·지시는 정책 한 곳이 소유 — 교체 지점 1곳.
+                # 지시는 system prompt에 싣는다: user tail은 마지막 메시지가
+                # assistant일 때만 붙어(ensure_user_tail) 항상 도달하지 않는다.
+                blocks.append(FinalAnswerDraftPolicy.render_block(draft_ctx))
+                draft_instruction = "\n\n" + FinalAnswerDraftPolicy.instruction()
             if not blocks:
                 logger.warning("final_answer_node: no worker outputs found")
                 blocks.append("(수집된 결과 없음)")
@@ -1301,6 +1419,7 @@ class WorkflowCompiler:
                 f"이전 대화 맥락도 참고하세요.\n\n"
                 + "\n\n".join(blocks)
                 + limit_notice
+                + draft_instruction
             )
 
             # fix-anthropic-prefill-error: name 없는 assistant-last 방어.

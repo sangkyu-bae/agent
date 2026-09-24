@@ -53,10 +53,25 @@ class TestToolCategoryPolicyAssignable:
             ToolCategoryPolicy.assert_assignable("collect", "mcp_server-1")
         assert "collect" in str(exc.value)
 
-    def test_non_collect_category_allowed_on_server_level_tool(self):
-        """제약은 collect 한정 — 다른 카테고리는 서버 단위에도 지정 가능."""
+    def test_search_and_analysis_allowed_on_server_level_tool(self):
+        """제약은 단일샷 계열(collect·action) 한정 — 나머지는 서버 단위에도 지정 가능."""
         ToolCategoryPolicy.assert_assignable("search", "mcp_server-1")
-        ToolCategoryPolicy.assert_assignable("action", "mcp_server-1")
+        ToolCategoryPolicy.assert_assignable("analysis", "mcp_server-1")
+
+    def test_action_rejected_on_server_level_legacy_tool(self):
+        """action-category-compose-node FR-03: action도 '도구 1회 호출' 계약이라
+        서버 단위 참조에는 지정할 수 없다 (collect D-04 확장)."""
+        with pytest.raises(ValueError) as exc:
+            ToolCategoryPolicy.assert_assignable("action", "mcp_server-1")
+        assert "action" in str(exc.value)
+
+    def test_action_allowed_on_catalog_format_mcp_tool(self):
+        ToolCategoryPolicy.assert_assignable(
+            "action", "mcp:3f2a1b4c-0000-1111-2222-333344445555:send_mail"
+        )
+
+    def test_action_allowed_on_internal_tool(self):
+        ToolCategoryPolicy.assert_assignable("action", "python_code_executor")
 
     def test_none_allowed_on_server_level_tool(self):
         ToolCategoryPolicy.assert_assignable(None, "mcp_server-1")

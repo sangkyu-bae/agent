@@ -242,9 +242,18 @@ class TestAgentDefinition:
 
 
 class TestToolMetaCategory:
-    def test_default_category_is_action(self):
+    def test_default_category_is_none(self):
+        """action-category-compose-node D-01: 미분류는 None(react).
+
+        'action'은 관리자가 명시 지정할 때만 의미를 가진다(작성→1회 호출 노드).
+        기본값이 'action'이면 미분류 도구 전체가 새 노드로 끌려간다.
+        """
         meta = ToolMeta(tool_id="t", name="n", description="d")
-        assert meta.category == "action"
+        assert meta.category is None
+
+    def test_category_collect(self):
+        meta = ToolMeta(tool_id="t", name="n", description="d", category="collect")
+        assert meta.category == "collect"
 
     def test_category_search(self):
         meta = ToolMeta(tool_id="t", name="n", description="d", category="search")

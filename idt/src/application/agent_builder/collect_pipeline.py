@@ -108,7 +108,7 @@ def _message_role(msg) -> str:
     return str(getattr(msg, "type", ""))
 
 
-def _collect_context(messages: list) -> str:
+def collect_recent_context(messages: list) -> str:
     """최근 대화 맥락 직렬화 — 워커 산출물도 포함한다.
 
     search 노드와 달리 이전 워커의 수집·검색 결과가 이번 호출 대상(URL 등)의
@@ -120,7 +120,7 @@ def _collect_context(messages: list) -> str:
     )
 
 
-def _resolve_input_schema(tool) -> dict:
+def resolve_input_schema(tool) -> dict:
     """도구의 실제 입력 스키마를 얻는다. 없으면 빈 dict.
 
     MCP 어댑터는 args_schema가 제네릭 래퍼라 쓸 수 없고, 서버가 준
@@ -139,17 +139,17 @@ def _resolve_input_schema(tool) -> dict:
     return {}
 
 
-def _is_mcp_adapter(tool) -> bool:
+def is_mcp_adapter(tool) -> bool:
     """MCP 어댑터 판별 — 호출 페이로드를 arguments로 감싸야 하는 대상."""
     return bool(getattr(tool, "mcp_tool_name", None))
 
 
-def _build_payload(tool, arguments: dict) -> dict:
+def build_payload(tool, arguments: dict) -> dict:
     """MCPToolAdapter는 {"arguments": {...}} 형태를 받는다 (args_schema 계약)."""
-    return {"arguments": arguments} if _is_mcp_adapter(tool) else arguments
+    return {"arguments": arguments} if is_mcp_adapter(tool) else arguments
 
 
-def _parse_arguments(raw: object) -> dict | None:
+def parse_arguments_json(raw: object) -> dict | None:
     """구조화 출력의 arguments_json을 dict로 파싱. 실패 시 None."""
     if isinstance(raw, dict):
         return raw
@@ -197,7 +197,7 @@ async def _build_arguments(
     user_context: str = "",
 ) -> _ArgumentPlan:
     """도구 입력 스키마 기반 인자 1회 산출 (§6.1 #1·#2·#4 분기 포함)."""
-    schema = _resolve_input_schema(tool)
+    schema = resolve_input_schema(tool)
     if not schema:
         # #4: 스키마를 모르면 키 이름을 추측하게 된다 — 호출하지 않는다.
         logger.warning(
@@ -231,7 +231,7 @@ async def _build_arguments(
             None, out.missing or "수집 대상을 대화에서 확인하지 못했습니다", llm_chars,
         )
 
-    arguments = _parse_arguments(getattr(out, "arguments_json", "{}"))
+    arguments = parse_arguments_json(getattr(out, "arguments_json", "{}"))
     if arguments is None:
         logger.warning("collect_node argument parse failed")
         return _ArgumentPlan(None, "생성된 인자를 해석할 수 없습니다", llm_chars)
@@ -241,7 +241,7 @@ async def _build_arguments(
 async def _invoke_once(tool, arguments: dict, logger: LoggerInterface) -> tuple[bool, str]:
     """도구를 정확히 1회 호출한다. 예외는 실패 문자열로 (§6.1 #5)."""
     try:
-        result = await tool.ainvoke(_build_payload(tool, arguments))
+        result = await tool.ainvoke(build_payload(tool, arguments))
     except Exception as e:
         logger.error("collect_node tool failed", exception=e)
         return False, f"수집 실패: {e}"
@@ -362,7 +362,7 @@ def create_collect_node(
         question = latest_user_question(messages) or _message_text(messages[-1])
 
         plan = await _build_arguments(
-            pipeline_llm, tool, question, _collect_context(messages), logger,
+            pipeline_llm, tool, question, collect_recent_context(messages), logger,
             user_context=context_block,
         )
         outcome = await _resolve_body(

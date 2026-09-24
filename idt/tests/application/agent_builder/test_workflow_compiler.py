@@ -230,14 +230,18 @@ class TestResolveCategory:
         )
         assert compiler._resolve_category(worker) == "search"
 
-    def test_falls_back_to_action_for_unknown_tool(self):
-        """TC-R03: TOOL_REGISTRY에 없는 도구(MCP 등)는 "action"."""
+    def test_falls_back_to_none_for_unknown_tool(self):
+        """TC-R03 (개정): TOOL_REGISTRY에 없는 도구(MCP 등)는 None(미분류=react).
+
+        action-category-compose-node D-01 — 'action'은 명시 지정만 의미를
+        가지므로 폴백이 'action'이면 미분류 워커 전체가 새 노드로 끌려간다.
+        """
         compiler, _ = _make_compiler()
         worker = WorkerDefinition(
             tool_id="mcp_custom_tool", worker_id="w",
             description="d", category=None,
         )
-        assert compiler._resolve_category(worker) == "action"
+        assert compiler._resolve_category(worker) is None
 
     def test_db_search_overrides_registry_action(self):
         """TC-R04: DB에 "search" 지정 → registry 무관하게 search."""
@@ -355,8 +359,12 @@ class TestCompileWithCategory:
 
     @pytest.mark.asyncio
     async def test_db_category_override_search_to_action(self):
-        """TC-W05: DB category override로 search 도구를 action으로."""
-        compiler, _ = _make_compiler()
+        """TC-W05 (개정): DB category override 'action'은 search 노드도 react도 아닌
+        action 노드로 간다 (action-category-compose-node D-01/D-02)."""
+        compiler, tool_factory = _make_compiler()
+        tool_factory.create.return_value.mcp_input_schema = {
+            "type": "object", "properties": {"body": {}},
+        }
         workers = [
             WorkerDefinition(
                 tool_id="internal_document_search", worker_id="searcher",
@@ -368,13 +376,17 @@ class TestCompileWithCategory:
             supervisor_prompt="프롬프트", workers=workers, flow_hint="test",
         )
         with patch("src.application.agent_builder.workflow_compiler.create_agent",
-                   return_value=MagicMock()) as mock_react:
+                   return_value=MagicMock()) as mock_react, patch(
+            "src.application.agent_builder.workflow_compiler.create_action_node",
+            return_value=AsyncMock(),
+        ) as mock_action:
             graph = await compiler.compile(workflow, _make_llm_model(), "req-1")
 
         node_names = set(graph.get_graph().nodes.keys())
-        assert "answer_agent" not in node_names
+        assert "searcher" in node_names
         assert "final_answer" in node_names
-        assert mock_react.call_count == 1
+        assert mock_react.call_count == 0
+        assert mock_action.call_count == 1
 
 
 class TestSupervisorWorkerExposure:
@@ -550,7 +562,7 @@ class TestMcpToolAsync:
         workers = [
             WorkerDefinition(
                 tool_id="mcp_custom_tool", worker_id="mcp_worker",
-                description="MCP 도구", sort_order=0, category="action",
+                description="MCP 도구", sort_order=0, category=None,
             ),
         ]
         workflow = WorkflowDefinition(
@@ -584,7 +596,7 @@ class TestMcpToolAsync:
             WorkerDefinition(
                 tool_id="mcp_081c6fe7-e0bd-4aad-9a42-29b8bf073167",
                 worker_id="mcp_worker",
-                description="MCP 도구", sort_order=0, category="action",
+                description="MCP 도구", sort_order=0, category=None,
             ),
         ]
         workflow = WorkflowDefinition(
@@ -621,11 +633,11 @@ class TestMcpToolAsync:
         workers = [
             WorkerDefinition(
                 tool_id="mcp_dead", worker_id="dead_worker",
-                description="죽은 MCP", sort_order=0, category="action",
+                description="죽은 MCP", sort_order=0, category=None,
             ),
             WorkerDefinition(
                 tool_id="python_code_executor", worker_id="live_worker",
-                description="정상 도구", sort_order=1, category="action",
+                description="정상 도구", sort_order=1, category=None,
             ),
         ]
         workflow = WorkflowDefinition(
@@ -673,11 +685,11 @@ class TestMcpToolAsync:
         workers = [
             WorkerDefinition(
                 tool_id="mcp_x", worker_id="mcp_worker",
-                description="MCP", sort_order=0, category="action",
+                description="MCP", sort_order=0, category=None,
             ),
             WorkerDefinition(
                 tool_id="python_code_executor", worker_id="live_worker",
-                description="정상 도구", sort_order=1, category="action",
+                description="정상 도구", sort_order=1, category=None,
             ),
         ]
         workflow = WorkflowDefinition(
@@ -703,7 +715,7 @@ class TestMcpToolAsync:
         workers = [
             WorkerDefinition(
                 tool_id="mcp_dead", worker_id="dead_worker",
-                description="죽은 MCP", sort_order=0, category="action",
+                description="죽은 MCP", sort_order=0, category=None,
             ),
         ]
         workflow = WorkflowDefinition(
@@ -1288,7 +1300,7 @@ class TestWorkerAgentNameClamp:
         workers = [
             WorkerDefinition(
                 tool_id="python_code_executor", worker_id=long_id,
-                description="긴 id 워커", sort_order=0, category="action",
+                description="긴 id 워커", sort_order=0, category=None,
             ),
         ]
         workflow = WorkflowDefinition(
