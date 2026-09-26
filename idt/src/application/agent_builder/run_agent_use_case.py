@@ -629,6 +629,9 @@ class RunAgentUseCase:
             include_user_context=agent.include_user_context,
             # wiki-agentic-navigation D2: wiki_read 목차 활성 조건 (최상위만)
             agent_id=agent.id,
+            # mcp-identity-header §2.1: 대화·스케줄·웹훅(소유자 대리)·백그라운드
+            # 모두 RunAgentRequest.user_id 를 채운다 — 스케줄엔 auth_ctx 가 없다.
+            subject_user_id=request.user_id,
         )
 
         initial_state = build_initial_state(
@@ -804,7 +807,10 @@ class RunAgentUseCase:
                 request_id=request_id, approval_id=approval.id, exception=e,
             )
             return ""
-        answer = await self._resume_graph(state, agent, request_id)
+        # mcp-identity-header §7: 승인자가 아니라 원래 실행을 요청한 사용자.
+        answer = await self._resume_graph(
+            state, agent, request_id, subject_user_id=approval.requested_by
+        )
         await self._save_resumed_answer(approval, answer, request_id)
         self._logger.info(
             "run resumed", request_id=request_id, approval_id=approval.id,
@@ -874,7 +880,14 @@ class RunAgentUseCase:
         state["finish_challenge_pending"] = False
         return state
 
-    async def _resume_graph(self, state: dict, agent, request_id: str) -> str:
+    async def _resume_graph(
+        self,
+        state: dict,
+        agent,
+        request_id: str,
+        *,
+        subject_user_id: str | None = None,
+    ) -> str:
         """복원 상태로 그래프를 1회 실행하고 최종 답변을 돌려준다."""
         llm_model = await self._llm_model_repository.find_by_id(
             agent.llm_model_id, request_id
@@ -896,6 +909,7 @@ class RunAgentUseCase:
             tracker=self._tracker,
             include_user_context=agent.include_user_context,
             agent_id=agent.id,
+            subject_user_id=subject_user_id,
         )
         result = await graph.ainvoke(state)
         answer, _ = self._parse_result(result)

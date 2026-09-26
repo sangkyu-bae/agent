@@ -30,5 +30,12 @@ class MCPServerModel(Base):
         server_default="0",
         comment="1이면 이 서버의 도구가 카탈로그에 처음 등록될 때 requires_approval=1 로 시작 (초기값 전용, 기존 엔트리 소급 없음). 기본 0 이라 기존 서버는 무영향",
     )
+    # mcp-identity-header Design §3.3 (V077): 서명 비밀 포함 → 암호화 필수.
+    # auth_config_enc 와 분리해 PUT 의 auth_config 교체가 비밀을 지우지 않게 한다.
+    identity_config_enc: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="호출자 신원 헤더 설정(header_name·claim_name·claim_source·issuer·audience·secret·ttl) 암호화 JSON. NULL 이면 신원 헤더 미사용 — 기존 동작과 동일",
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

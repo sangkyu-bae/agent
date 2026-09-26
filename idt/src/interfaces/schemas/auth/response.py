@@ -67,8 +67,16 @@ class AdminUserListItemResponse(BaseModel):
     position: Optional[str] = None
     department_names: list[str] = []
     created_at: Optional[str] = None  # ISO 8601
+    mailbox_upn: Optional[str] = None  # mcp-identity-header §4.1 (관리자 지정 메일함)
 
 
 class AdminUserListResponse(BaseModel):
     items: list[AdminUserListItemResponse]
     total: int
+
+
+class AdminUserMailboxResponse(BaseModel):
+    """mcp-identity-header §4.2: PATCH /admin/users/{id}/mailbox 결과."""
+    id: int
+    email: str
+    mailbox_upn: Optional[str] = None

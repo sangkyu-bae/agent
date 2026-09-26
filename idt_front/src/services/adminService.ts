@@ -6,6 +6,8 @@ import type {
   AdminCreateUserResponse,
   AdminUserListResponse,
   AdminUserListParams,
+  AdminUpdateMailboxRequest,
+  AdminUserMailboxResponse,
 } from '@/types/auth';
 
 export const adminService = {
@@ -27,5 +29,11 @@ export const adminService = {
   getAllUsers: (params: AdminUserListParams = {}) =>
     authApiClient
       .get<AdminUserListResponse>(API_ENDPOINTS.ADMIN_USERS_LIST, { params })
+      .then((r) => r.data),
+
+  // mcp-identity-header
+  updateUserMailbox: (userId: number, body: AdminUpdateMailboxRequest) =>
+    authApiClient
+      .patch<AdminUserMailboxResponse>(API_ENDPOINTS.ADMIN_USER_MAILBOX(userId), body)
       .then((r) => r.data),
 };

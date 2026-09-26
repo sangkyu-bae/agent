@@ -344,6 +344,7 @@ class TestToolFactoryMCPRouting:
             tool_id="mcp_uuid-001",
             repository=mock_repo,
             request_id="req-001",
+            subject_user_id=None,
         )
 
     @pytest.mark.asyncio
@@ -371,6 +372,7 @@ class TestToolFactoryMCPRouting:
             tool_id="mcp_uuid-001",
             repository=default_repo,
             request_id="req-001",
+            subject_user_id=None,
         )
 
     @pytest.mark.asyncio

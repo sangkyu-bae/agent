@@ -61,6 +61,13 @@ class TestTick:
         assert executor.execute.await_args.kwargs["tool_id"] == "rate_update"
 
     @pytest.mark.asyncio
+    async def test_예약_집행도_요청자_신원으로(self):
+        """mcp-identity-header §7 — 틱에는 사람이 없다. 요청자가 주체다."""
+        uc, _, executor = _uc()
+        await uc.run("req1")
+        assert executor.execute.await_args.kwargs["subject_user_id"] == "sys"
+
+    @pytest.mark.asyncio
     async def test_due가_없으면_아무것도_집행하지_않는다(self):
         uc, _, executor = _uc(due=[])
         result = await uc.run("req1")

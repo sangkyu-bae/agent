@@ -38,6 +38,7 @@ class CompositeActionExecutor(ActionExecutorInterface):
         tool_args: dict,
         request_id: str,
         idempotency_key: str | None = None,
+        subject_user_id: str | None = None,
     ) -> ExecutionResult:
         executor = self._find(tool_id)
         if executor is None:
@@ -48,7 +49,7 @@ class CompositeActionExecutor(ActionExecutorInterface):
         try:
             return await executor.execute(
                 tool_id=tool_id, tool_args=tool_args, request_id=request_id,
-                idempotency_key=idempotency_key,
+                idempotency_key=idempotency_key, subject_user_id=subject_user_id,
             )
         except Exception as e:
             # 집행기는 예외를 던지지 않는 계약이다. 어겼다면 집행 도중이었을

@@ -60,8 +60,9 @@ def _uc(*, agent_found=True, agent_updated=_NOW, final_answer="완료했습니�
 
     captured = {}
 
-    async def _fake_compile_and_run(state, agent_, request_id):
+    async def _fake_compile_and_run(state, agent_, request_id, **kwargs):
         captured["state"] = state
+        captured["resume_kwargs"] = kwargs
         return final_answer
 
     uc._resume_graph = _fake_compile_and_run
@@ -119,6 +120,17 @@ class TestGuards:
         )
         assert answer == ""
         assert uc._logger.error.called
+
+
+class TestIdentitySubject:
+    @pytest.mark.asyncio
+    async def test_재개는_요청자를_실행_주체로_넘긴다(self):
+        """mcp-identity-header §7 — 승인자가 아니라 원래 실행 요청자의 신원."""
+        uc, captured = _uc()
+        await uc.resume_from_snapshot(
+            _approval(requested_by="7"), outcome="집행 완료", request_id="req1"
+        )
+        assert captured["resume_kwargs"] == {"subject_user_id": "7"}
 
 
 class TestRestore:

@@ -119,6 +119,13 @@ class TestApproveImmediate:
         executor.execute.assert_awaited_once()
 
     @pytest.mark.asyncio
+    async def test_집행은_승인자가_아니라_요청자_신원으로(self):
+        """mcp-identity-header §7 — 승인자(u1)의 메일함으로 보내면 안 된다."""
+        uc, _, executor = _uc()
+        await uc.approve("ap1", user_id="u1", request_id="req1")
+        assert executor.execute.await_args.kwargs["subject_user_id"] == "sys"
+
+    @pytest.mark.asyncio
     async def test_집행_실패는_failed로_남는다(self):
         """FR-25 — 예외가 아니라 상태로. 자동 재시도 없음."""
         uc, repo, _ = _uc(exec_ok=False)

@@ -9,6 +9,9 @@ agent-user-context Design §6.4:
 admin-user-registration Design §6.2:
 - POST /api/v1/admin/users — 관리자 직접 사용자 생성 (즉시 approved)
 - GET  /api/v1/admin/users — 전체 사용자 목록 (프로필 + 부서명)
+
+mcp-identity-header Design §4.2:
+- PATCH /api/v1/admin/users/{user_id}/mailbox — 사내 메일함 UPN 설정·해제
 """
 import uuid
 
@@ -20,6 +23,10 @@ from src.application.auth.admin_create_user_use_case import (
     AdminCreateUserUseCase,
 )
 from src.application.auth.list_users_use_case import ListUsersUseCase
+from src.application.auth.update_user_mailbox_use_case import (
+    UpdateUserMailboxUseCase,
+    UserNotFoundError,
+)
 from src.application.permission.grant_revoke import (
     GrantPermissionUseCase,
     RevokePermissionUseCase,
@@ -28,11 +35,15 @@ from src.domain.auth.entities import User, UserStatus
 from src.domain.auth.interfaces import UserListFilters
 from src.domain.permission.interfaces import PermissionRepositoryInterface
 from src.interfaces.dependencies.auth import require_role
-from src.interfaces.schemas.auth.request import AdminCreateUserRequest
+from src.interfaces.schemas.auth.request import (
+    AdminCreateUserRequest,
+    AdminUpdateMailboxRequest,
+)
 from src.interfaces.schemas.auth.response import (
     AdminCreateUserResponse,
     AdminUserListItemResponse,
     AdminUserListResponse,
+    AdminUserMailboxResponse,
 )
 
 
@@ -59,6 +70,10 @@ def get_admin_create_user_use_case() -> AdminCreateUserUseCase:
 
 
 def get_list_users_use_case() -> ListUsersUseCase:
+    raise NotImplementedError
+
+
+def get_update_user_mailbox_use_case() -> UpdateUserMailboxUseCase:
     raise NotImplementedError
 
 
@@ -155,10 +170,31 @@ async def list_users(
                 position=i.position,
                 department_names=i.department_names,
                 created_at=i.created_at.isoformat() if i.created_at else None,
+                mailbox_upn=i.mailbox_upn,
             )
             for i in result.items
         ],
         total=result.total,
+    )
+
+
+@router.patch("/{user_id}/mailbox", response_model=AdminUserMailboxResponse)
+async def update_user_mailbox(
+    user_id: int,
+    body: AdminUpdateMailboxRequest,
+    _admin: User = Depends(require_role("admin")),
+    use_case: UpdateUserMailboxUseCase = Depends(get_update_user_mailbox_use_case),
+):
+    """사내 메일함 UPN 설정·해제 (mcp-identity-header §4.2). null·빈 값 = 해제."""
+    request_id = str(uuid.uuid4())
+    try:
+        user = await use_case.execute(user_id, body.mailbox_upn, request_id)
+    except UserNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    return AdminUserMailboxResponse(
+        id=user.id, email=user.email, mailbox_upn=user.mailbox_upn
     )
 
 

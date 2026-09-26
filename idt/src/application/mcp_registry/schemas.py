@@ -28,6 +28,14 @@ class RegisterMCPServerRequest(BaseModel):
         default=False,
         description="이 서버의 도구가 카탈로그에 처음 등록될 때 승인 필요로 시작할지",
     )
+    # mcp-identity-header §4.2. 생략 시 신원 헤더 미사용.
+    identity_config: dict | None = Field(
+        default=None,
+        description=(
+            "호출자 신원 헤더 {'audience','secret','issuer','header_name',"
+            "'claim_name','claim_source','ttl_seconds'} — secret 은 응답에서 마스킹"
+        ),
+    )
 
 
 class UpdateMCPServerRequest(BaseModel):
@@ -41,6 +49,9 @@ class UpdateMCPServerRequest(BaseModel):
     server_config: dict | None = None
     # None = 미변경. 바꿔도 이미 동기화된 도구에는 소급하지 않는다 (FR-16).
     default_requires_approval: bool | None = None
+    # mcp-identity-header §4.2 — 다른 필드와 달리 3상태: 필드 없음=불변,
+    # null=해제, 객체=교체(secret 비면 기존 비밀 유지). model_fields_set 으로 구분.
+    identity_config: dict | None = None
 
 
 class ToolSyncResultResponse(BaseModel):
@@ -71,6 +82,7 @@ class MCPServerResponse(BaseModel):
     updated_at: datetime
     auth_config: dict | None = None
     server_config: dict | None = None
+    identity_config: dict | None = None  # secret 마스킹 (mcp-identity-header §4.2)
     # mcp-tool-auto-sync FR-09: sync 미수행(GET)·미주입(FR-06) 시 None
     tool_sync: ToolSyncResultResponse | None = None
 
@@ -123,4 +135,5 @@ def to_response(entity, tool_sync=None) -> MCPServerResponse:
         updated_at=entity.updated_at,
         auth_config=entity.masked_auth(),
         server_config=entity.masked_server_config(),
+        identity_config=entity.masked_identity(),
     )

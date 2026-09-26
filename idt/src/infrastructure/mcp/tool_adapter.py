@@ -11,8 +11,12 @@ from pydantic import BaseModel, Field
 
 from src.domain.mcp.tool_argument_policy import ToolArgumentPolicy
 from src.domain.mcp.value_objects import MCPServerConfig
+from src.domain.mcp_registry.identity import (
+    IdentityClaimPolicy,
+    IdentityUnavailableError,
+)
 from src.infrastructure.logging import get_logger
-from src.infrastructure.mcp.client_factory import MCPClientFactory
+from src.infrastructure.mcp.client_factory import HeaderProvider, MCPClientFactory
 
 logger = get_logger(__name__)
 
@@ -51,6 +55,10 @@ class MCPToolAdapter(BaseTool):
     # ③ 실행 구간 로그의 추적 필드. 미주입(기본 "")이어도 기존 호출부는 그대로 동작한다.
     request_id: str = ""
     tool_id: str = ""
+
+    # Design Ref: mcp-identity-header §1.1 — 신원 헤더가 필요한 서버면 로더가
+    # 실행 주체로 만든 공급자를 넣는다. None 이면 기존과 동일 (FR-08).
+    header_provider: HeaderProvider | None = None
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -97,22 +105,32 @@ class MCPToolAdapter(BaseTool):
             return ToolArgumentPolicy.build_blocked_message(blocked)
 
         logger.info("MCP tool execution started", **log_extra)
+        return await self._call(args, log_extra)
 
+    async def _call(self, args: dict[str, Any], log_extra: dict) -> str:
+        """세션 생성 → call_tool. 신원 불가는 예외가 아닌 안내문으로 돌려준다."""
         try:
             # Design Ref: §4 — ③ 경로의 세션 로그도 같은 request_id로 이어야
             # 한 요청의 로그 체인이 끊기지 않는다.
             async with MCPClientFactory.create_session(
-                self.server_config, self.request_id or None
+                self.server_config,
+                self.request_id or None,
+                header_provider=self.header_provider,
             ) as session:
                 result = await session.call_tool(
                     name=self.mcp_tool_name,
                     arguments=args,
                 )
-
-            content = MCPToolAdapter._extract_content(result)
-            logger.info("MCP tool execution completed", **log_extra)
-            return content
-
+        except IdentityUnavailableError as e:
+            # Design Ref: mcp-identity-header §6.2 — 예상된 경로라 스택 없이 WARN.
+            # placeholder 차단과 같이 ToolMessage 로 돌려줘야 사용자가 원인을 본다.
+            logger.warning(
+                "MCP tool call blocked (identity)",
+                reason=e.reason,
+                identity_sub=e.subject,  # Check G-4
+                **log_extra,
+            )
+            return IdentityClaimPolicy.user_message(e)
         except Exception as e:
             logger.error(
                 "MCP tool execution failed",
@@ -120,6 +138,10 @@ class MCPToolAdapter(BaseTool):
                 **log_extra,
             )
             raise
+
+        content = MCPToolAdapter._extract_content(result)
+        logger.info("MCP tool execution completed", **log_extra)
+        return content
 
     @staticmethod
     def _extract_content(result: Any) -> str:

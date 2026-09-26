@@ -181,6 +181,8 @@ class ToolFactory:
         request_id: str = "",
         mcp_repository=None,
         tool_config: dict | None = None,
+        *,
+        subject_user_id: str | None = None,
     ) -> BaseTool:
         """
         tool_id에 해당하는 BaseTool 인스턴스 반환 (비동기).
@@ -191,7 +193,7 @@ class ToolFactory:
         ref = parse_mcp_tool_id(tool_id)
         if ref is not None:
             return await self._create_mcp_tool(
-                ref, tool_id, request_id, mcp_repository
+                ref, tool_id, request_id, mcp_repository, subject_user_id
             )
 
         return self.create(tool_id, request_id, tool_config=tool_config)
@@ -202,6 +204,8 @@ class ToolFactory:
         request_id: str = "",
         mcp_repository=None,
         tool_config: dict | None = None,
+        *,
+        subject_user_id: str | None = None,
     ) -> list[BaseTool]:
         """tool_id가 가리키는 도구 '전부'를 반환한다.
 
@@ -219,7 +223,11 @@ class ToolFactory:
         if ref is None:
             return [self.create(tool_id, request_id, tool_config=tool_config)]
 
-        tools = await self._load_mcp_tools(ref, tool_id, request_id, mcp_repository)
+        # Design Ref: mcp-identity-header §1.1 — 주체는 인자로만 흐른다.
+        # bind_auth_ctx 같은 싱글톤 가변 필드는 동시 요청에서 섞인다.
+        tools = await self._load_mcp_tools(
+            ref, tool_id, request_id, mcp_repository, subject_user_id
+        )
         if not ref.is_server_level:
             return [self._bind_tool(ref, tool_id, request_id, tools)]
 
@@ -239,12 +247,15 @@ class ToolFactory:
         tool_id: str,
         request_id: str,
         mcp_repository,
+        subject_user_id: str | None = None,
     ) -> BaseTool:
         """MCP 서버에서 도구를 로드해 워커에 바인딩할 단일 도구를 고른다.
 
         하위호환 경로 — 복수 바인딩이 필요하면 create_all_async를 쓴다.
         """
-        tools = await self._load_mcp_tools(ref, tool_id, request_id, mcp_repository)
+        tools = await self._load_mcp_tools(
+            ref, tool_id, request_id, mcp_repository, subject_user_id
+        )
         return self._bind_tool(ref, tool_id, request_id, tools)
 
     async def _load_mcp_tools(
@@ -253,6 +264,7 @@ class ToolFactory:
         tool_id: str,
         request_id: str,
         mcp_repository,
+        subject_user_id: str | None = None,
     ) -> list[BaseTool]:
         """MCP 서버에 접속해 도구 목록을 로드한다 (§2.2 ① 구간)."""
         # Design Ref: fix-mcp-tool-call-not-reaching-server §2.2 —
@@ -279,6 +291,7 @@ class ToolFactory:
             tool_id=f"mcp_{ref.server_id}",
             repository=repository,
             request_id=request_id,
+            subject_user_id=subject_user_id,
         )
         if not tools:
             raise ValueError(f"MCP tool not found: {tool_id!r}")

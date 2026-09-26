@@ -170,6 +170,8 @@ export const API_ENDPOINTS = {
   // Admin — User management (admin-user-registration)
   ADMIN_USERS_LIST: '/api/v1/admin/users',   // GET (?status=&q=&limit=&offset=)
   ADMIN_USERS_CREATE: '/api/v1/admin/users', // POST
+  // mcp-identity-header: 사내 메일함 UPN 설정·해제
+  ADMIN_USER_MAILBOX: (userId: number) => `/api/v1/admin/users/${userId}/mailbox`, // PATCH
 
   // Admin — RAGAS Evaluation
   ADMIN_RAGAS_DASHBOARD: '/api/v1/admin/ragas/dashboard',

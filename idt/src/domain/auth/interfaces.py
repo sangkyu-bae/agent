@@ -34,6 +34,10 @@ class UserRepositoryInterface(ABC):
     async def update_status(self, user_id: int, status: UserStatus) -> None: ...
 
     @abstractmethod
+    async def update_mailbox(self, user_id: int, mailbox_upn: Optional[str]) -> None:
+        """mcp-identity-header §4.2 — 정규화된 값(또는 해제 None)을 저장한다."""
+
+    @abstractmethod
     async def find_all(
         self, filters: "UserListFilters", request_id: str
     ) -> tuple[list[User], int]:

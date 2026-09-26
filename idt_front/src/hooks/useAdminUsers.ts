@@ -10,6 +10,18 @@ export const useAllUsers = (params: AdminUserListParams = {}) =>
     queryFn: () => adminService.getAllUsers(params),
   });
 
+/** 사내 메일함 설정·해제 (mcp-identity-header) — 성공 시 사용자 목록 갱신 */
+export const useUpdateUserMailbox = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, mailboxUpn }: { userId: number; mailboxUpn: string | null }) =>
+      adminService.updateUserMailbox(userId, { mailbox_upn: mailboxUpn }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.admin.all });
+    },
+  });
+};
+
 /** 관리자 직접 사용자 생성 */
 export const useCreateUser = () => {
   const qc = useQueryClient();

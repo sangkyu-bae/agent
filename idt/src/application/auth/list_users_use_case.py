@@ -23,6 +23,7 @@ class UserListItem:
     position: str | None
     department_names: list[str] = field(default_factory=list)
     created_at: datetime | None = None
+    mailbox_upn: str | None = None  # mcp-identity-header §4.1
 
 
 @dataclass
@@ -78,6 +79,7 @@ class ListUsersUseCase:
                     position=profile.position if profile else None,
                     department_names=dept_names,
                     created_at=u.created_at,
+                    mailbox_upn=u.mailbox_upn,
                 )
             )
 

@@ -3,6 +3,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 
+from src.domain.mcp_registry.identity import IdentityHeaderConfig
+
 _MASK = "****"
 
 
@@ -45,6 +47,16 @@ class MCPServerRegistration:
     # requires_approval 초기값. 기존 엔트리에는 소급하지 않는다 — 그 값의
     # 주인은 관리자(tool_catalog.requires_approval)다.
     default_requires_approval: bool = False
+    # Design Ref: mcp-identity-header §3.1 — None 이면 신원 헤더 미사용 (FR-08).
+    # 서명 비밀을 품으므로 auth_config 와 같은 저장 경계에서 암호화한다.
+    identity_config: IdentityHeaderConfig | None = field(default=None)
+    # Check G-3: 저장된 암호문을 복호화하지 못했다(키 누락·교체·손상). '미설정'과
+    # 구분해야 헤더 없이 나가거나 다음 수정에서 조용히 지워지지 않는다.
+    identity_config_unreadable: bool = False
+
+    @property
+    def requires_identity(self) -> bool:
+        return self.identity_config is not None or self.identity_config_unreadable
 
     @property
     def tool_id(self) -> str:
@@ -58,6 +70,10 @@ class MCPServerRegistration:
     def masked_server_config(self) -> dict | None:
         """응답/로깅용 마스킹된 server_config."""
         return mask_secrets(self.server_config)
+
+    def masked_identity(self) -> dict | None:
+        """응답/로깅용 신원 설정. secret 만 가린다."""
+        return self.identity_config.masked() if self.identity_config else None
 
     def deactivate(self) -> None:
         self.is_active = False

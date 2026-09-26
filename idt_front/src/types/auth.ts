@@ -85,11 +85,24 @@ export interface AdminUserListItem {
   position: string | null;
   department_names: string[];
   created_at: string | null;
+  /** mcp-identity-header: 관리자 지정 사내 메일함 UPN. 로그인 email 과 독립 */
+  mailbox_upn?: string | null;
 }
 
 export interface AdminUserListResponse {
   items: AdminUserListItem[];
   total: number;
+}
+
+/** mcp-identity-header §4.2 — PATCH /admin/users/{id}/mailbox. null·빈 값 = 해제 */
+export interface AdminUpdateMailboxRequest {
+  mailbox_upn: string | null;
+}
+
+export interface AdminUserMailboxResponse {
+  id: number;
+  email: string;
+  mailbox_upn: string | null;
 }
 
 export interface AdminUserListParams {
