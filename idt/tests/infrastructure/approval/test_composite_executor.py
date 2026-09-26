@@ -39,7 +39,7 @@ class TestDelegation:
         second.execute.assert_not_awaited()
         first.execute.assert_awaited_once_with(
             tool_id="mcp:s:t", tool_args={"a": 1}, request_id="req1",
-            idempotency_key="idem-1",
+            idempotency_key="idem-1", subject_user_id=None,
         )
 
     async def test_하위_결과를_그대로_돌려준다(self):

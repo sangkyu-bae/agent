@@ -1,6 +1,8 @@
 """MCP Registry 도메인 정책."""
 from urllib.parse import urlparse
 
+from src.domain.mcp_registry.identity import IdentityHeaderConfig
+
 
 class MCPRegistrationPolicy:
     """MCP 서버 등록 유효성 정책."""
@@ -49,6 +51,22 @@ class MCPRegistrationPolicy:
         시크릿을 안전하게 저장할 수 없어 등록을 허용하면 안 된다.
         """
         return transport == "streamable_http"
+
+    @staticmethod
+    def validate_identity_headers(
+        identity: IdentityHeaderConfig | None, auth_config: dict | None
+    ) -> bool:
+        """신원 헤더 이름이 정적 헤더와 겹치면 안 된다 (Plan R-6).
+
+        런타임에는 발급 헤더가 덮으므로 안전하지만, 겹친 설정은 관리자가
+        정적 값이 쓰인다고 오해하게 만든다 — 등록 시점에 막는다.
+        HTTP 헤더 이름은 대소문자를 구분하지 않는다.
+        """
+        if identity is None:
+            return True
+        headers = (auth_config or {}).get("headers") or {}
+        target = identity.header_name.lower()
+        return all(str(name).lower() != target for name in headers)
 
     @staticmethod
     def validate_auth(transport: str, auth_config: dict | None) -> bool:

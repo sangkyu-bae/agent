@@ -10,7 +10,7 @@ from langchain_core.tools import BaseTool
 from src.domain.mcp.policy import MCPConnectionPolicy
 from src.domain.mcp.value_objects import MCPServerConfig
 from src.infrastructure.logging import get_logger
-from src.infrastructure.mcp.client_factory import MCPClientFactory
+from src.infrastructure.mcp.client_factory import HeaderProvider, MCPClientFactory
 from src.infrastructure.mcp.tool_adapter import MCPToolAdapter
 
 logger = get_logger(__name__)
@@ -35,11 +35,18 @@ class MCPToolRegistry:
     단일 서버 연결 실패 시 해당 서버를 건너뛰고 나머지를 계속 처리한다.
     """
 
-    def __init__(self, configs: list[MCPServerConfig]) -> None:
+    def __init__(
+        self,
+        configs: list[MCPServerConfig],
+        header_providers: dict[str, HeaderProvider | None] | None = None,
+    ) -> None:
         """초기화.
 
         Args:
             configs: MCP 서버 설정 목록
+            header_providers: 서버 이름(config.name) → 호출 시점 헤더 공급자.
+                도구 실행에만 쓰이고 list_tools 에는 쓰지 않는다
+                (mcp-identity-header — 목록 조회는 신원 불필요).
 
         Raises:
             ValueError: 서버 수가 정책 상한을 초과하는 경우
@@ -49,6 +56,7 @@ class MCPToolRegistry:
                 f"Too many MCP servers: {len(configs)} > {MCPConnectionPolicy.MAX_SERVERS}"
             )
         self._configs = configs
+        self._header_providers = header_providers or {}
 
     async def get_tools(self, request_id: str | None = None) -> list[BaseTool]:
         """모든 등록된 MCP 서버의 Tool 목록을 LangChain Tool로 반환한다.
@@ -112,6 +120,7 @@ class MCPToolRegistry:
                     # Design Ref: §4 — ③ 실행 로그가 요청/도구를 되짚을 수 있도록 전달.
                     request_id=request_id or "",
                     tool_id=config.name,
+                    header_provider=self._header_providers.get(config.name),
                 )
                 tools.append(adapter)
 

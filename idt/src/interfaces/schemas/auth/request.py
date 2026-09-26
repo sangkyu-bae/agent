@@ -24,6 +24,12 @@ class AdminCreateUserRequest(BaseModel):
     department_id: Optional[str] = None
 
 
+class AdminUpdateMailboxRequest(BaseModel):
+    """mcp-identity-header §4.2: null·빈 문자열이면 메일함 해제. 형식 검증은 도메인."""
+    # 길이·형식은 도메인 MailboxPolicy 가 판정한다 (Check G-5 — 422/400 혼재 방지).
+    mailbox_upn: Optional[str] = None
+
+
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str

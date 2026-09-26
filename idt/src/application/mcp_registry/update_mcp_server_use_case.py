@@ -6,6 +6,10 @@ from src.application.mcp_registry.schemas import (
     UpdateMCPServerRequest,
     to_response,
 )
+from src.application.mcp_registry.identity_config import (
+    ensure_no_header_conflict,
+    resolve_for_update,
+)
 from src.application.tool_catalog.sync_outcome import run_tool_sync
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.domain.mcp_registry.interfaces import MCPServerRegistryRepositoryInterface
@@ -77,6 +81,16 @@ class UpdateMCPServerUseCase:
                     "없습니다. .env에 MCP_SECRET_KEY를 설정하세요"
                 )
 
+        # mcp-identity-header §4.2 — 기존 비밀 유지 병합 후, 병합된 auth 와 충돌 검사.
+        identity = resolve_for_update(
+            existing.identity_config, request, self._secrets_enabled,
+            existing_unreadable=existing.identity_config_unreadable,
+        )
+        ensure_no_header_conflict(
+            identity,
+            request.auth_config if request.auth_config is not None else existing.auth_config,
+        )
+
         new_transport = (
             MCPTransportType(request.transport) if request.transport is not None else None
         )
@@ -92,6 +106,8 @@ class UpdateMCPServerUseCase:
             server_config=request.server_config,
             default_requires_approval=request.default_requires_approval,
         )
+        existing.identity_config = identity
+        existing.identity_config_unreadable = False
 
         saved = await self._repo.update(existing, request_id)
 

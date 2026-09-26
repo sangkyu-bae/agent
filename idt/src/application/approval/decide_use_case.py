@@ -187,6 +187,8 @@ class DecideApprovalUseCase:
             request_id=request_id,
             # approval-gate-phase2 D-05: 대상 시스템이 재승인 중복을 걸러내도록.
             idempotency_key=approval.idempotency_key,
+            # mcp-identity-header §7: 승인자가 아니라 요청자의 신원으로 집행.
+            subject_user_id=approval.requested_by,
         )
         now = self._now()
         if result.ok:

@@ -4,6 +4,7 @@ import { adminService } from '@/services/adminService';
 import { queryKeys } from '@/lib/queryKeys';
 import { useAllUsers, useCreateUser } from '@/hooks/useAdminUsers';
 import UserRegisterModal from '@/components/admin/UserRegisterModal';
+import UserMailboxCell from '@/components/admin/UserMailboxCell';
 import type { AdminCreateUserRequest } from '@/types/auth';
 
 type Tab = 'all' | 'pending';
@@ -114,7 +115,7 @@ const AdminUsersPage = () => {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-zinc-100 bg-zinc-50">
-                  {['이메일', '이름', '직급', '부서', '권한', '상태', '가입일'].map((h) => (
+                  {['이메일', '이름', '직급', '부서', '권한', '상태', '메일함', '가입일'].map((h) => (
                     <th key={h} className="px-5 py-3 text-left text-[12px] font-semibold uppercase tracking-wider text-zinc-400">
                       {h}
                     </th>
@@ -139,6 +140,10 @@ const AdminUsersPage = () => {
                       }`}>
                         {STATUS_LABEL[u.status] ?? u.status}
                       </span>
+                    </td>
+                    <td className="px-5 py-4">
+                      {/* mcp-identity-header: 신원 헤더 MCP 호출의 메일함 클레임 소스 */}
+                      <UserMailboxCell userId={u.id} mailboxUpn={u.mailbox_upn} />
                     </td>
                     <td className="px-5 py-4 text-[13px] text-zinc-400">
                       {u.created_at ? new Date(u.created_at).toLocaleDateString('ko-KR') : '—'}

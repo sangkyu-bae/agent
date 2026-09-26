@@ -10,6 +10,10 @@ from src.application.mcp_registry.schemas import (
 from src.application.tool_catalog.sync_outcome import run_tool_sync
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.domain.mcp_registry.interfaces import MCPServerRegistryRepositoryInterface
+from src.application.mcp_registry.identity_config import (
+    ensure_no_header_conflict,
+    resolve_for_register,
+)
 from src.domain.mcp_registry.policies import MCPRegistrationPolicy
 from src.domain.mcp_registry.schemas import MCPServerRegistration, MCPTransportType
 
@@ -63,6 +67,9 @@ class RegisterMCPServerUseCase:
                 "없습니다. .env에 MCP_SECRET_KEY를 설정하세요"
             )
 
+        identity = resolve_for_register(request.identity_config, self._secrets_enabled)
+        ensure_no_header_conflict(identity, request.auth_config)
+
         now = datetime.utcnow()
         registration = MCPServerRegistration(
             id=str(uuid.uuid4()),
@@ -78,6 +85,7 @@ class RegisterMCPServerUseCase:
             auth_config=request.auth_config,
             server_config=request.server_config,
             default_requires_approval=request.default_requires_approval,
+            identity_config=identity,
         )
 
         saved = await self._repo.save(registration, request_id)

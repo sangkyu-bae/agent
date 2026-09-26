@@ -19,6 +19,8 @@ def _to_entity(model: UserModel) -> User:
         status=UserStatus(model.status),
         created_at=model.created_at,
         updated_at=model.updated_at,
+        # Design Ref: mcp-identity-header §3.3 — 빠지면 전원이 '메일함 미등록'.
+        mailbox_upn=model.mailbox_upn,
     )
 
 
@@ -34,6 +36,7 @@ class UserRepository(UserRepositoryInterface):
             password_hash=user.password_hash,
             role=user.role.value,
             status=user.status.value,
+            mailbox_upn=user.mailbox_upn,
         )
         self._session.add(model)
         await self._session.flush()
@@ -69,6 +72,17 @@ class UserRepository(UserRepositoryInterface):
             .values(status=status.value)
         )
         self._logger.info("User status updated", user_id=user_id, status=status.value)
+
+    async def update_mailbox(self, user_id: int, mailbox_upn: Optional[str]) -> None:
+        # DB-001 §10.3: commit 은 dependency 가 담당. 주소는 개인정보라 로그 제외.
+        await self._session.execute(
+            update(UserModel)
+            .where(UserModel.id == user_id)
+            .values(mailbox_upn=mailbox_upn)
+        )
+        self._logger.info(
+            "User mailbox updated", user_id=user_id, cleared=mailbox_upn is None
+        )
 
     async def find_all(
         self, filters: UserListFilters, request_id: str

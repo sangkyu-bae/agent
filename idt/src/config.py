@@ -117,6 +117,19 @@ class Settings(BaseSettings):
         "조회된 데이터가 없습니다,조회 결과가 없습니다"
     )
 
+    # Worker Capability Denial (worker-capability-denial-guard Design §3.3, D-03)
+    # 워커 산출의 '에이전트 능력 부정' 판정 문구 (콤마 구분).
+    # 소비 지점: src/api/main.py 가 tuple로 정규화해 WorkflowCompiler 생성자에
+    #   capability_denial_patterns= 으로 주입 → CapabilityDenialPolicy.detect(patterns=...)
+    # application/domain 레이어는 이 설정을 직접 import하지 않는다 (kwarg 주입만).
+    # 과탐 주의: "할 수 없습니다"류 짧은 상위 문자열과, 워커의 정당한 범위 표기
+    # "이 워커의 범위 밖"은 넣지 않는다. 빈 문자열이면 판정이 꺼진다.
+    # 기본값은 실측 워커 산출(런 031564e4)에서 뽑았다.
+    capability_denial_patterns: str = (
+        "어떤 도구로도,어떤 워커로도,조회할 수 없도록 제한,"
+        "제 권한 밖,제 범위 밖,권한/범위 밖"
+    )
+
     # Analysis
     analysis_max_retries: int = 3
     analysis_retry_on_hallucination: bool = True

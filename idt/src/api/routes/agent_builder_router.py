@@ -276,6 +276,10 @@ async def run_agent(
 ):
     """에이전트 실행 (DB에서 워크플로우 로드 → LangGraph 동적 컴파일 → 응답)."""
     request_id = str(uuid.uuid4())
+    # mcp-identity-header Check G-1: body.user_id 는 MCP 신원 헤더 주체·승인
+    # requested_by 가 된다. 남의 ID 로 그 사람 메일함 토큰이 발급되지 않도록
+    # 토큰 사용자로 강제한다 (create_agent 와 같은 방식 — 기존 클라이언트 호환).
+    body.user_id = str(auth_ctx.user_id)
     try:
         return await use_case.execute(
             agent_id,

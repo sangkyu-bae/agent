@@ -2,6 +2,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
+from src.domain.mcp_registry.identity import IdentityHeaderConfig
 from src.domain.mcp_registry.interfaces import MCPServerRegistryRepositoryInterface
 from src.domain.mcp_registry.schemas import MCPServerRegistration, MCPTransportType
 from src.domain.mysql.schemas import MySQLQueryCondition
@@ -15,6 +16,7 @@ def _to_model(
 ) -> MCPServerModel:
     auth_enc = cipher.encrypt_dict(entity.auth_config) if cipher else None
     server_enc = cipher.encrypt_dict(entity.server_config) if cipher else None
+    identity_enc = _encode_identity(entity.identity_config, cipher)
     return MCPServerModel(
         id=entity.id,
         user_id=entity.user_id,
@@ -25,6 +27,7 @@ def _to_model(
         input_schema=entity.input_schema,
         auth_config_enc=auth_enc,
         server_config_enc=server_enc,
+        identity_config_enc=identity_enc,
         is_active=entity.is_active,
         default_requires_approval=entity.default_requires_approval,
         created_at=entity.created_at,
@@ -33,8 +36,11 @@ def _to_model(
 
 
 def _to_entity(
-    model: MCPServerModel, cipher: SecretCipher | None = None
+    model: MCPServerModel,
+    cipher: SecretCipher | None = None,
+    logger: LoggerInterface | None = None,
 ) -> MCPServerRegistration:
+    identity, unreadable = _decode_identity(model, cipher, logger)
     auth_config = None
     server_config = None
     if cipher is not None:
@@ -56,7 +62,46 @@ def _to_entity(
         # 명시적으로 True 일 때만 켠다 — 값이 비어 있으면 기존 동작(False).
         default_requires_approval=getattr(model, "default_requires_approval", None)
         is True,
+        identity_config=identity,
+        identity_config_unreadable=unreadable,
     )
+
+
+def _encode_identity(
+    identity: IdentityHeaderConfig | None, cipher: SecretCipher | None
+) -> str | None:
+    """Design Ref: mcp-identity-header §3.3 — cipher 없이는 저장하지 않는다(평문 금지)."""
+    if identity is None or cipher is None:
+        return None
+    return cipher.encrypt_dict(identity.to_dict())
+
+
+def _decode_identity(
+    model: MCPServerModel,
+    cipher: SecretCipher | None,
+    logger: LoggerInterface | None,
+) -> tuple[IdentityHeaderConfig | None, bool]:
+    """(설정, 읽을 수 없음) — 실패해도 목록 조회 전체를 깨지 않는다.
+
+    Check G-3: 암호문이 있는데 못 읽으면 unreadable=True 로 표시한다. 이 서버는
+    신원이 필요한 서버로 취급되어(fail-closed) 헤더 없이 호출되지 않고,
+    UseCase 가 필드 없는 수정으로 저장값을 지우는 것을 막는다.
+    """
+    token = getattr(model, "identity_config_enc", None)
+    if not token:
+        return None, False
+    try:
+        if cipher is None:
+            raise ValueError("MCP_SECRET_KEY is not configured")
+        return IdentityHeaderConfig.from_dict(cipher.decrypt_dict(token) or {}), False
+    except Exception as e:
+        if logger is not None:
+            logger.error(
+                "MCP identity_config unreadable — calls blocked until re-entered",
+                exception=e,
+                server_id=getattr(model, "id", None),
+            )
+        return None, True
 
 
 class MCPServerRepository(
@@ -101,32 +146,32 @@ class MCPServerRepository(
     ) -> MCPServerRegistration:
         model = _to_model(registration, self._cipher)
         saved = await self._base_save(model, request_id)
-        return _to_entity(saved, self._cipher)
+        return _to_entity(saved, self._cipher, self._logger)
 
     async def find_by_id(
         self, id: str, request_id: str
     ) -> MCPServerRegistration | None:
         model = await self._base_find_by_id(id, request_id)
-        return _to_entity(model, self._cipher) if model else None
+        return _to_entity(model, self._cipher, self._logger) if model else None
 
     async def find_all_active(self, request_id: str) -> list[MCPServerRegistration]:
         conditions = [MySQLQueryCondition(field="is_active", operator="eq", value=True)]
         models = await self._base_find_by_conditions(conditions, request_id)
-        return [_to_entity(m, self._cipher) for m in models]
+        return [_to_entity(m, self._cipher, self._logger) for m in models]
 
     async def find_by_user(
         self, user_id: str, request_id: str
     ) -> list[MCPServerRegistration]:
         conditions = [MySQLQueryCondition(field="user_id", operator="eq", value=user_id)]
         models = await self._base_find_by_conditions(conditions, request_id)
-        return [_to_entity(m, self._cipher) for m in models]
+        return [_to_entity(m, self._cipher, self._logger) for m in models]
 
     async def update(
         self, registration: MCPServerRegistration, request_id: str
     ) -> MCPServerRegistration:
         model = _to_model(registration, self._cipher)
         saved = await self._base_merge(model, request_id)
-        return _to_entity(saved, self._cipher)
+        return _to_entity(saved, self._cipher, self._logger)
 
     async def delete(self, id: str, request_id: str) -> bool:
         return await self._base_delete(id, request_id)

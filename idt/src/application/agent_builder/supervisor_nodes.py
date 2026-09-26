@@ -111,6 +111,112 @@ def _render_empty_result_block(state) -> str:
     ])
 
 
+# 능력 부정 블록에 싣는 사유 요약 절단 길이 — 블록 총 400자 상한 보장 (Gap-07).
+_DENIAL_REASON_MAX_CHARS = 60
+
+# Act-1 Gap-03: 되물음 재진입 리마인더 — 사유 종류별 1줄.
+_CHALLENGE_REENTRY_HINTS = {
+    "denial": "직전 워커 산출의 '불가' 선언은 그 워커의 도구 범위일 뿐입니다.",
+    "empty": "직전 워커는 정상 실행됐지만 유효한 데이터가 확인되지 않았습니다.",
+}
+
+
+def _render_challenge_reentry_block(state: SupervisorState) -> str:
+    """되물음 재결정용 리마인더. pending이 아니면 ''.
+
+    Act-1 Gap-03 (실런 295d2915): 1회차 재판단은 옳았으나 FINISH answer는
+    DQ1로 폐기되고 reasoning은 대화에 남지 않아, 블록 없는 2회차가 원래
+    믿음으로 되돌아갔다. 신호 채널은 이미 리셋돼 있으므로 종류만 알린다 —
+    pending은 재진입에서 False로만 가고 1회 상한은 그대로다.
+    """
+    if not state.get("finish_challenge_pending"):
+        return ""
+    hint = _CHALLENGE_REENTRY_HINTS.get(state.get("finish_challenge_kind", ""), "")
+    return "\n".join([
+        "\n\n[되물음 재결정]",
+        "직전 결정(FINISH)은 아래 사유로 한 번 되돌려졌습니다. 이번이 재결정입니다.",
+        f"- {hint}" if hint else "- 직전 워커 산출에 확인이 필요한 신호가 있었습니다.",
+        "- 에이전트 능력 판단은 위 '사용 가능한 워커' 목록으로만 하세요. "
+        "요청 기능을 가진 워커가 있으면 호출하고, 없으면 FINISH하되 무엇이 불가한지 밝히세요.",
+    ])
+
+
+def _render_capability_denial_block(state: SupervisorState) -> str:
+    """워커의 '에이전트 능력 부정' 안내 블록. 신호 없으면 ''.
+
+    Design Ref: worker-capability-denial-guard §4.3 (D-05). Plan SC: FR-06, FR-10.
+
+    그래프 계약 ②(목록 프레이밍 금지)에 따라 워커·도구 이름을 나열하지 않는다 —
+    "목록에 있으면"이라는 조건부 서술로만 쓴다. 판단은 LLM에 맡긴다(계약 ③).
+    FR-10 전환 지점: '능동 조회' 모드로 바꾸려면 4번째 항목만 교체한다.
+    """
+    reason = state.get("last_worker_denial", "") or ""
+    if not reason:
+        return ""
+    # Act-1 Gap-07: 사유 요약 상한(120자)에서도 블록 400자 이내를 지킨다.
+    reason = reason[:_DENIAL_REASON_MAX_CHARS]
+    # module-6 실런(런 a217f45e) 정정: supervisor가 목록을 보고도 다른 워커의
+    # description에 적힌 제한 문구를 에이전트 전체 제한으로 읽었다 — 설명의
+    # 제한은 그 워커에만 적용됨을 명시한다.
+    return "\n".join([
+        "\n\n[워커 능력 부정 감지]",
+        f"직전 워커가 자기 도구 범위를 근거로 불가를 선언했습니다: {reason}",
+        "- 워커는 자기 도구 하나만 알며 에이전트 전체의 능력을 알지 못합니다.",
+        "- 능력 판단은 위 '사용 가능한 워커' 목록으로만 하세요. 워커의 불가 선언과 "
+        "어떤 워커 설명에 적힌 제한은 그 워커에만 적용되며, 다른 워커의 근거가 아닙니다.",
+        "- 요청 기능을 가진 워커가 목록에 있으면 FINISH 대신 그 워커를 호출하세요.",
+        "- 질문이 \"할 수 있는지\"를 묻는 것이면 목록 기준으로 가능함과 필요한 "
+        "입력(예: 대상 번호)을 answer에 적으세요.",
+        "- 목록에도 없을 때만 FINISH하고, 무엇이 불가한지 밝히세요.",
+    ])
+
+
+def _select_guidance_block(
+    state: SupervisorState,
+    wiki_worker_id: str,
+    logger: LoggerInterface | None = None,
+) -> tuple[str, str]:
+    """안내 블록은 결정 1회에 최대 1개. 우선순위: 오류 > 빈 결과 > 능력 부정 > 재진입.
+
+    Design Ref: worker-capability-denial-guard §4.4 (D-06). Plan SC: FR-07, FR-11.
+
+    두 블록이 동시에 뜨면 지시가 충돌한다(early-finish-fix §6.1). supervisor_node
+    본문 길이를 늘리지 않기 위해 로그까지 여기서 처리한다(Gap-05). 신호도
+    pending도 없으면 ("", "") — 결정 프롬프트가 기존과 바이트 동일(FR-09).
+
+    Returns:
+        (블록 텍스트, 종류). 종류는 "error" | "empty" | "denial" | "reentry" | "".
+        되물음 기회는 "empty"/"denial"에서만 세워진다 — 호출부가 종류로 분기.
+    """
+    block = _render_worker_error_block(state, wiki_worker_id)
+    if block:
+        return block, "error"
+    kind = ""
+    block = _render_empty_result_block(state)
+    if block:
+        kind = "empty"
+    else:
+        block = _render_capability_denial_block(state)
+        kind = "denial" if block else ""
+    if kind:
+        if logger:
+            # Plan SC: FR-11 — 되물음 기회가 세워진 시점(armed)을 남긴다.
+            logger.info(
+                "finish challenge armed", reason_kind=kind,
+                last_worker_id=state.get("last_worker_id", ""),
+            )
+        return block, kind
+    block = _render_challenge_reentry_block(state)
+    if block:
+        if logger:
+            logger.info(
+                "finish challenge consumed",
+                reason_kind=state.get("finish_challenge_kind", ""),
+            )
+        return block, "reentry"
+    return "", ""
+
+
 # 인벤토리 항목 요약 head 절단 길이(자) — 항목당 1줄 유지 (토큰 절약).
 _ENTRY_HEAD_MAX_CHARS = 80
 
@@ -230,7 +336,10 @@ def build_initial_state(
         "last_worker_error": "",
         # supervisor-early-finish-fix D-02 / D-05
         "last_worker_empty": "",
+        # worker-capability-denial-guard D-02
+        "last_worker_denial": "",
         "finish_challenge_pending": False,
+        "finish_challenge_kind": "",
         "quality_gate_result": "",
         "attachments": attachments or [],
         "worker_task": "",
@@ -265,6 +374,21 @@ class SupervisorDecision(BaseModel):
     )
 
 
+def _challenge_reset() -> dict:
+    """되물음 관련 채널 일괄 리셋 — supervisor_node의 모든 조기 return이 쓴다.
+
+    Design Ref: worker-capability-denial-guard §4.5 (D-07). early-finish-fix
+    §2.2 실측 정정: return 경로 하나라도 pending을 확정하지 않으면 route가
+    supervisor로 되돌려 무한 루프가 된다. 한 곳에서 정의해 누락을 막는다.
+    """
+    return {
+        "last_worker_empty": "",
+        "last_worker_denial": "",
+        "finish_challenge_pending": False,
+        "finish_challenge_kind": "",
+    }
+
+
 def create_supervisor_node(
     llm: BaseChatModel,
     workers: list[WorkerDefinition],
@@ -296,8 +420,7 @@ def create_supervisor_node(
             return {
                 "next_worker": "__end__",
                 "limit_reached": True,
-                "last_worker_empty": "",
-                "finish_challenge_pending": False,
+                **_challenge_reset(),
             }
 
         if state["token_usage"] >= state["token_limit"]:
@@ -309,8 +432,7 @@ def create_supervisor_node(
             # iteration_count도 이 경로에선 증가하지 않아 한도 가드가 막지 못한다.
             return {
                 "next_worker": "__end__",
-                "last_worker_empty": "",
-                "finish_challenge_pending": False,
+                **_challenge_reset(),
             }
 
         forced = hooks.force_worker(state)
@@ -322,10 +444,7 @@ def create_supervisor_node(
                 "forced_worker": forced,
                 "worker_task": "",
                 "iteration_count": state["iteration_count"] + 1,
-                # supervisor-early-finish-fix D-05: 강제 라우팅으로 결정을 건너뛰면
-                # 되물음 기회는 소멸한다 — 플래그가 워커 hop을 건너 잔류하지 않도록.
-                "last_worker_empty": "",
-                "finish_challenge_pending": False,
+                **_challenge_reset(),
             }
 
         skipped = hooks.skip_workers(state)
@@ -338,10 +457,13 @@ def create_supervisor_node(
         viz_block = _render_viz_guidance_block(
             state["messages"], analysis_worker_ids or [], viz_policy,
         )
-        # supervisor-early-finish-fix §6.1: 오류가 있으면 빈 결과 블록은 내지
-        # 않는다 — 두 블록이 동시에 뜨면 지시가 충돌한다.
-        error_block = _render_worker_error_block(state, wiki_worker_id)
-        empty_block = "" if error_block else _render_empty_result_block(state)
+        # supervisor-early-finish-fix §6.1 / worker-capability-denial-guard D-06:
+        # 안내 블록은 결정 1회에 최대 1개 (오류 > 빈 결과 > 능력 부정).
+        guidance_block, guidance_kind = _select_guidance_block(
+            state, wiki_worker_id, logger,
+        )
+        # 되물음 대상은 빈 결과·능력 부정만 — 오류·재진입 블록은 제외.
+        challenge_kind = guidance_kind if guidance_kind in ("empty", "denial") else ""
 
         decision_prompt = (
             f"{supervisor_prompt}\n\n"
@@ -353,9 +475,9 @@ def create_supervisor_node(
             f"{docgen_guidance_block}"
             # wiki-guided-routing D3/D4: 위키 지침 우선 기준 + 직전 수집 실패 안내
             f"{wiki_guidance_block}"
-            f"{error_block}"
-            # supervisor-early-finish-fix D-03: 수집 성공 + 데이터 부재 안내
-            f"{empty_block}\n\n"
+            # D4 직전 실패 / early-finish-fix D-03 빈 결과 / denial-guard D-05 능력
+            # 부정 — 배타 선택된 블록 1개. 신호 없으면 "" (바이트 동일 보존).
+            f"{guidance_block}\n\n"
             f"다음 중 선택하세요:\n"
             f"- 워커 호출이 필요하면 해당 worker_id를 선택\n"
             f"- 처리 가능한 워커가 사용 가능 목록에 있으면 거부하지 말고 그 워커를 선택\n"
@@ -398,8 +520,7 @@ def create_supervisor_node(
             return {
                 "next_worker": "__end__",
                 "last_worker_error": "",
-                "last_worker_empty": "",
-                "finish_challenge_pending": False,
+                **_challenge_reset(),
             }
 
         # M3 (AGENT-OBS-003): reasoning을 step output_summary로 노출.
@@ -422,8 +543,7 @@ def create_supervisor_node(
                     "last_worker_error": "",
                     # supervisor-early-finish-fix D-05: 조기 return도 플래그를
                     # 소진한다 — 모든 종료 경로에서 1회 상한이 성립해야 한다.
-                    "last_worker_empty": "",
-                    "finish_challenge_pending": False,
+                    **_challenge_reset(),
                 }
         elif next_worker in skipped:
             next_worker = "__end__"
@@ -446,7 +566,12 @@ def create_supervisor_node(
             # 신호를 리셋하면서 되물음 기회를 세운다. 재진입 시 empty_block이
             # 비므로 pending은 False로만 갈 수 있다 — 1회 상한이 여기서 보장된다.
             "last_worker_empty": "",
-            "finish_challenge_pending": bool(empty_block),
+            # worker-capability-denial-guard D-06/D-07: 능력 부정 신호도 소비 후
+            # 리셋. pending은 두 사유 합산 — 플래그 하나로 1회 상한을 유지한다.
+            "last_worker_denial": "",
+            "finish_challenge_pending": bool(challenge_kind),
+            # Act-1 Gap-03: 재진입 리마인더용 사유 종류 — pending과 함께 소진.
+            "finish_challenge_kind": challenge_kind,
         }
 
     return supervisor_node
@@ -536,6 +661,8 @@ def route_to_worker_or_final(state: SupervisorState) -> str:
         return "__end__"
     # supervisor-early-finish-fix D-05: 빈 결과 미해소 상태의 첫 FINISH를 1회
     # 되돌린다. 특정 워커를 강제하지 않고 재결정 기회만 준다 (그래프 계약 ③).
+    # worker-capability-denial-guard D-06: 능력 부정 신호도 같은 플래그를
+    # 세운다 — 두 사유 합산 1회. 종류는 finish_challenge_kind가 따로 든다.
     # D-09: 한도 도달은 되물음보다 우선 — 종료를 막지 않는다.
     # Plan SC: FR-06, FR-07
     if (

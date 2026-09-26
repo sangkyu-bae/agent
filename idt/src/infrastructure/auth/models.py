@@ -30,6 +30,12 @@ class UserModel(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now(), onupdate=func.now()
     )
+    # Design Ref: mcp-identity-header §3.3 (V076)
+    mailbox_upn: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        comment="관리자가 지정한 사내 메일함 UPN(소문자). 신원 헤더 MCP 호출의 클레임 소스. 로그인 email 과 독립, NULL 이면 메일함 미등록",
+    )
 
 
 class RefreshTokenModel(Base):

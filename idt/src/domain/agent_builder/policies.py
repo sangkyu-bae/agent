@@ -365,6 +365,49 @@ class EmptyResultPolicy:
         return ""
 
 
+class CapabilityDenialPolicy:
+    """워커 산출의 '에이전트 능력 부정' 판정 — 결정적 신호만 담당.
+
+    Design Ref: worker-capability-denial-guard §3.2 (D-01). Plan SC: FR-02.
+
+    EmptyResultPolicy와 같은 역할 분담: 확실한 문구만 여기서 잡고,
+    '그래서 어느 워커를 부를 것인가'는 supervisor LLM이 판단한다(그래프 계약 ③).
+    LangChain 타입을 참조하지 않는다 — 문자열만 받는다.
+
+    실측(런 031564e4): list_inquiries 워커가 도구 description의 "연락처 원문은
+    어떤 도구로도 볼 수 없다"를 문의 본문으로 오독해 "어떤 도구로도 조회 불가"라
+    선언했고, supervisor가 등록된 get_inquiry 워커 대신 그 주장을 채택했다.
+
+    판정 대상은 '에이전트 전체 또는 화자 권한을 부정하는' 문구로 한정한다.
+    early-finish-fix D-08이 권장한 워커 표기 "이 워커의 범위 밖"은 정당한
+    범위 표기이므로 기본 패턴에 넣지 않는다 — 오탐 방지. EmptyResultPolicy와
+    달리 구조적 1차 판정이 없다: 패턴을 비우는 것이 곧 off 스위치다.
+    """
+
+    MAX_SUMMARY_CHARS = 120
+    _REASON = "워커가 에이전트 전체 능력을 부정함"
+
+    @classmethod
+    def detect(cls, body, patterns) -> str:
+        """능력 부정 문구가 있으면 사유 요약을, 아니면 ''을 돌려준다.
+
+        Args:
+            body: 워커 산출 본문. str이 아니면 판정을 생략한다.
+            patterns: 능력 부정 문구. None/빈 튜플이면 항상 ''(판정 비활성).
+
+        Returns:
+            사유 요약(MAX_SUMMARY_CHARS 이내, 매칭 패턴 1개 포함). 정상이면 ''.
+            산출 원문을 담지 않는다 — 외부 콘텐츠(고객 문의 본문)의 지시문
+            승격 방지(§7). 매칭 패턴은 운영자가 설정한 값이라 안전하다.
+        """
+        if not isinstance(body, str):
+            return ""
+        for pattern in patterns or ():
+            if pattern and pattern.strip() and pattern in body:
+                return f"{cls._REASON}: '{pattern}'"[: cls.MAX_SUMMARY_CHARS]
+        return ""
+
+
 class UpdateAgentPolicy:
     @classmethod
     def validate_update(cls, status: str, system_prompt: str | None) -> None:

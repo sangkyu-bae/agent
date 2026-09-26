@@ -22,7 +22,12 @@ from src.domain.mcp.value_objects import (
     MCPToolResult,
 )
 from src.infrastructure.logging import get_logger
-from src.infrastructure.mcp.client_factory import MCPClientFactory
+from src.domain.mcp_registry.identity import IdentityUnavailableError
+from src.infrastructure.mcp.client_factory import (
+    HeaderProvider,
+    HeaderProviderError,
+    MCPClientFactory,
+)
 
 T = TypeVar("T")
 
@@ -60,8 +65,12 @@ class MCPCallClient:
         auth: MCPAuthConfig | None = None,
         retry: MCPRetryPolicy | None = None,
         logger: LoggerInterface | None = None,
+        call_header_provider: HeaderProvider | None = None,
     ) -> None:
         self._config = config
+        # Design Ref: mcp-identity-header §2.1 — call_tool 세션에만 쓴다.
+        # 집행기의 사전 검증(list_tools)은 신원 없이 연결·도구 존재만 본다.
+        self._call_header_provider = call_header_provider
         self._timeout = timeout or MCPTimeoutConfig()
         self._auth = auth
         self._retry = retry or MCPRetryPolicy()
@@ -99,6 +108,7 @@ class MCPCallClient:
             name,
             retry_operation=self._retry.retry_tool_execution,
             request_id=request_id,
+            header_provider=self._call_header_provider,
         )
 
     def _to_tool_result(self, name: str, raw: Any, request_id: str) -> MCPToolResult:
@@ -124,6 +134,7 @@ class MCPCallClient:
         *,
         retry_operation: bool,
         request_id: str,
+        header_provider: HeaderProvider | None = None,
     ) -> T:
         """세션 생성 → operation 실행을 재시도 정책으로 감싼다."""
         log_extra = {
@@ -143,6 +154,7 @@ class MCPCallClient:
                     request_id,
                     timeout=self._timeout,
                     auth=self._auth,
+                    header_provider=header_provider,
                 ) as session:
                     connected = True
                     result = await asyncio.wait_for(
@@ -153,6 +165,9 @@ class MCPCallClient:
                     "MCP call completed", elapsed_ms=elapsed_ms, **log_extra
                 )
                 return result
+            except (IdentityUnavailableError, HeaderProviderError):
+                # 설정·데이터 문제라 재시도해도 같다. 연결 전 실패라 로그는 호출자 몫.
+                raise
             except Exception as e:
                 if self._should_retry(e, connected, retry_operation, attempt):
                     backoff = self._retry.compute_backoff(attempt)

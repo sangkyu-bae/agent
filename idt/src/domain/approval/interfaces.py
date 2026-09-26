@@ -128,8 +128,12 @@ class ActionExecutorInterface(ABC):
         tool_args: dict,
         request_id: str,
         idempotency_key: str | None = None,
+        subject_user_id: str | None = None,
     ) -> ExecutionResult:
         """집행. 예외를 던지지 않고 ExecutionResult 로 성패를 돌려준다.
+
+        subject_user_id (mcp-identity-header §7): 원래 실행을 요청한 사용자.
+        승인자가 아니다 — 신원 헤더가 필요한 도구는 이 사용자의 자원으로 집행된다.
 
         idempotency_key (approval-gate-phase2 D-05): 승인 요청의 멱등키.
         대상 시스템이 받을 수 있을 때만 전달해 재승인 시 이중 집행을 막는다.

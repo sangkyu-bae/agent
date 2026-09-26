@@ -25,6 +25,7 @@ from src.domain.agent_builder.rag_tool_config import clamp_llm_name
 from src.domain.agent_builder.action_tool_config import ActionToolConfig
 from src.domain.agent_builder.policies import (
     ActionArgumentPolicy,
+    CapabilityDenialPolicy,
     FinalAnswerDraftPolicy,
     GatedWorkerPolicy,
 )
@@ -37,6 +38,7 @@ from src.application.agent_builder.supervisor_hooks import (
     SupervisorHooks,
 )
 from src.application.agent_builder.supervisor_nodes import (
+    _current_turn_messages,
     build_initial_state,
     create_quality_gate_node,
     create_supervisor_node,
@@ -190,6 +192,12 @@ def _extract_approval_pending(result_messages: list, worker_id: str) -> dict:
 
 # worker-context-injection §4.1: supervisor가 task를 주지 못한 경우(강제 라우팅·
 # 구조화 출력 누락)의 폴백 지시 — 변경 전과 동일한 문구를 유지한다.
+# worker-capability-denial-guard Act-1 (Gap-02): [현재 작업] 꼬리 리마인더.
+_WORKER_SCOPE_REMINDER = (
+    "(이 작업의 결과만 전달하세요. 대화의 다른 질문, 특히 이 에이전트가 무엇을 "
+    "할 수 있는지에 관한 능력 질문에는 답하지 마세요 — 상위 노드가 판단합니다.)"
+)
+
 _FALLBACK_WORKER_INSTRUCTION = (
     "위 대화 맥락과 이전 단계 결과를 참고하여 "
     "당신의 역할에 해당하는 작업을 수행하세요."
@@ -231,6 +239,81 @@ def _with_empty_signal(fn, patterns):
         return out
 
     return wrapped
+
+
+def _with_denial_signal(fn, patterns: tuple[str, ...] | None):
+    """워커 노드에 '능력 부정' 신호 주입 데코레이터 — 전 워커 적용.
+
+    Design Ref: worker-capability-denial-guard §4.2 (D-04). Plan SC: FR-04, FR-05.
+
+    _with_empty_signal은 수집 워커(search/collect)만 덮지만, 능력 부정은 어떤
+    워커도 할 수 있다 — 실측 결함(런 031564e4)은 미분류 react 워커였다. 그래서
+    노드 등록 루프에서 worker_map 전체를 감싼다. 패턴이 특정적이라 전 워커
+    적용의 오탐 비용은 낮고, 걸리더라도 되물음 1회로 상한이 잡힌다.
+
+    신호는 state 채널로만 올린다(그래프 계약 ①). 빈 결과 데코레이터 바깥에서
+    감싸 두 신호가 같은 out dict에 독립적으로 실린다.
+    """
+    async def wrapped(state):
+        out = await fn(state)
+        if not isinstance(out, dict):
+            return out
+        # 오류가 이미 잡혔으면 판정을 건너뛴다 — 블록 2개 동시 렌더 방지(§6.1).
+        if out.get("last_worker_error"):
+            out["last_worker_denial"] = ""
+            return out
+        messages = out.get("messages") or []
+        body = getattr(messages[-1], "content", None) if messages else None
+        # 정상일 때도 항상 덮어쓴다 — 이전 턴 신호가 잔류하지 않도록.
+        out["last_worker_denial"] = CapabilityDenialPolicy.detect(body, patterns)
+        return out
+
+    return wrapped
+
+
+def _render_denial_notice(
+    messages: list,
+    patterns: tuple[str, ...] | None,
+    worker_descriptions: str = "",
+) -> str:
+    """final_answer용 워커 능력 주장 주의 블록. 이번 턴 워커 산출에 능력 부정
+    문구가 없으면 ''.
+
+    Design Ref: worker-capability-denial-guard §6.2 Q1. Plan SC: FR-10.
+
+    state 채널(last_worker_denial)은 supervisor가 소비 후 리셋하므로 여기서는
+    이번 턴 워커 산출(마지막 사용자 메시지 이후)을 같은 정책으로 재판정한다 —
+    새 state 필드 없이 결정적.
+
+    Act-1 Gap-04 (실런 295d2915): 판단 근거를 '에이전트 지침'으로 두면 지침
+    자체가 결함 문구를 담은 경우 이길 수 없다. Plan Core Value대로 근거는
+    등록 워커 목록이다 — supervisor 결정 프롬프트와 같은 설명 목록을 **발동
+    시에만** 싣는다. 그래프 계약 ②(라우팅 프롬프트의 능력 화이트리스트 금지)는
+    supervisor 과차단 사례에서 왔고, 여기는 답변 종합 노드의 조건부 근거다.
+    """
+    if not patterns:
+        return ""
+    for msg in _current_turn_messages(messages):
+        if not _is_worker_output(msg):
+            continue
+        reason = CapabilityDenialPolicy.detect(getattr(msg, "content", None), patterns)
+        if not reason:
+            continue
+        catalog = (
+            f"\n이 에이전트에 등록된 워커(능력 판단의 근거):\n{worker_descriptions}"
+            if worker_descriptions else ""
+        )
+        return (
+            "\n\n[워커 능력 주장 주의]\n"
+            f"워커 산출에 에이전트 전체 능력을 부정하는 선언이 있습니다: {reason}. "
+            "이는 그 워커 하나의 도구 범위일 뿐 에이전트 전체의 능력이 아니며, "
+            "다른 워커 설명에 적힌 제한도 그 워커에만 적용됩니다. "
+            "등록된 워커가 제공하는 기능은 가능하다고 답하고, "
+            "워커의 불가 선언을 그대로 옮기지 마세요. 사용자가 그 기능을 원하면 "
+            "필요한 입력(예: 대상 번호)을 물어보세요."
+            f"{catalog}"
+        )
+    return ""
 
 
 def _blocked_step_summary(messages: list) -> str:
@@ -309,7 +392,12 @@ def _build_worker_input(state: SupervisorState) -> list:
     messages = list(state["messages"])
     task = state.get("worker_task", "")
     if task:
-        messages.append(HumanMessage(content=f"[현재 작업]\n{task}"))
+        # worker-capability-denial-guard Act-1 (Gap-02): system 규범만으로는
+        # 워커가 task 밖 능력 질문에 답했다(실런 2회). 지시와 가장 가까운
+        # 꼬리에 범위 리마인더를 한 번 더 둔다. D-08: 절대 프레이밍 금지.
+        messages.append(HumanMessage(
+            content=f"[현재 작업]\n{task}\n{_WORKER_SCOPE_REMINDER}"
+        ))
     return ensure_user_tail(messages, instruction=_FALLBACK_WORKER_INSTRUCTION)
 
 
@@ -414,6 +502,9 @@ class WorkflowCompiler:
         # config를 직접 import하지 않고 main.py가 정규화해 주입한다
         # (agent_timezone과 동일 규약). None이면 구조적 신호만 동작한다.
         empty_result_patterns: tuple[str, ...] | None = None,
+        # worker-capability-denial-guard D-03: 능력 부정 판정 문구. 동일 규약 —
+        # main.py가 정규화해 주입한다. None이면 판정이 꺼진다(무회귀).
+        capability_denial_patterns: tuple[str, ...] | None = None,
     ) -> None:
         self._tool_factory = tool_factory
         self._llm_factory = llm_factory
@@ -459,6 +550,8 @@ class WorkflowCompiler:
         self._agent_timezone = agent_timezone
         # supervisor-early-finish-fix D-07: 미주입이면 빈 튜플 — 구조적 신호만 동작.
         self._empty_result_patterns = tuple(empty_result_patterns or ())
+        # worker-capability-denial-guard D-03: 미주입이면 빈 튜플 — 판정 비활성.
+        self._capability_denial_patterns = tuple(capability_denial_patterns or ())
 
     async def compile(
         self,
@@ -476,7 +569,10 @@ class WorkflowCompiler:
         auth_ctx: AuthContext | None = None,
         include_user_context: bool = True,
         agent_id: str | None = None,
+        subject_user_id: str | None = None,
     ):
+        # subject_user_id — mcp-identity-header §1.1: MCP 신원 헤더의 실행 주체.
+        # 인증 컨텍스트가 없는 스케줄·승인 재개 런도 채우므로 auth_ctx 와 별개다.
         NestingDepthPolicy.validate_depth(depth)
 
         config = supervisor_config or SupervisorConfig()
@@ -589,6 +685,7 @@ class WorkflowCompiler:
                         run_id=run_id,
                         auth_ctx=auth_ctx,
                         include_user_context=include_user_context,
+                        subject_user_id=subject_user_id,
                     )
                     worker_map[worker_def.worker_id] = sub_node
                     continue
@@ -689,6 +786,7 @@ class WorkflowCompiler:
                         worker_tools = await self._tool_factory.create_all_async(
                             worker_def.tool_id, request_id,
                             tool_config=worker_def.tool_config,
+                            subject_user_id=subject_user_id,
                         )
                     except McpWiringError:
                         # Design Ref: §6.2 — 배선 누락은 개발자 실수다.
@@ -983,6 +1081,11 @@ class WorkflowCompiler:
                 # (tracker None → 원본 반환)에서도 신호가 살아남는다.
                 if worker_id in empty_signal_worker_ids:
                     node_fn = _with_empty_signal(node_fn, self._empty_result_patterns)
+                # worker-capability-denial-guard D-04: 전 워커. 빈 결과 데코레이터
+                # 바깥에서 감싸 두 신호가 같은 out dict에 독립적으로 실린다.
+                node_fn = _with_denial_signal(
+                    node_fn, self._capability_denial_patterns,
+                )
                 graph.add_node(
                     worker_id,
                     _wrap_step(worker_id, NodeType.WORKER, node_fn),
@@ -999,6 +1102,12 @@ class WorkflowCompiler:
                         NodeType.OTHER,
                         self._create_final_answer_node(
                             llm, effective_supervisor_prompt,
+                            # denial-guard Act-1 Gap-04: supervisor와 같은 워커
+                            # 설명 목록 — 능력 부정 주의 블록 발동 시에만 실린다.
+                            worker_descriptions="\n".join(
+                                f"- {w.worker_id}: {w.description}"
+                                for w in workers_for_supervisor
+                            ),
                         ),
                     ),
                 )
@@ -1106,6 +1215,7 @@ class WorkflowCompiler:
         run_id: Optional[RunId] = None,
         auth_ctx: AuthContext | None = None,
         include_user_context: bool = True,
+        subject_user_id: str | None = None,
     ):
         if self._agent_repository is None:
             raise ValueError("agent_repository is required for sub_agent compilation")
@@ -1142,6 +1252,7 @@ class WorkflowCompiler:
             run_id=run_id,
             auth_ctx=auth_ctx,
             include_user_context=sub_include,
+            subject_user_id=subject_user_id,
         )
 
         return self._wrap_sub_agent(worker_def.worker_id, sub_graph)
@@ -1334,7 +1445,9 @@ class WorkflowCompiler:
             worker_context_block=worker_context_block,
         )
 
-    def _create_final_answer_node(self, llm, system_prompt: str):
+    def _create_final_answer_node(
+        self, llm, system_prompt: str, worker_descriptions: str = "",
+    ):
         """모든 워커 결과(검색·분석·차트)를 종합하는 필수 최종 답변 노드.
 
         final-answer-node Design §3-3. 워커가 실행된 런은 route_to_worker_or_final이
@@ -1411,6 +1524,14 @@ class WorkflowCompiler:
                     "명시하세요."
                 )
 
+            # worker-capability-denial-guard §6.2 Q1 (module-6 실런 a217f45e 확정):
+            # supervisor 안내 블록은 이 노드에 닿지 않아 워커의 '어떤 도구로도
+            # 불가' 주장이 최종 답변에 그대로 종합됐다. 이번 턴 워커 산출을 같은
+            # 패턴으로 결정적으로 재판정해 조건부 주의만 싣는다 (LLM 호출 0회 추가).
+            denial_notice = _render_denial_notice(
+                messages, self._capability_denial_patterns, worker_descriptions,
+            )
+
             answer_prompt = (
                 f"{system_prompt}\n\n"
                 f"아래 수집된 결과들을 종합하여 사용자의 가장 최근 질문에 "
@@ -1419,6 +1540,7 @@ class WorkflowCompiler:
                 f"이전 대화 맥락도 참고하세요.\n\n"
                 + "\n\n".join(blocks)
                 + limit_notice
+                + denial_notice
                 + draft_instruction
             )
 

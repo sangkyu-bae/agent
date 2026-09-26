@@ -26,12 +26,19 @@ from src.domain.approval.interfaces import ActionExecutorInterface, ExecutionRes
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.domain.mcp.policy import MCPRetryPolicy
 from src.domain.mcp.value_objects import MCPTimeoutConfig, MCPToolDescriptor
+from src.domain.mcp_registry.identity import (
+    IdentityClaimPolicy,
+    IdentityUnavailableError,
+)
 from src.domain.mcp_registry.schemas import MCPServerRegistration
 from src.domain.tool_catalog.mcp_tool_id import McpToolRef, parse_mcp_tool_id
 from src.infrastructure.mcp.call_client import MCPCallClient
+from src.infrastructure.mcp.client_factory import HeaderProvider, HeaderProviderError
 from src.infrastructure.mcp_registry.mcp_tool_loader import MCPToolLoader
 
-ClientFactory = Callable[[MCPServerRegistration], MCPCallClient]
+# (registration, subject_user_id, request_id) — mcp-identity-header §2.1:
+# 신원 헤더 서버면 요청자로 만든 공급자를 call_tool 세션에 붙인다.
+ClientFactory = Callable[[MCPServerRegistration, str | None, str], MCPCallClient]
 
 
 def build_execution_client(
@@ -39,6 +46,7 @@ def build_execution_client(
     *,
     timeout: MCPTimeoutConfig,
     logger: LoggerInterface,
+    header_provider: HeaderProvider | None = None,
 ) -> MCPCallClient:
     """집행 전용 MCP client. 재시도는 0 으로 고정한다 (D-10, Plan FR-04).
 
@@ -50,6 +58,7 @@ def build_execution_client(
         timeout=timeout,
         retry=MCPRetryPolicy(max_retries=0, retry_tool_execution=False),
         logger=logger,
+        call_header_provider=header_provider,
     )
 
 
@@ -98,6 +107,7 @@ class McpActionExecutor(ActionExecutorInterface):
         tool_args: dict,
         request_id: str,
         idempotency_key: str | None = None,
+        subject_user_id: str | None = None,
     ) -> ExecutionResult:
         ref = parse_mcp_tool_id(tool_id)
         if ref is None:
@@ -109,7 +119,9 @@ class McpActionExecutor(ActionExecutorInterface):
                 "도구 이름이 없는 구형 id — 에이전트에서 도구를 다시 선택하세요",
                 tool_id, request_id,
             )
-        client, failure = await self._connect(ref, tool_id, request_id)
+        client, failure = await self._connect(
+            ref, tool_id, request_id, subject_user_id
+        )
         if client is None:
             return failure
         descriptor, failure = await self._verify(client, ref, tool_id, request_id)
@@ -123,7 +135,11 @@ class McpActionExecutor(ActionExecutorInterface):
         return await self._call(client, ref, arguments, tool_id, request_id)
 
     async def _connect(
-        self, ref: McpToolRef, tool_id: str, request_id: str
+        self,
+        ref: McpToolRef,
+        tool_id: str,
+        request_id: str,
+        subject_user_id: str | None = None,
     ) -> tuple[MCPCallClient | None, ExecutionResult | None]:
         """①② 서버 등록 조회 → client 조립. 네트워크 호출 없음."""
         try:
@@ -146,7 +162,7 @@ class McpActionExecutor(ActionExecutorInterface):
         # Check G1 (Design §6.2): config 조립(URL·헤더)도 네트워크 전 단계다.
         # 여기서 새면 Composite 가 '불명' 으로 기록해 경계가 역전된다.
         try:
-            return self._client_factory(registration), None
+            return self._client_factory(registration, subject_user_id, request_id), None
         except Exception as e:
             return None, self._fail(
                 "blocked", f"MCP 접속 설정 조립 실패 ({_exception_name(e)})",
@@ -189,6 +205,18 @@ class McpActionExecutor(ActionExecutorInterface):
         try:
             result = await client.call_tool(
                 name=ref.tool_name, arguments=arguments, request_id=request_id
+            )
+        except IdentityUnavailableError as e:
+            # mcp-identity-header §6.2: 공급자는 세션을 열기 전에 실패한다 —
+            # 대상 시스템엔 아무것도 가지 않았으므로 '불명'이 아니라 '불가'다.
+            return self._fail(
+                "blocked", IdentityClaimPolicy.user_message(e), tool_id, request_id
+            )
+        except HeaderProviderError as e:
+            # Check G-2: 서명·배선·설정 오류도 연결 전이다 — '불명'이 아니다.
+            return self._fail(
+                "blocked", "신원 헤더를 만들 수 없음 (관리자 설정 확인)",
+                tool_id, request_id, exception=e,
             )
         except Exception as e:
             # Plan SC-7: 보냈을 수도 있다. 재호출하지 않고 사람에게 넘긴다.

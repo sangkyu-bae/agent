@@ -11,6 +11,14 @@ import { useSyncMcpTools } from '@/hooks/useToolCatalog';
 import { useAuthStore } from '@/store/authStore';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import Modal from '@/components/common/Modal';
+import McpIdentityFields from '@/components/admin/McpIdentityFields';
+import {
+  buildIdentityPayload,
+  emptyIdentityForm,
+  identityFormFromServer,
+  validateIdentityForm,
+  type IdentityFormState,
+} from '@/utils/mcpIdentityForm';
 import type {
   McpServer,
   McpTransport,
@@ -34,6 +42,8 @@ interface FormState {
   profile: string;
   headersText: string;
   serverConfigText: string;
+  /** mcp-identity-header §5.1 — 호출자 신원 헤더 섹션 */
+  identity: IdentityFormState;
 }
 
 const emptyForm: FormState = {
@@ -49,6 +59,7 @@ const emptyForm: FormState = {
   profile: '',
   headersText: '',
   serverConfigText: '',
+  identity: emptyIdentityForm(),
 };
 
 const fromServer = (s: McpServer): FormState => ({
@@ -63,6 +74,7 @@ const fromServer = (s: McpServer): FormState => ({
   profile: '',
   headersText: '',
   serverConfigText: '',
+  identity: identityFormFromServer(s),
 });
 
 /** 비어있지 않은 JSON 텍스트를 객체로 파싱. 실패 시 throw. */
@@ -134,6 +146,15 @@ const McpServerFormModal = ({
       return;
     }
 
+    // mcp-identity-header §4.2 — 기존 설정이 있으면 비밀을 비워도 유지된다.
+    const hasIdentity = !!server?.identity_config;
+    const identityError = validateIdentityForm(form.identity, hasIdentity);
+    if (identityError) {
+      setError(identityError);
+      return;
+    }
+    const identityConfig = buildIdentityPayload(form.identity, hasIdentity);
+
     let authConfig: Record<string, unknown> | undefined;
     let serverConfig: Record<string, unknown> | undefined;
     try {
@@ -158,6 +179,8 @@ const McpServerFormModal = ({
       // 시크릿: 입력된 경우에만 전송 (빈 값 = 기존 유지)
       if (authConfig) data.auth_config = authConfig;
       if (serverConfig) data.server_config = serverConfig;
+      // undefined=키 생략(불변) / null=해제 / 객체=교체
+      if (identityConfig !== undefined) data.identity_config = identityConfig;
       onSubmitUpdate(data);
     } else {
       onSubmitCreate({
@@ -168,6 +191,7 @@ const McpServerFormModal = ({
         auth_config: authConfig ?? null,
         server_config: serverConfig ?? null,
         default_requires_approval: form.default_requires_approval,
+        ...(identityConfig ? { identity_config: identityConfig } : {}),
       });
     }
   };
@@ -276,6 +300,13 @@ const McpServerFormModal = ({
               </span>
             </label>
           </div>
+
+          {/* mcp-identity-header §5.1: 사용자별 자원을 다루는 서버의 호출자 신원 */}
+          <McpIdentityFields
+            value={form.identity}
+            onChange={(next) => set('identity', next)}
+            hasExisting={!!server?.identity_config}
+          />
 
           {/* 시크릿 영역 */}
           <div className="space-y-4 rounded-xl border border-zinc-100 bg-zinc-50/60 p-4">
@@ -646,6 +677,11 @@ const AdminMcpServersPage = () => {
                     {srv.default_requires_approval && (
                       <span className="ml-1.5 rounded-md bg-amber-50 px-2 py-1 text-[11.5px] font-medium text-amber-700">
                         승인 기본
+                      </span>
+                    )}
+                    {srv.identity_config && (
+                      <span className="ml-1.5 rounded-md bg-violet-50 px-2 py-1 text-[11.5px] font-medium text-violet-700">
+                        신원 헤더
                       </span>
                     )}
                   </td>
