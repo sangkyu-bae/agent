@@ -1264,7 +1264,8 @@ class TestDatetimeContext:
         compiler = self._compiler_with_tz()
         captured: dict = {}
 
-        def _fake_final(llm, system_prompt):
+        def _fake_final(llm, system_prompt, **_kwargs):
+            # denial-guard Act-1: worker_descriptions kwarg가 추가됐다 — 대역은 흡수.
             captured["prompt"] = system_prompt
             return self._noop
 

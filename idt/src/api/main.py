@@ -529,6 +529,11 @@ from src.infrastructure.visualization.llm_classifier import (
 )
 from src.infrastructure.mcp_registry.mcp_server_repository import MCPServerRepository
 from src.infrastructure.mcp_registry.mcp_tool_loader import MCPToolLoader
+from src.infrastructure.mcp_registry.identity_headers import (
+    IdentityHeaderProviderFactory,
+    SessionScopedUserReader,
+)
+from src.infrastructure.mcp_registry.identity_token import HmacIdentityTokenSigner
 from src.infrastructure.security.secret_cipher import SecretCipher
 
 
@@ -539,6 +544,22 @@ def _mcp_cipher() -> SecretCipher | None:
     """
     key = settings.mcp_secret_key
     return SecretCipher(key) if key else None
+
+
+def _identity_headers(logger) -> IdentityHeaderProviderFactory:
+    """mcp-identity-header §2.1 — 도구를 실제로 '실행'하는 경로에만 주입한다.
+
+    일반 채팅(MCPToolCache)은 도구를 전 사용자 공용 키로 캐시하므로 주입하지
+    않는다 — 사용자별 공급자가 캐시되면 신원이 섞인다. 그 경로의 신원 서버
+    도구는 배선 오류로 실패하고 헤더 없이 나가지 않는다.
+    """
+    return IdentityHeaderProviderFactory(
+        user_reader=SessionScopedUserReader(
+            session_factory=get_session_factory(), logger=logger
+        ),
+        signer=HmacIdentityTokenSigner(),
+        logger=logger,
+    )
 from src.api.routes.auth_router import (
     router as auth_router,
     get_register_use_case,
@@ -692,6 +713,7 @@ from src.api.routes.admin_user_router import (
     get_permission_repository,
     get_admin_create_user_use_case,
     get_list_users_use_case,
+    get_update_user_mailbox_use_case,
 )
 from src.application.auth.admin_create_user_use_case import AdminCreateUserUseCase
 from src.application.auth.list_users_use_case import ListUsersUseCase
@@ -1886,6 +1908,23 @@ def create_admin_user_mgmt_factories():
     return admin_create_user_factory, list_users_factory
 
 
+def create_admin_user_mailbox_factory():
+    """mcp-identity-header §4.2: 메일함 설정 UseCase per-request DI (세션 1개 공유)."""
+    from src.application.auth.update_user_mailbox_use_case import (
+        UpdateUserMailboxUseCase,
+    )
+
+    app_logger = get_app_logger()
+
+    def factory(session: AsyncSession = Depends(get_session)) -> UpdateUserMailboxUseCase:
+        return UpdateUserMailboxUseCase(
+            user_repo=UserRepository(session=session, logger=app_logger),
+            logger=app_logger,
+        )
+
+    return factory
+
+
 def create_llm_model_factories(
     cost_calculator: CostCalculator | None = None,
     llm_provider: UtilityLLMProviderPort | None = None,
@@ -2256,6 +2295,18 @@ def _empty_result_patterns() -> tuple[str, ...]:
     )
 
 
+def _capability_denial_patterns() -> tuple[str, ...]:
+    """worker-capability-denial-guard D-03: 능력 부정 판정 문구 (콤마 구분 설정).
+
+    _empty_result_patterns 동형 — WorkflowCompiler 생성자에 kwarg로 주입한다.
+    """
+    return tuple(
+        p.strip()
+        for p in settings.capability_denial_patterns.split(",")
+        if p.strip()
+    )
+
+
 # retrieval-observability §4.5: RunTracker lazy singleton.
 # agent_run(create_agent_builder_factories)과 general_chat factory가 동일 인스턴스를
 # 공유한다 — 상태 없는 파사드(session_factory만 보유)라 공유 안전.
@@ -2462,6 +2513,9 @@ def create_general_chat_use_case_factory():
             repository=mcp_repo,
             mcp_tool_loader=mcp_loader,
             logger=app_logger,
+            # mcp-identity-header: MCPToolCache 는 전 사용자 공용 키로 도구를 캐시한다.
+            # 사용자별 신원 서버(개인 메일함 등)는 일반 채팅에 싣지 않는다 — 에이전트 전용.
+            exclude_identity_servers=True,
         )
 
         tool_builder = ChatToolBuilder(
@@ -2709,7 +2763,9 @@ def create_agent_builder_factories():
     # MCP 워커(tool_id="mcp_{uuid}") 실행 의존.
     # ToolFactory/DocumentConversionAdapter는 앱 싱글톤이라 per-request 세션을
     # 들 수 없다 — 매 호출마다 세션을 여는 세션 스코프 저장소를 공유한다.
-    _mcp_tool_loader = MCPToolLoader(logger=app_logger)
+    _mcp_tool_loader = MCPToolLoader(
+        logger=app_logger, identity_headers=_identity_headers(app_logger)
+    )
     _mcp_runtime_repo = SessionScopedMcpServerRepository(
         session_factory=get_session_factory(),
         logger=app_logger,
@@ -2847,6 +2903,8 @@ def create_agent_builder_factories():
         agent_timezone=settings.agent_timezone,
         # ★ supervisor-early-finish-fix D-07: 빈 결과 판정 보조 문구
         empty_result_patterns=_empty_result_patterns(),
+        # ★ worker-capability-denial-guard D-03: 워커 능력 부정 판정 문구
+        capability_denial_patterns=_capability_denial_patterns(),
     )
 
     # DB-001 §10.2: session 은 Depends(get_session) 으로 주입.
@@ -3148,14 +3206,21 @@ def _build_approval_executor(app_logger):
 
     config = ApprovalExecutionConfig()
     timeout = config.get_timeout()
+    identity_headers = _identity_headers(app_logger)
     mcp_executor = McpActionExecutor(
         server_repo=SessionScopedMcpServerRepository(
             session_factory=get_session_factory(),
             logger=app_logger,
             cipher=_mcp_cipher(),
         ),
-        client_factory=lambda registration: build_execution_client(
-            registration, timeout=timeout, logger=app_logger
+        client_factory=lambda registration, subject_user_id, request_id: (
+            build_execution_client(
+                registration, timeout=timeout, logger=app_logger,
+                # mcp-identity-header §7: 요청자 신원으로 call_tool 세션에만.
+                header_provider=identity_headers.for_registration(
+                    registration, subject_user_id, request_id
+                ),
+            )
         ),
         max_output_chars=config.APPROVAL_EXEC_OUTPUT_MAX_CHARS,
         logger=app_logger,
@@ -4947,7 +5012,10 @@ def create_middleware_agent_factories():
         tavily_api_key=os.environ.get("TAVILY_API_KEY"),
         # RunMiddlewareAgentUseCase도 create_async를 저장소 없이 호출한다 —
         # 에이전트 빌더와 동일하게 세션 스코프 저장소를 주입한다.
-        mcp_tool_loader=MCPToolLoader(logger=app_logger),
+        # 이 경로는 실행 주체를 모른다 — 신원 서버 도구는 no_subject 안내로 끝난다.
+        mcp_tool_loader=MCPToolLoader(
+            logger=app_logger, identity_headers=_identity_headers(app_logger)
+        ),
         mcp_repository=SessionScopedMcpServerRepository(
             session_factory=get_session_factory(),
             logger=app_logger,
@@ -5414,6 +5482,9 @@ def create_app() -> FastAPI:
     _admin_create_user_f, _list_users_f = create_admin_user_mgmt_factories()
     app.dependency_overrides[get_admin_create_user_use_case] = _admin_create_user_f
     app.dependency_overrides[get_list_users_use_case] = _list_users_f
+    app.dependency_overrides[get_update_user_mailbox_use_case] = (
+        create_admin_user_mailbox_factory()
+    )
 
     # WebSocket DI
     _connection_manager = ConnectionManager(logger=logger, max_connections=100)

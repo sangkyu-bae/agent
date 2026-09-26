@@ -187,3 +187,58 @@ class TestCapabilityDenialNorm:
         block = render_worker_context_block("", "", [])
         for forbidden in ("browser_click", "browser_open", "scrape_url"):
             assert forbidden not in block
+
+
+class TestTaskScopeNorm:
+    """worker-capability-denial-guard §4.6 (D-08) / Plan SC: FR-01.
+
+    실측(런 031564e4): list_inquiries 워커가 대화에 남은 두 번째 질문
+    "각각 본문을 읽을 수 있나요?"에 자기 도구 범위만 보고 "어떤 도구로도 조회
+    불가"라고 답했고, supervisor가 그 주장을 채택해 조기 FINISH했다.
+    워커는 [현재 작업]만 수행하고 에이전트 능력 질문에는 답하지 않아야 한다.
+    """
+
+    def _block(self):
+        from src.application.agent_run.prompt_rendering import (
+            render_worker_context_block,
+        )
+        return render_worker_context_block("", "", [])
+
+    def test_norm_restricts_worker_to_current_task(self):
+        block = self._block()
+        assert "[현재 작업]에 적힌 일만 수행하세요" in block
+
+    def test_norm_forbids_answering_capability_questions(self):
+        block = self._block()
+        assert "할 수 있는지를 묻는" in block
+        assert "답하지 마세요" in block
+        # 판단 주체가 상위 노드임을 밝힌다 — 워커가 스스로 판정하지 않도록.
+        assert "상위 노드" in block
+
+    def test_task_norm_comes_after_pass_through_duty(self):
+        """D-08: 제한 규범이 전달 의무보다 앞서면 워커가 도구 결과를 버린다."""
+        block = self._block()
+        assert (
+            block.index("빠짐없이 답변에 그대로 실으세요")
+            < block.index("[현재 작업]에 적힌 일만 수행하세요")
+        )
+
+    def test_task_norm_avoids_truncation_word(self):
+        """'생략'은 프롬프트 절단 안내와 겹쳐 기존 테스트가 오탐한다."""
+        from src.application.agent_run.prompt_rendering import _TOOL_USAGE_NORM
+        assert "생략" not in _TOOL_USAGE_NORM
+
+    def test_task_norm_is_part_of_tool_usage_norm(self):
+        from src.application.agent_run.prompt_rendering import (
+            render_worker_context_block,
+        )
+        block = render_worker_context_block(
+            "프롬프트", "역할", [], include_tool_norm=False,
+        )
+        assert "[현재 작업]에 적힌 일만" not in block
+
+    def test_task_norm_addition_within_length_budget(self):
+        """Plan NFR: 규범 추가분 150자 이내."""
+        from src.application.agent_run.prompt_rendering import _TOOL_USAGE_NORM
+        start = _TOOL_USAGE_NORM.index("[현재 작업]에 적힌 일만")
+        assert len(_TOOL_USAGE_NORM[start:]) <= 150

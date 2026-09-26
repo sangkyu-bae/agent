@@ -45,12 +45,27 @@ class SupervisorState(TypedDict):
     # 도구는 성공했으나 유효 데이터가 없는 상태로, 도구 오류와 구분된다.
     last_worker_empty: str
 
+    # worker-capability-denial-guard D-02: 직전 워커 산출의 '능력 부정' 사유 요약.
+    # last_worker_empty 동형 — 워커 노드가 매번 덮어쓰고(정상 시 ""), supervisor가
+    # "[워커 능력 부정 감지]" 블록을 렌더한 뒤 ""로 리셋한다.
+    # 워커가 자기 도구 범위를 에이전트 전체 능력으로 착각해 '어떤 도구로도 불가'라
+    # 선언한 상태로, 도구 오류·빈 결과와 구분된다 (런 031564e4 실측).
+    last_worker_denial: str
+
     # supervisor-early-finish-fix D-05: FINISH 되물음 1회 기회 보유 플래그.
     # supervisor가 빈 결과 블록을 렌더할 때 True, 재진입 시 False로 소진된다.
+    # worker-capability-denial-guard D-06: 능력 부정 블록도 같은 플래그를 세운다 —
+    # 두 사유 합산 1회. 플래그를 나누면 상한 논리가 둘로 갈라진다.
     # route_to_worker_or_final이 읽어 __end__를 supervisor로 되돌린다.
     # 카운터가 아니라 플래그인 이유: 신호 리셋과 짝지어 1회 상한이 구조적으로
     # 보장되기 때문 (Design §2.2).
     finish_challenge_pending: bool
+
+    # worker-capability-denial-guard Act-1 (Gap-03): 되물음 사유 종류
+    # ("empty" | "denial" | ""). pending과 함께 세워지고 재진입 시 함께 소진된다.
+    # 신호 채널은 블록 렌더 직후 리셋되므로, 재결정에서 '왜 되돌려졌는가'를
+    # 짧은 리마인더로 알리려면 종류만 따로 남겨야 한다 (실런 295d2915).
+    finish_challenge_kind: str
 
     # approval-gate Design §2.1 ②: 워커 트레이스에서 건져 올린 승인 요청 신호.
     # last_worker_error 동형이지만 리셋하지 않는다 — 이 신호는 런을 끝내는
