@@ -13,6 +13,8 @@ interface ApprovalCardProps {
   onApprove: (item: ApprovalItem) => void;
   onReject: (item: ApprovalItem) => void;
   onSeen: (item: ApprovalItem) => void;
+  /** approval-edit-before-approve: 상세 드로어 열기 */
+  onOpenDetail: (item: ApprovalItem) => void;
 }
 
 const formatLocal = formatLocalDateTime;
@@ -29,7 +31,7 @@ const remainingText = (expiresAt: string): string => {
 
 // approval-gate: 승인 대기 1건 (Design §5.1 / §5.4)
 const ApprovalCard = ({
-  item, busy = false, onApprove, onReject, onSeen,
+  item, busy = false, onApprove, onReject, onSeen, onOpenDetail,
 }: ApprovalCardProps) => {
   const [expanded, setExpanded] = useState(false);
   const actionable = isApprovalActionable(item.status);
@@ -54,9 +56,24 @@ const ApprovalCard = ({
                 title="미확인"
               />
             )}
+            {item.edited && (
+              <span className="rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-xs text-amber-600">
+                수정됨
+              </span>
+            )}
           </div>
           <p className="mt-0.5 text-xs text-zinc-500">도구: {item.tool_id}</p>
         </div>
+        <button
+          type="button"
+          className="shrink-0 rounded px-2 py-1 text-xs text-violet-600 hover:bg-violet-50"
+          onClick={() => {
+            onOpenDetail(item);
+            if (item.seen_at === null) onSeen(item);
+          }}
+        >
+          상세 보기
+        </button>
       </div>
 
       <button

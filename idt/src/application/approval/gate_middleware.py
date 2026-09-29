@@ -12,16 +12,15 @@ MiddlewareBuilder 의 정적 구조를 깨지 않고, DB 없이 단위 테스트
 langchain v1 클래스 참조는 본 모듈과 MiddlewareBuilder 에만 존재한다
 (builtin-middleware D8 격리 계약).
 """
-import json
 from typing import Any, Callable
 
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import ToolMessage
 
+# 초안 추출(관례 키·MCP 래퍼 해제)은 도메인 단일 출처를 쓴다
+# (approval-edit-before-approve D-02).
+from src.domain.approval.edit_policy import ApprovalEditPolicy
 from src.domain.approval.policies import ApprovalSignalPolicy
-
-# 인자에 사람이 검토할 본문이 담기는 관례 키. 없으면 인자 전체를 초안으로 쓴다.
-_DRAFT_KEYS = ("draft", "body", "content", "본문")
 
 
 class ApprovalGateMiddleware(AgentMiddleware):
@@ -62,25 +61,12 @@ class ApprovalGateMiddleware(AgentMiddleware):
         content = ApprovalSignalPolicy.render(
             tool_id=self._tool_id,
             tool_args=args,
-            draft=_extract_draft(args),
+            draft=ApprovalEditPolicy.extract_draft(args),
             tool_call_id=call_id,
         )
         # tool_call_id 를 그대로 되돌려야 짝이 맞는다 — 어긋나면 OpenAI 가
         # 고아 tool 메시지로 400 을 낸다 (worker-toolmessage-leak-fix 와 동류).
         return ToolMessage(content=content, tool_call_id=call_id)
-
-
-def _extract_draft(args: dict) -> str:
-    """사람이 검토할 본문을 뽑는다.
-
-    관례 키가 없으면 인자 전체를 읽기 좋게 직렬화한다 — 승인 화면에서
-    '무엇을 승인하는지' 를 볼 수 없으면 게이트가 형식만 남는다.
-    """
-    for key in _DRAFT_KEYS:
-        value = args.get(key)
-        if isinstance(value, str) and value.strip():
-            return value
-    return json.dumps(args, ensure_ascii=False, indent=2, default=str)
 
 
 class StatelessGate:

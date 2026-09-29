@@ -14,12 +14,15 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from src.api.routes import approval_router as mod
+from src.application.approval.decide_use_case import ApprovalDetailView
 from src.application.approval.errors import (
     ApprovalAgentChangedError,
     ApprovalConflictError,
+    ApprovalEditInvalidError,
     ApprovalExpiredError,
     ApprovalForbiddenError,
     ApprovalInvalidWindowError,
+    ApprovalNotEditableError,
     ApprovalNotFoundError,
 )
 from src.application.approval.list_use_case import ApprovalPage
@@ -35,9 +38,20 @@ def _approval(**over):
         tool_args={"to": "a@b.c"}, worker_id="w1", decided_by=None,
         decided_at=None, decision_reason=None, executed_at=None,
         error_message=None,
+        # approval-edit-before-approve: 무수정 기본값
+        is_edited=False, original_tool_args=None, edited_by=None, edited_at=None,
     )
     base.update(over)
     return MagicMock(**base)
+
+
+def _view(approval=None, **over):
+    base = dict(
+        approval=approval or _approval(), agent_name=None,
+        body_key=None, editable_keys=[], display_args={"to": "a@b.c"},
+    )
+    base.update(over)
+    return ApprovalDetailView(**base)
 
 
 def _client(*, decide=None, listing=None, tick=None):
@@ -140,6 +154,8 @@ class TestErrorMapping:
             (ApprovalExpiredError("x"), 410, "APPROVAL_EXPIRED"),
             (ApprovalInvalidWindowError("x"), 400, "APPROVAL_INVALID_WINDOW"),
             (ApprovalAgentChangedError("x"), 409, "APPROVAL_AGENT_CHANGED"),
+            (ApprovalNotEditableError("x"), 422, "APPROVAL_NOT_EDITABLE"),
+            (ApprovalEditInvalidError("x"), 422, "APPROVAL_EDIT_INVALID"),
         ],
     )
     def test_오류가_상태코드와_코드로_매핑된다(self, error, status, code):
@@ -180,7 +196,7 @@ class TestReject:
 class TestDetailAndSeen:
     def test_상세는_초안_전문과_인자를_준다(self):
         uc = MagicMock()
-        uc.get = AsyncMock(return_value=(_approval(), None))
+        uc.get = AsyncMock(return_value=_view())
         body = _client(decide=uc).get("/api/v1/approvals/ap1").json()
         assert len(body["draft"]) == 400
         assert body["tool_args"] == {"to": "a@b.c"}
@@ -299,7 +315,7 @@ class TestTimezoneSerialization:
 
     def test_상세_시각에도_UTC_표시가_붙는다(self):
         uc = MagicMock()
-        uc.get = AsyncMock(return_value=(_approval(), "금리 에이전트"))
+        uc.get = AsyncMock(return_value=_view(agent_name="금리 에이전트"))
         body = _client(decide=uc).get("/api/v1/approvals/ap1").json()
         assert body["expires_at"].endswith(("Z", "+00:00"))
 
@@ -317,6 +333,68 @@ class TestAgentName:
 
     def test_상세에_에이전트명이_채워진다(self):
         uc = MagicMock()
-        uc.get = AsyncMock(return_value=(_approval(), "금리 에이전트"))
+        uc.get = AsyncMock(return_value=_view(agent_name="금리 에이전트"))
         body = _client(decide=uc).get("/api/v1/approvals/ap1").json()
         assert body["agent_name"] == "금리 에이전트"
+
+
+class TestEditBeforeApprove:
+    """approval-edit-before-approve §4.2 (B21)."""
+
+    def test_바디가_없으면_edited_args는_None(self):
+        uc = MagicMock()
+        uc.approve = AsyncMock(return_value=_approval(status="executed"))
+        _client(decide=uc).post("/api/v1/approvals/ap1/approve")
+        assert uc.approve.await_args.kwargs["edited_args"] is None
+
+    def test_edited_args가_UseCase로_전달된다(self):
+        uc = MagicMock()
+        uc.approve = AsyncMock(return_value=_approval(status="executed", is_edited=True))
+        r = _client(decide=uc).post(
+            "/api/v1/approvals/ap1/approve",
+            json={"edited_args": {"body": "수정"}},
+        )
+        assert r.status_code == 200
+        assert uc.approve.await_args.kwargs["edited_args"] == {"body": "수정"}
+        assert r.json()["message"].startswith("수정본으로")
+
+    def test_비문자열_값은_422(self):
+        r = _client().post(
+            "/api/v1/approvals/ap1/approve", json={"edited_args": {"body": 3}}
+        )
+        assert r.status_code == 422
+
+    def test_상세에_편집_정보가_실린다(self):
+        uc = MagicMock()
+        uc.get = AsyncMock(return_value=_view(
+            approval=_approval(
+                is_edited=True, original_tool_args={"to": "old"},
+                edited_by="u1", edited_at=_NOW,
+            ),
+            body_key="body", editable_keys=["to", "body"],
+            display_args={"to": "a", "body": "b"},
+        ))
+        body = _client(decide=uc).get("/api/v1/approvals/ap1").json()
+        assert body["editable"] is True
+        assert body["body_key"] == "body"
+        assert body["editable_keys"] == ["to", "body"]
+        assert body["display_args"] == {"to": "a", "body": "b"}
+        assert body["original_tool_args"] == {"to": "old"}
+        assert body["edited_by"] == "u1"
+        assert body["edited_at"].endswith("+00:00")
+        assert body["edited"] is True
+
+    def test_편집_불가_건은_editable_False(self):
+        uc = MagicMock()
+        uc.get = AsyncMock(return_value=_view())
+        body = _client(decide=uc).get("/api/v1/approvals/ap1").json()
+        assert body["editable"] is False
+        assert body["edited"] is False
+
+    def test_목록_항목에_edited_플래그(self):
+        uc = MagicMock()
+        uc.list = AsyncMock(return_value=ApprovalPage(
+            items=[_approval(is_edited=True)], total=1,
+        ))
+        r = _client(listing=uc).get("/api/v1/approvals")
+        assert r.json()["data"][0]["edited"] is True

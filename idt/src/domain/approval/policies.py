@@ -204,3 +204,24 @@ class ApprovalSignalPolicy:
         except ValueError:
             return None
         return raw if isinstance(raw, dict) else None
+
+
+class ApprovalOutcomePolicy:
+    """재개 시 워커 결과로 주입할 outcome 조립.
+
+    Design Ref: approval-edit-before-approve §3.3 (Plan FR-08).
+    담당자가 초안을 고쳐 내보냈다는 사실을 에이전트가 모르면, 재개 후 답변이
+    원본 초안을 기준으로 어긋난다. 무수정 건은 기존 입력과 바이트 동일하다.
+    """
+
+    DRAFT_MAX_CHARS: int = 4000  # 재개 컨텍스트 폭주 방지
+
+    @classmethod
+    def compose(cls, output: str, *, edited: bool, draft: str) -> str:
+        if not edited:
+            return output
+        body = (draft or "")[: cls.DRAFT_MAX_CHARS]
+        return (
+            "[담당자가 초안을 수정해 집행했습니다. 아래 최종 본문을 기준으로 답하세요]\n"
+            f"최종 본문:\n{body}\n\n도구 결과:\n{output}"
+        )

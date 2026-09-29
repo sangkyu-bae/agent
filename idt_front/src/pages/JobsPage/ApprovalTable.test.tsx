@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   approve: vi.fn(),
   reject: vi.fn(),
   markSeen: vi.fn(),
+  useApprovalDetail: vi.fn(),
 }));
 
 vi.mock('@/hooks/useApprovals', () => ({
@@ -17,6 +18,7 @@ vi.mock('@/hooks/useApprovals', () => ({
   useApproveApproval: () => ({ mutateAsync: mocks.approve }),
   useRejectApproval: () => ({ mutateAsync: mocks.reject }),
   useMarkApprovalSeen: () => ({ mutate: mocks.markSeen }),
+  useApprovalDetail: mocks.useApprovalDetail,
   extractApprovalError: (e: unknown) => (e as Error)?.message ?? '오류',
 }));
 
@@ -31,6 +33,7 @@ const item = (over: Partial<ApprovalItem> = {}): ApprovalItem => ({
   expires_at: new Date(Date.now() + 86_400_000).toISOString(),
   seen_at: null,
   created_at: new Date().toISOString(),
+  edited: false,
   ...over,
 });
 
@@ -47,6 +50,7 @@ const setList = (
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.useApprovalDetail.mockReturnValue({ data: undefined, isLoading: false, isError: false });
   mocks.approve.mockResolvedValue({ id: 'ap1', status: 'executed', message: '집행되었습니다.' });
   mocks.reject.mockResolvedValue({ id: 'ap1', status: 'rejected', message: '거절 처리되었습니다.' });
 });
@@ -241,5 +245,64 @@ describe('ApprovalTable — 예약 시각 표시 (Check G12)', () => {
     expect(await screen.findByRole('status')).toHaveTextContent(
       `${expected}에 집행 예정입니다.`,
     );
+  });
+});
+
+// approval-edit-before-approve Design §5.4 — 카드 상세 보기 · 수정됨 배지 (F2, F8)
+describe('ApprovalTable — 상세 보기', () => {
+  const detail = {
+    ...item(),
+    draft: '기준금리를 3.50% → 3.25%로 변경합니다',
+    tool_args: { body: '기준금리를 3.50% → 3.25%로 변경합니다' },
+    worker_id: 'w1',
+    decided_by: null,
+    decided_at: null,
+    decision_reason: null,
+    executed_at: null,
+    error_message: null,
+    editable: true,
+    body_key: 'body',
+    editable_keys: ['body'],
+    display_args: { body: '기준금리를 3.50% → 3.25%로 변경합니다' },
+    original_tool_args: null,
+    edited_by: null,
+    edited_at: null,
+  };
+
+  it('수정된 건에 수정됨 배지를 보여준다', () => {
+    setList([item({ edited: true, status: 'executed' })]);
+    render(<ApprovalTable />);
+    expect(screen.getByText('수정됨')).toBeInTheDocument();
+  });
+
+  it('상세 보기를 누르면 드로어가 열린다', async () => {
+    setList([item()]);
+    mocks.useApprovalDetail.mockReturnValue({ data: detail, isLoading: false, isError: false });
+    render(<ApprovalTable />);
+    await userEvent.click(screen.getByRole('button', { name: '상세 보기' }));
+    expect(screen.getByRole('dialog', { name: '승인 상세' })).toBeInTheDocument();
+    expect(mocks.useApprovalDetail).toHaveBeenLastCalledWith('ap1');
+  });
+
+  it('드로어에서 승인하면 닫히고 안내를 띄운다', async () => {
+    setList([item()]);
+    mocks.useApprovalDetail.mockReturnValue({ data: detail, isLoading: false, isError: false });
+    render(<ApprovalTable />);
+    await userEvent.click(screen.getByRole('button', { name: '상세 보기' }));
+    const dialog = screen.getByRole('dialog', { name: '승인 상세' });
+    await userEvent.click(within(dialog).getByRole('button', { name: '승인' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('집행되었습니다.');
+    expect(screen.queryByRole('dialog', { name: '승인 상세' })).not.toBeInTheDocument();
+  });
+
+  it('드로어에서 거절하면 사유 다이얼로그로 넘어간다', async () => {
+    setList([item()]);
+    mocks.useApprovalDetail.mockReturnValue({ data: detail, isLoading: false, isError: false });
+    render(<ApprovalTable />);
+    await userEvent.click(screen.getByRole('button', { name: '상세 보기' }));
+    const dialog = screen.getByRole('dialog', { name: '승인 상세' });
+    await userEvent.click(within(dialog).getByRole('button', { name: '거절' }));
+    expect(screen.queryByRole('dialog', { name: '승인 상세' })).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: '거절 사유 입력' })).toBeInTheDocument();
   });
 });

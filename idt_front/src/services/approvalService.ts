@@ -7,6 +7,7 @@ import type {
   ApprovalDetail,
   ApprovalListResponse,
   ApprovalStatus,
+  ApproveApprovalRequest,
   RejectApprovalRequest,
 } from '@/types/approval';
 
@@ -41,10 +42,17 @@ export const approvalService = {
    * 승인. executeOnly 는 에이전트 구성이 변경돼 재개가 불가할 때
    * "집행만 진행" 을 선택하는 경로다 (백엔드 FR-14).
    */
-  approve: (approvalId: string, executeOnly = false) =>
+  approve: (
+    approvalId: string,
+    executeOnly = false,
+    editedArgs?: Record<string, string>,
+  ) =>
     authApiClient.post<ApprovalDecisionResponse>(
       API_ENDPOINTS.APPROVAL_APPROVE(approvalId),
-      undefined,
+      // approval-edit-before-approve §4.2: 수정본이 없으면 바디를 보내지 않는다
+      editedArgs && Object.keys(editedArgs).length > 0
+        ? ({ edited_args: editedArgs } satisfies ApproveApprovalRequest)
+        : undefined,
       { params: executeOnly ? { execute_only: true } : undefined },
     ),
 

@@ -3280,6 +3280,8 @@ def create_approval_factories(build_run_agent_uc):
             gate_config_reader=_GateConfigReader(session),
             logger=app_logger,
             resumer=build_run_agent_uc(session),
+            # approval-edit-before-approve §7: 수정 필드 길이 상한
+            edit_max_field_chars=settings.approval_edit_max_field_chars,
         )
 
     def list_f(session: AsyncSession = Depends(get_session)):

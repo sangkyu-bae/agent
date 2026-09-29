@@ -233,3 +233,55 @@ class TestMarkSeenScoped:
         repo, session = _repo()
         await repo.mark_seen("ap1", (), "req1")
         session.execute.assert_not_awaited()
+
+
+class TestEditColumns:
+    """approval-edit-before-approve §3.4/§3.5 — 수정본은 승인 전이와 같은 UPDATE 에 실린다."""
+
+    @pytest.mark.asyncio
+    async def test_CAS가_수정본과_원본을_함께_SET한다(self):
+        repo, session = _repo()
+        session.execute.return_value = MagicMock(rowcount=1)
+        await repo.compare_and_set_status(
+            "ap1", expected="pending", new_status="approved", request_id="r",
+            decided_by="u1", decided_at=_NOW,
+            tool_args={"to": "b"}, draft="수정",
+            original_tool_args={"to": "a"}, edited_by="u1", edited_at=_NOW,
+        )
+        sql = _sql(session).lower()
+        for column in ("tool_args", "draft", "original_tool_args", "edited_by", "edited_at"):
+            assert column in sql
+
+    @pytest.mark.asyncio
+    async def test_무수정_승인은_편집_컬럼을_SET하지_않는다(self):
+        """SC-3 — 편집 필드가 None 이면 기존 SET 절과 동일."""
+        repo, session = _repo()
+        session.execute.return_value = MagicMock(rowcount=1)
+        await repo.compare_and_set_status(
+            "ap1", expected="pending", new_status="approved", request_id="r",
+            decided_by="u1", decided_at=_NOW,
+        )
+        sql = _sql(session).lower()
+        for column in ("tool_args", "draft", "edited_by", "edited_at"):
+            assert column not in sql
+
+    def test_모델_엔티티_왕복에서_편집_필드가_보존된다(self):
+        from src.infrastructure.approval.repository import _to_entity, _to_model
+
+        entity = _entity()
+        entity.original_tool_args = {"to": "a@b.c", "body": "원본"}
+        entity.edited_by = "u1"
+        entity.edited_at = _NOW
+        restored = _to_entity(_to_model(entity))
+        assert restored.original_tool_args == {"to": "a@b.c", "body": "원본"}
+        assert restored.edited_by == "u1"
+        assert restored.edited_at == _NOW
+        assert restored.is_edited
+
+    def test_구버전_행은_무수정으로_복원된다(self):
+        from src.infrastructure.approval.repository import _to_entity, _to_model
+
+        restored = _to_entity(_to_model(_entity()))
+        assert restored.original_tool_args is None
+        assert restored.edited_by is None
+        assert not restored.is_edited

@@ -310,6 +310,8 @@ class Settings(BaseSettings):
     # approval-gate Check G5: 예약 집행 tick 주기(초). 워커 루프가 호출한다.
     # 집행 지연 상한 = 이 값 (금리 00시 집행이면 최대 이만큼 늦어질 수 있다).
     approval_executor_tick_seconds: float = 60.0
+    # approval-edit-before-approve §7: 수정 후 승인 시 필드당 길이 상한(자).
+    approval_edit_max_field_chars: int = 20000
 
     # Application
     debug: bool = False

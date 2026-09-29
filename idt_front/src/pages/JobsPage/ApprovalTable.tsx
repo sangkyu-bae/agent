@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import ApprovalCard from './ApprovalCard';
+import ApprovalDetailDrawer from './ApprovalDetailDrawer';
 import RejectReasonDialog from './RejectReasonDialog';
 import {
   extractApprovalError,
@@ -12,7 +13,11 @@ import {
   ACTIVE_APPROVAL_STATUSES,
   APPROVAL_PAGE_SIZE,
 } from '@/types/approval';
-import type { ApprovalItem, ApprovalStatus } from '@/types/approval';
+import type {
+  ApprovalDecisionResponse,
+  ApprovalItem,
+  ApprovalStatus,
+} from '@/types/approval';
 import { formatLocalDateTime } from '@/utils/formatters';
 
 type FilterKey = 'active' | 'pending' | 'scheduled' | 'done';
@@ -29,12 +34,20 @@ const FILTERS: { key: FilterKey; label: string; statuses?: ApprovalStatus[] }[] 
     },
   ];
 
+// Check G12: 예약 시각은 사용자 로캘로 표시한다 (서버는 UTC 만 안다).
+const decisionNotice = (res: ApprovalDecisionResponse): string =>
+  res.status === 'scheduled' && res.execute_after
+    ? `${formatLocalDateTime(res.execute_after)}에 집행 예정입니다.`
+    : res.message;
+
 // approval-gate: 승인 대기 목록 (Design §5.1 / §5.4)
 const ApprovalTable = () => {
   const [filter, setFilter] = useState<FilterKey>('active');
   const [rejectTarget, setRejectTarget] = useState<ApprovalItem | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  // approval-edit-before-approve §5.3: 상세 드로어 대상
+  const [detailId, setDetailId] = useState<string | null>(null);
 
   const statuses = FILTERS.find((f) => f.key === filter)?.statuses;
   const { data, isLoading, isError } = useApprovals({
@@ -51,12 +64,7 @@ const ApprovalTable = () => {
     setNotice(null);
     try {
       const res = await approve.mutateAsync({ approvalId: item.id });
-      // Check G12: 예약 시각은 사용자 로캘로 표시한다 (서버는 UTC 만 안다).
-      setNotice(
-        res.status === 'scheduled' && res.execute_after
-          ? `${formatLocalDateTime(res.execute_after)}에 집행 예정입니다.`
-          : res.message,
-      );
+      setNotice(decisionNotice(res));
     } catch (e) {
       // 409(이미 처리됨)도 오류가 아니라 정상 안내다 — onSettled 가 목록을
       // 무효화했으므로 화면은 곧 최신 상태가 된다.
@@ -133,9 +141,25 @@ const ApprovalTable = () => {
             onApprove={handleApprove}
             onReject={setRejectTarget}
             onSeen={(i) => markSeen.mutate(i.id)}
+            onOpenDetail={(i) => setDetailId(i.id)}
           />
         ))}
       </ul>
+
+      {/* key: 대상이 바뀌면 편집 상태를 버린다 */}
+      <ApprovalDetailDrawer
+        key={detailId ?? 'none'}
+        approvalId={detailId}
+        onClose={() => setDetailId(null)}
+        onDone={(res) => {
+          setDetailId(null);
+          setNotice(decisionNotice(res));
+        }}
+        onReject={(detail) => {
+          setDetailId(null);
+          setRejectTarget(detail);
+        }}
+      />
 
       <RejectReasonDialog
         open={rejectTarget !== null}

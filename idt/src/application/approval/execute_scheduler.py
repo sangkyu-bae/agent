@@ -19,7 +19,7 @@ from typing import Callable
 
 from src.domain.approval.entity import ApprovalRequest
 from src.domain.approval.interfaces import ApprovalRepositoryInterface
-from src.domain.approval.policies import ApprovalPolicy
+from src.domain.approval.policies import ApprovalOutcomePolicy, ApprovalPolicy
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 
 
@@ -147,10 +147,14 @@ class ExecuteDueApprovalsUseCase:
         return applied and event == "execute"
 
 
-    async def _resume(self, approval, outcome: str, request_id: str) -> None:
+    async def _resume(self, approval, output: str, request_id: str) -> None:
         """재개 실패가 집행 성공을 무효로 만들지 않도록 예외를 가둔다."""
         if self._resumer is None:
             return
+        # approval-edit-before-approve FR-08: 즉시 집행과 같은 outcome 규칙.
+        outcome = ApprovalOutcomePolicy.compose(
+            output, edited=approval.is_edited, draft=approval.draft
+        )
         try:
             await self._resumer.resume_from_snapshot(
                 approval, outcome=outcome, request_id=request_id

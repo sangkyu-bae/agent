@@ -82,6 +82,11 @@ class ApprovalRepositoryInterface(ABC):
         execute_after: datetime | None = None,
         executed_at: datetime | None = None,
         error_message: str | None = None,
+        tool_args: dict | None = None,
+        draft: str | None = None,
+        original_tool_args: dict | None = None,
+        edited_by: str | None = None,
+        edited_at: datetime | None = None,
     ) -> bool:
         """조건부 UPDATE — 영향 행 0 이면 False.
 

@@ -40,6 +40,20 @@ class ApprovalInvalidWindowError(ApprovalError):
     http_status = 400
 
 
+class ApprovalNotEditableError(ApprovalError):
+    """본문 키를 판정할 수 없는 건에 수정본이 왔다 (approval-edit-before-approve §6.1)."""
+
+    code = "APPROVAL_NOT_EDITABLE"
+    http_status = 422
+
+
+class ApprovalEditInvalidError(ApprovalError):
+    """불허 키·비문자열·본문 공백·길이 초과 (approval-edit-before-approve §6.1)."""
+
+    code = "APPROVAL_EDIT_INVALID"
+    http_status = 422
+
+
 class ApprovalAgentChangedError(ApprovalError):
     """에이전트 정의 변경으로 재개 불가 (FR-14). execute_only 로 우회 가능."""
 

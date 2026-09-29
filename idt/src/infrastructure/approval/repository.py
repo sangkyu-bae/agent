@@ -134,6 +134,11 @@ class ApprovalRepository(ApprovalRepositoryInterface):
         execute_after: datetime | None = None,
         executed_at: datetime | None = None,
         error_message: str | None = None,
+        tool_args: dict | None = None,
+        draft: str | None = None,
+        original_tool_args: dict | None = None,
+        edited_by: str | None = None,
+        edited_at: datetime | None = None,
     ) -> bool:
         """조건부 UPDATE — 이중 집행 방어 2차 저지선.
 
@@ -148,6 +153,13 @@ class ApprovalRepository(ApprovalRepositoryInterface):
             execute_after=execute_after,
             executed_at=executed_at,
             error_message=error_message,
+            # approval-edit-before-approve §3.5: 수정본은 승인 전이와 같은
+            # UPDATE 에 실어 '수정본 없는 승인' 이 생기지 않게 한다.
+            tool_args=tool_args,
+            draft=draft,
+            original_tool_args=original_tool_args,
+            edited_by=edited_by,
+            edited_at=edited_at,
         )
         result = await self._session.execute(
             update(ApprovalRequestModel)
@@ -260,6 +272,9 @@ def _to_model(entity: ApprovalRequest) -> ApprovalRequestModel:
         error_message=entity.error_message,
         seen_at=entity.seen_at,
         session_id=entity.session_id,
+        original_tool_args=entity.original_tool_args,
+        edited_by=entity.edited_by,
+        edited_at=entity.edited_at,
         request_id=entity.request_id,
         created_at=entity.created_at,
         updated_at=entity.updated_at,
@@ -296,4 +311,7 @@ def _to_entity(model: ApprovalRequestModel) -> ApprovalRequest:
         error_message=model.error_message,
         seen_at=model.seen_at,
         session_id=model.session_id,
+        original_tool_args=model.original_tool_args,
+        edited_by=model.edited_by,
+        edited_at=model.edited_at,
     )

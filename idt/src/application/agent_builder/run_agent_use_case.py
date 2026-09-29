@@ -24,9 +24,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.application.agent_builder.schemas import RunAgentRequest, RunAgentResponse
 from src.application.agent_builder.search_pipeline import (
+    format_draft_output,
     format_search_result,
     is_search_result,
     is_worker_output,
+    split_draft_output,
 )
 from src.application.agent_builder.supervisor_nodes import build_initial_state
 from src.application.agent_builder.workflow_compiler import WorkflowCompiler
@@ -186,6 +188,25 @@ def _collect_node_names(workflow: WorkflowDefinition) -> set[str]:
 def _has_excel_attachment(attachments: list[dict] | None) -> bool:
     """analysis-data-continuity §3.3: 엑셀 첨부 턴 판정 (excel 항목 수집 조건)."""
     return any(a.get("type") == "excel" for a in attachments or [])
+
+
+def _replace_worker_draft(messages: list, worker_id: str, draft: str) -> list:
+    """worker_id 의 마지막 초안 메시지를 수정본으로 바꾼 사본.
+
+    초안 메시지의 집행결과 칸(승인 대기 문구)은 그대로 둔다 — 재개 시
+    주입되는 outcome 이 D-07 규칙으로 그 칸을 이긴다.
+    """
+    result = list(messages)
+    for index in range(len(result) - 1, -1, -1):
+        parsed = split_draft_output(result[index])
+        if parsed is None or parsed[0] != worker_id:
+            continue
+        result[index] = AIMessage(
+            content=format_draft_output(worker_id, draft, parsed[2]),
+            name=result[index].name,
+        )
+        break
+    return result
 
 
 class RunAgentUseCase:
@@ -869,7 +890,15 @@ class RunAgentUseCase:
         다시 __end__ 로 빠져 런이 한 발도 못 나간다.
         """
         state = SnapshotSerializer.loads(approval.snapshot.state_json)
-        state["messages"] = list(state.get("messages") or []) + [
+        messages = list(state.get("messages") or [])
+        if getattr(approval, "is_edited", False):
+            # approval-edit-before-approve Check G1: final_answer 는 초안을 원문
+            # 그대로 싣는다 — 원본을 수정본으로 바꿔 두어야 사용자에게 원본이
+            # 나가지 않는다.
+            messages = _replace_worker_draft(
+                messages, approval.worker_id, approval.draft
+            )
+        state["messages"] = messages + [
             AIMessage(
                 content=outcome,
                 name=clamp_llm_name(approval.worker_id or "approval"),

@@ -64,7 +64,12 @@ authApiClient.interceptors.response.use(
       (typeof detail === 'string' ? detail : detail?.message) ??
       '알 수 없는 오류가 발생했습니다.';
     const status = error.response?.status ?? 0;
-    return Promise.reject(new ApiError(message, status));
+    // approval-edit-before-approve Check G2: 코드 기반 문구 매핑이 가능하도록 보존
+    const code =
+      detail && typeof detail === 'object' && typeof detail.code === 'string'
+        ? detail.code
+        : undefined;
+    return Promise.reject(new ApiError(message, status, code));
   }
 );
 
