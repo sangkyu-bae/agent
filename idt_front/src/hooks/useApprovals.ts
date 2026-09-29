@@ -1,5 +1,6 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { AxiosError } from 'axios';
+import { ApiError } from '@/services/api/ApiError';
 import { approvalService } from '@/services/approvalService';
 import type { ApprovalListParams } from '@/services/approvalService';
 import { queryClient } from '@/lib/queryClient';
@@ -14,10 +15,16 @@ import {
 
 // approval-gate: 승인 대기 조회·결정 훅 (Design §4, §5)
 
-/** 백엔드 detail 은 {code, message} 객체다 (Design §6.1). */
+/** 백엔드 detail 은 {code, message} 객체다 (Design §6.1).
+ *
+ * authApiClient 인터셉터는 AxiosError 를 ApiError(message, status, code) 로 바꿔
+ * reject 한다 — 실제 경로는 ApiError 다 (approval-edit-before-approve Check G2).
+ * AxiosError 분기는 인터셉터를 거치지 않는 호출을 위해 남긴다.
+ */
 const errorPayload = (
   e: unknown,
 ): { code?: string; message?: string } | undefined => {
+  if (e instanceof ApiError) return { code: e.code, message: e.message };
   if (!(e instanceof AxiosError)) return undefined;
   const detail = (e.response?.data as { detail?: unknown } | undefined)?.detail;
   return detail && typeof detail === 'object'
@@ -44,7 +51,8 @@ export const extractApprovalError = (e: unknown): string => {
 
 /** 이미 처리된 건 — 중복 클릭의 정상 응답이다. 목록만 새로고침하면 된다. */
 export const isApprovalConflict = (e: unknown): boolean =>
-  e instanceof AxiosError && e.response?.status === 409;
+  (e instanceof ApiError && e.status === 409) ||
+  (e instanceof AxiosError && e.response?.status === 409);
 
 export const invalidateApprovals = () =>
   queryClient.invalidateQueries({ queryKey: queryKeys.approvals.all });
@@ -78,10 +86,12 @@ export const useApproveApproval = () =>
   useMutation<
     ApprovalDecisionResponse,
     unknown,
-    { approvalId: string; executeOnly?: boolean }
+    { approvalId: string; executeOnly?: boolean; editedArgs?: Record<string, string> }
   >({
-    mutationFn: ({ approvalId, executeOnly }) =>
-      approvalService.approve(approvalId, executeOnly).then((r) => r.data),
+    mutationFn: ({ approvalId, executeOnly, editedArgs }) =>
+      approvalService
+        .approve(approvalId, executeOnly, editedArgs)
+        .then((r) => r.data),
     // 성공·실패 모두 무효화한다: 409(이미 처리됨)는 목록이 낡았다는 뜻이라
     // 새로고침이 곧 해결이다.
     onSettled: invalidateApprovalBadges,

@@ -50,7 +50,14 @@ export const APPROVAL_ERROR_MESSAGES: Record<string, string> = {
     '집행 예정 시각이 만료 시각보다 늦습니다. 에이전트 설정을 확인하세요.',
   APPROVAL_AGENT_CHANGED:
     '에이전트 구성이 변경되어 이어서 진행할 수 없습니다. 집행만 진행할 수 있습니다.',
+  // approval-edit-before-approve Design §6.1
+  APPROVAL_NOT_EDITABLE:
+    '이 요청은 본문을 찾을 수 없어 수정할 수 없습니다. 승인 또는 거절해 주세요.',
 };
+
+/** 수정 불가 건 안내 (approval-edit-before-approve Design §5.2) */
+export const APPROVAL_NOT_EDITABLE_HINT =
+  '이 도구는 본문 필드를 찾을 수 없어 수정할 수 없습니다. 승인 또는 거절해 주세요.';
 
 export const APPROVAL_PAGE_SIZE = 20;
 
@@ -65,6 +72,8 @@ export interface ApprovalItem {
   expires_at: string;
   seen_at: string | null;
   created_at: string;
+  /** 담당자가 수정해 승인한 건 (approval-edit-before-approve) */
+  edited: boolean;
 }
 
 export interface ApprovalDetail extends ApprovalItem {
@@ -76,6 +85,22 @@ export interface ApprovalDetail extends ApprovalItem {
   decision_reason: string | null;
   executed_at: string | null;
   error_message: string | null;
+  // approval-edit-before-approve Design §4.2 — 편집 가능 정보 + 수정 이력
+  editable: boolean;
+  /** 본문 키 (display_args 레벨). 판정 불가면 null */
+  body_key: string | null;
+  editable_keys: string[];
+  /** 화면 표시·편집 기준 인자 (MCP 래퍼 해제) */
+  display_args: Record<string, unknown>;
+  original_tool_args: Record<string, unknown> | null;
+  edited_by: string | null;
+  edited_at: string | null;
+}
+
+/** POST /approvals/{id}/approve 바디 — 생략하면 일반 승인 */
+export interface ApproveApprovalRequest {
+  /** display_args 레벨 키 → 새 문자열 값. 바뀐 키만 보낸다 */
+  edited_args?: Record<string, string>;
 }
 
 export interface ApprovalListResponse {
