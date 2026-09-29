@@ -29,7 +29,7 @@ class TestResolveDraftKey:
         assert ActionArgumentPolicy.resolve_draft_key("", _SCHEMA_CONTENT) == "content"
 
     def test_candidate_order_is_draft_body_content_korean(self):
-        """gate_middleware._DRAFT_KEYS 와 같은 순서 — 승인 화면 추출과 일치."""
+        """ApprovalEditPolicy.DRAFT_KEYS 와 같은 순서 — 승인 화면 추출과 일치."""
         assert ActionArgumentPolicy.DRAFT_KEY_CANDIDATES == (
             "draft", "body", "content", "본문",
         )

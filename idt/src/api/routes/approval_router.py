@@ -19,6 +19,7 @@ from src.interfaces.schemas.approval import (
     ApprovalDetailResponse,
     ApprovalListResponse,
     ApprovalTickResponse,
+    ApproveApprovalRequest,
     RejectApprovalRequest,
     to_detail,
     to_item,
@@ -101,12 +102,12 @@ async def get_approval(
 ):
     request_id = str(uuid.uuid4())
     try:
-        approval, agent_name = await use_case.get(
+        view = await use_case.get(
             approval_id, user_id=str(current_user.id), request_id=request_id
         )
     except ApprovalError as e:
         raise _http(e) from e
-    return to_detail(approval, agent_name)
+    return to_detail(view)
 
 
 @router.post("/{approval_id}/approve", response_model=ApprovalDecisionResponse)
@@ -115,6 +116,7 @@ async def approve(
     execute_only: bool = Query(
         False, description="정의 변경 시 재개를 포기하고 집행만 (FR-14)"
     ),
+    body: ApproveApprovalRequest | None = None,
     current_user: User = Depends(get_current_user),
     use_case=Depends(get_decide_approval_use_case),
 ):
@@ -123,6 +125,8 @@ async def approve(
         approval = await use_case.approve(
             approval_id, user_id=str(current_user.id),
             request_id=request_id, execute_only=execute_only,
+            # approval-edit-before-approve: 바디가 없으면 일반 승인.
+            edited_args=body.edited_args if body else None,
         )
     except ApprovalError as e:
         raise _http(e) from e
@@ -183,11 +187,12 @@ async def tick(use_case=Depends(get_execute_due_approvals_use_case)):
 def _approve_message(approval) -> str:
     # Check G12: 서버는 사용자 벽시계를 모른다. 시각은 execute_after(UTC 명시)로
     # 내려주고, 사람이 읽는 시각 포맷은 로캘을 아는 프론트가 만든다.
+    prefix = "수정본으로 " if approval.is_edited else ""
     if approval.status == "scheduled":
-        return "승인되었습니다. 예약된 시각에 집행됩니다."
+        return f"{prefix}승인되었습니다. 예약된 시각에 집행됩니다."
     if approval.status == "failed":
         return f"집행에 실패했습니다: {approval.error_message or '사유 미상'}"
-    return "집행되었습니다."
+    return f"{prefix}집행되었습니다."
 
 
 @agent_gate_router.get(

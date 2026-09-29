@@ -5,7 +5,7 @@ Design Ref: §4. 프론트 타입(`idt_front/src/types/approval.ts`)과 1:1 대�
 from datetime import datetime, timezone
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_serializer
+from pydantic import BaseModel, Field, StrictStr, field_serializer
 
 # 초안 미리보기 길이 — 목록 응답을 가볍게 유지한다. 전문은 상세에서 본다.
 DRAFT_PREVIEW_CHARS = 200
@@ -46,6 +46,8 @@ class ApprovalItemResponse(_UtcDatetimeModel):
     expires_at: datetime
     seen_at: datetime | None = None
     created_at: datetime
+    # approval-edit-before-approve §4.1: 카드 '수정됨' 배지
+    edited: bool = False
 
 
 class ApprovalListResponse(BaseModel):
@@ -64,6 +66,14 @@ class ApprovalDetailResponse(ApprovalItemResponse):
     decision_reason: str | None = None
     executed_at: datetime | None = None
     error_message: str | None = None
+    # approval-edit-before-approve §4.2: 편집 가능 정보 + 수정 이력
+    editable: bool = False
+    body_key: str | None = None
+    editable_keys: list[str] = Field(default_factory=list)
+    display_args: dict = Field(default_factory=dict)
+    original_tool_args: dict | None = None
+    edited_by: str | None = None
+    edited_at: datetime | None = None
 
 
 class ApprovalDecisionResponse(_UtcDatetimeModel):
@@ -73,6 +83,16 @@ class ApprovalDecisionResponse(_UtcDatetimeModel):
     status: str
     execute_after: datetime | None = None
     message: str
+
+
+class ApproveApprovalRequest(BaseModel):
+    """수정 후 승인 (approval-edit-before-approve §4.2). 생략하면 일반 승인.
+
+    키는 display_args(MCP 래퍼 해제) 레벨, 값은 문자열만. 키 허용 여부·
+    길이 상한은 도메인 정책이 판정한다 — 여기서는 모양만 본다.
+    """
+
+    edited_args: dict[str, StrictStr] | None = Field(default=None, max_length=50)
 
 
 class RejectApprovalRequest(BaseModel):
@@ -102,12 +122,15 @@ def to_item(approval, agent_name: str | None = None) -> ApprovalItemResponse:
         expires_at=approval.expires_at,
         seen_at=approval.seen_at,
         created_at=approval.created_at,
+        edited=bool(approval.is_edited),
     )
 
 
-def to_detail(approval, agent_name: str | None = None) -> ApprovalDetailResponse:
+def to_detail(view) -> ApprovalDetailResponse:
+    """ApprovalDetailView → 응답. 편집 가능 판정은 UseCase 가 이미 끝냈다."""
+    approval = view.approval
     return ApprovalDetailResponse(
-        **to_item(approval, agent_name).model_dump(),
+        **to_item(approval, view.agent_name).model_dump(),
         draft=approval.draft,
         tool_args=approval.tool_args or {},
         worker_id=approval.worker_id,
@@ -116,6 +139,13 @@ def to_detail(approval, agent_name: str | None = None) -> ApprovalDetailResponse
         decision_reason=approval.decision_reason,
         executed_at=approval.executed_at,
         error_message=approval.error_message,
+        editable=bool(view.editable_keys),
+        body_key=view.body_key,
+        editable_keys=list(view.editable_keys),
+        display_args=view.display_args,
+        original_tool_args=approval.original_tool_args,
+        edited_by=approval.edited_by,
+        edited_at=approval.edited_at,
     )
 
 

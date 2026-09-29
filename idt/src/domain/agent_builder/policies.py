@@ -2,6 +2,8 @@
 from dataclasses import dataclass
 from enum import Enum
 
+from src.domain.approval.edit_policy import ApprovalEditPolicy
+
 
 class Visibility(str, Enum):
     PRIVATE = "private"
@@ -541,8 +543,9 @@ class ActionArgumentPolicy:
     순수 dict·str 규칙만 다룬다(외부 의존 없음).
     """
 
-    # gate_middleware._DRAFT_KEYS 와 같은 순서 — 승인 화면의 초안 추출과 일치.
-    DRAFT_KEY_CANDIDATES: tuple[str, ...] = ("draft", "body", "content", "본문")
+    # 승인 화면의 초안 추출과 같은 목록·순서 — 단일 출처를 참조한다
+    # (approval-edit-before-approve §3.2).
+    DRAFT_KEY_CANDIDATES: tuple[str, ...] = ApprovalEditPolicy.DRAFT_KEYS
 
     @classmethod
     def resolve_draft_key(cls, configured: str, input_schema: dict | None) -> str:

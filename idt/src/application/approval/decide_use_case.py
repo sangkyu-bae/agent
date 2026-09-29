@@ -9,22 +9,40 @@ ExecuteDueApprovalsUseCase 가 그 시각에 집행한다.
 이중 집행 방어: 모든 전이를 `compare_and_set_status`(조건부 UPDATE)로 하고,
 영향 행이 0 이면 즉시 중단한다. 승인 버튼 2회 클릭의 두 번째는 여기서 막힌다.
 """
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Callable
 
 from src.application.approval.errors import (  # noqa: F401 (라우터 재수출)
     ApprovalAgentChangedError,
     ApprovalConflictError,
+    ApprovalEditInvalidError,
     ApprovalError,
     ApprovalExpiredError,
     ApprovalForbiddenError,
     ApprovalInvalidWindowError,
+    ApprovalNotEditableError,
     ApprovalNotFoundError,
 )
-from src.domain.approval.entity import ApprovalRequest, GateSettings
+from src.domain.approval.edit_policy import ApprovalEditError, ApprovalEditPolicy
+from src.domain.approval.entity import ApprovalEdit, ApprovalRequest, GateSettings
 from src.domain.approval.interfaces import ApprovalRepositoryInterface
-from src.domain.approval.policies import ApprovalPolicy
+from src.domain.approval.policies import ApprovalOutcomePolicy, ApprovalPolicy
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
+
+
+@dataclass(frozen=True)
+class ApprovalDetailView:
+    """상세 응답 재료 — 편집 가능 정보까지 계산해 라우터는 매핑만 한다.
+
+    Design Ref: approval-edit-before-approve §4.2.
+    """
+
+    approval: ApprovalRequest
+    agent_name: str | None
+    body_key: str | None
+    editable_keys: list[str]
+    display_args: dict
 
 
 class DecideApprovalUseCase:
@@ -38,8 +56,10 @@ class DecideApprovalUseCase:
         clock: Callable[[], datetime] | None = None,
         # approval-gate Design §2.1: 집행·거절 후 런 재개 (미주입 시 생략).
         resumer=None,
+        edit_max_field_chars: int = ApprovalEditPolicy.DEFAULT_MAX_FIELD_CHARS,
     ) -> None:
         self._repo = approval_repo
+        self._edit_max_field_chars = edit_max_field_chars
         self._agent_repo = agent_repo
         self._executor = executor
         self._gate_config_reader = gate_config_reader
@@ -50,7 +70,7 @@ class DecideApprovalUseCase:
 
     async def get(
         self, approval_id: str, *, user_id: str, request_id: str
-    ) -> tuple[ApprovalRequest, str | None]:
+    ) -> ApprovalDetailView:
         """상세 조회 — 권한만 확인하고 상태·만료는 따지지 않는다.
 
         이미 처리·만료된 건도 이력으로 열람할 수 있어야 한다.
@@ -63,7 +83,15 @@ class DecideApprovalUseCase:
         owner = getattr(agent, "user_id", "") if agent is not None else ""
         if not ApprovalPolicy.can_decide(user_id=user_id, agent_owner_id=owner):
             raise ApprovalForbiddenError(approval_id)
-        return approval, getattr(agent, "name", None)
+        return ApprovalDetailView(
+            approval=approval,
+            agent_name=getattr(agent, "name", None),
+            body_key=ApprovalEditPolicy.body_key(approval.tool_args, approval.draft),
+            editable_keys=ApprovalEditPolicy.editable_keys(
+                approval.tool_args, approval.draft
+            ),
+            display_args=ApprovalEditPolicy.display_args(approval.tool_args),
+        )
 
     async def approve(
         self,
@@ -72,10 +100,13 @@ class DecideApprovalUseCase:
         user_id: str,
         request_id: str,
         execute_only: bool = False,
+        edited_args: dict | None = None,
     ) -> ApprovalRequest:
         approval, agent = await self._load_and_authorize(
             approval_id, user_id, request_id, execute_only=execute_only
         )
+        # approval-edit-before-approve §6.1: 편집 검증은 CAS 앞 — 실패해도 pending 유지.
+        edit = self._prepare_edit(approval, edited_args)
         gate = await self._resolve_gate(approval, request_id)
         now = self._now()
         # Check G13: cron 은 게이트 설정의 타임존(기본 KST) 기준으로 해석한다.
@@ -91,10 +122,14 @@ class DecideApprovalUseCase:
         except ValueError as e:
             raise ApprovalInvalidWindowError(str(e)) from e
 
+        # Plan FR-06: 수정본은 승인 전이와 같은 UPDATE 한 문장에 싣는다.
         await self._transition(
             approval_id, expected="pending", event="approve", request_id=request_id,
             decided_by=user_id, decided_at=now,
+            **_edit_fields(approval, edit, user_id, now),
         )
+        if edit is not None:
+            self._apply_edit(approval, edit, user_id, now, request_id)
         if execute_after is not None and not execute_only:
             return await self._schedule(approval, execute_after, request_id)
         return await self._execute_now(approval, request_id)
@@ -120,6 +155,36 @@ class DecideApprovalUseCase:
         return approval
 
     # ── 내부 ────────────────────────────────────────────────────────────
+
+    def _prepare_edit(
+        self, approval: ApprovalRequest, edited_args: dict | None
+    ) -> ApprovalEdit | None:
+        """도메인 편집 거부를 HTTP 로 매핑되는 application 오류로 번역한다."""
+        try:
+            return ApprovalEditPolicy.apply(
+                approval.tool_args, approval.draft, edited_args,
+                max_chars=self._edit_max_field_chars,
+            )
+        except ApprovalEditError as e:
+            if e.reason == "not_editable":
+                raise ApprovalNotEditableError(str(e)) from e
+            raise ApprovalEditInvalidError(str(e)) from e
+
+    def _apply_edit(
+        self, approval: ApprovalRequest, edit: ApprovalEdit,
+        user_id: str, now: datetime, request_id: str,
+    ) -> None:
+        """CAS 성공 후 메모리 사본을 DB 와 맞춘다 — 집행·재개가 수정본을 본다."""
+        approval.original_tool_args = approval.tool_args
+        approval.tool_args = edit.tool_args
+        approval.draft = edit.draft
+        approval.edited_by = user_id
+        approval.edited_at = now
+        # §7: 값은 PII 일 수 있어 키 목록만 남긴다.
+        self._logger.info(
+            "approval edited", request_id=request_id, approval_id=approval.id,
+            changed_keys=list(edit.changed_keys), edited_by=user_id,
+        )
 
     async def _load_and_authorize(
         self, approval_id: str, user_id: str, request_id: str,
@@ -198,7 +263,11 @@ class DecideApprovalUseCase:
             )
             approval.status = "executed"
             approval.executed_at = now
-            await self._resume(approval, result.output, request_id)
+            # Plan FR-08: 수정된 건이면 에이전트가 최종 본문 기준으로 답하게 한다.
+            outcome = ApprovalOutcomePolicy.compose(
+                result.output, edited=approval.is_edited, draft=approval.draft
+            )
+            await self._resume(approval, outcome, request_id)
         else:
             # FR-25: 자동 재시도하지 않는다 — 비가역 작업의 재시도는 이중
             # 집행 위험. failed 를 벨에 노출해 사람이 재판단한다.
@@ -228,6 +297,22 @@ class DecideApprovalUseCase:
                 "resume after decision failed",
                 request_id=request_id, approval_id=approval.id, exception=e,
             )
+
+
+def _edit_fields(
+    approval: ApprovalRequest, edit: ApprovalEdit | None,
+    user_id: str, now: datetime,
+) -> dict:
+    """CAS 에 덧붙일 편집 컬럼. 무수정이면 빈 dict — 기존 SET 절과 동일."""
+    if edit is None:
+        return {}
+    return {
+        "tool_args": edit.tool_args,
+        "draft": edit.draft,
+        "original_tool_args": approval.tool_args,
+        "edited_by": user_id,
+        "edited_at": now,
+    }
 
 
 def _agent_changed(agent, approval: ApprovalRequest) -> bool:

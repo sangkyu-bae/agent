@@ -97,6 +97,18 @@ class ApprovalSignal:
 
 
 @dataclass(frozen=True)
+class ApprovalEdit:
+    """담당자 수정 확정본 — ApprovalEditPolicy.apply 결과가 CAS 에 그대로 실린다.
+
+    Design Ref: approval-edit-before-approve §3.1.
+    """
+
+    tool_args: dict  # 원래 래퍼 모양으로 재포장된 최종 인자
+    draft: str  # 최종 본문 (본문 키의 값)
+    changed_keys: tuple[str, ...]  # 로그·감사용. 값은 싣지 않는다
+
+
+@dataclass(frozen=True)
 class ResumeSnapshot:
     """워커 진입 시점 SupervisorState 직렬화 스냅샷.
 
@@ -140,6 +152,14 @@ class ApprovalRequest:
     # SessionId("") 예외로 최종 답변이 유실됐다.
     session_id: str | None = None
     tags: list[str] = field(default_factory=list)
+    # approval-edit-before-approve (V078): 담당자 수정. 무수정이면 모두 None.
+    original_tool_args: dict | None = None  # 수정 전 원본 (감사용)
+    edited_by: str | None = None
+    edited_at: datetime | None = None
+
+    @property
+    def is_edited(self) -> bool:
+        return self.edited_at is not None
 
     @property
     def is_terminal(self) -> bool:

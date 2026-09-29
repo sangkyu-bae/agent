@@ -232,3 +232,57 @@ class TestOutcome:
         )
         assert answer == "완료"
         assert captured["saved"] == []
+
+
+class TestRestoreEditedDraft:
+    """approval-edit-before-approve Check G1 — 재개 시 action 워커 초안을 수정본으로.
+
+    스냅샷(final_state)에는 원본 초안 메시지가 있고, final_answer 는
+    FinalAnswerDraftPolicy 로 그 초안을 "한 글자도 고치지 말고" 싣는다.
+    수정본으로 바꿔 두지 않으면 사용자에게 원본이 나간다.
+    """
+
+    @staticmethod
+    def _draft_state(draft: str) -> str:
+        from src.application.agent_builder.search_pipeline import format_draft_output
+
+        return _state_json(messages=[
+            HumanMessage(content="메일 보내줘"),
+            AIMessage(content=format_draft_output("w1", draft, "승인 대기"), name="w1"),
+        ])
+
+    def _edited(self, **over):
+        approval = _approval(state_json=self._draft_state("원본 초안"))
+        approval.draft = "수정 초안"
+        approval.original_tool_args = {"body": "원본 초안"}
+        approval.edited_by = "u1"
+        approval.edited_at = _NOW
+        for key, value in over.items():
+            setattr(approval, key, value)
+        return approval
+
+    def test_수정된_건은_초안_메시지를_수정본으로_바꾼다(self):
+        from src.application.agent_builder.search_pipeline import split_draft_output
+
+        state = RunAgentUseCase._restore_state(self._edited(), "결과")
+        worker_id, draft, outcome = split_draft_output(state["messages"][1])
+        assert (worker_id, draft, outcome) == ("w1", "수정 초안", "승인 대기")
+        assert state["messages"][-1].content == "결과"
+
+    def test_final_answer_초안_컨텍스트가_수정본을_본다(self):
+        from src.application.agent_builder.workflow_compiler import _draft_context
+
+        state = RunAgentUseCase._restore_state(self._edited(), "결과")
+        ctx, _ = _draft_context(state["messages"][1:])
+        assert ctx.draft == "수정 초안"
+        assert ctx.outcome == "결과"
+
+    def test_무수정_건은_스냅샷을_그대로_둔다(self):
+        approval = _approval(state_json=self._draft_state("원본 초안"))
+        state = RunAgentUseCase._restore_state(approval, "결과")
+        assert "원본 초안" in state["messages"][1].content
+
+    def test_다른_워커의_초안은_건드리지_않는다(self):
+        approval = self._edited(worker_id="w2")
+        state = RunAgentUseCase._restore_state(approval, "결과")
+        assert "원본 초안" in state["messages"][1].content

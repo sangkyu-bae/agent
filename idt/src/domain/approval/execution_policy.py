@@ -63,10 +63,26 @@ class McpArgumentPolicy:
         래퍼로 본다 — 실제 파라미터 이름이 arguments 인 도구를 망가뜨리지
         않기 위해서다.
         """
-        inner = tool_args.get(cls._WRAPPER_KEY)
-        if len(tool_args) == 1 and isinstance(inner, dict):
-            return dict(inner)
+        if cls.is_wrapped(tool_args):
+            return dict(tool_args[cls._WRAPPER_KEY])
         return dict(tool_args)
+
+    @classmethod
+    def is_wrapped(cls, tool_args: dict) -> bool:
+        """unwrap 과 같은 판정식 — 키가 정확히 하나이고 값이 dict."""
+        inner = tool_args.get(cls._WRAPPER_KEY)
+        return len(tool_args) == 1 and isinstance(inner, dict)
+
+    @classmethod
+    def rewrap(cls, original: dict, inner: dict) -> dict:
+        """unwrap 의 역 — original 이 래퍼였으면 같은 모양으로 되돌린다.
+
+        Design Ref: approval-edit-before-approve D-03 — 수정본을 저장할 때
+        집행기의 unwrap 계약이 깨지지 않게 한다.
+        """
+        if cls.is_wrapped(original):
+            return {cls._WRAPPER_KEY: dict(inner)}
+        return dict(inner)
 
     @classmethod
     def with_idempotency_key(

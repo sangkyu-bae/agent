@@ -62,6 +62,18 @@ class ApprovalRequestModel(Base):
         _LONG_TEXT, nullable=False,
         comment="사람이 검토할 초안 (이메일 본문·변경 내역 등)",
     )
+    # V078 (approval-edit-before-approve): DDL COMMENT 와 동일 문구 유지.
+    original_tool_args: Mapped[dict | None] = mapped_column(
+        JSON, nullable=True,
+        comment="담당자 수정 전 원본 도구 인자. NULL=무수정 (approval-edit-before-approve)",
+    )
+    edited_by: Mapped[str | None] = mapped_column(
+        String(100), nullable=True,
+        comment="초안을 수정해 승인한 사용자 ID. NULL=무수정",
+    )
+    edited_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True, comment="초안 수정 확정 시각(UTC). NULL=무수정"
+    )
     status: Mapped[str] = mapped_column(
         String(20), nullable=False,
         comment="상태 (pending|approved|scheduled|executed|rejected|expired|failed)",
