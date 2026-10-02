@@ -38,6 +38,7 @@ import type {
 import type { CatalogTool } from '@/types/toolCatalog';
 import type { LlmModel } from '@/types/llmModel';
 import { mapDetailToForm, RAG_CATALOG_TOOL_ID } from '@/utils/agentDetailMapping';
+import { buildToolConfigsForSave } from '@/utils/toolConfigPayload';
 
 type ViewMode = 'list' | 'create' | 'edit';
 
@@ -267,10 +268,11 @@ const AgentBuilderPage = () => {
             // 빈 배열도 명시 전송(전부 해제) — 빌트인은 서버가 재주입하므로
             // 상한(MAX_TOOLS) 왜곡을 막기 위해 여기서 걸러낸다.
             tool_ids: buildToolIdsForSave(form.tools, catalogTools),
-            tool_configs:
-              Object.keys(form.toolConfigs).length > 0
-                ? form.toolConfigs
-                : undefined,
+            // approval-gate-run-termination §5.1: 본문 인자를 tool_configs 에 병합
+            tool_configs: buildToolConfigsForSave(
+              form.toolConfigs,
+              form.draftArgKeys ?? {},
+            ),
             sub_agent_configs: form.subAgents.map((s) => ({
               ref_agent_id: s.ref_agent_id,
               description: s.description,
@@ -316,7 +318,8 @@ const AgentBuilderPage = () => {
       );
     } else {
       const selectedModel = models?.find(m => m.model_name === form.model);
-      const toolConfigs = Object.keys(form.toolConfigs).length > 0 ? form.toolConfigs : undefined;
+      // approval-gate-run-termination §5.1: 본문 인자를 tool_configs 에 병합
+      const toolConfigs = buildToolConfigsForSave(form.toolConfigs, form.draftArgKeys ?? {});
 
       // fix-agent-composer FR-08: 저장 API가 mcp_{server_id}를 수용하므로 MCP 필터 없이 전송
       const toolIds = form.tools.length > 0 ? form.tools : undefined;
@@ -431,6 +434,12 @@ const AgentBuilderPage = () => {
 
       // 문서추출기 해제 시 보유 드래프트 정리 (document-template-extractor)
       const next = { ...prev, tools: newTools, toolConfigs: newConfigs };
+      // approval-gate-run-termination §5.1: 해제한 도구의 본문 인자 정리
+      if (isRemoving && prev.draftArgKeys?.[toolId] !== undefined) {
+        next.draftArgKeys = Object.fromEntries(
+          Object.entries(prev.draftArgKeys).filter(([id]) => id !== toolId),
+        );
+      }
       if (toolId === DOCUMENT_EXTRACTOR_TOOL_ID && isRemoving) {
         next.documentExtractorDraft = null;
       }
@@ -514,6 +523,13 @@ const AgentBuilderPage = () => {
   const handleApplyDraft = (draft: ComposeAgentDraftResponse) => {
     if (draft.system_prompt?.trim()) setPromptError(null);
     setForm((prev) => composeDraftToForm(draft, prev, { catalogTools, models }));
+  };
+
+  const handleDraftArgKeyChange = (toolId: string, value: string) => {
+    setForm((prev) => ({
+      ...prev,
+      draftArgKeys: { ...(prev.draftArgKeys ?? {}), [toolId]: value },
+    }));
   };
 
   const handleRagConfigChange = (config: RagToolConfig) => {
@@ -604,6 +620,7 @@ const AgentBuilderPage = () => {
           onToolToggle={handleToolToggle}
           onSkillToggle={handleSkillToggle}
           onRagConfigChange={handleRagConfigChange}
+          onDraftArgKeyChange={handleDraftArgKeyChange}
           onBuiltinToggle={handleBuiltinToggle}
           onMiddlewareToggle={handleMiddlewareToggle}
           onStagedScheduleAdd={handleStagedScheduleAdd}

@@ -16,6 +16,8 @@ interface StudioLayoutProps {
   onToolToggle: (toolId: string) => void;
   onSkillToggle: (skillId: string) => void;
   onRagConfigChange: (config: RagToolConfig) => void;
+  /** approval-gate-run-termination §5.1: 승인 필요 도구의 본문 인자 입력 */
+  onDraftArgKeyChange?: (toolId: string, value: string) => void;
   /** builtin-tools D8: 빌트인 수동 해제/복원 (create 모드 전용) */
   onBuiltinToggle: (toolId: string) => void;
   /** builtin-middleware D10: 미들웨어 토글 (create=opt-out, edit=전체 교체) */
@@ -53,6 +55,7 @@ const StudioLayout = ({
   onToolToggle,
   onSkillToggle,
   onRagConfigChange,
+  onDraftArgKeyChange,
   onBuiltinToggle,
   onMiddlewareToggle,
   onStagedScheduleAdd,
@@ -92,6 +95,7 @@ const StudioLayout = ({
             onToolToggle={onToolToggle}
             onSkillToggle={onSkillToggle}
             onRagConfigChange={onRagConfigChange}
+            onDraftArgKeyChange={onDraftArgKeyChange}
             onBuiltinToggle={onBuiltinToggle}
             onMiddlewareToggle={onMiddlewareToggle}
             isEditMode={mode === 'edit'}

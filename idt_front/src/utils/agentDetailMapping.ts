@@ -13,6 +13,7 @@ import { MAX_ITERATIONS } from '@/constants/agentSettings';
 import { mapDraftToolIdsToCatalog } from './draftToolMapping';
 import { draftFromGenerationTypeInfo } from './documentGenerator';
 import { draftFromWorkerToolConfig } from '@/utils/presentationGenerator';
+import { draftArgKeysFromWorkers } from '@/utils/toolConfigPayload';
 
 /** RAG 도구의 저장 형식 tool_id (worker.tool_id) */
 const RAG_WORKER_TOOL_ID = 'internal_document_search';
@@ -63,6 +64,8 @@ export function mapDetailToForm(
     tools: mapDraftToolIdsToCatalog(detail.tool_ids, catalogTools),
     temperature: detail.temperature,
     toolConfigs,
+    // approval-gate-run-termination §5.1: 승인 필요 도구의 본문 인자 프리필
+    draftArgKeys: draftArgKeysFromWorkers(detail.workers),
     subAgents,
     skills: detail.skill_ids ?? [],
     // edit 모드 스케줄은 SchedulePanel이 서버 직결 — staged 미사용
