@@ -130,6 +130,20 @@ class Settings(BaseSettings):
         "제 권한 밖,제 범위 밖,권한/범위 밖"
     )
 
+    # Draft Grounding Check (draft-grounding-check Design §5.4)
+    # action 초안·final_answer 를 근거 판정 → 재작성 루프에 통과시킨다.
+    # 소비 지점: src/api/main.py 가 GroundedGenerator·WorkflowCompiler 에 주입.
+    # false 면 판정·재작성 LLM 호출 0 (기존 동작).
+    grounding_check_enabled: bool = True
+    draft_grounding_max_retries: int = 2
+    answer_grounding_max_retries: int = 1
+    grounding_corpus_max_chars: int = 24000
+    # 판정 전용 모델(등록된 활성 LLM 모델의 model_name). 못 찾으면 기본 모델로 폴백,
+    # 빈 문자열이면 관리자 유틸리티 모델. L3 실측(2026-09-30): gpt-4o-mini 는 조회
+    # 결과에 그대로 있는 제목·금액까지 '근거 없음' 으로 판정해 정상 문장을 지웠고,
+    # gpt-4.1-mini 는 근거 없는 대표번호를 놓쳤다. gpt-4o 는 양쪽 모두 통과.
+    grounding_judge_model: str = "gpt-4o"
+
     # Analysis
     analysis_max_retries: int = 3
     analysis_retry_on_hallucination: bool = True

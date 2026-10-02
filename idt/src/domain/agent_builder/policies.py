@@ -536,6 +536,65 @@ class GatedWorkerPolicy:
 # ── action-category-compose-node ─────────────────────────────────
 
 
+class GatedWorkerHintPolicy:
+    """supervisor 워커 목록에서 게이트 워커를 알리는 접두.
+
+    Design Ref: approval-gate-run-termination §3.3 (Plan FR-06). 도구 설명이
+    "승인 전에 호출하지 마십시오" 라면 supervisor 는 호출 자체를 피한다(실측).
+    플랫폼 게이트가 곧 승인 절차임을 도구와 무관하게 일반 규칙으로 알린다.
+    """
+
+    PREFIX = (
+        "[승인 필요] 호출하면 즉시 실행되지 않고 담당자 승인함에 등록됩니다. "
+        "사용자가 실행·등록을 요청하면 호출하세요. "
+    )
+    # Act-1 실측: 접두만으로는 뒤따르는 도구 원문("승인 전에 호출하지 마십시오")이
+    # 이겼다. 모델이 마지막에 읽는 문장이 금지 문구가 되지 않게 뒤에도 둔다.
+    SUFFIX = (
+        " (이 플랫폼에서는 이 워커 호출이 곧 담당자 승인 요청입니다 — "
+        "위 설명의 '승인 후 호출' 요건은 호출로 충족됩니다.)"
+    )
+    RULE_BLOCK = (
+        "\n\n[승인 게이트 규칙]\n"
+        "- [승인 필요] 표시 워커는 호출해도 즉시 실행되지 않고 담당자 승인함에 "
+        "등록되며, 담당자가 승인한 뒤에만 실제로 실행됩니다.\n"
+        "- 도구 설명의 '담당자 승인 후 호출'·'승인 전에 호출하지 말 것' 요건은 "
+        "이 호출(승인 요청 등록)로 충족됩니다. 초안만 보여주고 끝내지 마세요.\n"
+        "- 사용자가 등록·발송·실행을 요청하면, 필요한 조회를 마친 뒤 해당 워커를 "
+        "반드시 호출하세요. 질문만 한 경우에는 호출하지 않습니다."
+    )
+
+    @classmethod
+    def describe(cls, description: str, *, gated: bool) -> str:
+        return f"{cls.PREFIX}{description}{cls.SUFFIX}" if gated else description
+
+    @classmethod
+    def rule_block(cls, *, has_gated_workers: bool) -> str:
+        """supervisor 결정 프롬프트 규칙 블록. 게이트 워커가 없으면 빈 문자열."""
+        return cls.RULE_BLOCK if has_gated_workers else ""
+
+
+class GatedCategoryPolicy:
+    """승인 필요 도구의 카테고리 승격 규칙.
+
+    Design Ref: approval-gate-run-termination §3.5 (Plan FR-11, D-03). 미분류
+    부작용 도구를 react 로 돌리면 워커 LLM 이 도구 인자를 채우며 본문을 즉흥
+    작성한다 — 초안 작성 노드(action)를 기본으로 한다. implicit=True 면
+    본문 키 미확정 시 격리 대신 react+게이트로 폴백한다.
+    """
+
+    # Analysis G2: search/collect 노드에는 게이트가 없어 승인 필요 도구가 무승인으로
+    # 실행됐다 — 미분류와 함께 승격 대상이다. analysis 는 도구를 호출하지 않는다.
+    _PROMOTABLE: frozenset[str | None] = frozenset({None, "search", "collect"})
+
+    @classmethod
+    def promote(cls, category: str | None, *, gated: bool) -> tuple[str | None, bool]:
+        """(effective_category, implicit)."""
+        if gated and category in cls._PROMOTABLE:
+            return "action", True
+        return category, False
+
+
 class ActionArgumentPolicy:
     """action 워커의 발송 인자 규칙 — 본문 키 해석·병합·요약.
 

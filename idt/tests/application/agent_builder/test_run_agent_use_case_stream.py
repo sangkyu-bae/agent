@@ -513,6 +513,31 @@ class TestStreamTokenEvents:
         tokens = [e for e in events if e.event_type == AgentRunEventType.TOKEN]
         assert len(tokens) == 0
 
+    @pytest.mark.asyncio
+    async def test_grounding_internal_tag_is_not_streamed(self):
+        """draft-grounding-check I5/I6 — 루프 안 호출(내부 태그)은 채팅에 흘리지 않는다."""
+        from src.domain.hallucination.grounding import INTERNAL_LLM_TAG
+
+        events_in = [
+            {"event": "on_chat_model_stream", "name": "ChatOpenAI",
+             "data": {"chunk": self._chunk_msg('{"unsupported_claims": []}')},
+             "metadata": {"langgraph_node": "final_answer"},
+             "tags": ["seq:step:1", INTERNAL_LLM_TAG],
+             "run_id": "llm-1"},
+            {"event": "on_chat_model_stream", "name": "ChatOpenAI",
+             "data": {"chunk": self._chunk_msg("안녕")},
+             "metadata": {"langgraph_node": "final_answer"},
+             "tags": ["seq:step:1"],
+             "run_id": "llm-2"},
+        ]
+        use_case, agent, _, _, _ = _make_stream_use_case(astream_event_list=events_in)
+        request = RunAgentRequest(query="x", user_id="user-1")
+
+        events = await _collect(use_case.stream(agent.id, request, "req-1"))
+
+        tokens = [e for e in events if e.event_type == AgentRunEventType.TOKEN]
+        assert [t.payload["chunk"] for t in tokens] == ["안녕"]
+
 
 # ── 4-5 Failure ────────────────────────────────────────────────────────
 

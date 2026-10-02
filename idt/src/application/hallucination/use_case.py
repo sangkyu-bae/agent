@@ -1,8 +1,8 @@
 """Use case for hallucination evaluation."""
 
+from src.domain.hallucination.grounding import HallucinationEvaluatorPort
 from src.domain.hallucination.policy import HallucinationPolicy
 from src.domain.hallucination.value_objects import HallucinationEvaluationResult
-from src.infrastructure.hallucination.adapter import HallucinationEvaluatorAdapter
 
 
 class HallucinationEvaluatorUseCase:
@@ -13,7 +13,7 @@ class HallucinationEvaluatorUseCase:
     2. Delegating to HallucinationEvaluatorAdapter for LLM evaluation
     """
 
-    def __init__(self, evaluator_adapter: HallucinationEvaluatorAdapter) -> None:
+    def __init__(self, evaluator_adapter: HallucinationEvaluatorPort) -> None:
         """Initialize the use case.
 
         Args:

@@ -20,13 +20,16 @@ from src.application.agent_builder.search_pipeline import (
     latest_user_question,
 )
 from src.application.deep_search.workflow import create_deep_search_node
+from src.application.hallucination.grounded_generation import GroundedGenerator
 from src.domain.deep_search.policies import DeepSearchBudgetPolicy
+from src.domain.hallucination.grounding import INTERNAL_LLM_TAG
 from src.domain.agent_builder.rag_tool_config import clamp_llm_name
 from src.domain.agent_builder.action_tool_config import ActionToolConfig
 from src.domain.agent_builder.policies import (
     ActionArgumentPolicy,
     CapabilityDenialPolicy,
     FinalAnswerDraftPolicy,
+    GatedCategoryPolicy,
     GatedWorkerPolicy,
 )
 from src.domain.approval.entity import GateSettings
@@ -42,6 +45,7 @@ from src.application.agent_builder.supervisor_nodes import (
     build_initial_state,
     create_quality_gate_node,
     create_supervisor_node,
+    route_after_gated_worker,
     route_after_quality,
     route_to_worker,
     route_to_worker_or_final,
@@ -505,6 +509,10 @@ class WorkflowCompiler:
         # worker-capability-denial-guard D-03: 능력 부정 판정 문구. 동일 규약 —
         # main.py가 정규화해 주입한다. None이면 판정이 꺼진다(무회귀).
         capability_denial_patterns: tuple[str, ...] | None = None,
+        # draft-grounding-check §5.4: 근거 재작성 루프. 미주입이면 비활성(무회귀).
+        grounded_generator: GroundedGenerator | None = None,
+        draft_grounding_max_retries: int = 2,
+        answer_grounding_max_retries: int = 1,
     ) -> None:
         self._tool_factory = tool_factory
         self._llm_factory = llm_factory
@@ -552,6 +560,9 @@ class WorkflowCompiler:
         self._empty_result_patterns = tuple(empty_result_patterns or ())
         # worker-capability-denial-guard D-03: 미주입이면 빈 튜플 — 판정 비활성.
         self._capability_denial_patterns = tuple(capability_denial_patterns or ())
+        self._grounded = grounded_generator
+        self._draft_grounding_max_retries = draft_grounding_max_retries
+        self._answer_grounding_max_retries = answer_grounding_max_retries
 
     async def compile(
         self,
@@ -639,8 +650,13 @@ class WorkflowCompiler:
             #   도구 축 = tool_catalog.requires_approval ("무엇이 위험한가")
             #   에이전트 축 = 적용 미들웨어 ∪ enforced ("누가 통제받는가")
             # 둘 다 compile()당 1회만 해석하고 워커 루프에서 조합한다.
-            gate_settings = _gate_settings(middleware_plan)
             gated_tool_ids = GatedWorkerPolicy.collect_gated_tool_ids(catalog_meta)
+            # approval-gate-run-termination D-01 (Plan FR-08): 에이전트에 게이트가
+            # 없어도 승인 필요 도구가 있으면 도메인 기본 게이트 — fail-closed.
+            gate_settings = self._effective_gate_settings(
+                middleware_plan, workflow.workers, gated_tool_ids,
+                agent_id=agent_id, request_id=request_id,
+            )
 
             worker_map: dict[str, object] = {}
             # search/analysis 처럼 LLM 래핑 없이 직접 실행되는 "함수형 노드" id 집합.
@@ -753,7 +769,14 @@ class WorkflowCompiler:
                     function_node_ids.add(worker_def.worker_id)
                     continue
 
-                category = self._resolve_category(worker_def, catalog_meta)
+                # approval-gate-run-termination D-03 (Plan FR-11): 미분류 승인 필요
+                # 도구는 초안 작성 노드(action)로 승격 — implicit 이면 폴백 허용.
+                category, implicit_action = GatedCategoryPolicy.promote(
+                    self._resolve_category(worker_def, catalog_meta),
+                    gated=self._should_gate_worker(
+                        worker_def, gate_settings, gated_tool_ids,
+                    ),
+                )
 
                 # analysis 노드는 도구를 직접 쓰지 않으므로 tool 생성을 생략한다.
                 if category == "analysis":
@@ -833,10 +856,15 @@ class WorkflowCompiler:
                         user_context_block=user_context_block,
                         datetime_block=datetime_block,
                         worker_context_block=worker_context_block,
+                        implicit=implicit_action,
                     )
-                    if action_node is None:
+                    if action_node is None and implicit_action:
+                        # D-03: 암묵 승격은 격리 대신 react+게이트로 폴백한다.
+                        category = None
+                    elif action_node is None:
                         failed_worker_ids.add(worker_def.worker_id)
                         continue
+                if category == "action":
                     worker_map[worker_def.worker_id] = action_node
                     function_node_ids.add(worker_def.worker_id)
                     # D-12: 작성은 수집이 아니다 — empty_signal 판정 대상에서 제외.
@@ -991,6 +1019,18 @@ class WorkflowCompiler:
                     logger=self._logger,
                 )
 
+            # approval-gate-run-termination D-02: 노드가 만들어진 게이트 워커만.
+            sub_agent_worker_ids = frozenset(
+                w.worker_id for w in workflow.workers if w.worker_type == "sub_agent"
+            )
+            # Analysis G2: 도구를 호출하지 않는 analysis 노드는 제외 — 안내는 게이트가
+            # 실제로 걸리는 워커(action 노드·react+게이트)에만 붙는다.
+            gated_worker_ids = frozenset(
+                w.worker_id for w in workers_for_supervisor
+                if w.worker_id in worker_map
+                and w.worker_id not in analysis_worker_ids
+                and self._should_gate_worker(w, gate_settings, gated_tool_ids)
+            )
             supervisor_fn = create_supervisor_node(
                 llm=llm,
                 workers=workers_for_supervisor,
@@ -1013,6 +1053,8 @@ class WorkflowCompiler:
                 wiki_worker_id=(
                     _wiki_worker_id(workers_for_supervisor) if wiki_toc_block else ""
                 ),
+                # approval-gate-run-termination §4.2: 게이트 워커 안내 (빈 집합=바이트 동일)
+                gated_worker_ids=gated_worker_ids,
             )
             quality_gate_fn = create_quality_gate_node(
                 policy=policy, logger=self._logger,
@@ -1108,6 +1150,7 @@ class WorkflowCompiler:
                                 f"- {w.worker_id}: {w.description}"
                                 for w in workers_for_supervisor
                             ),
+                            request_id=request_id,
                         ),
                     ),
                 )
@@ -1162,6 +1205,15 @@ class WorkflowCompiler:
                 if worker_id in analysis_worker_ids:
                     # analysis 워커 직후에만 라우터 경유 (그 외 워커는 quality_gate 직결).
                     graph.add_edge(worker_id, "chart_router")
+                elif worker_id in gated_worker_ids or worker_id in sub_agent_worker_ids:
+                    # Analysis G3: 서브 에이전트는 내부 게이트 여부를 컴파일 시점에
+                    # 알 수 없어 항상 조건부 — 신호가 없으면 기존과 같은 quality_gate.
+                    # approval-gate-run-termination D-02 (Plan FR-01): 승인 대기면
+                    # supervisor·quality_gate 재진입 없이 종료. 비게이트 간선은 불변.
+                    graph.add_conditional_edges(
+                        worker_id, route_after_gated_worker,
+                        {"end": END, "quality_gate": "quality_gate"},
+                    )
                 else:
                     graph.add_edge(worker_id, "quality_gate")
 
@@ -1274,12 +1326,16 @@ class WorkflowCompiler:
     def _create_action_worker_node(
         self, worker_def, tool, llm, *, request_id: str, gated: bool,
         user_context_block: str, datetime_block: str, worker_context_block: str,
+        implicit: bool = False,
     ):
         """action 워커 노드 생성. 본문 키를 정할 수 없으면 None (호출자가 격리).
 
         Design Ref: action-category-compose-node §2.1 / D-09 — 도구는 compile에서
         이미 로드됐으므로 스키마 검증도 여기서 한다. 첫 실행 때 조용히 실패하는
         것보다 즉시 격리·로그가 낫다.
+
+        implicit: 승인 필요 도구의 암묵 승격(approval-gate-run-termination D-03).
+        이 경우 None 은 격리가 아니라 react+게이트 폴백이므로 경고로 남긴다.
         """
         config = ActionToolConfig.from_tool_config(worker_def.tool_config)
         try:
@@ -1287,19 +1343,53 @@ class WorkflowCompiler:
                 config.draft_arg_key, resolve_input_schema(tool)
             )
         except ValueError as e:
-            self._logger.error(
-                "action worker isolated: draft key unresolved",
-                request_id=request_id, worker_id=worker_def.worker_id,
+            event = (
+                "gated worker fallback to react" if implicit
+                else "action worker isolated: draft key unresolved"
+            )
+            log = self._logger.warning if implicit else self._logger.error
+            log(
+                event, request_id=request_id, worker_id=worker_def.worker_id,
                 tool_id=worker_def.tool_id, exception=e,
             )
             return None
+        if implicit:
+            self._logger.info(
+                "gated worker compiled as action", request_id=request_id,
+                worker_id=worker_def.worker_id, tool_id=worker_def.tool_id,
+                draft_key=draft_key,
+            )
         return create_action_node(
             worker_id=worker_def.worker_id, tool=tool, tool_id=worker_def.tool_id,
             llm=llm, pipeline_llm=self._resolve_pipeline_llm(llm),
             draft_key=draft_key, gated=gated, logger=self._logger,
             user_context_block=user_context_block, datetime_block=datetime_block,
             worker_context_block=worker_context_block,
+            grounded=self._grounded,
+            grounding_max_retries=self._draft_grounding_max_retries,
+            request_id=request_id,
         )
+
+    def _effective_gate_settings(
+        self, middleware_plan, workers: list, gated_tool_ids: set[str],
+        *, agent_id: str | None, request_id: str,
+    ):
+        """에이전트 축 게이트 해석 + fail-closed 기본 적용 (D-01, Plan FR-08).
+
+        기본 게이트는 승인 측(DecideApprovalUseCase)의 `from_config({})` 와 같은
+        도메인 기본값이라 적재·승인 해석이 어긋나지 않는다(approval-gate G4).
+        """
+        applied = _gate_settings(middleware_plan)
+        gated_workers = [w.tool_id for w in workers if w.tool_id in gated_tool_ids]
+        effective = ApprovalPolicy.effective_gate(
+            applied, has_gated_workers=bool(gated_workers)
+        )
+        if applied is None and effective is not None:
+            self._logger.info(
+                "approval gate applied by default", request_id=request_id,
+                agent_id=agent_id, tool_ids=sorted(set(gated_workers)),
+            )
+        return effective
 
     def _approval_gate_middleware(
         self, *, worker_def, gate_settings, gated_tool_ids: set[str]
@@ -1321,9 +1411,15 @@ class WorkflowCompiler:
         )
         # Check G9: Protocol(ApprovalGateInterface)을 경유한다 — B(interrupt)
         # 전환 시 approval_gate 만 교체하면 된다.
+        # approval-gate-run-termination D-04: react 워커도 본문 키를 받는다.
+        draft_key = (
+            ActionToolConfig.from_tool_config(worker_def.tool_config).draft_arg_key
+            or None  # 미지정("")은 관례 키 탐색
+        )
         return [
             self.approval_gate.build_for_worker(
-                tool_id=worker_def.tool_id, worker_id=worker_def.worker_id
+                tool_id=worker_def.tool_id, worker_id=worker_def.worker_id,
+                draft_key=draft_key,
             )
         ]
 
@@ -1447,6 +1543,7 @@ class WorkflowCompiler:
 
     def _create_final_answer_node(
         self, llm, system_prompt: str, worker_descriptions: str = "",
+        request_id: str = "",
     ):
         """모든 워커 결과(검색·분석·차트)를 종합하는 필수 최종 답변 노드.
 
@@ -1509,6 +1606,10 @@ class WorkflowCompiler:
                 # assistant일 때만 붙어(ensure_user_tail) 항상 도달하지 않는다.
                 blocks.append(FinalAnswerDraftPolicy.render_block(draft_ctx))
                 draft_instruction = "\n\n" + FinalAnswerDraftPolicy.instruction()
+            # draft-grounding-check D-09: 워커 산출이 없으면 판정 대상 아님.
+            grounding_sources = self._answer_grounding_sources(
+                system_prompt, worker_outputs, conversation_messages,
+            )
             if not blocks:
                 logger.warning("final_answer_node: no worker outputs found")
                 blocks.append("(수집된 결과 없음)")
@@ -1564,7 +1665,10 @@ class WorkflowCompiler:
                 conversation_message_count=len(conversation_messages),
             )
 
-            response = await llm.ainvoke(llm_messages)
+            response = await self._generate_final_answer(
+                llm, llm_messages, grounding_sources,
+                latest_user_question(messages), request_id,
+            )
 
             token_delta = len(response.content) // 4 if hasattr(response, "content") else 0
 
@@ -1575,6 +1679,61 @@ class WorkflowCompiler:
             }
 
         return final_answer_node
+
+    @staticmethod
+    def _answer_grounding_sources(
+        system_prompt: str, worker_outputs: list, conversation_messages: list,
+    ) -> str:
+        """final_answer 판정 코퍼스 — 지침 → 최신 워커 산출 → 대화 (§5.3, D-10).
+
+        워커 산출이 없으면 "" — 차트 블록만 있는 런은 판정하지 않는다(D-09,
+        Analysis G-3). 상한 절단은 앞쪽 우선이라 최신 산출을 먼저 싣는다(G-4).
+        """
+        if not worker_outputs:
+            return ""
+        evidence = [
+            f"[{getattr(m, 'name', '')}]\n{getattr(m, 'content', '')}"
+            for m in reversed(worker_outputs)
+        ]
+        conversation = [
+            c for c in (getattr(m, "content", "") for m in conversation_messages)
+            if isinstance(c, str) and c.strip()
+        ]
+        return "\n\n".join([system_prompt, *evidence, *conversation])
+
+    async def _generate_final_answer(
+        self, llm, llm_messages: list, sources: str, question: str, request_id: str,
+    ):
+        """최종 답변 생성 — 근거 루프 활성이면 판정·재작성 (draft-grounding-check §5.3).
+
+        비활성(미주입·off·근거 없음)이면 기존 1회 호출 그대로 — 태그도 붙이지
+        않아 스트리밍 동작이 바뀌지 않는다(D-09). 반환은 AIMessage 1건(계약 유지).
+        """
+        if self._grounded is None or not self._grounded.active or not sources:
+            return await llm.ainvoke(llm_messages)
+        last: dict = {}
+
+        async def generate(feedback: str) -> str:
+            messages = llm_messages
+            if feedback:
+                system = {**llm_messages[0], "content": llm_messages[0]["content"] + "\n\n" + feedback}
+                messages = [system, *llm_messages[1:]]
+            last["response"] = await llm.ainvoke(messages, config={"tags": [INTERNAL_LLM_TAG]})
+            content = getattr(last["response"], "content", "")
+            return content if isinstance(content, str) else str(content)
+
+        result = await self._grounded.run(
+            generate=generate, question=question, sources=sources,
+            max_retries=self._answer_grounding_max_retries, target="answer",
+            request_id=request_id,
+        )
+        response = last["response"]
+        if getattr(response, "content", None) == result.text:
+            return response
+        # Analysis G-5: 문장 제거로 본문만 바뀐다 — usage·response_metadata 는 보존.
+        if isinstance(response, AIMessage):
+            return response.model_copy(update={"content": result.text})
+        return AIMessage(content=result.text)
 
     def _normalize_search_mode(self, mode: str | None) -> str:
         """search 파이프라인 모드 정규화 (deep-search-pipeline FR-13).
@@ -2443,11 +2602,18 @@ class WorkflowCompiler:
             answer_msg = AIMessage(content=answer_content, name=clamp_llm_name(worker_id))
             sub_token_usage = result.get("token_usage", 0)
 
-            return {
+            out = {
                 "messages": [answer_msg],
                 "last_worker_id": worker_id,
                 "token_usage": state["token_usage"] + sub_token_usage,
             }
+            # approval-gate-run-termination Analysis G3: 서브 그래프의 승인 대기 신호를
+            # 부모로 올려 부모 런도 종료시킨다. 재개는 부모 그래프 워커에 결과를
+            # 주입하므로 worker_id 를 이 래퍼(부모 워커)로 바꾼다.
+            pending = result.get("approval_pending") or {}
+            if pending:
+                out["approval_pending"] = {**pending, "worker_id": worker_id}
+            return out
 
         return wrapped
 

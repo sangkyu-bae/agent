@@ -21,10 +21,13 @@ class ApprovalGateInterface(Protocol):
       - InterruptGate: interrupt() 로 그래프 일시정지 (checkpointer 필요)
     """
 
-    def build_for_worker(self, *, tool_id: str, worker_id: str) -> object:
+    def build_for_worker(
+        self, *, tool_id: str, worker_id: str, draft_key: str | None = None
+    ) -> object:
         """해당 워커용 게이트 미들웨어 인스턴스를 만든다.
 
         워커마다 새 인스턴스여야 한다 (builtin-middleware D6 — 상태 공유 금지).
+        draft_key: 승인 초안으로 쓸 인자 키 (approval-gate-run-termination D-04).
 
         Raises:
             Exception: 조립 실패. 호출측은 이를 삼키지 않는다 — 안전 기능이

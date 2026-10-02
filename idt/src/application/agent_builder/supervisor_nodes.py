@@ -11,7 +11,7 @@ from src.application.agent_builder.search_pipeline import (
 from src.application.agent_builder.supervisor_hooks import SupervisorHooks
 from src.application.agent_builder.supervisor_state import SupervisorState
 from src.application.agent_run.context import get_current_run_context
-from src.domain.agent_builder.policies import QualityGatePolicy
+from src.domain.agent_builder.policies import GatedWorkerHintPolicy, QualityGatePolicy
 from src.domain.conversation.analysis_snapshot_policy import AnalysisSnapshotPolicy
 from src.domain.agent_builder.schemas import SupervisorConfig, WorkerDefinition
 from src.domain.agent_run.value_objects import RunPurpose
@@ -401,9 +401,16 @@ def create_supervisor_node(
     # wiki-guided-routing D3/D4: 빈 문자열이면 무영향(위키 미등록 에이전트 바이트 동일).
     wiki_guidance_block: str = "",
     wiki_worker_id: str = "",
+    # approval-gate-run-termination §4.2 (Plan FR-06): 빈 집합이면 바이트 동일.
+    gated_worker_ids: frozenset[str] = frozenset(),
 ):
     worker_descriptions = "\n".join(
-        f"- {w.worker_id}: {w.description}" for w in workers
+        f"- {w.worker_id}: "
+        f"{GatedWorkerHintPolicy.describe(w.description, gated=w.worker_id in gated_worker_ids)}"
+        for w in workers
+    )
+    gate_rule_block = GatedWorkerHintPolicy.rule_block(
+        has_gated_workers=any(w.worker_id in gated_worker_ids for w in workers)
     )
     available_ids = {w.worker_id for w in workers}
 
@@ -468,6 +475,8 @@ def create_supervisor_node(
         decision_prompt = (
             f"{supervisor_prompt}\n\n"
             f"사용 가능한 워커:\n{worker_descriptions}"
+            # approval-gate-run-termination Act-1: 게이트 워커가 없으면 빈 문자열
+            f"{gate_rule_block}"
             f"{attachment_block}"
             f"{data_block}"
             f"{viz_block}"
@@ -676,6 +685,17 @@ def route_to_worker_or_final(state: SupervisorState) -> str:
     ):
         return "final_answer"
     return next_worker
+
+
+def route_after_gated_worker(state: SupervisorState) -> str:
+    """게이트 워커 직후 분기 (approval-gate-run-termination D-02, Plan FR-01).
+
+    승인 대기 신호가 오르면 supervisor·quality_gate 로 돌아가지 않고 끝낸다 —
+    되돌아가면 supervisor 가 "실제 결과가 없다" 며 같은 워커를 반복 호출하고
+    (실측 5회), 워커 LLM 이 성공을 지어낼 기회가 생긴다. 런당 pending 1건
+    불변식(approval-gate FR-06)의 구조적 강제다.
+    """
+    return "end" if state.get("approval_pending") else "quality_gate"
 
 
 def route_after_quality(state: SupervisorState) -> str:
