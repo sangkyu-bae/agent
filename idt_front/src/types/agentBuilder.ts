@@ -56,7 +56,7 @@ export interface CreateBuilderAgentRequest {
   department_id?: string;
   temperature?: number;
   tool_ids?: string[];
-  tool_configs?: Record<string, RagToolConfig>;
+  tool_configs?: Record<string, ToolConfigPayload>;
   sub_agent_configs?: SubAgentConfigRequest[];
   // builtin-tools D5: 빌트인 수동 opt-out (생성 폼 전용 — 카탈로그/저장 형식 모두 수용)
   exclude_builtin_tool_ids?: string[];
@@ -114,7 +114,7 @@ export interface UpdateBuilderAgentRequest {
   tool_ids?: string[];
   // undefined = 설정 변경 안 함. 전달된 도구만 덮어쓰고 나머지 유지 도구는
   // 기존 tool_config 를 승계한다. tool_ids 없이 단독 전송은 서버가 422 거부.
-  tool_configs?: Record<string, RagToolConfig>;
+  tool_configs?: Record<string, ToolConfigPayload>;
   // undefined = 변경 안 함, [] = 모든 서브에이전트 제거
   sub_agent_configs?: SubAgentConfigRequest[];
   // agent-skill-toggle: undefined = 변경 안 함, [] = 전부 해제, [...] = 목표 상태
@@ -145,6 +145,12 @@ export interface UpdateBuilderAgentResponse {
   max_visibility?: string | null;
 }
 
+/**
+ * approval-gate-run-termination §5.1: tool_configs 값 — RAG 설정 또는 본문 인자만 담은 설정.
+ * 서버 RagToolConfigRequest 는 모든 필드에 기본값이 있어 부분 설정을 수용한다.
+ */
+export type ToolConfigPayload = RagToolConfig | { draft_arg_key: string | null };
+
 // ── Form (프론트엔드 전용) ─────────────────────
 
 export interface AgentBuilderFormData {
@@ -155,6 +161,11 @@ export interface AgentBuilderFormData {
   tools: string[];
   temperature: number;
   toolConfigs: Record<string, RagToolConfig>;
+  /**
+   * approval-gate-run-termination §5.1: 승인 필요 도구의 본문 인자(카탈로그 tool_id → 인자 키).
+   * 저장 시 tool_configs[tool_id].draft_arg_key 로 합쳐진다 (utils/toolConfigPayload).
+   */
+  draftArgKeys?: Record<string, string>;
   subAgents: SubAgentConfig[];
   // agent-skill-toggle: 부착 스킬 id 목록(단일 진실원, 저장 시 skill_ids로 전송)
   skills: string[];

@@ -296,3 +296,45 @@ describe('LeftConfigPanel — sessionStorage 복원 (R4 이관)', () => {
     expect(sessionStorage.getItem(DRAFT_STORAGE_KEY)).toBeNull();
   });
 });
+
+// approval-gate-run-termination Design §5.2 (F1, F4) — 승인 필요 도구의 본문 인자
+describe('LeftConfigPanel — 승인 필요 도구 본문 인자', () => {
+  const GATED_ID = 'mcp:6ea2f615-515e-4f65-aabe-388970dbafbe:submit_reply';
+  const gatedCatalog: CatalogTool[] = [
+    ...CATALOG_TOOLS,
+    catalogTool({
+      tool_id: GATED_ID, source: 'mcp', name: 'submit_reply',
+      description: '답변 등록', requires_approval: true,
+    }),
+  ];
+
+  it('승인 필요 도구에 배지와 본문 인자 입력을 보여준다', () => {
+    renderPanel({ tools: [GATED_ID] }, vi.fn(), { catalogTools: gatedCatalog });
+    expect(screen.getByText('승인 필요')).toBeInTheDocument();
+    expect(screen.getByLabelText('submit_reply 본문 인자')).toBeInTheDocument();
+  });
+
+  it('저장된 본문 인자를 입력값으로 보여준다', () => {
+    renderPanel(
+      { tools: [GATED_ID], draftArgKeys: { [GATED_ID]: 'reply_content' } },
+      vi.fn(),
+      { catalogTools: gatedCatalog },
+    );
+    expect(screen.getByLabelText('submit_reply 본문 인자')).toHaveValue('reply_content');
+  });
+
+  it('입력하면 도구 id 와 값을 알린다', async () => {
+    const onDraftArgKeyChange = vi.fn();
+    renderPanel({ tools: [GATED_ID] }, vi.fn(), {
+      catalogTools: gatedCatalog, onDraftArgKeyChange,
+    });
+    await userEvent.type(screen.getByLabelText('submit_reply 본문 인자'), 'r');
+    expect(onDraftArgKeyChange).toHaveBeenLastCalledWith(GATED_ID, 'r');
+  });
+
+  it('승인 필요가 아닌 도구 행은 그대로다', () => {
+    renderPanel({ tools: ['internal:web_search'] });
+    expect(screen.queryByText('승인 필요')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/본문 인자/)).not.toBeInTheDocument();
+  });
+});

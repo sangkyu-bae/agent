@@ -56,6 +56,8 @@ from src.domain.approval.entity import (
     GateSettings,
     ResumeSnapshot,
 )
+from src.domain.approval.notice_policy import ApprovalPendingNoticePolicy
+from src.domain.hallucination.grounding import INTERNAL_LLM_TAG
 from src.domain.approval.policies import ApprovalPolicy
 from src.infrastructure.approval.snapshot import SnapshotSerializer
 from src.domain.agent_builder.interfaces import AgentDefinitionRepositoryInterface
@@ -332,7 +334,7 @@ class RunAgentUseCase:
                 if extra is not None:
                     yield extra
 
-            answer, tools_used = self._parse_result({"messages": state.final_messages})
+            answer, tools_used = self._resolve_answer(state)
             # analysis-data-continuity D3: 턴의 분석 원천 데이터 스냅샷 수집.
             # analysis-source-preservation: 엑셀 원천(state.analysis_source) 병합.
             snapshot = self._collect_snapshot(
@@ -1150,6 +1152,10 @@ class RunAgentUseCase:
         self, raw: dict, data: dict,
         seq: _SeqCounter, run_id: Optional[RunId], state: _StreamState,
     ) -> Optional[AgentRunEvent]:
+        # draft-grounding-check D-04: 근거 루프 안의 호출(판정 JSON·재작성 중간본)은
+        # 채팅에 흘리지 않는다 — 최종본은 ANSWER_COMPLETED 로 표시된다.
+        if INTERNAL_LLM_TAG in (raw.get("tags") or []):
+            return None
         chunk_obj = data.get("chunk")
         # content가 content block 리스트로 내려올 수 있어 평탄화 문자열로 정규화.
         # (정규화하지 않으면 WS payload에 list가 실려 프론트에서 [object Object]로 표시됨)
@@ -1405,6 +1411,29 @@ class RunAgentUseCase:
             analysis_data=analysis_data,
         )
         await self._message_repo.save(assistant_msg)
+
+    def _resolve_answer(self, state: "_StreamState") -> tuple[str, list[str]]:
+        """런의 최종 답변 결정 — 승인 대기면 결정적 템플릿.
+
+        Design Ref: approval-gate-run-termination §4.4 (Plan FR-03/05). 승인 대기
+        런은 final_answer 를 거치지 않아 마지막 메시지가 워커 LLM 텍스트다 —
+        실측에서 그 자리에 지어낸 성공 JSON 이 저장됐다. 동기 run()·웹훅·
+        백그라운드 잡이 모두 stream 을 소비하므로 여기 한 곳에서 교체한다.
+        """
+        answer, tools_used = self._parse_result({"messages": state.final_messages})
+        pending = state.approval_pending
+        if not pending:
+            return answer, tools_used
+        self._logger.info(
+            "run ended on approval gate",
+            worker_id=pending.get("worker_id", ""), tool_id=pending.get("tool_id", ""),
+        )
+        notice = ApprovalPendingNoticePolicy.render(
+            tool_id=pending.get("tool_id", ""),
+            tool_args=pending.get("tool_args") or {},
+            draft=pending.get("draft", ""),
+        )
+        return notice, tools_used
 
     def _parse_result(self, result: dict) -> tuple[str, list[str]]:
         messages = result.get("messages", [])

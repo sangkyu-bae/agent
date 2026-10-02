@@ -3,17 +3,29 @@
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 
+from src.domain.hallucination.grounding import (
+    INTERNAL_LLM_TAG,
+    GroundingJudgePort,
+    GroundingVerdict,
+    HallucinationEvaluatorPort,
+    UnsupportedClaim,
+)
 from src.domain.hallucination.value_objects import HallucinationEvaluationResult
 from src.domain.llm.interfaces import UtilityLLMProviderPort
 from src.infrastructure.hallucination.prompts import (
+    GROUNDING_JUDGE_HUMAN_TEMPLATE,
+    GROUNDING_JUDGE_SYSTEM_PROMPT,
     HALLUCINATION_EVALUATION_SYSTEM_PROMPT,
     HALLUCINATION_EVALUATION_HUMAN_TEMPLATE,
 )
-from src.infrastructure.hallucination.schemas import HallucinationOutput
+from src.infrastructure.hallucination.schemas import (
+    GroundingJudgeOutput,
+    HallucinationOutput,
+)
 from src.infrastructure.logging import get_logger
 
 
-class HallucinationEvaluatorAdapter:
+class HallucinationEvaluatorAdapter(HallucinationEvaluatorPort, GroundingJudgePort):
     """Adapter for evaluating hallucination using LLM with structured output.
 
     Uses ChatOpenAI with structured output to determine if an LLM generation
@@ -46,6 +58,9 @@ class HallucinationEvaluatorAdapter:
         self._chain = None if llm_provider is not None else self._build_chain()
         self._cached_llm: object | None = None
         self._cached_chain = None
+        # draft-grounding-check v0.2 §4.3: 근거 판정 체인 캐시 (기존 체인과 분리)
+        self._judge_llm: object | None = None
+        self._judge_chain = None
 
     def _build_chain_from(self, llm):
         """Build the LangChain chain for hallucination evaluation."""
@@ -110,3 +125,46 @@ class HallucinationEvaluatorAdapter:
                 request_id=request_id
             )
             raise
+
+    # ── draft-grounding-check v0.2 §4.3: 주장 단위 근거 판정 ─────────────
+
+    async def _resolve_judge_chain(self):
+        """근거 판정 체인. 관리자 유틸리티 LLM 우선, 없으면 레거시 ChatOpenAI."""
+        llm = None
+        if self._llm_provider is not None:
+            llm = await self._llm_provider.get(self._temperature)
+        if llm is None:
+            llm = self._llm or ChatOpenAI(model=self._model_name, temperature=self._temperature)
+        if llm is not self._judge_llm or self._judge_chain is None:
+            prompt = ChatPromptTemplate.from_messages([
+                ("system", GROUNDING_JUDGE_SYSTEM_PROMPT),
+                ("human", GROUNDING_JUDGE_HUMAN_TEMPLATE),
+            ])
+            self._judge_llm = llm
+            self._judge_chain = prompt | llm.with_structured_output(GroundingJudgeOutput)
+        return self._judge_chain
+
+    async def judge(
+        self, *, question: str, sources: str, generation: str,
+        hints: list[str], request_id: str,
+    ) -> GroundingVerdict:
+        """근거 없는 주장 목록. 실패는 그대로 재발생 — fail-open 은 호출측 몫(D-06).
+
+        루프 안 호출이므로 INTERNAL_LLM_TAG 를 달아 채팅 토큰 스트림에서 뺀다(D-04).
+        실패 로깅은 호출측 루프(GroundedGenerator) 한 곳에서 타입·스택만 남긴다
+        (Analysis G-2/G-12) — 파싱 오류 메시지에 판정기 원출력이 실릴 수 있다.
+        """
+        chain = await self._resolve_judge_chain()
+        output: GroundingJudgeOutput = await chain.ainvoke(
+            {
+                "question": question,
+                "sources": sources,
+                "hints": "\n".join(f"- {h}" for h in hints) if hints else "(없음)",
+                "generation": generation,
+            },
+            config={"tags": [INTERNAL_LLM_TAG]},
+        )
+        return GroundingVerdict(unsupported_claims=tuple(
+            UnsupportedClaim(span=c.span, reason=c.reason, severity=c.severity)
+            for c in output.unsupported_claims
+        ))

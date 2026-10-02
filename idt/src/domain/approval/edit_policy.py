@@ -39,14 +39,19 @@ class ApprovalEditPolicy:
     DEFAULT_MAX_FIELD_CHARS: int = 20000
 
     @classmethod
-    def extract_draft(cls, tool_args: dict) -> str:
+    def extract_draft(cls, tool_args: dict, draft_key: str | None = None) -> str:
         """게이트 적재 시 사람이 검토할 본문 (D-02: 래퍼를 먼저 벗긴다).
+
+        draft_key(워커 tool_config.draft_arg_key)가 있으면 그 키를 먼저 본다 —
+        관례 키가 아닌 본문(`reply_content` 등)을 쓰는 도구용
+        (approval-gate-run-termination D-04).
 
         관례 키가 없으면 원본 인자 전체를 읽기 좋게 직렬화한다 — 승인 화면에서
         '무엇을 승인하는지' 를 볼 수 없으면 게이트가 형식만 남는다.
         """
         inner = McpArgumentPolicy.unwrap(tool_args)
-        for key in cls.DRAFT_KEYS:
+        candidates = ((draft_key,) if draft_key else ()) + cls.DRAFT_KEYS
+        for key in candidates:
             value = inner.get(key)
             if isinstance(value, str) and value.strip():
                 return value

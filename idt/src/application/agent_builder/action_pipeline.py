@@ -42,9 +42,11 @@ from src.application.agent_builder.search_pipeline import (
 )
 from src.application.agent_builder.supervisor_state import SupervisorState
 from src.application.agent_run.step_tracking import STEP_OUTPUT_SUMMARY_KEY
+from src.application.hallucination.grounded_generation import GroundedGenerator
 from src.domain.agent_builder.policies import ActionArgumentPolicy, ToolErrorPolicy
 from src.domain.agent_builder.rag_tool_config import clamp_llm_name
 from src.domain.approval.policies import ApprovalSignalPolicy
+from src.domain.hallucination.grounding import INTERNAL_LLM_TAG
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.domain.mcp.tool_argument_policy import ToolArgumentPolicy
 
@@ -128,9 +130,16 @@ class _ActionOutcome:
 
 async def _compose_draft(
     llm, messages: list, context_block: str, logger: LoggerInterface,
+    *, feedback: str = "", internal: bool = False,
 ) -> tuple[str, str]:
-    """에이전트 모델로 초안 1회 작성 → (draft, error). error가 비면 성공."""
+    """에이전트 모델로 초안 1회 작성 → (draft, error). error가 비면 성공.
+
+    draft-grounding-check §5.2: feedback(재작성 사유)은 system 끝에 덧붙이고,
+    internal 이면 내부 태그로 채팅 스트림에서 뺀다. 둘 다 기본값이면 기존과 동일.
+    """
     system = context_block + COMPOSE_SYSTEM_PROMPT + _evidence_block(messages)
+    if feedback:
+        system += "\n\n" + feedback
     llm_messages = [
         {"role": "system", "content": system},
         *ensure_user_tail(
@@ -139,7 +148,10 @@ async def _compose_draft(
         ),
     ]
     try:
-        response = await llm.ainvoke(llm_messages)
+        if internal:
+            response = await llm.ainvoke(llm_messages, config={"tags": [INTERNAL_LLM_TAG]})
+        else:
+            response = await llm.ainvoke(llm_messages)
     except Exception as e:
         logger.warning("action_node compose failed", error=str(e))
         return "", f"초안 작성 실패: {e}"
@@ -149,36 +161,97 @@ async def _compose_draft(
     return draft, ""
 
 
+class _ComposeFailed(Exception):
+    """근거 루프 첫 작성 실패 — 루프를 멈추고 기존 작성 실패 경로로 보낸다."""
+
+
+def _message_text(m) -> str:
+    content = m.get("content", "") if isinstance(m, dict) else getattr(m, "content", "")
+    return content if isinstance(content, str) else str(content)
+
+
+def _grounding_sources(messages: list, context_block: str) -> str:
+    """판정 근거 코퍼스 — 지침 → 최신 워커 산출 → 대화 순 (D-10: 상한 절단 시 앞쪽 우선)."""
+    evidence = [
+        f"[{getattr(m, 'name', '')}]\n{_message_text(m)}"
+        for m in reversed(messages) if is_worker_output(m)
+    ]
+    conversation = [_message_text(m) for m in _conversation_messages(messages)]
+    return "\n\n".join(p for p in (context_block, *evidence, *conversation) if p.strip())
+
+
+async def _compose_grounded(
+    llm, messages: list, context_block: str, logger: LoggerInterface,
+    grounded: GroundedGenerator, max_retries: int, request_id: str,
+) -> tuple[str, str]:
+    """근거 재작성 루프를 거친 초안 → (draft, error). Design Ref: §5.2."""
+
+    async def generate(feedback: str) -> str:
+        draft, error = await _compose_draft(
+            llm, messages, context_block, logger, feedback=feedback, internal=True,
+        )
+        if error:
+            raise _ComposeFailed(error)
+        return draft
+
+    try:
+        result = await grounded.run(
+            generate=generate, question=latest_user_question(messages),
+            sources=_grounding_sources(messages, context_block),
+            max_retries=max_retries, target="draft", request_id=request_id,
+        )
+    except _ComposeFailed as e:
+        return "", str(e)
+    if not result.text.strip():
+        # D-07: 근거 없는 문장을 빼고 나니 남은 초안이 없다.
+        return "", "초안 작성 실패: 근거로 확인되는 내용이 없어 초안을 만들지 못했습니다"
+    return result.text, ""
+
+
 # ── 인자 조립 단계 ───────────────────────────────────────────────
 
 
-def _argument_user_content(tool, schema: dict, draft: str, messages: list) -> str:
+_PARSE_FAILED = "발송 인자 생성 실패: 생성된 인자를 해석할 수 없습니다"
+# approval-gate-run-termination Analysis G1: 파싱 실패 시 재시도 횟수 (총 시도 = 1 + 이 값)
+_ARGUMENT_PARSE_RETRIES = 1
+
+
+def _schema_without(schema: dict, key: str) -> dict:
+    """본문 키를 뺀 스키마 사본 — 보조 LLM 이 본문을 다시 쓰지 않게 한다 (G1).
+
+    실측: "본문은 비워라" 지시만으로는 수천 자 본문을 arguments_json 에 옮겨 적다
+    파싱이 깨졌다. 스키마에서 아예 없애고, 본문은 병합 단계가 초안으로 채운다.
+    """
+    props = {k: v for k, v in (schema.get("properties") or {}).items() if k != key}
+    stripped = {**schema, "properties": props}
+    if "required" in schema:
+        stripped["required"] = [r for r in schema.get("required") or [] if r != key]
+    return stripped
+
+
+def _argument_user_content(
+    tool, schema: dict, draft: str, messages: list, draft_key: str,
+) -> str:
     schema_text = json.dumps(schema, ensure_ascii=False)[:_SCHEMA_MAX_CHARS]
     question = latest_user_question(messages)
     return (
         f"[도구]\n{getattr(tool, 'name', '')}: {getattr(tool, 'description', '')}\n\n"
         f"[입력 스키마]\n{schema_text}\n\n"
-        f"[이미 작성된 초안 — 본문 필드에 넣지 말 것]\n{draft}\n\n"
+        f"[본문] '{draft_key}' 필드는 이미 작성된 초안({len(draft)}자)이 자동으로 채워진다 — "
+        "인자에 넣지 말 것\n\n"
         f"[대화 맥락]\n{collect_recent_context(messages)}\n\n[요청]\n{question}"
     )
 
 
-async def _assemble_arguments(
-    pipeline_llm, tool, draft: str, messages: list, context_block: str,
-    logger: LoggerInterface,
-) -> tuple[dict | None, str, int]:
-    """보조 LLM이 초안 이외 필드를 채운다 → (arguments, error, llm_chars)."""
-    schema = resolve_input_schema(tool)
-    if not schema:
-        return None, "발송 인자 생성 실패: 도구의 입력 스키마를 확인할 수 없습니다", 0
-    try:
-        out = await pipeline_llm.with_structured_output(CollectArguments).ainvoke([
-            {"role": "system", "content": context_block + ACTION_ARGUMENT_SYSTEM_PROMPT},
-            {"role": "user", "content": _argument_user_content(tool, schema, draft, messages)},
-        ])
-    except Exception as e:
-        logger.warning("action_node argument build failed", error=str(e))
-        return None, f"발송 인자 생성 실패: {e}", 0
+async def _request_arguments(pipeline_llm, context_block: str, user_content: str):
+    return await pipeline_llm.with_structured_output(CollectArguments).ainvoke([
+        {"role": "system", "content": context_block + ACTION_ARGUMENT_SYSTEM_PROMPT},
+        {"role": "user", "content": user_content},
+    ])
+
+
+def _interpret_arguments(out) -> tuple[dict | None, str, int]:
+    """구조화 출력 → (arguments, error, llm_chars). 파싱 실패는 _PARSE_FAILED."""
     raw = getattr(out, "arguments_json", "") or ""
     chars = len(raw) + len(getattr(out, "missing", "") or "")
     if not getattr(out, "grounded", False):
@@ -186,8 +259,35 @@ async def _assemble_arguments(
         return None, f"발송 대상을 확인하지 못했습니다: {missing}", chars
     arguments = parse_arguments_json(raw or "{}")
     if arguments is None:
-        return None, "발송 인자 생성 실패: 생성된 인자를 해석할 수 없습니다", chars
+        return None, _PARSE_FAILED, chars
     return arguments, "", chars
+
+
+async def _assemble_arguments(
+    pipeline_llm, tool, draft: str, messages: list, context_block: str,
+    logger: LoggerInterface, draft_key: str = "",
+) -> tuple[dict | None, str, int]:
+    """보조 LLM이 초안 이외 필드를 채운다 → (arguments, error, llm_chars)."""
+    schema = resolve_input_schema(tool)
+    if not schema:
+        return None, "발송 인자 생성 실패: 도구의 입력 스키마를 확인할 수 없습니다", 0
+    user_content = _argument_user_content(
+        tool, _schema_without(schema, draft_key), draft, messages, draft_key,
+    )
+    total = 0
+    for attempt in range(1 + _ARGUMENT_PARSE_RETRIES):
+        try:
+            out = await _request_arguments(pipeline_llm, context_block, user_content)
+        except Exception as e:
+            logger.warning("action_node argument build failed", error=str(e))
+            return None, f"발송 인자 생성 실패: {e}", total
+        arguments, error, chars = _interpret_arguments(out)
+        total += chars
+        if error != _PARSE_FAILED:
+            return arguments, error, total
+        # G1: 파싱 실패만 재시도 — grounded=false 는 정보 부족이라 다시 물어도 같다.
+        logger.warning("action_node argument parse retry", attempt=attempt + 1)
+    return None, _PARSE_FAILED, total
 
 
 # ── 게이트 / dispatch 단계 ───────────────────────────────────────
@@ -245,6 +345,7 @@ async def _resolve_after_draft(
     """초안 확보 이후의 분기: 인자 조립 → 차단 검사 → 게이트 또는 dispatch."""
     arguments, error, chars = await _assemble_arguments(
         pipeline_llm, tool, out.draft, messages, context_block, logger,
+        draft_key=draft_key,
     )
     out.llm_chars += chars
     if arguments is None:
@@ -287,8 +388,14 @@ def create_action_node(
     user_context_block: str = "",
     datetime_block: str = "",
     worker_context_block: str = "",
+    grounded: GroundedGenerator | None = None,
+    grounding_max_retries: int = 2,
+    request_id: str = "",
 ):
     """action 노드 생성 — 초안 1회 작성 후 도구를 정확히 1회 호출(또는 승인 대기).
+
+    grounded 가 활성이면 초안은 근거 재작성 루프를 거친다(draft-grounding-check
+    §5.2). 비활성·미주입이면 기존 1회 작성과 호출·프롬프트가 같다.
 
     tool_id는 카탈로그 형식(`mcp:<srv>:<tool>`)이다 — 런타임 합성명(tool.name)이
     아니다(위키 mcp-runtime-tool-shape). draft_key는 컴파일러가
@@ -300,7 +407,13 @@ def create_action_node(
     async def action_node(state: SupervisorState) -> dict:
         messages = state["messages"]
         out = _ActionOutcome()
-        out.draft, out.error = await _compose_draft(llm, messages, context_block, logger)
+        if grounded is not None and grounded.active:
+            out.draft, out.error = await _compose_grounded(
+                llm, messages, context_block, logger,
+                grounded, grounding_max_retries, request_id,
+            )
+        else:
+            out.draft, out.error = await _compose_draft(llm, messages, context_block, logger)
         out.llm_chars += len(out.draft)
         if out.error:
             out.outcome = out.error

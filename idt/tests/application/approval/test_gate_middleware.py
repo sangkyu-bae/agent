@@ -107,7 +107,8 @@ class TestPurity:
         import inspect
 
         params = set(inspect.signature(ApprovalGateMiddleware.__init__).parameters)
-        assert params == {"self", "tool_id", "worker_id"}
+        # approval-gate-run-termination D-04: draft_key 는 설정값(문자열)이라 순수성 유지
+        assert params == {"self", "tool_id", "worker_id", "draft_key"}
 
     def test_동일_입력에_동일_출력(self):
         a = _gate().wrap_tool_call(_Req(), _boom).content
@@ -148,14 +149,16 @@ class TestStatelessGate:
         built = []
 
         class _FakeGate:
-            def build_for_worker(self, *, tool_id, worker_id):
-                built.append((tool_id, worker_id))
+            def build_for_worker(self, *, tool_id, worker_id, draft_key=None):
+                built.append((tool_id, worker_id, draft_key))
                 return "fake-mw"
 
         compiler = WorkflowCompiler.__new__(WorkflowCompiler)
         compiler._logger = __import__("unittest.mock").mock.MagicMock()
         compiler.approval_gate = _FakeGate()
-        worker_def = type("W", (), {"tool_id": "email_send", "worker_id": "w1"})()
+        worker_def = type(
+            "W", (), {"tool_id": "email_send", "worker_id": "w1", "tool_config": None}
+        )()
         gate = GateSettings(mode="always", execute_after=None,
                             expires_hours=168, is_enforced=False)
         result = compiler._approval_gate_middleware(
@@ -163,4 +166,4 @@ class TestStatelessGate:
             gated_tool_ids={"email_send"},
         )
         assert result == ["fake-mw"]
-        assert built == [("email_send", "w1")]
+        assert built == [("email_send", "w1", None)]

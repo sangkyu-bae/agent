@@ -261,3 +261,23 @@ describe('mapDetailToForm — 서브에이전트/스킬 회귀 고정', () => {
     expect(form.schedules).toEqual([]);
   });
 });
+
+// approval-gate-run-termination Design §5.1 — 편집 모드 본문 인자 복원
+describe('mapDetailToForm — 본문 인자 복원', () => {
+  const MCP_ID = 'mcp:6ea2f615-515e-4f65-aabe-388970dbafbe:submit_reply';
+
+  it('워커 tool_config 의 draft_arg_key 를 draftArgKeys 로 복원한다', () => {
+    const detail = makeDetail({
+      tool_ids: [MCP_ID],
+      workers: [makeWorker({ tool_id: MCP_ID, tool_config: { draft_arg_key: 'reply_content' } })],
+    });
+    expect(mapDetailToForm(detail, [makeModel()], []).draftArgKeys).toEqual({
+      [MCP_ID]: 'reply_content',
+    });
+  });
+
+  it('본문 인자가 없으면 빈 객체', () => {
+    const detail = makeDetail({ workers: [makeWorker({ tool_config: null })] });
+    expect(mapDetailToForm(detail, [makeModel()], []).draftArgKeys).toEqual({});
+  });
+});

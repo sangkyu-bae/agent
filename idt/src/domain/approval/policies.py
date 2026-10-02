@@ -56,6 +56,21 @@ class ApprovalPolicy:
         return gate.mode != "off"
 
     @staticmethod
+    def effective_gate(
+        applied: GateSettings | None, *, has_gated_workers: bool
+    ) -> GateSettings | None:
+        """fail-closed 에이전트 축 해석 (approval-gate-run-termination D-01).
+
+        적용 목록에 게이트가 없어도 승인 필요 도구 워커가 있으면 도메인 기본
+        게이트를 쓴다 — 설정 누락이 곧 무승인 부작용이 되지 않게 한다.
+        기본값은 승인 측(`from_config({})`)과 같아 적재·승인 해석이 일치한다.
+        applied 가 있으면(명시 off 포함) 그대로 — should_gate 가 판정한다.
+        """
+        if applied is not None or not has_gated_workers:
+            return applied
+        return GateSettings.from_config({}, is_enforced=False)
+
+    @staticmethod
     def can_decide(*, user_id: str, agent_owner_id: str) -> bool:
         """승인 권한 — 현재는 에이전트 소유자.
 

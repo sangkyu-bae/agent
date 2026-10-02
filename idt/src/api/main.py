@@ -448,6 +448,7 @@ from src.infrastructure.tool_selection.llm_tool_selector import (
     LLMToolSelector,
 )
 from src.infrastructure.web_search.tavily_tool import TavilySearchTool
+from src.application.hallucination.grounded_generation import GroundedGenerator
 from src.application.hallucination.use_case import HallucinationEvaluatorUseCase
 from src.infrastructure.hallucination.adapter import HallucinationEvaluatorAdapter
 from src.infrastructure.intent.adapter import LLMIntentAnalyzerAdapter
@@ -815,6 +816,40 @@ def get_utility_llm_provider() -> UtilityLLMProvider:
             max_instances=settings.llm_instance_cache_max_entries,
         )
     return _utility_llm_provider
+
+
+# draft-grounding-check: 근거 판정 전용 공급자 (앱 수명 싱글톤, lazy).
+_grounding_judge_llm_provider: Optional[UtilityLLMProvider] = None
+
+
+def get_grounding_judge_llm_provider() -> UtilityLLMProvider:
+    """근거 판정기 LLM 공급자 — settings.grounding_judge_model 을 이름으로 해석.
+
+    유틸리티 공급자와 같은 해석 규칙(활성 모델 이름 일치 → 실패 시 기본 모델)을
+    쓰되 모델만 분리한다. 빈 값이면 유틸리티 공급자를 그대로 쓴다.
+    관리자 모델 수정은 TTL(llm_model_cache_ttl_seconds) 후 반영된다.
+    """
+    global _grounding_judge_llm_provider
+    if not settings.grounding_judge_model:
+        return get_utility_llm_provider()
+    if _grounding_judge_llm_provider is None:
+        app_logger = get_app_logger()
+        _grounding_judge_llm_provider = UtilityLLMProvider(
+            cache=InMemoryCache(
+                default_ttl_seconds=settings.llm_model_cache_ttl_seconds,
+                max_entries=8,
+            ),
+            llm_factory=_llm_factory,
+            session_factory=get_session_factory(),
+            repo_builder=lambda session: LlmModelRepository(
+                session=session, logger=app_logger
+            ),
+            logger=app_logger,
+            utility_model_name=settings.grounding_judge_model,
+            ttl_seconds=settings.llm_model_cache_ttl_seconds,
+            max_instances=4,
+        )
+    return _grounding_judge_llm_provider
 
 # Global logger instance
 _app_logger: Optional[StructuredLogger] = None
@@ -2905,6 +2940,15 @@ def create_agent_builder_factories():
         empty_result_patterns=_empty_result_patterns(),
         # ★ worker-capability-denial-guard D-03: 워커 능력 부정 판정 문구
         capability_denial_patterns=_capability_denial_patterns(),
+        # ★ draft-grounding-check §5.4: 초안·최종 답변 근거 재작성 루프
+        grounded_generator=GroundedGenerator(
+            HallucinationEvaluatorAdapter(llm_provider=get_grounding_judge_llm_provider()),
+            app_logger,
+            enabled=settings.grounding_check_enabled,
+            corpus_max_chars=settings.grounding_corpus_max_chars,
+        ),
+        draft_grounding_max_retries=settings.draft_grounding_max_retries,
+        answer_grounding_max_retries=settings.answer_grounding_max_retries,
     )
 
     # DB-001 §10.2: session 은 Depends(get_session) 으로 주입.

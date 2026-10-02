@@ -34,10 +34,15 @@ class ApprovalGateMiddleware(AgentMiddleware):
             신호 경로가 끊겨도 추적이 가능하게 한다.
     """
 
-    def __init__(self, tool_id: str, worker_id: str) -> None:
+    def __init__(
+        self, tool_id: str, worker_id: str, draft_key: str | None = None
+    ) -> None:
         super().__init__()
         self._tool_id = tool_id
         self._worker_id = worker_id
+        # approval-gate-run-termination D-04: 관례 키가 아닌 본문 인자
+        # (tool_config.draft_arg_key) 를 승인 초안으로 쓴다.
+        self._draft_key = draft_key
 
     def wrap_tool_call(
         self, request: Any, handler: Callable[[Any], Any]
@@ -61,7 +66,7 @@ class ApprovalGateMiddleware(AgentMiddleware):
         content = ApprovalSignalPolicy.render(
             tool_id=self._tool_id,
             tool_args=args,
-            draft=ApprovalEditPolicy.extract_draft(args),
+            draft=ApprovalEditPolicy.extract_draft(args, draft_key=self._draft_key),
             tool_call_id=call_id,
         )
         # tool_call_id 를 그대로 되돌려야 짝이 맞는다 — 어긋나면 OpenAI 가
@@ -78,6 +83,10 @@ class StatelessGate:
     형식에 그쳤다.
     """
 
-    def build_for_worker(self, *, tool_id: str, worker_id: str) -> ApprovalGateMiddleware:
+    def build_for_worker(
+        self, *, tool_id: str, worker_id: str, draft_key: str | None = None
+    ) -> ApprovalGateMiddleware:
         # 워커마다 새 인스턴스 (builtin-middleware D6 — 상태 공유 금지)
-        return ApprovalGateMiddleware(tool_id=tool_id, worker_id=worker_id)
+        return ApprovalGateMiddleware(
+            tool_id=tool_id, worker_id=worker_id, draft_key=draft_key
+        )

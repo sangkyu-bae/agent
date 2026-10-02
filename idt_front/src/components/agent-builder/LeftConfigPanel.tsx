@@ -67,6 +67,8 @@ interface LeftConfigPanelProps {
   isModelsLoading: boolean;
   isModelsError: boolean;
   onRetryModels: () => void;
+  /** approval-gate-run-termination §5.1: 승인 필요 도구의 본문 인자 입력 */
+  onDraftArgKeyChange?: (toolId: string, value: string) => void;
 }
 
 /**
@@ -92,6 +94,7 @@ const LeftConfigPanel = ({
   isModelsLoading,
   isModelsError,
   onRetryModels,
+  onDraftArgKeyChange,
 }: LeftConfigPanelProps) => {
   const [leftTab, setLeftTab] = useState<LeftTabId>('form');
   const [isModelModalOpen, setModelModalOpen] = useState(false);
@@ -397,6 +400,9 @@ const LeftConfigPanel = ({
                       {tool.source === 'mcp' && (
                         <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-600">MCP</span>
                       )}
+                      {tool.requires_approval && (
+                        <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-600">승인 필요</span>
+                      )}
                       {isConfigurable && (
                         <button
                           type="button"
@@ -416,6 +422,20 @@ const LeftConfigPanel = ({
                         제거
                       </button>
                     </div>
+                    {tool.requires_approval && (
+                      // approval-gate-run-termination §5.1: 승인 화면에 본문으로 보일 인자
+                      <label className="mt-2 flex items-center gap-2 text-[12px] text-zinc-500">
+                        <span className="shrink-0">본문 인자</span>
+                        <input
+                          type="text"
+                          aria-label={`${tool.name} 본문 인자`}
+                          value={form.draftArgKeys?.[tool.tool_id] ?? ''}
+                          onChange={(e) => onDraftArgKeyChange?.(tool.tool_id, e.target.value)}
+                          placeholder="비우면 body/content 등 자동"
+                          className="min-w-0 flex-1 rounded-lg border border-zinc-300 px-2 py-1 text-[12px] text-zinc-800 outline-none focus:border-violet-400"
+                        />
+                      </label>
+                    )}
                     {tool.tool_id === RAG_TOOL_ID && ragConfig && (
                       <RagConfigSummaryBadge
                         config={ragConfig}
