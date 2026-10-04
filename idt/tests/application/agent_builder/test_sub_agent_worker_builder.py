@@ -85,6 +85,15 @@ class TestSubAgentWorkerBuilder:
         assert workers[0].sort_order == 1
 
     @pytest.mark.asyncio
+    async def test_worker_id에_공백이_없다(self):
+        """subagent-context-scope FR-12 — 이름의 공백·금지 문자는 id 에 남지 않는다."""
+        builder, _ = _make_builder(
+            _make_agent("sub-1", "user-1", name="[L3] 요약 서브/v2")
+        )
+        workers = await _build(builder)
+        assert workers[0].worker_id == "sub_agent_[L3]_요약_서브_v2_0"
+
+    @pytest.mark.asyncio
     async def test_public_other_user_allowed_without_subscription(self):
         builder, _ = _make_builder(_make_agent("sub-1", "other", visibility="public"))
         workers = await _build(builder)

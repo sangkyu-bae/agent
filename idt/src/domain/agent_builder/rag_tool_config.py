@@ -14,6 +14,13 @@ _TOOL_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
 MAX_LLM_NAME_LENGTH = 64
 # 초과분을 잘라낸 뒤 붙이는 해시 접미사 길이("_" 제외).
 _LLM_NAME_HASH_LEN = 4
+# OpenAI messages[].name 패턴 ^[^\s<|\\/>]+$ 의 금지 문자 (FR-12).
+_LLM_NAME_FORBIDDEN = re.compile(r"[\s<|\\/>]")
+
+
+def sanitize_llm_name(name: str) -> str:
+    """OpenAI messages[].name 금지 문자(공백·<|\\/>)를 '_'로 치환. 한글은 보존."""
+    return _LLM_NAME_FORBIDDEN.sub("_", name)
 
 
 def clamp_llm_name(name: str) -> str:
@@ -23,11 +30,17 @@ def clamp_llm_name(name: str) -> str:
     고정이라 MCP 도구명이 17자만 넘어도 worker_id 가 상한을 넘는다. 단순 절단은
     접두부가 같은 도구끼리 충돌하므로 원본 전체의 해시를 접미사로 붙여 갈라낸다.
     상한 이하 이름은 그대로 돌려줘 기존 저장값과의 호환을 지킨다.
+
+    subagent-context-scope FR-12: OpenAI messages[].name 금지 문자(공백·<|\\/>)도
+    '_'로 치환한다. 서브에이전트 worker_id 는 에이전트 이름에서 만들어져 공백을
+    포함할 수 있고, 이미 저장된 id 도 재저장 없이 동작해야 한다. 해시는 치환 전
+    원본으로 계산해 결정성을 유지한다.
     """
-    if len(name) <= MAX_LLM_NAME_LENGTH:
-        return name
+    safe = sanitize_llm_name(name)
+    if len(safe) <= MAX_LLM_NAME_LENGTH:
+        return safe
     digest = hashlib.sha1(name.encode("utf-8")).hexdigest()[:_LLM_NAME_HASH_LEN]
-    head = name[: MAX_LLM_NAME_LENGTH - _LLM_NAME_HASH_LEN - 1]
+    head = safe[: MAX_LLM_NAME_LENGTH - _LLM_NAME_HASH_LEN - 1]
     return f"{head}_{digest}"
 
 

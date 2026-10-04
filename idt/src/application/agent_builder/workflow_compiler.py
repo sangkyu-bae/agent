@@ -35,6 +35,13 @@ from src.domain.agent_builder.policies import (
 from src.domain.approval.entity import GateSettings
 from src.domain.approval.policies import ApprovalPolicy, ApprovalSignalPolicy
 from src.domain.middleware.entities import MiddlewareType
+from src.application.agent_builder.sub_agent_context import (
+    SubAgentContextStrategy,
+    SubAgentInput,
+    TaskWithOriginStrategy,
+    legacy_input,
+    resolve_strategy,
+)
 from src.application.agent_builder.supervisor_hooks import (
     AttachmentRoutingHooks,
     DefaultHooks,
@@ -513,6 +520,9 @@ class WorkflowCompiler:
         grounded_generator: GroundedGenerator | None = None,
         draft_grounding_max_retries: int = 2,
         answer_grounding_max_retries: int = 1,
+        # subagent-context-scope FR-08: 서브에이전트 입력 조립 전략. 미주입이면
+        # 기본 전략([원 질문]+[참고 자료]+[현재 작업]).
+        sub_agent_context_strategy: SubAgentContextStrategy | None = None,
     ) -> None:
         self._tool_factory = tool_factory
         self._llm_factory = llm_factory
@@ -563,6 +573,9 @@ class WorkflowCompiler:
         self._grounded = grounded_generator
         self._draft_grounding_max_retries = draft_grounding_max_retries
         self._answer_grounding_max_retries = answer_grounding_max_retries
+        self._sub_agent_context_strategy = (
+            sub_agent_context_strategy or TaskWithOriginStrategy()
+        )
 
     async def compile(
         self,
@@ -704,6 +717,10 @@ class WorkflowCompiler:
                         subject_user_id=subject_user_id,
                     )
                     worker_map[worker_def.worker_id] = sub_node
+                    # subagent-context-scope FR-10: 래퍼가 이미 노드 함수다.
+                    # 누락 시 _wrap_worker가 함수에 .ainvoke를 호출해 런 실패
+                    # (회귀 3a25eb7 — isinstance 휴리스틱 → id 집합 전환 때 빠짐).
+                    function_node_ids.add(worker_def.worker_id)
                     continue
 
                 # Design Ref: worker-context-injection §4.1 (FR-03, GAP-01) —
@@ -1307,7 +1324,9 @@ class WorkflowCompiler:
             subject_user_id=subject_user_id,
         )
 
-        return self._wrap_sub_agent(worker_def.worker_id, sub_graph)
+        # subagent-context-scope FR-09: 연결별 전략 선택 지점 (현재는 항상 기본값).
+        strategy = resolve_strategy(worker_def, self._sub_agent_context_strategy)
+        return self._wrap_sub_agent(worker_def.worker_id, sub_graph, strategy)
 
     @staticmethod
     def _should_gate_worker(
@@ -2562,10 +2581,42 @@ class WorkflowCompiler:
 
         return wrapped
 
-    def _wrap_sub_agent(self, worker_id: str, sub_graph):
+    def _build_sub_agent_input(
+        self,
+        state: SupervisorState,
+        worker_id: str,
+        strategy: SubAgentContextStrategy,
+    ) -> SubAgentInput:
+        """Design Ref: subagent-context-scope §6 — 조립 실패는 현행 입력으로 (D-08).
+
+        관측·문맥 보강 기능 때문에 서브에이전트 위임 자체를 막지 않는다.
+        """
+        try:
+            built = strategy.build(state, worker_id)
+        except Exception as e:
+            self._logger.error(
+                "sub_agent input build failed, falling back to last message",
+                exception=e, worker_id=worker_id,
+            )
+            return legacy_input(state.get("messages", []))
+        self._logger.info(
+            "sub_agent input built",
+            worker_id=worker_id, blocks=len(built.messages), summary=built.summary,
+        )
+        return built
+
+    def _wrap_sub_agent(
+        self,
+        worker_id: str,
+        sub_graph,
+        strategy: SubAgentContextStrategy | None = None,
+    ):
+        # D-07: 인자로 받는다 — __init__을 거치지 않은 인스턴스(테스트)도 동작.
+        strategy = strategy or TaskWithOriginStrategy()
+
         async def wrapped(state: SupervisorState) -> dict:
-            last_msg = state["messages"][-1]
-            task_content = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
+            # Plan SC: SC-1/SC-2 — [원 질문]+[참고 자료]+[현재 작업(+재시도 사유)].
+            sub_input = self._build_sub_agent_input(state, worker_id, strategy)
 
             # agent-recursion-limit D8: 반복 한도는 부모의 절반(정책 상수, 하한 보장).
             # 기존 state(키 부재) 하위호환을 위해 get + 정책 기본값.
@@ -2573,7 +2624,7 @@ class WorkflowCompiler:
                 state.get("max_iterations", IterationLimitPolicy.DEFAULT)
             )
             sub_initial = build_initial_state(
-                messages=[{"role": "user", "content": task_content}],
+                messages=sub_input.messages,
                 config=SupervisorConfig(
                     max_iterations=sub_limit,
                     token_limit=state["token_limit"] // 2,
@@ -2606,6 +2657,8 @@ class WorkflowCompiler:
                 "messages": [answer_msg],
                 "last_worker_id": worker_id,
                 "token_usage": state["token_usage"] + sub_token_usage,
+                # FR-07: 입력 요약(길이·개수만) — 실행 이력 step output_summary.
+                STEP_OUTPUT_SUMMARY_KEY: sub_input.summary,
             }
             # approval-gate-run-termination Analysis G3: 서브 그래프의 승인 대기 신호를
             # 부모로 올려 부모 런도 종료시킨다. 재개는 부모 그래프 워커에 결과를
