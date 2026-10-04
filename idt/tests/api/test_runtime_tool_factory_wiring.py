@@ -115,3 +115,32 @@ class TestMiddlewareAgentToolFactoryMcpWiring:
     def test_mcp_repository_is_injected(self, middleware_tool_factory):
         """create_async를 저장소 없이 호출하므로 생성자 주입이 유일한 폴백이다."""
         assert middleware_tool_factory._mcp_repository is not None
+
+
+class TestRuntimeSubAgentWiring:
+    """subagent-context-scope FR-11 — 서브에이전트 런타임 배선.
+
+    WorkflowCompiler에 agent_repository가 없으면 서브에이전트를 가진
+    에이전트는 compile 단계에서 ValueError로 통째로 실패한다 (최초 도입부터
+    미주입이었다 — module-4 실런에서 발견).
+    """
+
+    def test_agent_repository_is_session_scoped(self, workflow_compiler):
+        from src.infrastructure.agent_builder.session_scoped_agent_repository import (
+            SessionScopedAgentDefinitionRepository,
+        )
+
+        assert isinstance(
+            workflow_compiler._agent_repository,
+            SessionScopedAgentDefinitionRepository,
+        ), "WorkflowCompiler에 세션 스코프 agent_repository가 주입되지 않았다"
+
+    def test_llm_model_repository_is_session_scoped(self, workflow_compiler):
+        """서브에이전트가 부모와 다른 모델을 쓸 때 해석 경로."""
+        from src.infrastructure.llm_model.session_scoped_llm_model_repository import (
+            SessionScopedLlmModelRepository,
+        )
+
+        assert isinstance(
+            workflow_compiler._llm_model_repository, SessionScopedLlmModelRepository,
+        ), "WorkflowCompiler에 세션 스코프 llm_model_repository가 주입되지 않았다"

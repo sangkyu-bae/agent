@@ -2909,9 +2909,24 @@ def create_agent_builder_factories():
         session_factory=get_session_factory(), logger=app_logger,
     )
 
+    # ★ subagent-context-scope FR-11: 서브에이전트 정의·모델 런타임 조회.
+    # 미주입이면 서브에이전트를 가진 에이전트가 compile 단계에서 통째로 실패한다.
+    from src.infrastructure.agent_builder.session_scoped_agent_repository import (
+        SessionScopedAgentDefinitionRepository,
+    )
+    from src.infrastructure.llm_model.session_scoped_llm_model_repository import (
+        SessionScopedLlmModelRepository,
+    )
+
     workflow_compiler = WorkflowCompiler(
         tool_factory=tool_factory, llm_factory=_llm_factory, logger=app_logger,
         hooks=DefaultHooks(),
+        agent_repository=SessionScopedAgentDefinitionRepository(
+            session_factory=get_session_factory(), logger=app_logger,
+        ),
+        llm_model_repository=SessionScopedLlmModelRepository(
+            session_factory=get_session_factory(), logger=app_logger,
+        ),
         # ★ mcp-tool-category-routing §5 D-01/D-09: 카테고리 해석 + 호출 상한
         tool_catalog_repository=_tool_catalog_runtime_repo,
         excel_analysis_workflow_getter=get_configured_excel_analysis_workflow,

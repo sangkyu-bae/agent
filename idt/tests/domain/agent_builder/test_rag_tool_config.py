@@ -271,3 +271,33 @@ class TestClampLlmName:
     def test_clamped_name_keeps_allowed_charset(self):
         name = "mcp_5c007b42-f417-426b-af7d-45819f175575_" + "n" * 40
         assert sanitize_tool_name(clamp_llm_name(name)) == clamp_llm_name(name)
+
+
+class TestClampLlmNameForbiddenChars:
+    """subagent-context-scope FR-12 — OpenAI messages[].name 패턴 ^[^\\s<|\\\\/>]+$.
+
+    서브에이전트 worker_id 는 에이전트 이름에서 만들어져 공백을 포함한다(실런
+    08f917c7: 서브에이전트 다음 supervisor 호출이 400). 이미 저장된 id 도
+    재저장 없이 동작해야 하므로 메시지 이름 단계에서 치환한다.
+    """
+
+    _OPENAI_NAME = __import__("re").compile(r"^[^\s<|\\/>]+$")
+
+    def test_공백은_밑줄로(self):
+        assert clamp_llm_name("sub_agent_[L3] 요약 서브_0") == "sub_agent_[L3]_요약_서브_0"
+
+    def test_금지_문자_전부_치환(self):
+        out = clamp_llm_name("a<b|c\\d/e>f\tg\nh")
+        assert out == "a_b_c_d_e_f_g_h"
+        assert self._OPENAI_NAME.match(out)
+
+    def test_한글과_괄호는_보존(self):
+        assert clamp_llm_name("sub_agent_요약봇(v2)_0") == "sub_agent_요약봇(v2)_0"
+
+    def test_안전한_이름은_그대로(self):
+        assert clamp_llm_name("tavily_search_worker") == "tavily_search_worker"
+
+    def test_치환_후에도_길이_상한(self):
+        out = clamp_llm_name("sub_agent_" + "긴 이름 " * 20 + "_0")
+        assert len(out) <= MAX_LLM_NAME_LENGTH
+        assert self._OPENAI_NAME.match(out)

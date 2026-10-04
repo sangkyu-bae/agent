@@ -12,6 +12,7 @@ from src.domain.agent_builder.policies import (
     NestingDepthPolicy,
     VisibilityPolicy,
 )
+from src.domain.agent_builder.rag_tool_config import sanitize_llm_name
 from src.domain.agent_builder.schemas import AgentDefinition, WorkerDefinition
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 
@@ -46,7 +47,9 @@ class SubAgentWorkerBuilder:
             description = config.description or sub_agent.description
             workers.append(WorkerDefinition(
                 tool_id=f"sub_agent_{config.ref_agent_id[:8]}",
-                worker_id=f"sub_agent_{sub_agent.name}_{i}",
+                # subagent-context-scope FR-12: 이름의 공백 등은 LLM 메시지
+                # name 패턴 위반(OpenAI 400) — 저장 id 부터 안전하게 만든다.
+                worker_id=sanitize_llm_name(f"sub_agent_{sub_agent.name}_{i}"),
                 description=description,
                 sort_order=existing_tool_count + i,
                 worker_type="sub_agent",
