@@ -14,13 +14,19 @@ source_refs:
   - idt/src/application/ingest/ingest_use_case.py
   - idt/src/application/eval/use_cases.py (_kickoff_feedback_fanout)
   - docs/SOURCE-OF-TRUTH.md (2026-07-23, 커밋 6cc25656 기준 전면 갱신본)
+  - 커밋 72b3632 (v4 — 게이트 워커 조건부 END, GroundedGenerator 배선)
+  - 커밋 fe184dd, 49b2f41 (v4 — 서브에이전트 런타임 저장소 DI, function_node_ids)
+  - idt/src/application/agent_builder/supervisor_nodes.py (route_after_gated_worker) — v4
 confidence: 0.9
-version: 3
+version: 4
 created: 2026-07-23
-updated: 2026-08-16
-verified_at: 12c69b4
+updated: 2026-10-06
 reviewer: 배상규
+verified_at: ae12fc4
 ---
+
+> v4 (2026-10-06): §2(b)에 게이트/서브에이전트 조건부 간선·근거 판정 루프·서브에이전트 DI 3항목 추가.
+> 에이전트 갱신이므로 approved → draft 강등 (재승인 필요). 다른 절은 v3(12c69b4) 기준 그대로이며 이번에 재검증하지 않았다.
 
 # 백엔드 아키텍처 조감도 — 요청→응답 전체 경로
 
@@ -79,6 +85,15 @@ agent_builder_router → RunAgentUseCase
 ```
 - 그래프는 **정적 자산이 아니다**. agent_definition 테이블의 정의가 곧 그래프 구조이며,
   워커 추가·수정은 코드 배포 없이 DB 변경으로 반영된다.
+- (v4) **간선 예외 2종**: 승인 게이트 워커·서브에이전트 워커 직후는 `route_after_gated_worker`
+  조건부 간선 — `approval_pending` 이면 supervisor·quality_gate 재진입 없이 END, 답변은 결정적
+  템플릿으로 교체([[approval-gate-run-contract]]). 그 외 워커 간선은 위 그림 그대로.
+- (v4) **final_answer·action 초안은 근거 판정 재작성 루프**(`GroundedGenerator`, gpt-4o 판정,
+  `grounding_check_enabled` 기본 True)를 통과하며, 루프 중 토큰은 채팅에 흘리지 않는다
+  ([[grounding-rewrite-loop]]).
+- (v4) **서브에이전트 워커**는 자식 정의를 런타임에 읽으므로 컴파일러(앱 싱글톤)에
+  `SessionScopedAgentDefinitionRepository`·`SessionScopedLlmModelRepository` 가 main.py에서 주입돼야
+  동작한다(2026-10 이전엔 미주입이라 한 번도 동작한 적 없음). 입력 계약은 [[supervisor-graph-contracts]] §5.
 - RunTracker(관측)가 노드/도구/LLM 호출 단위로 ai_run_* 5테이블에 기록한다 (V021+V046).
 
 **(c) RAG 검색 — 하이브리드 vs 라우팅 (별도 경로 2개)**
