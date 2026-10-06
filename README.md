@@ -1,4 +1,4 @@
-# sangplusbot
+# agentbuilder
 
 > 자연어 대화만으로 **실제 일하는 에이전트**를 만드는 Agent Builder 플랫폼
 
