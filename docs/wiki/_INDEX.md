@@ -5,7 +5,7 @@
 > **설명은 트리거 조건형**: "무엇에 관한 문서"가 아니라 "언제 읽어야 하는 문서"로 쓴다.
 
 ## backend/
-- ✅ [백엔드 아키텍처 조감도](backend/architecture-overview.md) — **idt/ 작업 첫 진입 시, 또는 새 기능이 어느 레이어·어느 그래프에 붙는지 정할 때** — DI는 main.py 단일 집중, supervisor 그래프는 요청마다 DB 정의로 동적 컴파일, 문서는 저장소 3곳 분산, 성장 루프 4 플래그 기본 off, 실행 경로 5종(백그라운드 잡 포함)
+- ✅ [백엔드 아키텍처 조감도](backend/architecture-overview.md) — **idt/ 작업 첫 진입 시, 또는 새 기능이 어느 레이어·어느 그래프에 붙는지 정할 때** — DI는 main.py 단일 집중, supervisor 그래프는 요청마다 DB 정의로 동적 컴파일, 문서는 저장소 3곳 분산, 성장 루프 4 플래그 기본 off, 실행 경로 5종(백그라운드 잡 포함). v4: 게이트·서브에이전트 워커 직후 조건부 END, final_answer 근거 판정 루프(기본 on), 서브에이전트는 SessionScoped 저장소 DI 필수
 - api/
   - ✅ [백엔드 라우터 지도](backend/api/router-map.md) — **새 API 라우터 추가하거나 기존 라우터의 책임·경유 서비스를 찾을 때**. 라우트 등록 테스트는 `app.routes` 순회 금지(`_IncludedRouter` 로 깨짐)·pipeline 라우터는 DI 섹션 조건부 include+와일드카드보다 선등록 필수·intent 라우터는 독립 모듈(hot path 미배선)·tree 선언 순서·source 토글·도구 ID 이중 네임스페이스·skills/list=POST·wiki 인증 선행+싱글턴
 - db/
@@ -17,7 +17,7 @@
 - patterns/
   - 📝 [사용자 평가 저장 — 취소는 행 삭제 토글](backend/patterns/feedback-toggle-row-delete.md) — **"있다/없다" 신호를 저장하는 기능 설계 시** — 상태 컬럼 대신 행 존재+upsert/delete, 0건 집계는 None
   - ✅ [무거운 외부 클라이언트는 앱 수명 싱글턴](backend/patterns/app-lifetime-client-singleton.md) — **임베딩·Qdrant·ES 클라이언트를 쓰는 DI/라우터 추가 시, 또는 특정 API가 초 단위로 느릴 때** — per-request 생성이면 요청당 ~6.5s+누수, 인증 파라미터는 use_case보다 앞에, 무토큰 4xx도 느리면 DI 병목
-  - ✅ [Supervisor 그래프 계약 3종](backend/patterns/supervisor-graph-contracts.md) — **워커 래퍼·수퍼바이저 프롬프트·강제 라우팅 트리거를 수정하기 전 필수** — 워커 산출물=AIMessage(name) 1건(위반 시 고아 tool 400), 능력 목록 프레이밍은 과차단 유발, 재주입분은 강제 라우팅 제외
+  - ✅ [Supervisor 그래프 계약](backend/patterns/supervisor-graph-contracts.md) — **워커 래퍼·수퍼바이저 프롬프트·강제 라우팅 트리거·서브에이전트 입력을 수정하기 전, 또는 새 노드/워커 유형을 추가할 때 필수** — 워커 산출물=AIMessage(name) 1건(위반 시 고아 tool 400), 능력 목록 프레이밍은 과차단 유발, 재주입분은 강제 라우팅 제외, v2: name은 OpenAI 패턴(공백 금지 — 위반 시 다음 supervisor 400)이라 `clamp_llm_name` 필수, 서브에이전트 입력=원 질문+참고자료(4000자)+현재 작업 3블록(`_current_turn_messages`는 QG 피드백을 턴 경계로 오인), 함수형 노드는 `function_node_ids` 등록 누락 시 AttributeError
   - ✅ [빌트인 도구 — opt-out 채널 분리](backend/patterns/builtin-tools-optout-channel.md) — **표준 도구를 전 에이전트에 보급하거나 "LLM은 못 빼고 사용자만 뺄 수 있는" 요구를 만났을 때** — is_builtin(V054) SoT·upsert 보존 계약·exclude 필드 부재로 채팅 우회 구조 차단
   - ✅ [Stateless HITL 질문 왕복](backend/patterns/stateless-hitl-clarification.md) — **무상태 API에 "부족하면 되묻기" 다회 왕복을 넣을 때, 또는 compose/Fix 탭·에이전트 파이프라인 질문 흐름 수정 전** — 세션 테이블 대신 질문 에코백+클라 신고값 서버 재clamp 2요소, 두 번째 적용(pipeline: 왕복 후 4단계 실행까지, 세션 0), Protocol이 application DTO를 물면 application 레이어 배치, v3 auto_agent_builder 루프와 혼동 금지
   - 📝 [탈착형 모듈 이음매](backend/patterns/detachable-module-seam.md) — **실험적/부가 기능을 기존 실행 경로에 끼울 때, 또는 "안 되면 뺄 수 있게" 요구를 받았을 때** — 팩토리가 None 반환=노드 미존재, 실패 시 입력 그대로 반환(부분 성공 금지), 킬스위치 기본 off, 경계는 AST import 테스트로 강제. ⚠️ 근거 전량 미커밋 + 두 사이클 모두 미활성 — 확립된 관행 아닌 제안(단, v4: 두 번째 소비자 등장 시 선언 목록 확장 프로세스는 실작동 확인 — duck typing 규칙은 "떼어도 동작해야 하는" 소비자에게만). **§3(LLM 스키마 겸용+3층 방어)은 폐기 → [LLM 출력 신뢰 경계](backend/patterns/llm-output-trust-boundary.md)로 대체**
@@ -30,6 +30,8 @@
   - ✅ [degraded vs 예외 전파 경계](backend/patterns/degradation-vs-failure-boundary.md) — **graceful degradation·폴백을 설계할 때, "이 실패를 200으로 줄까 5xx로 줄까" 망설일 때** — 기준은 "쓸 수 있는 결과가 존재하는가"(LLM 실패=degraded, 저장 실패=전파), 흡수는 어댑터 한 곳(포트 계약+AST로 고정), 배제한 입력은 스냅샷에서도 제외, 다단계 적용례(파이프라인: 단계별 degraded + bind만 흡수 — agent_id가 이미 존재)
   - ✅ [SSE heartbeat — wait_for 전제 조건](backend/patterns/sse-heartbeat-async-generator.md) — **SSE/스트림에 heartbeat·타임아웃을 붙이기 전 필수, 또는 heartbeat 추가 후 스트림이 중간에 죽을 때** — `wait_for(__anext__)`는 큐 기반 스트림 전용(직접 LLM await 제너레이터에 쓰면 취소가 내부로 주입돼 파이프라인 중단), 직접 await 형은 task 유지+`asyncio.wait(timeout)`, heartbeat 테스트는 이벤트 무손실 단언 세트
   - ✅ [동기+SSE 이중 노출 — 공유 제너레이터+고정 steps](backend/patterns/sync-sse-dual-exposure.md) — **같은 작업을 동기·스트리밍 두 엔드포인트로 낼 때, 또는 화면 단계 진행 바용 다단계 상태 계약을 설계할 때** — UseCase는 async generator 하나(이벤트…+최종 결과), 두 라우터는 소비 방식만 상이(의미 동일이 구조로 강제+직렬화 동일성 테스트), steps는 항상 고정 5개(미도달 skipped, finalize_steps), wire 문자열=StrEnum value(변경=프론트 계약 파괴), 스트림 개시 후 실패는 SSE 레이어가 이벤트로 합성
+  - ✅ [승인 게이트 런 계약](backend/patterns/approval-gate-run-contract.md) — **승인 필요(부작용) 도구·게이트 워커·초안 작성 노드를 추가/수정할 때, 또는 "승인 대기인데 성공했다고 답했다/같은 워커 반복 호출"을 만났을 때** — 게이트 미설정이어도 fail-closed 기본 게이트(effective_gate), 게이트 직후 조건부 END(되돌아가면 5회 반복+가짜 성공 JSON), 답변은 결정적 템플릿, 접두 안내는 도구 원문 설명에 진다(접미+규칙 블록), "하지 말라" 대신 스키마에서 본문 키 제거
+  - ✅ [근거 판정 재작성 루프](backend/patterns/grounding-rewrite-loop.md) — **LLM 판정기·검증기를 새로 만들거나 모델을 고를 때, 답변/초안 근거 검사를 건드리거나 "final_answer 타이핑 스트리밍이 안 된다"·판정 비용이 튈 때** — GroundedGenerator 공통 루프(판정→재작성 2/1→문장 제거), fail-open, 판정 모델 벤치는 양성 대조군 필수(4o-mini 정상 7/7 오판·4.1-mini 미검출 → gpt-4o), 원문 그대로 지적은 결정적 제외, `<sources>` 태그 경계, `grounding_check_enabled` 기본 True
   - ✅ [logger.warning의 exception kwarg](backend/patterns/structured-logger-warning-exception.md) — **예외 삼키고 폴백하는 경로에 warning 로그를 쓸 때** — `exception=e`로 스택 트레이스 기록 가능(`error=str(e)` 금지), 인터페이스에 없어도 구현(_log)이 받는다
 
 ## frontend/
@@ -51,7 +53,7 @@
 ## conventions/
 - 📝 ["데이터는 있고 노출 경로만 없다" 패턴](conventions/data-exists-exposure-missing.md) — **새 계산·집계 기능을 만들기 전** — 기존 산출물(버려지는 반환값·잘린 응답 스키마)에 이미 있는지 먼저 확인
 - 📝 [계약 확장은 additive + 응답 타입 분리](conventions/additive-contract-extension.md) — **공용 스키마·API·WS 계약을 변경하거나 기존 UseCase에 협력자를 추가할 때** — 기존 소비자 무변경(신규 응답 타입·optional 필드·optional 마지막 인자+폴백)으로 회귀 0, 신규 상태값은 구형 소비자 안전 강하 동반, 독립 opt-in 선호
-- ✅ [거짓 초록 품질 게이트 4종](conventions/false-green-quality-gates.md) — **Plan에서 DoD·품질 기준을 적을 때, Do를 닫기 전, "회귀 0건"을 증명해야 할 때, MSW/픽스처를 작성하기 전** — 회귀는 pass/fail 개수가 아니라 정렬된 `FAILED` 목록 diff로 증명(baseline 58건 상시 존재), 전역 기준은 단일 사이클에서 달성 불가, `tsc --noEmit` ≠ `tsc -b`, 핸들러가 훅 select와 어긋나면 조용히 통과
+- ✅ [거짓 초록 품질 게이트](conventions/false-green-quality-gates.md) — **Plan에서 DoD·품질 기준을 적을 때, Do를 닫기 전, "회귀 0건"을 증명해야 할 때, MSW/픽스처·AsyncMock을 작성하기 전, 앱 싱글톤에 선택 의존성을 추가할 때** — 회귀는 pass/fail 개수가 아니라 정렬된 `FAILED` 목록 diff로 증명(상시 실패 58→53건, 숫자 변동), 전역 기준은 단일 사이클에서 달성 불가, `tsc --noEmit` ≠ `tsc -b`, 핸들러가 훅 select와 어긋나면 조용히 통과, v3: AsyncMock·싱글톤 미주입이 서브에이전트 런타임 4개월 불능을 가림 → 컴파일 그래프 실행 테스트+배선 계약 테스트+module-1 전 실런 스모크
 - 📝 [PDCA gap 명시적 이월](conventions/explicit-gap-carryover.md) — **gap 분석 후 미달 항목 처리 방침 정할 때** — 억지로 메우지 않고 후속 소형 사이클로 회수
 - ✅ [운영 config는 소비 지점 기준 단일 출처](conventions/config-single-source-at-consumption.md) — **새 config 키를 추가하기 전, 특히 기존 모듈의 상한·타임아웃을 "오버라이드 가능하게" 복제하고 싶을 때 필수** — 소비 지점이 안 읽는 config는 dead config(값을 바꿔도 동작 불변, G-02/G-03 실사례), 기존 config의 VO 변환 메서드 주입으로 재사용하고 새 키에는 소비 지점 파일:라인을 docstring에 명기
 - ✅ [중간 산출물도 검증 대상](conventions/intermediate-artifact-verification.md) — **Design 작성·검수 시(FR 역추적 표), 그리고 gap-detector 등 에이전트가 "기본 동작·기본값" 류 판정을 냈을 때** — Plan FR이 Design에서 유실되면 구현·테스트가 성실하게 함께 누락(G-04), 판정은 확신도 85%여도 실측 반증 가능(G-06: 403 주장→실측 401) — 수정 전 재현 테스트부터

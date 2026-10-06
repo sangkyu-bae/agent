@@ -1,7 +1,6 @@
 ---
-title: 거짓 초록 — 통과했는데 검증되지 않은 품질 게이트 4종
+title: 거짓 초록 — 통과했는데 검증되지 않은 품질 게이트
 status: approved
-reviewer: 배상규
 source_type: conversation
 source_refs:
   - idt_front/package.json:6-15 (build="tsc -b && vite build" vs type-check="tsc --noEmit")
@@ -10,14 +9,23 @@ source_refs:
   - docs/archive/2026-08/intent-analyzer/intent-analyzer.report.md (SC-2 baseline 58건, §6.2)
   - docs/archive/2026-08/tool-recommender/tool-recommender.report.md (§6.1 픽스처가 설계 가정을 따라간 사례)
   - docs/archive/2026-08/prompt-composer/prompt-composer.analysis.md (SC-01 — FAILED 목록 byte-identical 대조)
+  - idt/docs/archive/2026-10/subagent-context-scope/subagent-context-scope.report.md (§1.3, §6.2~6.3 — v3)
+  - 커밋 fe184dd (WorkflowCompiler 저장소 DI 누락 → TestRuntimeSubAgentWiring) — v3
+  - 커밋 49b2f41 (AsyncMock이 가린 function_node_ids 회귀 → C0) — v3
+  - idt/tests/api/test_runtime_tool_factory_wiring.py (배선 계약 테스트) — v3
+  - idt/docs/04-report/approval-gate-run-termination.report.md (§6.1 — 단위 초록 상태에서 L3가 결함 2건) — v3
 confidence: 0.85
-version: 2
+version: 3
 created: 2026-08-14
-updated: 2026-08-18
-verified_at: 7c3ffdd
+updated: 2026-10-06
+reviewer: 배상규
+verified_at: ae12fc4
 ---
 
-# 거짓 초록 — 통과했는데 검증되지 않은 품질 게이트 4종
+# 거짓 초록 — 통과했는데 검증되지 않은 품질 게이트
+
+> v3 (2026-10-06): §6(모킹·앱 싱글톤 배선이 런타임 경로를 가림) 추가. 제목의 "4종" 제거.
+> 에이전트 갱신이므로 approved → draft 강등 (재승인 필요).
 
 ## 문제
 
@@ -35,6 +43,7 @@ DoD는 "미충족"으로 기록됐다 — **기준 설정 오류**다.
 
 백엔드도 같다: `pytest` 전체에 baseline 실패 58건(parser 21 / agent_builder_stream 9
 / retriever 7 / general_chat 7 …)이 상시 존재하며, 원인은 라이브러리 버전 드리프트다.
+(v3: 2026-09~10 사이클 보고서 기준 상시 실패는 **53건**으로 줄었다 — 숫자는 변하므로 매번 목록 diff로 확인.)
 
 > **관행**: 품질 기준은 **"변경 파일 기준"과 "전역 기준"을 분리 표기**한다.
 > 전역 부채는 별도 정리 사이클로 뺀다.
@@ -102,6 +111,23 @@ Do에서 ruff·pytest만 돌리고 넘어가, 설계 이탈로 추가한 코드 
 관련: 설계 이탈 항목을 추가할 때 테스트를 같이 늘리지 않는 것이 직접 원인이었다 —
 "이탈 항목 → 대응 테스트" 2열 표를 Do 산출물로 만들면 이탈을 적는 순간 테스트도 적게 된다.
 
+### 6. 모킹과 앱 싱글톤 배선은 "한 번도 실행된 적 없는 런타임"을 초록으로 만든다 (v3)
+
+subagent-context-scope 조사 중 **서브에이전트 런타임이 운영에서 한 번도 동작한 적이 없었다**는 사실이
+드러났다. 3중 차단이 4개월 잠복했고, 단위·통합 테스트는 전부 초록이었다.
+
+| 차단 | 왜 테스트가 못 잡았나 | 고정 장치 |
+|------|------|------|
+| sub_agent가 `function_node_ids` 누락 → `AttributeError` | 기존 테스트가 `_compile_sub_agent` 를 `AsyncMock` 으로 대체해 실제 노드 실행 경로를 안 탐 | 컴파일된 그래프에서 노드를 실제 실행하는 C0 테스트 |
+| `WorkflowCompiler`(앱 싱글톤)에 `agent_repository`·`llm_model_repository` 미주입 → compile `ValueError` | 선택(optional) 의존성이라 생성은 성공, 단위 테스트는 직접 주입 | `test_runtime_tool_factory_wiring.py::TestRuntimeSubAgentWiring`(main.py 실제 싱글톤의 주입 단언) |
+| worker_id 공백 → OpenAI name 400 | 단위 테스트는 실 LLM을 안 부름 | L3 실런 + `sanitize_llm_name` |
+
+- 2·3번은 **L3 실런에서만** 드러났다. approval-gate-run-termination 사이클도 단위 초록 상태에서 L3가
+  결함 2건(안내 문구 패배·인자 조립 파싱)을 드러냈다 — 두 사이클 연속 같은 패턴.
+- 앱 싱글톤이 per-request 세션에 묶인 저장소를 써야 할 때는 `SessionScoped*Repository`(호출마다
+  `session_factory()` 로 새 세션을 열어 위임) 어댑터를 main.py에서 주입한다 — 기존 7종+ 선례.
+- "런타임 위임은 범위 외"로 넘긴 경로는 아무도 실행하지 않는다 — 이월 시 **L3 실런 항목**으로 백로그에 명시.
+
 ## 다음에 적용하는 법
 
 1. Plan에서 품질 기준마다 **측정 범위(변경 파일 / 전역)** 를 명시한다.
@@ -113,6 +139,9 @@ Do에서 ruff·pytest만 돌리고 넘어가, 설계 이탈로 추가한 코드 
 6. 외부 의존(LLM 실호출·MCP·실서버)이 필요한 검증은 수동 체크리스트로 미루면
    사이클이 끝나도록 미실행된다 — **Do 단계의 종료 조건**으로 못 박거나, 환경이
    없다면 그 사실 자체를 Plan 리스크로 올린다.
+7. (v3) 새 노드·워커 유형은 **컴파일 그래프 실제 실행 테스트**를, 앱 싱글톤의 선택 의존성은
+   **배선 계약 테스트**를 기본으로 둔다. 기존 경로에 처음 의존하는 기능이면 **module-1 전에 실런 스모크**로
+   전제부터 확인한다 (기존 기능이 동작한다고 가정하지 말 것).
 
 ## 관련 문서
 
