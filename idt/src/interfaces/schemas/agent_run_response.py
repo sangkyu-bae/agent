@@ -82,6 +82,10 @@ class StepDto(BaseModel):
     error_text: Optional[str] = None
     llm_calls: List[LlmCallDto] = []
     tool_calls: List[ToolCallDto] = []
+    # subagent-step-observability §4.1 — 서브에이전트 계층 (목록은 평면 유지,
+    # 트리 조립은 클라이언트). 과거 런은 None/0.
+    parent_step_id: Optional[str] = None
+    depth: int = 0
 
 
 class RunDto(BaseModel):
@@ -492,4 +496,6 @@ def _step_node_to_dto(node) -> StepDto:
         error_text=s.error_text,
         llm_calls=[_llm_to_dto(lc) for lc in node.llm_calls],
         tool_calls=[_tool_call_node_to_dto(tc) for tc in node.tool_calls],
+        parent_step_id=s.parent_step_id,
+        depth=s.depth,
     )

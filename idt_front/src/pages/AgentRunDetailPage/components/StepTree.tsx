@@ -1,9 +1,12 @@
+import { useState } from 'react';
 import type {
   LlmCallDto,
   RetrievalDto,
+  StepTreeNode,
   StepDto,
   ToolCallDto,
 } from '@/types/agentRunAdmin';
+import { buildStepTree, countDescendants } from '@/utils/buildStepTree';
 
 function fmtCost(c: string | number): string {
   const v = typeof c === 'string' ? parseFloat(c) : c;
@@ -89,32 +92,69 @@ const ToolCallItem = ({ tool }: { tool: ToolCallDto }) => (
   </li>
 );
 
-const StepItem = ({ step }: { step: StepDto }) => (
-  <li className="rounded-md border border-zinc-200 bg-white p-3">
-    <div className="flex items-center gap-2 text-sm">
-      <span className="font-mono text-zinc-500">#{step.step_index}</span>
-      <span className="font-semibold text-zinc-800">{step.node_name}</span>
-      <span className="text-[11px] text-zinc-400">[{step.node_type}]</span>
-      <StatusBadge status={step.status} />
-      <span className="ml-auto text-xs text-zinc-500">
-        {fmtLatency(step.latency_ms)}
-      </span>
-    </div>
-    {step.error_text && (
-      <p className="mt-1 text-xs text-red-600">{step.error_text}</p>
-    )}
-    {(step.llm_calls.length > 0 || step.tool_calls.length > 0) && (
-      <ul className="mt-2 space-y-1">
-        {step.llm_calls.map((llm) => (
-          <LlmCallItem key={llm.id} llm={llm} />
-        ))}
-        {step.tool_calls.map((tool) => (
-          <ToolCallItem key={tool.id} tool={tool} />
-        ))}
-      </ul>
-    )}
-  </li>
-);
+const StepCalls = ({ step }: { step: StepDto }) =>
+  step.llm_calls.length > 0 || step.tool_calls.length > 0 ? (
+    <ul className="mt-2 space-y-1">
+      {step.llm_calls.map((llm) => (
+        <LlmCallItem key={llm.id} llm={llm} />
+      ))}
+      {step.tool_calls.map((tool) => (
+        <ToolCallItem key={tool.id} tool={tool} />
+      ))}
+    </ul>
+  ) : null;
+
+// subagent-step-observability Design §5.3 — 서브에이전트 step 아래 자식 step 을
+// 들여쓰기·접기로 묶는다. 자식이 없는 step(과거 런 포함)은 기존과 같은 한 줄.
+const StepItem = ({ node }: { node: StepTreeNode }) => {
+  const { step, children } = node;
+  const [expanded, setExpanded] = useState(true);
+  const groupLabel = `${step.node_name} 하위 step`;
+  return (
+    <li className="rounded-md border border-zinc-200 bg-white p-3">
+      <div className="flex items-center gap-2 text-sm">
+        {children.length > 0 && (
+          <button
+            type="button"
+            aria-expanded={expanded}
+            aria-label={`${groupLabel} ${expanded ? '접기' : '펼치기'}`}
+            onClick={() => setExpanded((v) => !v)}
+            className="w-4 text-zinc-500 hover:text-zinc-800"
+          >
+            {expanded ? '▾' : '▸'}
+          </button>
+        )}
+        <span className="font-mono text-zinc-500">#{step.step_index}</span>
+        <span className="font-semibold text-zinc-800">{step.node_name}</span>
+        <span className="text-[11px] text-zinc-400">[{step.node_type}]</span>
+        <StatusBadge status={step.status} />
+        {children.length > 0 && (
+          <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-medium text-violet-600">
+            하위 {countDescendants(node)}
+          </span>
+        )}
+        <span className="ml-auto text-xs text-zinc-500">
+          {fmtLatency(step.latency_ms)}
+        </span>
+      </div>
+      {step.error_text && (
+        <p className="mt-1 text-xs text-red-600">{step.error_text}</p>
+      )}
+      <StepCalls step={step} />
+      {children.length > 0 && expanded && (
+        <ul
+          role="group"
+          aria-label={groupLabel}
+          className="mt-2 space-y-2 border-l-2 border-violet-100 pl-4"
+        >
+          {children.map((child) => (
+            <StepItem key={child.step.id} node={child} />
+          ))}
+        </ul>
+      )}
+    </li>
+  );
+};
 
 interface Props {
   steps: StepDto[];
@@ -123,8 +163,8 @@ interface Props {
 
 const StepTree = ({ steps, orphanLlmCalls }: Props) => (
   <ul className="space-y-2">
-    {steps.map((s) => (
-      <StepItem key={s.id} step={s} />
+    {buildStepTree(steps).map((node) => (
+      <StepItem key={node.step.id} node={node} />
     ))}
     {orphanLlmCalls.length > 0 && (
       <li className="rounded-md border border-dashed border-zinc-200 bg-zinc-50 p-3">

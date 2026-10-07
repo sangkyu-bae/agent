@@ -8,6 +8,7 @@ Design §4.1 참조.
 from __future__ import annotations
 
 import json
+import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any, AsyncIterator, Final, Mapping, Optional, TYPE_CHECKING
@@ -140,6 +141,8 @@ async def _record_step_best_effort(
     node_type: NodeType,
     input_summary: Optional[str],
     logger: LoggerInterface,
+    parent_step_id: Optional[str] = None,
+    depth: int = 0,
 ) -> Optional[str]:
     """record_step 호출을 best-effort로 wrap. 실패 시 None 반환."""
     try:
@@ -151,6 +154,8 @@ async def _record_step_best_effort(
             llm_model_id=None,
             status=StepStatus.STARTED,
             input_summary=input_summary,
+            parent_step_id=parent_step_id,
+            depth=depth,
         )
     except Exception as e:
         logger.warning(
@@ -172,6 +177,7 @@ async def _update_step_best_effort(
     error_text: Optional[str],
     logger: LoggerInterface,
     node_name: str,
+    latency_ms: Optional[int] = None,
 ) -> None:
     """update_step을 best-effort로 wrap. step_id None이면 skip."""
     if step_id is None:
@@ -183,6 +189,7 @@ async def _update_step_best_effort(
             status=status,
             output_summary=output_summary,
             error_text=error_text,
+            latency_ms=latency_ms,
         )
     except Exception as e:
         logger.warning(
@@ -205,6 +212,25 @@ def _restore_context(
         set_current_run_context(with_step_id(prev_ctx, prev_step_id))
 
 
+def _resolve_hierarchy(parent_step_id: Optional[str], ctx: Any) -> int:
+    """기록할 step 의 중첩 깊이 (Design §3.4 H2~H4).
+
+    부모는 기록 직전의 callback._current_step_id — 서브에이전트 래퍼 노드 안에서
+    자식 그래프 노드가 시작되면 래퍼 step id, 최상위 노드면 None 이다 (H1).
+    """
+    if parent_step_id is None:
+        return 0
+    if ctx is not None and ctx.step_id == parent_step_id:
+        return ctx.step_depth + 1
+    # 컨텍스트 없이 부모만 알 때 — 관측 저하 허용 (H4)
+    return 1
+
+
+def _elapsed_ms(started: float) -> int:
+    """monotonic 경과 ms (Design §3.5 L1). DB 반올림 시각에 의존하지 않는다."""
+    return max(0, int((time.monotonic() - started) * 1000))
+
+
 @asynccontextmanager
 async def track_step(
     *,
@@ -222,51 +248,50 @@ async def track_step(
     - exit (normal): update_step(SUCCESS, output_summary) + callback.exit_step + 복원
     - exit (exception): update_step(FAILED, error_text) + callback.exit_step + 복원 + re-raise
     - best-effort: record_step 실패 → step_id=None, enter_step skip, update_step skip
+    - subagent-step-observability: parent_step_id·depth 기록, latency 는 monotonic 측정
     """
-    next_index = callback._step_index + 1  # M3: monotonic counter
+    prev_step_id = callback._current_step_id
+    prev_ctx = get_current_run_context()
+    depth = _resolve_hierarchy(prev_step_id, prev_ctx)
+    started = time.monotonic()
     step_id = await _record_step_best_effort(
         tracker=tracker,
         run_id=run_id,
-        step_index=next_index,
+        step_index=callback._step_index + 1,  # M3: monotonic counter
         node_name=node_name,
         node_type=node_type,
         input_summary=_truncate(input_summary, _INPUT_SUMMARY_MAX_CHARS),
         logger=logger,
+        parent_step_id=prev_step_id,
+        depth=depth,
     )
-
-    prev_step_id = callback._current_step_id
-    prev_ctx = get_current_run_context()
 
     if step_id is not None:
         callback.enter_step(step_id)  # _step_index 자동 increment
         if prev_ctx is not None:
-            set_current_run_context(with_step_id(prev_ctx, step_id))
+            set_current_run_context(
+                with_step_id(prev_ctx, step_id, step_depth=depth)
+            )
 
     step_ctx = _StepContext(step_id=step_id)
+    finish = dict(tracker=tracker, run_id=run_id, step_id=step_id,
+                  logger=logger, node_name=node_name)
     try:
         yield step_ctx
     except BaseException as e:
         await _update_step_best_effort(
-            tracker=tracker,
-            run_id=run_id,
-            step_id=step_id,
-            status=StepStatus.FAILED,
-            output_summary=None,
+            **finish, status=StepStatus.FAILED, output_summary=None,
             error_text=_truncate(str(e), _ERROR_TEXT_MAX_CHARS),
-            logger=logger,
-            node_name=node_name,
+            latency_ms=_elapsed_ms(started),
         )
         _restore_context(callback, prev_step_id, prev_ctx)
         raise
     else:
         await _update_step_best_effort(
-            tracker=tracker,
-            run_id=run_id,
-            step_id=step_id,
-            status=StepStatus.SUCCESS,
-            output_summary=_truncate(step_ctx.output_summary, _OUTPUT_SUMMARY_MAX_CHARS),
-            error_text=None,
-            logger=logger,
-            node_name=node_name,
+            **finish, status=StepStatus.SUCCESS,
+            output_summary=_truncate(
+                step_ctx.output_summary, _OUTPUT_SUMMARY_MAX_CHARS
+            ),
+            error_text=None, latency_ms=_elapsed_ms(started),
         )
         _restore_context(callback, prev_step_id, prev_ctx)
