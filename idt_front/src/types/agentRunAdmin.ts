@@ -183,6 +183,16 @@ export interface StepDto {
   error_text: string | null;
   llm_calls: LlmCallDto[];
   tool_calls: ToolCallDto[];
+  /** subagent-step-observability: 감싸는 서브에이전트 step id (최상위·과거 런은 null) */
+  parent_step_id: string | null;
+  /** 중첩 깊이 (0=최상위) */
+  depth: number;
+}
+
+/** buildStepTree 산출 — 평면 StepDto 목록을 parent_step_id 로 묶은 트리 노드 */
+export interface StepTreeNode {
+  step: StepDto;
+  children: StepTreeNode[];
 }
 
 export interface RunDto {
