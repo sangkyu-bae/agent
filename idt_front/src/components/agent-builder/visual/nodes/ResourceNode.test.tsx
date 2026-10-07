@@ -32,6 +32,15 @@ describe('ResourceNode', () => {
     expect(onAction).toHaveBeenCalledOnce();
   });
 
+  it('서브에이전트 노드 — "+ 서브에이전트 추가" 클릭 시 onAction 호출', async () => {
+    const onAction = vi.fn();
+    renderNode({ kind: 'subagent', items: [], disabled: false, onAction });
+    const btn = screen.getByRole('button', { name: '+ 서브에이전트 추가' });
+    expect(btn).toHaveTextContent('+ 서브에이전트 추가');
+    await userEvent.click(btn);
+    expect(onAction).toHaveBeenCalledOnce();
+  });
+
   it('스킬 노드 — 액션 버튼 disabled (준비중)', async () => {
     const onAction = vi.fn();
     renderNode({ kind: 'skill', items: [], disabled: true, onAction });
