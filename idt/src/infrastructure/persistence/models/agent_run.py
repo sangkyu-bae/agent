@@ -69,6 +69,18 @@ class AgentRunStepModel(Base):
     ended_at: Mapped[datetime | None] = mapped_column(DateTime)
     latency_ms: Mapped[int | None] = mapped_column(Integer)
     error_text: Mapped[str | None] = mapped_column(Text)
+    # subagent-step-observability V079 — FK 없음(관측 best-effort, Design D-03)
+    parent_step_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True,
+        comment=(
+            "감싸는 부모 step id (서브에이전트 wrapper step). "
+            "최상위 step은 NULL. FK 없음 - 관측 best-effort"
+        ),
+    )
+    depth: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0",
+        comment="중첩 깊이 (0=최상위 그래프, 1=서브에이전트 내부, 2=손자 그래프)",
+    )
 
     __table_args__ = (Index("idx_step_run", "run_id", "step_index"),)
 

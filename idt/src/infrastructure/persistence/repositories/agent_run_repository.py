@@ -171,6 +171,8 @@ class SqlAlchemyAgentRunRepository(AgentRunRepositoryInterface):
             ended_at=step.ended_at,
             latency_ms=step.latency_ms,
             error_text=step.error_text,
+            parent_step_id=step.parent_step_id,
+            depth=step.depth,
         )
         self._session.add(row)
         await self._session.flush()
@@ -384,6 +386,9 @@ class SqlAlchemyAgentRunRepository(AgentRunRepositoryInterface):
             ended_at=_to_utc(row.ended_at),
             latency_ms=row.latency_ms,
             error_text=row.error_text,
+            # V079 이전 행(또는 server_default 미반영 객체)은 최상위로 읽는다 (SC-6)
+            parent_step_id=row.parent_step_id,
+            depth=row.depth or 0,
         )
 
     def _tool_to_orm(self, call: ToolCall) -> ToolCallModel:

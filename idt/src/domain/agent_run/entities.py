@@ -64,6 +64,10 @@ class AgentRunStep:
     ended_at: Optional[datetime]
     latency_ms: Optional[int]
     error_text: Optional[str]
+    # subagent-step-observability §3.2: 서브에이전트 wrapper step 아래 자식 계층.
+    # 기본값은 최상위 — 기존 생성부·과거 행 무수정.
+    parent_step_id: Optional[str] = None
+    depth: int = 0
 
 
 @dataclass

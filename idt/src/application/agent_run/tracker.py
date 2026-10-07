@@ -207,6 +207,8 @@ class RunTracker:
         input_summary: Optional[str] = None,
         output_summary: Optional[str] = None,
         error_text: Optional[str] = None,
+        parent_step_id: Optional[str] = None,
+        depth: int = 0,
     ) -> Optional[str]:
         step_id = str(uuid.uuid4())
         step = AgentRunStep(
@@ -223,6 +225,9 @@ class RunTracker:
             ended_at=None,
             latency_ms=None,
             error_text=error_text,
+            # subagent-step-observability §3.2 — 계층은 생성 시 확정
+            parent_step_id=parent_step_id,
+            depth=depth,
         )
         try:
             async with self._session_factory() as session:
@@ -246,6 +251,7 @@ class RunTracker:
         status: StepStatus,
         output_summary: Optional[str] = None,
         error_text: Optional[str] = None,
+        latency_ms: Optional[int] = None,
     ) -> None:
         try:
             async with self._session_factory() as session:
@@ -262,8 +268,12 @@ class RunTracker:
                     if error_text is not None:
                         target.error_text = error_text
                     target.ended_at = _utcnow()
-                    target.latency_ms = _compute_latency_ms(
-                        target.started_at, target.ended_at
+                    # subagent-step-observability §3.5 L2 — 측정값(track_step monotonic)
+                    # 우선. DB 재조회 started_at 은 초 단위 반올림이라 음수까지 나온다.
+                    target.latency_ms = (
+                        latency_ms
+                        if latency_ms is not None
+                        else _compute_latency_ms(target.started_at, target.ended_at)
                     )
                     await repo.update_step(target)
         except Exception as e:
