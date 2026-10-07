@@ -59,7 +59,7 @@ export const RESOURCE_META: Record<
 > = {
   skill: { title: '스킬', icon: '📖', actionLabel: '+ 스킬 추가' },
   tool: { title: '도구', icon: '🔧', actionLabel: '+ 도구 추가' },
-  subagent: { title: '서브 에이전트', icon: '👥', actionLabel: '⚙' },
+  subagent: { title: '서브 에이전트', icon: '👥', actionLabel: '+ 서브에이전트 추가' },
   middleware: { title: '미들웨어', icon: '🧩', actionLabel: '+ 미들웨어 추가' },
   model: { title: '모델', icon: '⚙', actionLabel: '' },
 };
