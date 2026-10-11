@@ -1,8 +1,9 @@
-"""확장자 기반 파서 라우팅 (kb-excel-upload D3).
+"""확장자 기반 파서 라우팅 (kb-excel-upload D3, hwp-parser §11.1).
 
 기존 PDF 파서를 감싸는 additive 위임 구조 — PDF 경로의 동작은 주입된
 파서 인스턴스에 그대로 위임되고, 엑셀만 어댑터로 분기한다.
 미지원 확장자는 파싱 시도 전에 UnsupportedFileFormatError(→422)로 거부한다.
+hwp_parser는 마지막 optional 인자다 — 주입하지 않으면 .hwp/.hwpx도 미지원으로 처리.
 """
 import os
 from typing import List, Optional
@@ -13,6 +14,7 @@ from src.domain.parser.exceptions import UnsupportedFileFormatError
 from src.domain.parser.interfaces import PDFParserInterface
 from src.domain.parser.supported_formats import (
     FORMAT_EXCEL,
+    FORMAT_HWP,
     FORMAT_PDF,
     resolve_format,
 )
@@ -24,11 +26,14 @@ class ExtensionRoutingParser(PDFParserInterface):
         self,
         pdf_parser: PDFParserInterface,
         excel_parser: PDFParserInterface,
+        hwp_parser: Optional[PDFParserInterface] = None,
     ) -> None:
         self._parsers = {
             FORMAT_PDF: pdf_parser,
             FORMAT_EXCEL: excel_parser,
         }
+        if hwp_parser is not None:
+            self._parsers[FORMAT_HWP] = hwp_parser
         self._pdf_parser = pdf_parser
 
     def parse(
@@ -58,7 +63,9 @@ class ExtensionRoutingParser(PDFParserInterface):
 
     def _select(self, filename: str) -> PDFParserInterface:
         file_format = resolve_format(filename)
-        if file_format is None:
+        # 등록된 포맷이라도 파서가 주입되지 않았으면 미지원과 같게 처리 (hwp-parser §11.1)
+        parser = self._parsers.get(file_format) if file_format else None
+        if parser is None:
             _, ext = os.path.splitext(filename)
             raise UnsupportedFileFormatError(ext.lower() or filename)
-        return self._parsers[file_format]
+        return parser

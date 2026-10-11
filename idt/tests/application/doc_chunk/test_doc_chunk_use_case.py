@@ -324,3 +324,58 @@ async def test_chunk_items_have_required_fields():
         assert chunk.content
         assert chunk.chunk_type in {"full", "parent", "child", "semantic"}
         assert chunk.chunk_index >= 0
+
+
+# ──────────────────────────────────────────────────────
+# 한글 문서 청킹 (hwp-parser Design §8.2 U-14)
+# ──────────────────────────────────────────────────────
+
+def _hwpx_bytes(text: str) -> bytes:
+    import io
+    import zipfile
+
+    ns = (
+        'xmlns:hs="http://www.hancom.co.kr/hwpml/2011/section" '
+        'xmlns:hp="http://www.hancom.co.kr/hwpml/2011/paragraph"'
+    )
+    body = f"<hp:p><hp:run><hp:t>{text}</hp:t></hp:run></hp:p>"
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("Contents/section0.xml", f"<hs:sec {ns}>{body}</hs:sec>")
+    return buf.getvalue()
+
+
+@pytest.mark.asyncio
+async def test_chunk_hwpx_with_real_hwp_parser():
+    from src.application.doc_chunk.use_case import DocChunkUseCase
+    from src.infrastructure.parser.hwp import HwpDocumentParser
+
+    pdf_parser = _make_pdf_parser()
+    use_case = DocChunkUseCase(
+        pdf_parser=pdf_parser,
+        excel_parser=_make_excel_parser(),
+        logger=_make_logger(),
+        hwp_parser=HwpDocumentParser(max_decompressed_mb=1),
+    )
+    request = _make_request(
+        filename="여신규정.hwpx", content=_hwpx_bytes("여신 심사 기준 안내")
+    )
+    result = await use_case.execute(request)
+
+    assert result.total_chunks >= 1
+    assert "여신 심사 기준 안내" in " ".join(c.content for c in result.chunks)
+    pdf_parser.parse_bytes.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_chunk_hwp_without_hwp_parser_raises_value_error():
+    # 파서를 주입하지 않으면 미지원과 같게 ValueError(→422)
+    from src.application.doc_chunk.use_case import DocChunkUseCase
+
+    use_case = DocChunkUseCase(
+        pdf_parser=_make_pdf_parser(),
+        excel_parser=_make_excel_parser(),
+        logger=_make_logger(),
+    )
+    with pytest.raises(ValueError):
+        await use_case.execute(_make_request(filename="a.hwp", content=b"x"))

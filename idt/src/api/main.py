@@ -422,6 +422,7 @@ from src.infrastructure.parser.extension_routing_parser import (
 from src.infrastructure.excel.excel_document_parser_adapter import (
     ExcelDocumentParserAdapter,
 )
+from src.infrastructure.parser.hwp.hwp_document_parser import HwpDocumentParser
 from src.infrastructure.embeddings.openai_embedding import OpenAIEmbedding
 from src.infrastructure.vector.qdrant_vectorstore import QdrantVectorStore
 from src.infrastructure.compressor.providers.openai_provider import OpenAIProvider
@@ -1627,6 +1628,10 @@ def create_doc_chunk_use_case() -> DocChunkUseCase:
         pdf_parser=pdf_parser,
         excel_parser=excel_parser,
         logger=app_logger,
+        # hwp-parser §11.1: .hwp/.hwpx 청킹
+        hwp_parser=HwpDocumentParser(
+            max_decompressed_mb=settings.kb_hwp_max_decompressed_mb,
+        ),
     )
 
 
@@ -4080,12 +4085,16 @@ def create_unified_upload_factories():
     )
     collection_repo = QdrantCollectionRepository(qdrant_client)
     embedding_factory = EmbeddingFactory()
-    # kb-excel-upload D9: 확장자 라우팅 — pdf는 기존 파서, xlsx/xls는 어댑터
+    # kb-excel-upload D9: 확장자 라우팅 — pdf는 기존 파서, xlsx/xls·hwp/hwpx는 어댑터
     parser = ExtensionRoutingParser(
         pdf_parser=ParserFactory.create_from_string(settings.parser_type),
         excel_parser=ExcelDocumentParserAdapter(
             excel_parser=PandasExcelParser(),
             max_rows_per_sheet=settings.kb_excel_max_rows_per_sheet,
+        ),
+        # hwp-parser §11.1: .hwp/.hwpx는 HWP 어댑터로
+        hwp_parser=HwpDocumentParser(
+            max_decompressed_mb=settings.kb_hwp_max_decompressed_mb,
         ),
     )
     morph_analyzer = KiwiMorphAnalyzer()

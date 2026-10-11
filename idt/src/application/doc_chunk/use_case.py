@@ -1,17 +1,18 @@
 """DocChunkUseCase — 파일 업로드 → 텍스트 추출 → 청킹 → 결과 반환.
 
-지원 형식: .pdf, .xlsx, .xls, .txt, .md
+지원 형식: .pdf, .xlsx, .xls, .hwp, .hwpx, .txt, .md
 벡터 저장 없이 청킹 결과만 반환 (테스트/미리보기 용도).
 
 LOG-001 compliant: INFO on start/complete, ERROR with exception= on failure.
 """
 import uuid
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from langchain_core.documents import Document as LangchainDocument
 
 from src.domain.doc_chunk.schemas import (
+    HWP_EXTENSIONS,
     SUPPORTED_EXTENSIONS,
     DocChunkItem,
     DocChunkRequest,
@@ -29,6 +30,7 @@ class DocChunkUseCase:
     """파일 업로드 → 텍스트 추출 → 청킹 → 결과 반환 오케스트레이터.
 
     PDF는 PDFParseUseCase, Excel은 ExcelParserInterface,
+    한글 문서(.hwp/.hwpx)는 주입된 hwp_parser,
     텍스트 파일(.txt/.md)은 직접 디코딩하여 처리한다.
     """
 
@@ -37,10 +39,13 @@ class DocChunkUseCase:
         pdf_parser: PDFParserInterface,
         excel_parser: ExcelParserInterface,
         logger: LoggerInterface,
+        hwp_parser: Optional[PDFParserInterface] = None,
     ) -> None:
         self._pdf_parser = pdf_parser
         self._excel_parser = excel_parser
         self._logger = logger
+        # hwp-parser §11.1: 마지막 optional 인자 — 기존 호출부 무변경
+        self._hwp_parser = hwp_parser
 
     async def execute(self, request: DocChunkRequest) -> DocChunkResult:
         """파일을 청킹하고 결과를 반환한다.
@@ -119,7 +124,23 @@ class DocChunkUseCase:
             return await self._extract_pdf(request)
         if ext in {".xlsx", ".xls"}:
             return self._extract_excel(request)
+        if ext in HWP_EXTENSIONS:
+            return self._extract_hwp(request, ext)
         return self._extract_text(request)
+
+    def _extract_hwp(
+        self, request: DocChunkRequest, ext: str
+    ) -> List[LangchainDocument]:
+        """한글 문서를 섹션별 Document로 추출한다 (hwp-parser Design §2.2)."""
+        if self._hwp_parser is None:
+            raise ValueError(
+                f"Unsupported file type: '{ext}' (HWP parser not configured)"
+            )
+        return self._hwp_parser.parse_bytes(
+            file_bytes=request.file_bytes,
+            filename=request.filename,
+            user_id=request.user_id,
+        )
 
     async def _extract_pdf(
         self, request: DocChunkRequest
