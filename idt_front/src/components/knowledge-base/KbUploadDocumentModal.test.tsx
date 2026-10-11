@@ -35,15 +35,20 @@ const renderModal = () => {
 };
 
 describe('KbUploadDocumentModal', () => {
-  it('파일 입력이 PDF와 엑셀 확장자를 허용한다 (kb-excel-upload D10)', () => {
+  it('파일 입력이 PDF·엑셀·한글 확장자를 허용한다 (kb-excel-upload D10, hwp-parser §5.3)', () => {
     renderModal();
     const input = screen.getByLabelText('업로드할 문서 파일');
-    expect(input).toHaveAttribute('accept', '.pdf,.xlsx,.xls');
+    expect(input).toHaveAttribute('accept', '.pdf,.xlsx,.xls,.hwp,.hwpx');
   });
 
   it('지원 형식 안내 문구를 표시한다', () => {
     renderModal();
     expect(screen.getByText(/지원 형식: PDF, 엑셀/)).toBeInTheDocument();
+  });
+
+  it('지원 형식 안내에 한글(.hwp/.hwpx)을 표시한다 (hwp-parser §5.4)', () => {
+    renderModal();
+    expect(screen.getByText(/한글\(\.hwp\/\.hwpx\)/)).toBeInTheDocument();
   });
 
   it('업로드 실패(422) 시 서버 detail 메시지를 표시한다', async () => {
