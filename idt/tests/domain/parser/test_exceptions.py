@@ -1,7 +1,11 @@
 """UnsupportedFileFormatError — 미지원 확장자 예외 (kb-excel-upload D2)."""
 import pytest
 
-from src.domain.parser.exceptions import UnsupportedFileFormatError
+from src.domain.parser.exceptions import (
+    HwpEncryptedError,
+    HwpParseError,
+    UnsupportedFileFormatError,
+)
 
 
 class TestUnsupportedFileFormatError:
@@ -16,3 +20,15 @@ class TestUnsupportedFileFormatError:
         assert ".docx" in msg
         assert "pdf" in msg
         assert "xlsx" in msg
+
+
+class TestHwpParseErrors:
+    # hwp-parser Design §6.1 — ValueError 계열이어야 기존 422 매핑을 탄다
+    def test_parse_error_is_value_error(self):
+        assert issubclass(HwpParseError, ValueError)
+
+    def test_encrypted_error_is_parse_error(self):
+        assert issubclass(HwpEncryptedError, HwpParseError)
+
+    def test_encrypted_error_default_message(self):
+        assert "암호" in str(HwpEncryptedError())

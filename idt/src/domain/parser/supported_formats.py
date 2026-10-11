@@ -7,11 +7,15 @@ from pathlib import PurePosixPath, PureWindowsPath
 
 FORMAT_PDF = "pdf"
 FORMAT_EXCEL = "excel"
+# hwp-parser Design §9.4 — HWP 5.0(.hwp)과 HWPX(.hwpx)를 한 포맷으로 묶는다
+FORMAT_HWP = "hwp"
 
 SUPPORTED_EXTENSIONS: dict[str, str] = {
     ".pdf": FORMAT_PDF,
     ".xlsx": FORMAT_EXCEL,
     ".xls": FORMAT_EXCEL,
+    ".hwp": FORMAT_HWP,
+    ".hwpx": FORMAT_HWP,
 }
 
 

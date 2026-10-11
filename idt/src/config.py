@@ -59,6 +59,9 @@ class Settings(BaseSettings):
     parser_type: str = "pymupdf"
     # KB 엑셀 업로드 시트당 행 수 상한 — 초과 시 422 (kb-excel-upload D6)
     kb_excel_max_rows_per_sheet: int = 20000
+    # 한글 문서 압축 해제 크기 상한(MB) — 초과 시 422 (hwp-parser Design §7)
+    # 소비 지점: HwpDocumentParser.__init__ → 리더의 max_decompressed_bytes
+    kb_hwp_max_decompressed_mb: int = 50
 
     # Chunking
     default_chunk_size: int = 1000
