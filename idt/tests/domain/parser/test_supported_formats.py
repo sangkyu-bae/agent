@@ -1,6 +1,7 @@
 """supported_formats — 확장자→포맷 판정 단일 진실원 (kb-excel-upload D1)."""
 from src.domain.parser.supported_formats import (
     FORMAT_EXCEL,
+    FORMAT_HWP,
     FORMAT_PDF,
     resolve_format,
     supported_formats_display,
@@ -33,9 +34,23 @@ class TestResolveFormat:
         assert resolve_format("backup.pdf.xlsx") == FORMAT_EXCEL
 
 
+class TestResolveHwpFormat:
+    # hwp-parser Design §8 U-01
+    def test_hwp(self):
+        assert resolve_format("공문.hwp") == FORMAT_HWP
+
+    def test_hwpx_uppercase(self):
+        assert resolve_format("공문.HWPX") == FORMAT_HWP
+
+    def test_windows_path(self):
+        assert resolve_format(r"C:\a\b.hwpx") == FORMAT_HWP
+
+
 class TestSupportedFormatsDisplay:
     def test_lists_all_extensions(self):
         display = supported_formats_display()
         assert "pdf" in display
         assert "xlsx" in display
         assert "xls" in display
+        assert "hwp" in display
+        assert "hwpx" in display

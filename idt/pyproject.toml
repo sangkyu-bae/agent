@@ -31,6 +31,8 @@ dependencies = [
     "pymupdf>=1.24.0",
     "pymupdf4llm>=0.0.17",
     "llama-parse>=0.4.0",
+    # HWP 5.0 OLE 컨테이너 읽기 (hwp-parser Design §2.3 — BSD, pyhwp는 AGPL이라 미사용)
+    "olefile>=0.47",
     # Tokenization
     "tiktoken>=0.5.0",
     # LLM Client

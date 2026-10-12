@@ -3,7 +3,9 @@ from typing import Any, Dict, List
 
 from pydantic import BaseModel, field_validator
 
-SUPPORTED_EXTENSIONS = {".pdf", ".xlsx", ".xls", ".txt", ".md"}
+# hwp-parser §11.1: .hwp/.hwpx 추가
+SUPPORTED_EXTENSIONS = {".pdf", ".xlsx", ".xls", ".hwp", ".hwpx", ".txt", ".md"}
+HWP_EXTENSIONS = {".hwp", ".hwpx"}
 VALID_STRATEGY_TYPES = {"full_token", "parent_child", "semantic"}
 
 

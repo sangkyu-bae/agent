@@ -79,3 +79,30 @@ class TestInterfaceContract:
         pdf_parser.supports_ocr.return_value = True
         assert router.supports_ocr() is True
         pdf_parser.supports_ocr.assert_called_once()
+
+
+class TestUnwiredFormat:
+    # hwp-parser Design §11.1 — 포맷은 등록됐지만 파서가 주입되지 않았으면 미지원(422)으로 처리
+    def test_hwp_without_parser_raises_unsupported(self, router):
+        with pytest.raises(UnsupportedFileFormatError):
+            router.parse_bytes(b"x", "공문.hwp", "u1")
+
+
+class TestHwpRouting:
+    # hwp-parser Design §8 U-13
+    def test_hwp_and_hwpx_delegate_to_hwp_parser(self, pdf_parser, excel_parser):
+        hwp_parser = MagicMock()
+        hwp_parser.parse_bytes.return_value = ["hwp-doc"]
+        router = ExtensionRoutingParser(
+            pdf_parser=pdf_parser, excel_parser=excel_parser, hwp_parser=hwp_parser
+        )
+        assert router.parse_bytes(b"x", "a.hwp", "u1") == ["hwp-doc"]
+        assert router.parse_bytes(b"x", "a.HWPX", "u1") == ["hwp-doc"]
+        assert hwp_parser.parse_bytes.call_count == 2
+        pdf_parser.parse_bytes.assert_not_called()
+
+    def test_pdf_still_goes_to_pdf_parser(self, pdf_parser, excel_parser):
+        router = ExtensionRoutingParser(
+            pdf_parser=pdf_parser, excel_parser=excel_parser, hwp_parser=MagicMock()
+        )
+        assert router.parse_bytes(b"x", "a.pdf", "u1") == ["pdf-doc"]
