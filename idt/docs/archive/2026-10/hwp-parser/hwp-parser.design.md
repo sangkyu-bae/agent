@@ -6,7 +6,7 @@
 > **작성자**: 배상규
 > **작성일**: 2026-10-08
 > **상태**: Draft
-> **계획 문서**: [hwp-parser.plan.md](../../01-plan/features/hwp-parser.plan.md)
+> **계획 문서**: [hwp-parser.plan.md](hwp-parser.plan.md)
 > **선택 설계안**: C안 — Pragmatic(실용 균형)
 
 ---

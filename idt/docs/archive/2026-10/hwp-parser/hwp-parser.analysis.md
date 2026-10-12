@@ -1,7 +1,7 @@
 # hwp-parser 갭 분석 보고서
 
 > **분석 대상**: hwp-parser (idt + idt_front)
-> **기준 문서**: [계획](../01-plan/features/hwp-parser.plan.md), [설계 v0.2](../02-design/features/hwp-parser.design.md)
+> **기준 문서**: [계획](hwp-parser.plan.md), [설계 v0.2](hwp-parser.design.md)
 > **분석일**: 2026-10-09
 > **방법**: gap-detector 정적 분석 + 전체 pytest 회귀 + 커버리지 측정 + 실제 .hwp 1개 스모크 실행 (서버 미기동 → L1 생략)
 

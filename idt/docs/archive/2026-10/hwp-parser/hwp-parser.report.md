@@ -71,9 +71,9 @@
 
 ## 2. 관련 문서
 
-- 계획: [hwp-parser.plan.md](../01-plan/features/hwp-parser.plan.md) (v0.2)
-- 설계: [hwp-parser.design.md](../02-design/features/hwp-parser.design.md) (v0.4)
-- 분석: [hwp-parser.analysis.md](../03-analysis/hwp-parser.analysis.md) (v0.3)
+- 계획: [hwp-parser.plan.md](hwp-parser.plan.md) (v0.2)
+- 설계: [hwp-parser.design.md](hwp-parser.design.md) (v0.4)
+- 분석: [hwp-parser.analysis.md](hwp-parser.analysis.md) (v0.3)
 - 픽스처 출처: `tests/fixtures/hwp/NOTICE.md`
 
 ---
