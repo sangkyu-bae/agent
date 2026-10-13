@@ -54,6 +54,9 @@ from src.domain.llm.interfaces import LLMFactoryInterface
 from src.domain.llm.message_content import coerce_message_text
 from src.domain.llm_model.entity import LlmModel
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
+from src.domain.prompt_guard.interfaces import PromptGuardPort
+from src.domain.prompt_guard.policies import BLOCK_NOTICE_KO, BlockedTurnPolicy
+from src.domain.prompt_guard.schemas import GuardDecision, GuardTier, InputSource
 from src.domain.visualization.followup_policy import (
     ChartFollowupDecision,
     ChartFollowupPolicy,
@@ -155,8 +158,11 @@ class GeneralChatUseCase:
         tool_filter=None,
         *,
         agent_timezone: str | None = None,
+        # prompt-guard Design §4.6: 채팅 입력 인젹션 가드. None 이면 비활성 (FR-10).
+        prompt_guard: PromptGuardPort | None = None,
     ) -> None:
         self._tool_builder = chat_tool_builder
+        self._prompt_guard = prompt_guard
         # runtime-datetime-context D3/D8: [현재 날짜] 블록 기준 타임존
         # (main.py가 settings.agent_timezone 주입). None이면 블록 생략 — 무회귀.
         self._agent_timezone = agent_timezone
@@ -201,6 +207,26 @@ class GeneralChatUseCase:
         # builtin-middleware D7: 미주입(None) 시 미들웨어 0 (하위호환).
         # General Chat은 에이전트 정의가 없어 카탈로그 빌트인 ∪ enforced 전부 적용.
         self._middleware_provider = middleware_provider
+
+    async def _inspect_safe(
+        self, request: GeneralChatRequest, request_id: str, session_id: str,
+    ) -> GuardDecision:
+        """prompt-guard Design §4.6 — 가드 예외는 PASS + warning (가드가 채팅을 죽이지 않는다)."""
+        try:
+            return await self._prompt_guard.inspect(
+                request.message, source=InputSource.USER_CHAT, request_id=request_id,
+                user_id=request.user_id, agent_id=None, session_id=session_id,
+            )
+        except Exception as e:  # noqa: BLE001
+            self._logger.warning(
+                "prompt_guard inspect failed — treating as PASS",
+                exception=e, request_id=request_id,
+            )
+            return GuardDecision(
+                tier=GuardTier.PASS, enforced=False, rule_ids=(), judge=None,
+                judge_error="inspect_exception", input_len=len(request.message),
+                input_hash12="", source=InputSource.USER_CHAT,
+            )
 
     async def _begin_observability(
         self, request: GeneralChatRequest, session_id_str: str,
@@ -341,9 +367,42 @@ class GeneralChatUseCase:
         try:
             history = await self._msg_repo.find_by_session(user_id, session_id)
 
+            # prompt-guard Design §4.6 (D5): LLM 을 쓰는 모든 분기(차트 편집 포함) 앞.
+            # Plan SC: 차단 시 LLM 호출 0. 이 경로는 run 이 아직 없어 로그만 (FR-13).
+            if self._prompt_guard is not None:
+                decision = await self._inspect_safe(request, request_id, session_id_str)
+                if decision.enforced:
+                    _, assistant_message_id = await self._persist_messages(
+                        user_id, session_id, request.message, BLOCK_NOTICE_KO,
+                        len(history),
+                    )
+                    yield self._build_event(
+                        seq, ChatEventType.ANSWER_COMPLETED, session_id_str,
+                        {
+                            "answer": BLOCK_NOTICE_KO,
+                            "tools_used": [],
+                            "sources": [],
+                            "was_summarized": False,
+                            # 정상 경로와 동일하게 빈 리스트 — execute() 가 list() 로 감싼다
+                            # (module-4 실런: None 이면 REST /chat 이 500 TypeError).
+                            "charts": [],
+                            "assistant_message_id": assistant_message_id,
+                            "guard_blocked": True,  # Design D2
+                        },
+                    )
+                    yield self._build_event(
+                        seq, ChatEventType.CHAT_DONE, session_id_str,
+                        {"session_id": session_id_str},
+                    )
+                    return
+
+            # prompt-guard Design §4.6 (OQ2): 차단 턴은 컨텍스트 조립에서만 제외한다.
+            # 저장 turn_index 는 아래 _persist_messages(..., len(history)) 가 원본으로 계산.
+            context_history = BlockedTurnPolicy.exclude_blocked_turns(history)
+
             # chart-context-continuity D4: 차트 편집 의도 → ReAct 우회 전용 분기.
             # 실패/미해당 시 None → 아래 일반 경로로 폴백.
-            edited = await self._try_chart_edit(request.message, history)
+            edited = await self._try_chart_edit(request.message, context_history)
             if edited is not None:
                 answer, charts = edited
                 _, assistant_message_id = await self._persist_messages(
@@ -372,15 +431,15 @@ class GeneralChatUseCase:
                 request, session_id_str,
             )
 
-            if self._policy.needs_summarization(history):
+            if self._policy.needs_summarization(context_history):
                 was_summarized = True
                 context = await self._build_summarized_context(
-                    history, request.message, user_id, session_id,
+                    context_history, request.message, user_id, session_id,
                     AgentId.super(), request_id,
                 )
             else:
                 was_summarized = False
-                context = self._build_full_context(history, request.message)
+                context = self._build_full_context(context_history, request.message)
 
             tools = await self._tool_builder.build(
                 top_k=request.top_k, request_id=request_id, auth_ctx=auth_ctx,

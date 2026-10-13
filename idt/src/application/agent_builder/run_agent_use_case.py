@@ -42,7 +42,10 @@ from src.application.agent_run.context import (
     set_current_run_context,
 )
 from src.domain.agent_run.auth_context import AuthContext
-from src.application.agent_run.step_tracking import _INPUT_SUMMARY_MAX_CHARS
+from src.application.agent_run.step_tracking import (
+    _INPUT_SUMMARY_MAX_CHARS,
+    track_step,
+)
 from src.application.agent_run.tracker import RunTracker
 from src.application.conversation.interfaces import ConversationSummarizerInterface
 from src.application.repositories.conversation_repository import (
@@ -93,6 +96,9 @@ from src.domain.conversation.value_objects import (
 from src.domain.llm.message_content import coerce_message_text
 from src.domain.llm_model.interfaces import LlmModelRepositoryInterface
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
+from src.domain.prompt_guard.interfaces import PromptGuardPort
+from src.domain.prompt_guard.policies import BLOCK_NOTICE_KO, BlockedTurnPolicy
+from src.domain.prompt_guard.schemas import GuardDecision, GuardTier, InputSource
 from src.infrastructure.langsmith.langsmith import make_agent_run_tracer
 from src.infrastructure.langsmith.trace_extractor import TraceExtractor
 from src.infrastructure.llm.usage_callback import UsageCallback
@@ -232,8 +238,12 @@ class RunAgentUseCase:
         approval_gate_config: Optional[dict] = None,
         # Check G4: (session, agent_id, request_id) -> 게이트 config
         approval_gate_config_resolver=None,
+        # prompt-guard Design §4.5: 채팅 입력 인젹션 가드. None 이면 비활성 —
+        # 가드가 없던 상태와 동일하게 동작한다 (FR-10, 탈착형 이음매).
+        prompt_guard: Optional[PromptGuardPort] = None,
     ) -> None:
         self._repository = repository
+        self._prompt_guard = prompt_guard
         self._approval_repo_factory = approval_repo_factory
         self._approval_gate_config = approval_gate_config
         self._approval_gate_config_resolver = approval_gate_config_resolver
@@ -316,6 +326,19 @@ class RunAgentUseCase:
 
         state = _StreamState()
         try:
+            # prompt-guard Design §4.5 (D5): 그래프를 만들기 전에 입력을 검사한다.
+            # Plan SC: 차단 시 LLM 호출 0 — 안내문은 결정적 템플릿이다 (FR-07/08).
+            if self._prompt_guard is not None:
+                decision = await self._inspect_with_step(
+                    request, agent_id, session_id, run_id, callback, request_id,
+                )
+                if decision.enforced:
+                    async for ev in self._guard_blocked_events(
+                        seq=seq, run_id=run_id, request=request,
+                        session_id=session_id, agent_id=agent_id,
+                    ):
+                        yield ev
+                    return
             graph, initial_state, graph_config = await self._prepare_graph(
                 agent=agent, request=request, session_id=session_id,
                 callback=callback, run_id=run_id, request_id=request_id,
@@ -465,6 +488,94 @@ class RunAgentUseCase:
             request_id=request_id,
             session_id=session_id,
             run_id=run_id_str,
+        )
+
+    # ── prompt-guard (Design §4.5) ──────────────────────────────────────
+
+    async def _inspect_with_step(
+        self,
+        request: RunAgentRequest,
+        agent_id: str,
+        session_id: str,
+        run_id: Optional[RunId],
+        callback: Optional[UsageCallback],
+        request_id: str,
+    ) -> GuardDecision:
+        """가드 검사 + ai_run 스텝 1건 (FR-13). 가드 자체 예외는 PASS 로 흡수한다.
+
+        스텝은 tracker·run_id·callback 이 모두 있을 때만 남긴다 (관측은 degraded 허용).
+        스텝 요약은 tier·규칙 id·판정만 — 원문 없음 (Design OQ5).
+        """
+        if self._tracker is None or run_id is None or callback is None:
+            return await self._inspect_safe(request, agent_id, session_id, request_id)
+        async with track_step(
+            tracker=self._tracker, callback=callback, run_id=run_id,
+            node_name="prompt_guard", node_type=NodeType.OTHER,
+            input_summary=f"source={InputSource.USER_CHAT.value}",
+            logger=self._logger,
+        ) as step:
+            decision = await self._inspect_safe(
+                request, agent_id, session_id, request_id,
+            )
+            step.output_summary = decision.summary
+        return decision
+
+    async def _inspect_safe(
+        self,
+        request: RunAgentRequest,
+        agent_id: str,
+        session_id: str,
+        request_id: str,
+    ) -> GuardDecision:
+        """가드가 채팅을 죽이면 안 된다 — 예외는 PASS + warning (Design §6)."""
+        try:
+            return await self._prompt_guard.inspect(
+                request.query, source=InputSource.USER_CHAT, request_id=request_id,
+                user_id=request.user_id, agent_id=agent_id, session_id=session_id,
+            )
+        except Exception as e:  # noqa: BLE001
+            self._logger.warning(
+                "prompt_guard inspect failed — treating as PASS",
+                exception=e, request_id=request_id, agent_id=agent_id,
+            )
+            return GuardDecision(
+                tier=GuardTier.PASS, enforced=False, rule_ids=(), judge=None,
+                judge_error="inspect_exception", input_len=len(request.query),
+                input_hash12="", source=InputSource.USER_CHAT,
+            )
+
+    async def _guard_blocked_events(
+        self,
+        *,
+        seq: _SeqCounter,
+        run_id: Optional[RunId],
+        request: RunAgentRequest,
+        session_id: str,
+        agent_id: str,
+    ) -> AsyncIterator[AgentRunEvent]:
+        """차단 턴 마감 — _degraded_completion_events 와 동형 (Design §4.5, FR-07).
+
+        안내문 저장 → ANSWER_COMPLETED(guard_blocked=True, D2) → complete_run
+        → RUN_COMPLETED.
+        """
+        await self._save_assistant_message(
+            BLOCK_NOTICE_KO, request.user_id, session_id, agent_id,
+            persist=request.persist_conversation,
+        )
+        yield self._build_event(
+            seq, AgentRunEventType.ANSWER_COMPLETED, run_id,
+            {"answer": BLOCK_NOTICE_KO, "tools_used": [], "guard_blocked": True},
+        )
+        if self._tracker is not None and run_id is not None:
+            await self._tracker.complete_run(
+                run_id, langsmith_trace_id=None, langsmith_run_url=None,
+            )
+        yield self._build_event(
+            seq, AgentRunEventType.RUN_COMPLETED, run_id,
+            {
+                "run_id": run_id.value if run_id is not None else None,
+                "langsmith_run_url": None,
+            },
         )
 
     async def _degraded_completion_events(
@@ -1263,6 +1374,9 @@ class RunAgentUseCase:
         existing = await self._message_repo.find_by_session(
             UserId(user_id), SessionId(session_id)
         )
+        # prompt-guard Design §4.5 (OQ2): 차단 턴(공격문 + 안내문)은 LLM 컨텍스트에
+        # 재주입하지 않는다. 저장·turn_index 는 _save_*_message 가 원본 조회로 계산한다.
+        existing = BlockedTurnPolicy.exclude_blocked_turns(existing)
 
         if not existing:
             return [{"role": "user", "content": query}]
