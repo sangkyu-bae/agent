@@ -1,6 +1,7 @@
 import { http, HttpResponse } from 'msw';
 import { API_ENDPOINTS } from '@/constants/api';
 import type { ScheduleResponse } from '@/types/agentSchedule';
+import type { ExcelPreviewResponse } from '@/types/excelPreview';
 
 // ── Agent Schedule (agent-schedule) — stateful in-memory store ──
 const scheduleStore = new Map<string, ScheduleResponse[]>();
@@ -134,7 +135,49 @@ const mockBlueprintDraft: import('@/types/blueprint').BlueprintResponse = {
   updated_at: '2026-08-22T10:00:00',
 };
 
+// ── excel-preview (Design §8.5) — 정상 2시트(1개 truncated) + 빈 시트 ──
+export const mockExcelPreview = (fileId: string): ExcelPreviewResponse => ({
+  file_id: fileId,
+  filename: '매출현황.xlsx',
+  max_rows: 100,
+  max_cols: 50,
+  sheets: [
+    {
+      name: 'Sheet1',
+      columns: ['지점', '매출', '날짜'],
+      rows: [
+        ['서울', '1200', '2026-10-01'],
+        ['부산', '900', '2026-10-02'],
+      ],
+      total_rows: 20001,
+      total_cols: 3,
+      truncated: true,
+    },
+    {
+      name: '요약',
+      columns: ['항목', '값'],
+      rows: [['합계', '2100']],
+      total_rows: 2,
+      total_cols: 2,
+      truncated: false,
+    },
+    {
+      name: '빈시트',
+      columns: [],
+      rows: [],
+      total_rows: 0,
+      total_cols: 0,
+      truncated: false,
+    },
+  ],
+});
+
 export const handlers = [
+
+  // ── excel-preview (Design §8.5) ─────────────────────────────────────────────
+  http.get(`*${API_ENDPOINTS.DOCUMENT_EXTRACTOR_FILE_PREVIEW(':fileId')}`, ({ params }) =>
+    HttpResponse.json(mockExcelPreview(String(params.fileId))),
+  ),
 
   // ── golden-sample-blueprint (Design §4.1) ───────────────────────────────────
   http.post(`*${API_ENDPOINTS.ADMIN_BLUEPRINTS_EXTRACT}`, ({ request }) => {

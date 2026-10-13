@@ -13,6 +13,8 @@ from src.application.document_extractor.extract_use_case import (
     ExtractDocumentUseCase,
 )
 from src.application.document_extractor.refine_use_case import RefineSlotsUseCase
+from src.application.excel_preview.preview_use_case import PreviewExcelUseCase
+from src.application.excel_preview.schemas import ExcelPreviewResponse
 from src.application.document_extractor.schemas import (
     ExtractResponse,
     RefineRequest,
@@ -26,6 +28,12 @@ from src.domain.document_extractor.exceptions import (
     McpToolNotConfiguredError,
     RegenLimitExceededError,
     SlotExtractionFailedError,
+)
+from src.domain.excel_preview.exceptions import (
+    PreviewFileNotFoundError,
+    PreviewForbiddenError,
+    PreviewParseFailedError,
+    PreviewUnsupportedError,
 )
 from src.interfaces.dependencies.auth import get_current_user
 
@@ -42,6 +50,10 @@ def get_refine_slots_use_case() -> RefineSlotsUseCase:
 
 def get_document_attachment_store():
     raise NotImplementedError("AgentAttachmentStore not initialized")
+
+
+def get_excel_preview_use_case() -> PreviewExcelUseCase:
+    raise NotImplementedError("PreviewExcelUseCase not initialized")
 
 
 def _http_error(status_code: int, code: str, message: str) -> HTTPException:
@@ -129,6 +141,37 @@ _MEDIA_TYPES = {
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     ),
 }
+
+
+@router.get("/files/{file_id}/preview", response_model=ExcelPreviewResponse)
+async def preview_generated_file(
+    file_id: str,
+    current_user: User = Depends(get_current_user),
+    use_case: PreviewExcelUseCase = Depends(get_excel_preview_use_case),
+) -> ExcelPreviewResponse:
+    """산출 .xlsx 프리뷰 JSON (excel-preview Design §4.2). 다운로드와 동일 검증.
+
+    Errors:
+        404 FILE_NOT_FOUND (만료 포함), 403 FORBIDDEN,
+        415 PREVIEW_UNSUPPORTED (.xlsx 외), 422 PREVIEW_PARSE_FAILED (손상)
+    """
+    import uuid
+
+    request_id = str(uuid.uuid4())
+    try:
+        return await use_case.execute(
+            file_id=file_id,
+            owner_user_id=str(current_user.id),
+            request_id=request_id,
+        )
+    except PreviewFileNotFoundError as e:
+        raise _http_error(404, "FILE_NOT_FOUND", str(e))
+    except PreviewForbiddenError as e:
+        raise _http_error(403, "FORBIDDEN", str(e))
+    except PreviewUnsupportedError as e:
+        raise _http_error(415, "PREVIEW_UNSUPPORTED", str(e))
+    except PreviewParseFailedError:
+        raise _http_error(422, "PREVIEW_PARSE_FAILED", "파일을 해석할 수 없습니다.")
 
 
 @router.get("/files/{file_id}")

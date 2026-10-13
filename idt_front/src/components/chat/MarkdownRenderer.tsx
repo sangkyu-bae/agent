@@ -3,6 +3,8 @@ import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { documentExtractorService } from '@/services/documentExtractorService';
+import { useExcelPreviewStore } from '@/store/excelPreviewStore';
+import { EXCEL_PREVIEW_TRIGGER } from '@/types/excelPreview';
 
 interface MarkdownRendererProps {
   content: string;
@@ -68,20 +70,43 @@ const components: Components = {
   a: ({ href, children }) => {
     if (href?.startsWith(DOC_EXTRACTOR_FILE_PREFIX)) {
       const fileId = href.slice(DOC_EXTRACTOR_FILE_PREFIX.length);
+      const filename = extractText(children);
+      // excel-preview Design §5.3: .xlsx 판별은 링크 텍스트(=파일명) 확장자.
+      // 모달 상태는 스토어가 소유 — 여기서는 open()만 호출 (memo 트리 밖).
+      const isXlsx = /\.xlsx$/i.test(filename);
+      const openPreview = () =>
+        useExcelPreviewStore.getState().open({ fileId, filename });
+      const download = () =>
+        void documentExtractorService.downloadGeneratedFile(fileId, filename);
+      // FR-09: 'link' 모드면 링크 클릭=프리뷰, 다운로드는 모달 안에서만
+      const linkOpensPreview = isXlsx && EXCEL_PREVIEW_TRIGGER === 'link';
       return (
-        <a
-          href={href}
-          onClick={(e) => {
-            e.preventDefault();
-            void documentExtractorService.downloadGeneratedFile(
-              fileId,
-              extractText(children),
-            );
-          }}
-          className="font-medium text-violet-600 underline underline-offset-2 hover:text-violet-700"
-        >
-          📄 {children}
-        </a>
+        <>
+          <a
+            href={href}
+            onClick={(e) => {
+              e.preventDefault();
+              if (linkOpensPreview) {
+                openPreview();
+              } else {
+                download();
+              }
+            }}
+            className="font-medium text-violet-600 underline underline-offset-2 hover:text-violet-700"
+          >
+            📄 {children}
+          </a>
+          {isXlsx && EXCEL_PREVIEW_TRIGGER === 'button' && (
+            <button
+              type="button"
+              aria-label={`${filename} 미리보기`}
+              onClick={openPreview}
+              className="ml-1.5 inline-flex items-center rounded-md border border-violet-200 bg-violet-50 px-2 py-0.5 text-[12px] font-medium text-violet-600 transition-colors hover:bg-violet-100"
+            >
+              미리보기
+            </button>
+          )}
+        </>
       );
     }
     return (

@@ -223,6 +223,11 @@ class Settings(BaseSettings):
     document_extractor_preview_mode: str = "layout"
     document_extractor_preview_dpi: int = 120         # 72~300 (MCP 계약)
 
+    # Excel Preview (excel-preview Design §4.3)
+    # 소비: src/api/main.py → PreviewExcelUseCase (시트당 프리뷰 상한, FR-03)
+    excel_preview_max_rows: int = 100  # 시트당 프리뷰 행 상한 (헤더 제외)
+    excel_preview_max_cols: int = 50   # 시트당 프리뷰 열 상한
+
     # Document Generator (doc-generator Design §4-5)
     document_generator_max_sections: int = 20         # 섹션 개수 상한
     # 작성 LLM 입력(근거/대화 각각) 상한(문자) — 모델 TPM 한도 초과(429) 방지

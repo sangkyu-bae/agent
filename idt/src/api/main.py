@@ -177,7 +177,10 @@ from src.api.routes.document_extractor_router import (
     get_extract_document_use_case,
     get_refine_slots_use_case,
     get_document_attachment_store,
+    get_excel_preview_use_case,
 )
+from src.application.excel_preview.preview_use_case import PreviewExcelUseCase
+from src.infrastructure.excel.preview_reader import ExcelPreviewReader
 from src.application.document_extractor.extract_use_case import (
     ExtractDocumentUseCase,
 )
@@ -5465,6 +5468,15 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_document_attachment_store] = (
         lambda: _attachment_store
     )
+    # excel-preview Design §4.3: 산출 .xlsx 프리뷰 (store는 다운로드와 동일 인스턴스)
+    _excel_preview_uc = PreviewExcelUseCase(
+        store=_attachment_store,
+        reader=ExcelPreviewReader(),
+        max_rows=settings.excel_preview_max_rows,
+        max_cols=settings.excel_preview_max_cols,
+        logger=StructuredLogger("excel_preview"),
+    )
+    app.dependency_overrides[get_excel_preview_use_case] = lambda: _excel_preview_uc
 
     # Department DI
     (
