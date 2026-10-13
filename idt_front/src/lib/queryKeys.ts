@@ -382,4 +382,11 @@ export const queryKeys = {
     runs: (params?: import('@/types/usageMe').MyRunsParams) =>
       [...queryKeys.usageMe.all, 'runs', params] as const,
   },
+
+  // ── Excel Preview (excel-preview) ───────────────────────
+  excelPreview: {
+    all: ['excelPreview'] as const,
+    detail: (fileId: string) =>
+      [...queryKeys.excelPreview.all, 'detail', fileId] as const,
+  },
 } as const;

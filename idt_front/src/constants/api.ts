@@ -242,6 +242,9 @@ export const API_ENDPOINTS = {
   DOCUMENT_EXTRACTOR_REFINE: '/api/v1/document-extractor/refine',
   DOCUMENT_EXTRACTOR_FILE: (fileId: string) =>
     `/api/v1/document-extractor/files/${fileId}`,
+  // excel-preview Design §4.1: 산출 .xlsx 프리뷰
+  DOCUMENT_EXTRACTOR_FILE_PREVIEW: (fileId: string) =>
+    `/api/v1/document-extractor/files/${fileId}/preview`,
 
   // Agent-Skill Attach (skill-agent-integration Phase A)
   AGENT_SKILLS: (agentId: string) => `/api/v1/agents/${agentId}/skills`,

@@ -5,6 +5,7 @@ import ChatHeader from '@/components/layout/ChatHeader';
 import MessageList from '@/components/chat/MessageList';
 import ChatInput from '@/components/chat/ChatInput';
 import ToolPreviewPanel from '@/components/chat/ToolPreviewPanel';
+import ExcelPreviewModal from '@/components/chat/ExcelPreviewModal';
 import { useAgentSessionMessages } from '@/hooks/useChat';
 import { useChatStream } from '@/hooks/useChatStream';
 import { useAgentRunStream } from '@/hooks/useAgentRunStream';
@@ -383,6 +384,8 @@ const ChatPage = () => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {/* excel-preview Design §5.3: 모달은 페이지 레벨 1회 마운트 (상태는 스토어 소유) */}
+      <ExcelPreviewModal />
       <ChatHeader
         title={selectedAgent?.name ?? 'SUPER AI Agent'}
         messageCount={messages.length}
