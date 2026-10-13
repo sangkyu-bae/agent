@@ -8,7 +8,7 @@ import os
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI
@@ -854,6 +854,56 @@ def get_grounding_judge_llm_provider() -> UtilityLLMProvider:
             max_instances=4,
         )
     return _grounding_judge_llm_provider
+
+
+if TYPE_CHECKING:  # prompt-guard: 타입 전용 — 런타임 import 는 _build_prompt_guard 안에서
+    from src.application.prompt_guard.service import PromptGuardService
+
+# prompt-guard Design §4.4: 채팅 입력 인젹션 가드 (앱 수명 싱글톤, lazy).
+# 킬스위치 off 또는 조립 실패 시 None — 두 채팅 유스케이스는 가드 없는 기존 동작
+# (탈착형 이음매). 실패는 한 번만 기록하고 재시도하지 않는다.
+_prompt_guard: Optional["PromptGuardService"] = None
+_prompt_guard_built = False
+
+
+def get_prompt_guard() -> Optional["PromptGuardService"]:
+    """prompt-guard Design §4.4 — None 이면 가드 비활성 (FR-10)."""
+    global _prompt_guard, _prompt_guard_built
+    if _prompt_guard_built:
+        return _prompt_guard
+    _prompt_guard_built = True
+    if not settings.prompt_guard_enabled:
+        return None
+    try:
+        _prompt_guard = _build_prompt_guard()
+    except Exception as e:  # noqa: BLE001 — 가드 조립 실패가 앱 기동을 막으면 안 된다
+        get_app_logger().warning(
+            "prompt_guard assembly failed — guard disabled", exception=e
+        )
+    return _prompt_guard
+
+
+def _build_prompt_guard() -> "PromptGuardService":
+    from src.application.prompt_guard.service import PromptGuardService
+    from src.domain.prompt_guard.policies import PromptGuardPolicy
+    from src.domain.prompt_guard.rules import DEFAULT_RULES
+    from src.infrastructure.prompt_guard.llm_judge import LlmInjectionJudge
+
+    app_logger = get_app_logger()
+    judge = (
+        LlmInjectionJudge(get_utility_llm_provider(), app_logger)
+        if settings.prompt_guard_judge_enabled
+        else None
+    )
+    return PromptGuardService(
+        policy=PromptGuardPolicy(DEFAULT_RULES),
+        judge=judge,
+        mode=settings.prompt_guard_mode,
+        judge_timeout_seconds=settings.prompt_guard_judge_timeout_seconds,
+        judge_max_chars=settings.prompt_guard_judge_max_chars,
+        logger=app_logger,
+    )
+
 
 # Global logger instance
 _app_logger: Optional[StructuredLogger] = None
@@ -2612,6 +2662,8 @@ def create_general_chat_use_case_factory():
             tool_filter=_build_tool_filter(),
             # ★ runtime-datetime-context D3: [현재 날짜] 블록 기준 타임존
             agent_timezone=settings.agent_timezone,
+            # prompt-guard Design §4.6: 킬스위치 off면 None → 가드 비활성
+            prompt_guard=get_prompt_guard(),
         )
 
     return _factory
@@ -3125,6 +3177,8 @@ def create_agent_builder_factories():
             approval_repo_factory=_make_approval_repo,
             # Check G4: 만료·타임존을 에이전트별 게이트 설정에서 해석
             approval_gate_config_resolver=_resolve_approval_gate_config,
+            # prompt-guard Design §4.5: 킬스위치 off면 None → 가드 비활성
+            prompt_guard=get_prompt_guard(),
         )
 
     def run_uc_factory(session: AsyncSession = Depends(get_session)):

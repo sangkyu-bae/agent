@@ -335,6 +335,25 @@ class Settings(BaseSettings):
     # approval-edit-before-approve §7: 수정 후 승인 시 필드당 길이 상한(자).
     approval_edit_max_field_chars: int = 20000
 
+    # Prompt Guard (prompt-guard Design §4.3)
+    # 소비 지점은 모두 src/api/main.py — get_prompt_guard() / _build_prompt_guard().
+    # false 면 팩토리가 None 을 돌려 두 채팅 유스케이스는 가드 없는 기존 동작.
+    # 소비: main.py get_prompt_guard() `if not settings.prompt_guard_enabled`.
+    prompt_guard_enabled: bool = True
+    # "block" | "log_only" — log_only 는 BLOCK 판정이어도 차단하지 않고 로그·스텝만 (FR-11).
+    # 소비: main.py _build_prompt_guard() → PromptGuardService(mode=) (잘못된 값은 ValueError
+    # → 조립 실패 → 가드 비활성 + warning 1회. 운영 .env 오타 주의).
+    prompt_guard_mode: str = "block"
+    # REVIEW 구간 LLM 판정 사용 여부. false 면 REVIEW 는 PASS (규칙 BLOCK 은 그대로).
+    # 소비: main.py _build_prompt_guard() `judge = LlmInjectionJudge(...) if ... else None`.
+    prompt_guard_judge_enabled: bool = True
+    # 판정기 타임아웃(초) — 초과 시 fail-open (FR-06).
+    # 소비: main.py _build_prompt_guard() → PromptGuardService(judge_timeout_seconds=).
+    prompt_guard_judge_timeout_seconds: float = 3.0
+    # 판정기에 보내는 최대 글자 수 — 초과분은 머리/꼬리 절반씩 (Design OQ4).
+    # 소비: main.py _build_prompt_guard() → PromptGuardService(judge_max_chars=).
+    prompt_guard_judge_max_chars: int = 3000
+
     # Application
     debug: bool = False
 
