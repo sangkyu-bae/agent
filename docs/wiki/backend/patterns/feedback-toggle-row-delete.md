@@ -1,6 +1,7 @@
 ---
 title: 사용자 평가(👍/👎) 저장 — 취소는 상태값이 아니라 행 삭제 토글로 표현
-status: draft
+status: approved
+reviewer: 배상규
 source_type: conversation
 source_refs:
   - idt/docs/archive/2026-07/agent-eval-gate/agent-eval-gate.report.md (§2 결정 ②, §6)
@@ -8,7 +9,7 @@ source_refs:
 confidence: 0.85
 version: 1
 created: 2026-07-20
-updated: 2026-07-20
+updated: 2026-10-13
 verified_at: 6cc25656
 ---
 

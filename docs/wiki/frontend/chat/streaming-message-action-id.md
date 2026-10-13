@@ -1,6 +1,7 @@
 ---
 title: 채팅 메시지 단위 액션 부착 — 히스토리 id와 스트리밍 id의 양방향 해석
-status: draft
+status: approved
+reviewer: 배상규
 source_type: conversation
 source_refs:
   - idt/docs/archive/2026-07/agent-eval-gate/agent-eval-gate.report.md (§6 학습 포인트)
@@ -8,7 +9,7 @@ source_refs:
 confidence: 0.85
 version: 1
 created: 2026-07-20
-updated: 2026-07-20
+updated: 2026-10-13
 verified_at: 6cc25656
 ---
 

@@ -1,6 +1,7 @@
 ---
 title: "데이터는 있고 노출 경로만 없다" 패턴 — 신규 계산 전 기존 산출물 노출 여부 먼저 확인
-status: draft
+status: approved
+reviewer: 배상규
 source_type: conversation
 source_refs:
   - idt/docs/archive/2026-07/expose-user-department/expose-user-department.report.md (Lessons 2)
@@ -10,7 +11,7 @@ source_refs:
 confidence: 0.9
 version: 1
 created: 2026-07-20
-updated: 2026-07-20
+updated: 2026-10-13
 verified_at: 6cc25656
 ---
 

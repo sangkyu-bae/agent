@@ -18,17 +18,18 @@ source_refs:
   - docs/archive/2026-08/agent-create-pipeline/agent-create-pipeline.report.md (§3.3 Deliverables)
   - idt/src/api/routes/intent_router.py + idt/src/api/main.py:4793-4798,5193 (v6 — intent 라우터 등록 확인)
   - docs/archive/2026-08/intent-slot-elicitation/intent-slot-elicitation.report.md (v6 — answers/round 확장)
+  - idt/src/api/routes/document_extractor_router.py:146 (v7 — GET /files/{file_id}/preview)
+  - idt/src/infrastructure/parser/extension_routing_parser.py + idt/src/api/main.py HwpDocumentParser DI 2곳 (v7)
 confidence: 0.85
-version: 6
+version: 7
 created: 2026-07-21
-updated: 2026-08-20
-verified_at: 7c3ffdd
+updated: 2026-10-13
+verified_at: 3b6353b
 ---
 
-> ⚠️ `verified_at: 7c3ffdd` 에서 재확인한 것은 **prompt-composer 행·agent_pipeline 행·
-> intent 행(v6)과 아래 "라우트 등록 검증" 절뿐**이다. 나머지 행은 `18fd521e` 시점
-> 확인분이 그대로 남아 있다. agent_pipeline 근거 코드와 intent의 answers/round 확장은
-> 미커밋 — 커밋 후 재확인 필요.
+> v7 (2026-10-13): `document_extractor_router` 행에 .xlsx 프리뷰 엔드포인트, `excel_upload`·`doc_chunk_router` 행에
+> 한글(.hwp/.hwpx) 라우팅 추가. 그 외 행은 v6(7c3ffdd) 확인분 그대로(agent_pipeline·intent 근거 코드는 이후 커밋됨).
+> approved → draft 강등 → 2026-10-13 재승인(배상규).
 
 라우터 파일 단위의 책임 지도. 엔드포인트 상세는 코드/OpenAPI(`/docs`)가 기록한다.
 프론트 대응 상수는 `idt_front/src/constants/api.ts` (계약 동기화는 루트 CLAUDE.md §4-1).
@@ -94,8 +95,8 @@ verified_at: 7c3ffdd
 | `hybrid_search_router` | `/api/v1/hybrid-search` | BM25+Vector 하이브리드 검색 |
 | `ingest_router` / `advanced_ingest_router` | `/api/v1/ingest(/pdf)` | PDF 파싱+청킹+벡터 저장 |
 | `unified_upload_router` / `document_upload` | `/api/v1/documents` | 통합 업로드 (`upload-all`) |
-| `excel_upload` | `/api/v1/excel` | 엑셀 업로드 — 확장자 라우팅 파서, ValueError 편승 422 (kb-excel-upload) |
-| `chunk_index_router` / `morph_index_router` / `doc_chunk_router` | 각 prefix | 청크 인덱싱·형태소 인덱스·청크 유틸 |
+| `excel_upload` | `/api/v1/excel` | 엑셀 업로드 — 확장자 라우팅 파서, ValueError 편승 422 (kb-excel-upload). (v7) 같은 `ExtensionRoutingParser`가 KB 업로드에서 `.hwp/.hwpx`도 받는다 — `HwpDocumentParser` optional 인자 미주입이면 미지원과 동일, 암호·배포용·손상은 `HwpParseError(ValueError)` → 422 ([[hwp-parser-format-facts]]) |
+| `chunk_index_router` / `morph_index_router` / `doc_chunk_router` | 각 prefix | 청크 인덱싱·형태소 인덱스·청크 유틸. (v7) `/doc-chunk`도 `.hwp/.hwpx` 지원(`DocChunkUseCase` optional `hwp_parser`) |
 | `chunking_profile_router` | `/api/v1/chunking` | 청킹 프로파일 조회 (일반) |
 | `rag_agent_router` | `/api/v1/rag-agent` | ReAct RAG Agent |
 | `rag_tool_router` | `/api/v1/rag-tools` | RAG 도구 설정(컬렉션/메타데이터 키) |
@@ -107,7 +108,7 @@ verified_at: 7c3ffdd
 
 | 라우터 | prefix | 책임 |
 |---|---|---|
-| `document_extractor_router` | `/api/v1/document-extractor` | 템플릿 기반 문서 추출/정제 (LLM 입력 20000자 절단 — 429 방지) |
+| `document_extractor_router` | `/api/v1/document-extractor` | 템플릿 기반 문서 추출/정제 (LLM 입력 20000자 절단 — 429 방지). (v7) 산출 파일 `GET /files/{id}`(다운로드)와 `GET /files/{id}/preview`(.xlsx 시트별 상위 100×50 JSON, 동일 owner/만료 검증, 404→403→415→422 순) — 프리뷰 응답 스키마는 첨부·KB 프리뷰가 재사용할 계약 ([[openpyxl-readonly-preview-pitfalls]]) |
 | `excel_export_router` / `pdf_export_router` | `/api/v1/excel`, `/api/v1/pdf` | 산출물 내보내기 (PDF 한글 폰트 이슈: doc-convert-korean-font 이월) |
 | `preview_router` | `/api/v1/preview` | 미리보기 |
 

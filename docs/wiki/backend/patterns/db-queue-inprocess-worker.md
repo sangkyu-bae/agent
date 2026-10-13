@@ -1,6 +1,7 @@
 ---
 title: DB 큐 + 인프로세스 워커 — 비동기 작업·스케줄 실행
-status: draft
+status: approved
+reviewer: 배상규
 source_type: conversation
 source_refs:
   - idt/src/application/background_job/worker.py (start/stop/reconcile/_claim_and_spawn/_maybe_tick_schedules)
@@ -11,7 +12,7 @@ source_refs:
 confidence: 0.85
 version: 1
 created: 2026-08-14
-updated: 2026-08-14
+updated: 2026-10-13
 verified_at: 12c69b4
 ---
 

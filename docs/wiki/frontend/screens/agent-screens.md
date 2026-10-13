@@ -1,6 +1,7 @@
 ---
 title: 화면↔API 지도 — 에이전트 화면 (스토어·빌더·워크스페이스)
-status: draft
+status: approved
+reviewer: 배상규
 source_type: conversation
 source_refs:
   - idt_front/src/App.tsx (라우트 선언)
@@ -13,7 +14,7 @@ source_refs:
 confidence: 0.85
 version: 4
 created: 2026-07-21
-updated: 2026-08-20
+updated: 2026-10-13
 verified_at: 7c3ffdd
 ---
 

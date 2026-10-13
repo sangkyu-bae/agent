@@ -1,6 +1,7 @@
 ---
 title: 미니 ERD — 지식베이스 도메인 (knowledge_base/chunking_profile/문서·검색 메타)
-status: draft
+status: approved
+reviewer: 배상규
 source_type: conversation
 source_refs:
   - idt/src/infrastructure/persistence/models/knowledge_base.py
@@ -9,14 +10,19 @@ source_refs:
   - idt/src/infrastructure/doc_browse/models.py
   - idt/src/infrastructure/collection_search/models.py
   - idt/db/migration/V047__alter_document_metadata_add_kb_id.sql
+  - idt/db/migration/V040__create_knowledge_base.sql · V041__create_chunking_profile.sql · V044__create_section_summary_job.sql (v2 — DDL 대조)
+  - idt/src/infrastructure/collection/permission_models.py (v2 — collection_permissions 한 줄)
 confidence: 0.9
-version: 1
+version: 2
 created: 2026-07-21
-updated: 2026-07-21
-verified_at: 6cc25656
+updated: 2026-10-13
+verified_at: 3b6353b
 ---
 
-구조는 SQLAlchemy 모델에서 도출(2026-07-21 기준). 실선=실제 FK, 점선=소프트 참조.
+> v2 (2026-10-13): V053~V079 27건 재검증 — 이 도메인 5테이블에 닿은 마이그레이션 **0건**, ORM 컬럼·FK·인덱스가 V040/V041/V044/V047/V049 DDL과 일치.
+> ERD 본체 무변경. 각주에 컬렉션 권한 테이블과의 관계 한 줄 추가.
+
+구조는 SQLAlchemy 모델에서 도출. 실선=실제 FK, 점선=소프트 참조.
 실제 청크/벡터는 MySQL이 아니라 ES/Qdrant에 있다 — 여기는 메타데이터 계층만.
 
 ```mermaid
@@ -83,3 +89,4 @@ erDiagram
 - `chunking_profile.summary_llm_model_id`는 FK 없는 소프트 참조 — NULL이면 섹션 요약 파이프라인 자체가 비활성 (card-section-summary D2).
 - `section_summary_job`은 **문서당 1행(UQ)이고 행 존재+status가 곧 요약 진행 상태**다. 재시도는 행 갱신으로 처리된다.
 - KB 검색 격리는 이 테이블들이 아니라 Qdrant payload `kb_id` 필터로 실현된다 (kb-rag-filter). E2E 실측은 [[e2e-carryover-checklist]]에 이월 중.
+- (v2) **`collection_permissions`(V013)는 물리 컬렉션 단위의 별도 권한 테이블**이고 `knowledge_base.scope`와 같은 PERSONAL/DEPARTMENT/PUBLIC enum을 쓰지만 서로 FK·동기화가 없다. KB는 `collection_name`으로 물리 컬렉션을 소프트 참조할 뿐이므로 "KB가 보이는가"와 "컬렉션에 권한이 있는가"는 별개 판정이다. `collection_activity_log`·`embedding_model`은 단순 CRUD(FK 없음)라 ERD 생략.

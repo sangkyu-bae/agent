@@ -1,6 +1,7 @@
 ---
 title: MCP 런타임 도구 객체의 실제 형태 (이름은 UUID다)
-status: draft
+status: approved
+reviewer: 배상규
 source_type: conversation
 source_refs:
   - idt/src/infrastructure/mcp_registry/mcp_tool_loader.py:34-45 (MCPServerConfig.name = registration.tool_id = "mcp_{uuid}")
@@ -10,7 +11,7 @@ source_refs:
 confidence: 0.85
 version: 2
 created: 2026-08-14
-updated: 2026-08-14
+updated: 2026-10-13
 verified_at: 12c69b4
 ---
 

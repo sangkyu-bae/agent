@@ -17,16 +17,22 @@ source_refs:
   - 커밋 72b3632 (v4 — 게이트 워커 조건부 END, GroundedGenerator 배선)
   - 커밋 fe184dd, 49b2f41 (v4 — 서브에이전트 런타임 저장소 DI, function_node_ids)
   - idt/src/application/agent_builder/supervisor_nodes.py (route_after_gated_worker) — v4
+  - idt/src/api/main.py get_prompt_guard() + run_agent_use_case.py·general_chat/use_case.py 가드 배선 (v5, 커밋 ded7e74)
+  - idt/src/application/agent_run/step_tracking.py (v5 — parent_step_id·depth, monotonic latency, V079)
+  - idt/src/infrastructure/parser/extension_routing_parser.py + parser/hwp/ (v5 — .hwp/.hwpx 라우팅, 커밋 02677d0)
 confidence: 0.9
-version: 4
+version: 5
 created: 2026-07-23
-updated: 2026-10-06
+updated: 2026-10-13
 reviewer: 배상규
-verified_at: ae12fc4
+verified_at: 3b6353b
 ---
 
+> v5 (2026-10-13): §2(a)(b)에 **prompt guard 검사 지점**(그래프 생성 전, LLM 분기 전), §2(b) RunTracker에
+> step 계층·latency(V079), §2(d) 파서 라우팅에 한글(.hwp/.hwpx) 추가. 에이전트 갱신이므로 approved → draft 강등 → 2026-10-13 재승인(배상규).
+> 다른 절은 v4(ae12fc4) 기준 그대로이며 이번에 재검증하지 않았다.
+>
 > v4 (2026-10-06): §2(b)에 게이트/서브에이전트 조건부 간선·근거 판정 루프·서브에이전트 DI 3항목 추가.
-> 에이전트 갱신이므로 approved → draft 강등 (재승인 필요). 다른 절은 v3(12c69b4) 기준 그대로이며 이번에 재검증하지 않았다.
 
 # 백엔드 아키텍처 조감도 — 요청→응답 전체 경로
 
@@ -63,6 +69,7 @@ FastAPI router (src/api/routes/*, 52 등록)
 **(a) General Chat — WS 스트리밍** (`/ws/chat/{session_id}`)
 ```
 ws_router.ws_chat → JWT 검증 → GeneralChatUseCase.stream()
+  → [prompt_guard.inspect]  ← (v5) 이력 조회 직후·차트 편집 분기 전. enforced면 LLM 미호출, 안내문 저장+CHAT_DONE
   → create_react_agent (단일 ReAct, ChatToolBuilder가 웹검색·문서검색·MCP 도구 조립)
   → astream_events(v2) → ChatEvent → ChatEventWsAdapter → WS 송신 + cache.record(재접속 replay)
 ```
@@ -78,6 +85,7 @@ ws_router.ws_chat → JWT 검증 → GeneralChatUseCase.stream()
 **(b) Agent 실행 — Supervisor 그래프** (POST `/api/v1/agents/.../run` SSE + `/ws/agent/{run_id}`)
 ```
 agent_builder_router → RunAgentUseCase
+  → [prompt_guard.inspect + ai_run 스텝 'prompt_guard']  ← (v5) RUN_STARTED 직후·compile 전. enforced면 그래프 미생성
   → WorkflowCompiler.compile()  ← 요청마다 DB의 WorkflowDefinition으로 동적 컴파일 (그래프 캐시 없음)
   → StateGraph: supervisor → (route_to_worker) → worker들(각각 create_react_agent)
        → [chart_router → chart_builder]? → quality_gate → (route_after_quality: 재시도 or final_answer) → END
@@ -95,6 +103,12 @@ agent_builder_router → RunAgentUseCase
   `SessionScopedAgentDefinitionRepository`·`SessionScopedLlmModelRepository` 가 main.py에서 주입돼야
   동작한다(2026-10 이전엔 미주입이라 한 번도 동작한 적 없음). 입력 계약은 [[supervisor-graph-contracts]] §5.
 - RunTracker(관측)가 노드/도구/LLM 호출 단위로 ai_run_* 5테이블에 기록한다 (V021+V046).
+  (v5) `ai_run_step`은 `parent_step_id`·`depth`(V079)로 서브에이전트 자식 그래프 step을 계층화하며,
+  latency는 DB 시각 차가 아니라 `track_step`의 monotonic 측정값이다([[run-step-hierarchy-and-latency]]).
+  WS 실시간 이벤트에는 아직 계층이 없다.
+- (v5) **두 채팅 경로 공통 입력 가드**: `prompt_guard_enabled` 기본 True, `get_prompt_guard()` None 팩토리가
+  킬스위치. 규칙 1차 → REVIEW만 LLM 판정 → fail-open. 차단 턴은 저장되지만 다음 턴 컨텍스트에서 제외
+  ([[prompt-injection-guard]]).
 
 **(c) RAG 검색 — 하이브리드 vs 라우팅 (별도 경로 2개)**
 ```
@@ -111,6 +125,8 @@ agent_builder_router → RunAgentUseCase
 ```
 IngestDocumentUseCase: 파서 레지스트리에서 선택(pymupdf/pymupdf4llm/llamaparse)
   → ChunkingStrategyFactory로 청킹 → 임베딩 → Qdrant 저장
+KB 업로드·/doc-chunk: ExtensionRoutingParser — pdf는 기존 파서, xlsx/xls는 엑셀 어댑터,
+  (v5) .hwp/.hwpx는 HwpDocumentParser(optional 마지막 인자, main.py DI 2곳) → 같은 청킹 경로
   → document_metadata 저장(MySQL) + collection_activity_log 기록
 ```
 - 벡터는 Qdrant, 메타는 MySQL, 전문검색은 ES — **한 문서가 3곳에 흩어진다**.
