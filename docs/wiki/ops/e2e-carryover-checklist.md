@@ -9,12 +9,19 @@ source_refs:
   - idt/docs/archive/2026-07/kb-retrieval-test/kb-retrieval-test.report.md
   - idt/docs/archive/2026-07/wiki-user-facing/wiki-user-facing.report.md
   - idt/docs/archive/2026-07/agent-memory/agent-memory.report.md
+  - idt/docs/archive/2026-10/excel-preview/excel-preview.report.md §8.1 (v2)
+  - docs/archive/2026-10/prompt-guard/prompt-guard.report.md §4.1 (v2)
+  - idt/docs/archive/2026-10/subagent-step-observability/subagent-step-observability.report.md §4.1 (v2)
+  - idt/docs/archive/2026-10/hwp-parser/hwp-parser.report.md §4.1 환경 메모 (v2)
 confidence: 0.9
-version: 1
+version: 2
 created: 2026-07-21
-updated: 2026-07-21
-verified_at: 6cc25656
+updated: 2026-10-13
+verified_at: 3b6353b
 ---
+
+> v2 (2026-10-13): "2026-10 사이클" 절 추가(excel-preview 수동 E2E 4종, prompt-guard 배포 전 수기 항목·운영 관측,
+> subagent-step-observability 화면 확인·V079, hwp-parser ES nori). 기존 절은 v1(6cc25656) 그대로. approved → draft 강등 → 2026-10-13 재승인(배상규).
 
 ## 문제
 
@@ -59,6 +66,13 @@ verified_at: 6cc25656
 - [ ] **nl-agent-composer**: compose→POST /agents→run (실 LLM/DB, 라우터 401 검증 포함) — `idt/docs/archive/2026-07/nl-agent-composer/nl-agent-composer.report.md`
 - [ ] **analysis-source-preservation**: 턴1 엑셀 첨부 분석→턴2 "분기별로 다시"(첨부 X)→원천 재집계 + LangSmith context/토큰 측정 — `idt/docs/archive/2026-07/analysis-source-preservation/analysis-source-preservation.report.md`
 - [ ] **agent-eval-gate**: E2E 수동 검증 (일괄 체크리스트 편입 명시) — `idt/docs/archive/2026-07/agent-eval-gate/agent-eval-gate.report.md`
+
+### 2026-10 사이클 (실서버·실에이전트, v2 추가)
+
+- [ ] **excel-preview §8.1 (배포 전 1회)**: 엑셀 생성 에이전트로 .xlsx 산출→미리보기 전 시트 탭·데이터 일치 / 모달 다운로드 vs 링크 다운로드 바이트 동일(`fc /b`) / TTL(1h) 만료 후 "만료" 문구 + 모달 열린 채 만료 후 다운로드 실패 안내 / 10MB·5시트·2만 행 응답 2초 이내·채팅 UI 비차단 — `idt/docs/archive/2026-10/excel-preview/excel-preview.report.md`
+- [ ] **prompt-guard (배포 전 수기)**: `idt/.env.example`에 `PROMPT_GUARD_*` 5키 반영(bkit이 `.env*` 쓰기 차단으로 미반영) / 기동 로그에 `prompt_guard assembly failed` 없음 확인(mode 오타면 가드 전체 off) / 운영 1~2주 `prompt_guard decision` 로그의 `judge_error=timeout`·REVIEW 비율 관측 후 타임아웃(3s)·soft 규칙 조정 — `docs/archive/2026-10/prompt-guard/prompt-guard.report.md`, [[prompt-injection-guard]]
+- [ ] **subagent-step-observability SC-5**: **V079 운영 적용 후** `/admin/agent-runs/{runId}` 실행 상세에서 서브에이전트 step 아래 자식이 들여쓰기·"하위 N"·접기로 묶이는지 육안 확인(실런 run `8863101d`) — `idt/docs/archive/2026-10/subagent-step-observability/subagent-step-observability.report.md`
+- [ ] **hwp-parser 환경**: ES에 `analysis-nori` 설치 후 `documents` 인덱스 재생성(로컬은 한국어 분석기 없이 생성됨) → 한글 문서 업로드 후 KB 검색 히트 확인 — `idt/docs/archive/2026-10/hwp-parser/hwp-parser.report.md`
 
 ## 다음에 적용하는 법
 

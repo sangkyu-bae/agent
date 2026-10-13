@@ -1,6 +1,7 @@
 ---
 title: 화면↔API 지도 — 관리자 화면 (/admin/*)
-status: draft
+status: approved
+reviewer: 배상규
 source_type: conversation
 source_refs:
   - idt_front/src/App.tsx (AdminRoute + AdminLayout 라우트 블록)
@@ -8,12 +9,16 @@ source_refs:
   - idt/docs/archive/2026-07/admin-dashboard/admin-dashboard.report.md
   - idt_front/docs/archive/2026-08/admin-nav-restructure/admin-nav-restructure.report.md
   - idt/docs/archive/2026-08/builtin-tools/builtin-tools.report.md (/admin/tools)
+  - idt_front/src/utils/buildStepTree.ts + components StepTree (v3 — 런 상세 계층 트리)
+  - idt/docs/archive/2026-10/subagent-step-observability/subagent-step-observability.report.md (v3)
 confidence: 0.85
-version: 2
+version: 3
 created: 2026-07-21
-updated: 2026-08-03
-verified_at: 4f650d3c
+updated: 2026-10-13
+verified_at: 3b6353b
 ---
+
+> v3 (2026-10-13): `/admin/agent-runs/:runId` 행에 StepTree 계층 표시 계약 추가. 다른 행은 v2(4f650d3c) 그대로.
 
 모든 `/admin/*` 라우트는 `AdminRoute`(비admin이면 `/`로 리다이렉트) + `AdminLayout` 하위에 선언된다.
 
@@ -29,7 +34,7 @@ verified_at: 4f650d3c
 | `/admin/chunking-profiles` | 청킹 프로파일 관리 + 요약 LLM 배정 | `useChunkingProfiles`, `useLlmModels` | `ADMIN_CHUNKING_PROFILES*` → `admin_chunking_router` |
 | `/admin/skills` | 스킬 정의 관리 | `useSkills` | `SKILLS*` → `skill_builder_router` |
 | `/admin/ragas` | RAGAS 평가 대시보드/런/테스트셋 | (서비스 직접: `adminRagasService`) | `ADMIN_RAGAS_*` → `admin_ragas_router` |
-| `/admin/agent-runs`, `/admin/agent-runs/:runId` | 에이전트 런 관측(비용/토큰/스텝 드릴다운) | `useAgentRunAdmin` | `ADMIN_AGENT_RUNS`, `ADMIN_AGENT_RUN_DETAIL` → `agent_run_router` |
+| `/admin/agent-runs`, `/admin/agent-runs/:runId` | 에이전트 런 관측(비용/토큰/스텝 드릴다운). (v3) 상세의 Steps는 API 평면 `steps[]`(`parent_step_id`·`depth` additive)를 `buildStepTree`로 묶어 `StepTree`가 접기형 트리로 렌더 — 부모 미발견·순환은 최상위 승격, 과거 런(depth 0)은 평면 그대로. 서브에이전트 wrapper step 아래 자식이 들여쓰기·"하위 N"으로 보이면 정상 ([[run-step-hierarchy-and-latency]]) | `useAgentRunAdmin` | `ADMIN_AGENT_RUNS`, `ADMIN_AGENT_RUN_DETAIL` → `agent_run_router` |
 | `/admin/wiki` | 제품 위키 큐레이션(승인/반려/폐기/distill) | `useWiki`, `useAgentStore`, `useRagToolConfig` | `WIKI_*` → `wiki_router` ([[wiki-screens]]) |
 | `/admin/tools` | 도구 카탈로그 목록 + 빌트인 지정/해제 토글(`role="switch"`, 행 단위 pending 가드) | `useToolCatalog`, `useSetToolBuiltin` | `TOOL_CATALOG`, `TOOL_CATALOG_BUILTIN`(PATCH) → `tool_catalog_router` ([[builtin-tools-optout-channel]]) |
 

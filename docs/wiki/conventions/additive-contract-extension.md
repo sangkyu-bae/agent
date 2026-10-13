@@ -1,6 +1,7 @@
 ---
 title: API·WS 계약 확장은 additive + 응답 타입 분리 — 기존 소비자 무변경으로 회귀 0
-status: draft
+status: approved
+reviewer: 배상규
 source_type: conversation
 source_refs:
   - idt/docs/archive/2026-07/expose-user-department/expose-user-department.report.md (결정 ③, Lessons 3)
@@ -11,7 +12,7 @@ source_refs:
 confidence: 0.85
 version: 2
 created: 2026-07-20
-updated: 2026-08-06
+updated: 2026-10-13
 verified_at: 18fd521e
 ---
 

@@ -1,6 +1,7 @@
 ---
 title: 탈착형 모듈 이음매 — None 킬스위치 + AST 경계 테스트
-status: draft
+status: approved
+reviewer: 배상규
 source_type: conversation
 source_refs:
   - idt/src/application/intent/node.py (analyzer=None → 노드 자체를 만들지 않음)
@@ -13,21 +14,23 @@ source_refs:
   - docs/archive/2026-08/tool-recommender/tool-recommender.report.md (§1.5 Decision Record, §6.1)
   - idt/tests/infrastructure/tool_selection/test_module_boundaries.py:101-159 (_DECLARED_CONSUMERS 확장 + duck typing 예외 원칙, ⚠️ 미커밋)
   - docs/archive/2026-08/agent-create-pipeline/agent-create-pipeline.report.md (§1.5 Plan D2, §6.1 "탈부착 계약 테스트가 실제로 작동")
-confidence: 0.65
-version: 4
+  - idt/src/api/main.py get_prompt_guard()/_build_prompt_guard() + idt/src/config.py prompt_guard_enabled=True (v5 — 첫 "기본 on" 소비자, 커밋 ded7e74)
+  - idt/tests/infrastructure/prompt_guard/test_module_boundaries.py (v5 — 패턴 복제 사례)
+  - docs/archive/2026-10/prompt-guard/prompt-guard.report.md §6.1 "탈착형 이음매" (v5)
+confidence: 0.75
+version: 5
 created: 2026-08-14
-updated: 2026-08-19
-verified_at: 7c3ffdd
+updated: 2026-10-13
+verified_at: 3b6353b
 ---
 
 # 탈착형 모듈 이음매 — None 킬스위치 + AST 경계 테스트
 
-> ⚠️ **근거 전량이 `12c69b4` 미커밋 상태다.** `git cat-file` 전수 확인 결과:
-> `intent/node.py`·`langchain_filter.py`·`test_module_boundaries.py`·PDCA 보고서 3종은
-> HEAD에 **존재하지 않고**, `main.py`·`config.py`·`general_chat/use_case.py`는 파일만
-> 커밋돼 있을 뿐 **인용한 라인은 전부 미커밋 diff 안**에 있다.
-> 따라서 `verified_at`을 이용한 표류 검사가 **작동하지 않는다** — 코드 커밋 후
-> `verified_at` 재기록이 필요하다.
+> v5 (2026-10-13): 근거 파일(`intent/node.py`·`langchain_filter.py`·`test_module_boundaries.py`·PDCA 보고서)은
+> **모두 커밋됐다**(`git ls-files` 확인) — v1~v4의 "근거 전량 미커밋" 경고는 해소. 다만 `main.py`·`config.py`의
+> 인용 라인 번호는 당시 기준이라 현재와 다르다(`tool_selector_enabled`는 `config.py:202`). §6에 **prompt-guard**
+> 를 추가 — 이 패턴을 **기본 on**으로 배포한 첫 소비자이며 운영 활성 상태로 확인됐다(실런 §8.6).
+> intent·tool-recommender는 여전히 기본 off/미배선이라 "확립된 관행"의 근거는 prompt-guard 한 건이다.
 >
 > **선례에 대한 정정(v2)**: v1은 `search_decision`·`chart_router`를 이 패턴의 선례로
 > 적었으나, 커밋된 코드를 확인하니 **둘 다 None 킬스위치를 구현하지 않는다** —
@@ -127,6 +130,21 @@ agent-create-pipeline이 tool_selection의 **두 번째 소비자**가 되자 §
 **`include_router` 자체를 하지 않는다** — 노드가 그래프에 없는 것처럼 라우트가 앱에
 없다(404). "off = 없던 상태"를 엔드포인트 단위로 적용한 세 번째 사례
 ([[router-map]] 등록 순서 주의 참조).
+
+### 6. 세 번째 소비자 prompt-guard — "기본 on"일 때의 추가 규칙 (v5 추가)
+
+prompt-guard는 같은 이음매(`prompt_guard: PromptGuardPort | None = None` 기본값, `get_prompt_guard()`가
+킬스위치 off·조립 실패 시 None, AST 경계 테스트 5건 복제)를 썼지만 **`prompt_guard_enabled` 기본값이 True**다 —
+보안 기능이라 "배포=활성화"를 택했고, 기존 테스트 1229건 무수정·회귀 0으로 끝났다. 기본 on이 되면 두 가지가 달라진다:
+
+- **조립은 1회만 시도한다** (`_prompt_guard_built` 플래그). 요청마다 재조립을 시도하면 실패 warning이 폭주한다.
+- **"조립 실패 = None = 기능 없음"이 보안 기능에서는 조용한 구멍이 된다.** `.env` mode 오타 하나로 가드
+  전체가 꺼지고 warning 1회만 남는다(G-10, 설계상 수용). 기본 on 소비자는 기동 로그 확인을 배포 체크리스트에
+  넣거나, 조립 실패 시 보수적 폴백(`block`)을 검토할 것 — 이 결정은 아직 내려지지 않았다.
+
+또 하나의 확인: 부가 기능이 **런타임 예외를 자기 안에서 흡수**하는 지점이 두 겹이다 — 서비스 내부 fail-open
+(판정기 실패) + 유스케이스 `_inspect_safe`(가드 자체 예외). 이음매가 "없던 상태"를 보장하려면 주입 지점뿐
+아니라 호출 지점에서도 예외를 삼켜야 한다. 상세: [[prompt-injection-guard]].
 
 ## 다음에 적용하는 법
 

@@ -1,6 +1,7 @@
 ---
 title: 라우트 간 1회성 상태 핸드오프 — 생명주기 계약 G1~G5
-status: draft
+status: approved
+reviewer: 배상규
 source_type: conversation
 source_refs:
   - idt_front/src/store/agentDraftStore.ts (persist 금지 · consumePendingIntent 원자적 읽기+비우기)
@@ -11,7 +12,7 @@ source_refs:
 confidence: 0.85
 version: 1
 created: 2026-08-14
-updated: 2026-08-14
+updated: 2026-10-13
 verified_at: 12c69b4
 ---
 

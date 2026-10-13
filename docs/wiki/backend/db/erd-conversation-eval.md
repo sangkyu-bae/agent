@@ -1,18 +1,26 @@
 ---
 title: 미니 ERD — 대화·평가 도메인 (conversation_message/summary, message_feedback)
-status: draft
+status: approved
+reviewer: 배상규
 source_type: conversation
 source_refs:
   - idt/src/infrastructure/persistence/models/conversation.py
   - idt/src/infrastructure/eval/models.py
   - idt/db/migration/V052__create_message_feedback.sql
   - idt/docs/archive/2026-07/agent-eval-gate/agent-eval-gate.report.md
+  - docs/archive/2026-10/prompt-guard/prompt-guard.design.md §8.6 발견 2 (v2 — 에이전트 경로 turn_index 중복 실측)
+  - idt/src/domain/prompt_guard/policies.py BlockedTurnPolicy (v2 — 안내문 상수로 차단 턴 식별)
 confidence: 0.9
-version: 1
+version: 3
 created: 2026-07-21
-updated: 2026-07-21
-verified_at: 6cc25656
+updated: 2026-10-13
+verified_at: 3b6353b
 ---
+
+> v3 (2026-10-13): 범위 안내 한 줄 추가 — 여기서 "평가"는 **사용자 👍/👎(`message_feedback`)** 다. RAGAS 배치 평가·모델 스윕(`evaluation_run/result/testset/sweep`)은 [[erd-evaluation]]이 주인이다.
+> 또 `conversation_message.id`는 **`ai_run.user_message_id`가 DDL FK(ON DELETE SET NULL)로 역참조**한다 — 이 도메인이 바깥으로 거는 FK는 0이지만 들어오는 FK는 1개 있다 ([[erd-agent-run]]).
+> v2 (2026-10-13): 각주에 **에이전트 경로 turn_index 중복(기존 결함)**과 **차단 턴 식별 규칙** 2항목 추가.
+> ERD 본체는 v1(6cc25656) 기준 그대로이며 이번에 재검증하지 않았다.
 
 구조는 SQLAlchemy 모델에서 도출(2026-07-21 기준). 이 도메인은 **FK가 하나도 없다** — 전부 소프트 참조.
 
@@ -59,3 +67,11 @@ erDiagram
 - `message_feedback.agent_id`는 조인 회피용 비정규화 컬럼이다 (`idx_feedback_agent_rating`으로 에이전트별 만족도 집계).
 - 👎 환류 파이프라인은 이 테이블을 기점으로 한다: 이유(comment) 있는 👎만 memory 후보(eval-feedback-loop)·wiki 초안(wiki-feedback-loop)으로 팬아웃, 반복 👎는 빈도 집계로 초안 강화(recurring-feedback-promotion). **이유 없는 👎는 상류에서 차단**된다.
 - 대화 기록은 vector DB에 저장 금지 (idt/CLAUDE.md 금지 조항) — 요약은 `conversation_summary`가 담당.
+- (v2) **`turn_index`는 에이전트 실행 경로에서 유일하지 않다.** `_save_user_message`는 별도 세션으로 즉시 commit하고
+  `_save_assistant_message`는 요청 세션의 REPEATABLE READ 스냅샷으로 `find_by_session`해 user 행을 못 보므로
+  user/assistant가 **같은 turn_index**로 저장된다(2026-09-30 이후 11세션 재현, 일반 채팅 `_persist_messages`는 정상).
+  turn으로 정렬·페어링하는 코드는 `(turn_index, role==user 선행)` 복합 키를 써야 한다(`BlockedTurnPolicy` 선례).
+  근본 수정(assistant 저장도 session_factory 경로)은 이월 — [[prompt-injection-guard]] §5.
+- (v2) **차단 턴은 스키마 없이 내용으로 식별한다.** prompt guard가 막은 턴은 assistant `content == BLOCK_NOTICE_KO`
+  상수로 판별해 다음 턴 LLM 컨텍스트에서 user+assistant 쌍을 제외한다. 안내문 문구를 바꾸면 과거 차단 턴이
+  식별되지 않는다(상수 변경 시 마이그레이션성 고려 필요).

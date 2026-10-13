@@ -1,17 +1,22 @@
 ---
 title: 화면↔API 지도 — 지식베이스·컬렉션 화면
-status: draft
+status: approved
+reviewer: 배상규
 source_type: conversation
 source_refs:
   - idt_front/src/App.tsx (라우트 선언)
   - idt_front/src/constants/api.ts (KNOWLEDGE_BASES / COLLECTIONS 블록)
   - idt/docs/archive/2026-07/kb-content-browser/kb-content-browser.report.md
+  - idt_front/src/components/knowledge-base/KbUploadDocumentModal.tsx:92 (v2 — accept 목록)
+  - idt/docs/archive/2026-10/hwp-parser/hwp-parser.report.md (v2)
 confidence: 0.85
-version: 1
+version: 2
 created: 2026-07-21
-updated: 2026-07-21
-verified_at: 6cc25656
+updated: 2026-10-13
+verified_at: 3b6353b
 ---
+
+> v2 (2026-10-13): KB 상세 업로드 형식에 한글(.hwp/.hwpx) 추가. 다른 절은 v1(6cc25656) 그대로.
 
 ## KnowledgeBasesPage — `/knowledge-bases`
 
@@ -23,7 +28,9 @@ verified_at: 6cc25656
 
 ## KnowledgeBaseDetailPage — `/knowledge-bases/:kbId`
 
-KB 상세 — 문서 목록·업로드(PDF/엑셀), 청킹 설정, 콘텐츠 브라우저(3계층 드릴다운), 리트리버 테스트를 한 화면에서 처리.
+KB 상세 — 문서 목록·업로드(PDF/엑셀/한글), 청킹 설정, 콘텐츠 브라우저(3계층 드릴다운), 리트리버 테스트를 한 화면에서 처리.
+
+- (v2) 업로드 모달 `KbUploadDocumentModal` `accept=".pdf,.xlsx,.xls,.hwp,.hwpx"`. 한글은 백엔드 `ExtensionRoutingParser`가 같은 청킹 경로로 보내며 암호·배포용·손상 파일은 422로 돌아온다(모달이 서버 메시지를 그대로 노출). 프론트 변경은 accept·안내 문구뿐 — 새 포맷 추가 시 백엔드 라우팅 + 이 두 줄이 전부 ([[hwp-parser-format-facts]])
 
 - 진입: `idt_front/src/pages/KnowledgeBaseDetailPage/index.tsx`
 - 훅: `useKnowledgeBases` (조회+뮤테이션 일괄)

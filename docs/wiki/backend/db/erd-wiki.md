@@ -1,6 +1,7 @@
 ---
 title: 미니 ERD — 위키 도메인 (wiki_article + wiki_folder_summary)
-status: draft
+status: approved
+reviewer: 배상규
 source_type: conversation
 source_refs:
   - idt/src/infrastructure/wiki/models.py
@@ -10,11 +11,14 @@ source_refs:
   - idt/docs/archive/2026-07/wiki-feedback-loop/wiki-feedback-loop.report.md
   - idt/docs/archive/2026-07/wiki-folder-summaries/wiki-folder-summaries.report.md
 confidence: 0.9
-version: 2
+version: 3
 created: 2026-07-21
-updated: 2026-08-03
-verified_at: 4f650d3c
+updated: 2026-10-13
+verified_at: 3b6353b
 ---
+
+> v3 (2026-10-13): V055~V079 25건 재검증 — `wiki_article`·`wiki_folder_summary`에 닿은 마이그레이션 **0건**, ORM이 V036/V051/V053 DDL과 일치.
+> 본체·각주 무변경(검증 좌표만 갱신). 참고: `wiki_article`은 V036이 `utf8mb4_unicode_ci`를 명시한 테이블이라, 이 테이블을 FK로 참조하는 마이그레이션은 거꾸로 같은 콜레이션을 맞춰야 한다 — 현재 참조하는 테이블은 없다.
 
 테이블 2개 도메인 (본문 + 폴더 요약 계층). 구조는 SQLAlchemy 모델에서 도출. FK 없음 — 전부 소프트 참조.
 

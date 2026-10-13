@@ -1,6 +1,7 @@
 ---
 title: 화면↔API 지도 — 위키·지식 노출 화면
-status: draft
+status: approved
+reviewer: 배상규
 source_type: conversation
 source_refs:
   - idt_front/src/App.tsx (agents/:agentId/knowledge, knowledge/:articleId, admin/wiki 라우트)
@@ -9,7 +10,7 @@ source_refs:
 confidence: 0.85
 version: 1
 created: 2026-07-21
-updated: 2026-07-21
+updated: 2026-10-13
 verified_at: 6cc25656
 ---
 

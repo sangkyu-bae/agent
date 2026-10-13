@@ -4,7 +4,7 @@ status: approved
 reviewer: 배상규
 source_type: conversation
 source_refs:
-  - idt/db/migration/V037__create_agent_definition.sql
+  - idt/db/migration/V037__create_document_template.sql
   - idt/src/infrastructure/agent_builder (SQLAlchemy 모델 생성 테이블)
   - idt/db/migration/V056·V057·V058·V059·V060 (동일 주의 주석이 반복 기록됨)
   - idt/db/migration/V058__create_agent_webhook_delivery.sql (COMMENT 최상위 콤마 금지)

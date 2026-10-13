@@ -1,6 +1,7 @@
 ---
 title: PDCA gap은 억지로 메우지 말고 명시적 후속 태스크로 이월한다
-status: draft
+status: approved
+reviewer: 배상규
 source_type: conversation
 source_refs:
   - idt/docs/archive/2026-07/expose-user-department/expose-user-department.report.md (Lessons 1)
@@ -8,7 +9,7 @@ source_refs:
 confidence: 0.8
 version: 1
 created: 2026-07-20
-updated: 2026-07-20
+updated: 2026-10-13
 verified_at: 6cc25656
 ---
 
