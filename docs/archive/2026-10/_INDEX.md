@@ -3,6 +3,7 @@
 | Feature | Phase | Match Rate | Archived At | Path |
 |---------|-------|:----------:|-------------|------|
 | prompt-guard | completed | 99.8% | 2026-10-13 | [prompt-guard/](prompt-guard/) |
+| judgment-backend | completed | 99.3% | 2026-10-16 | [judgment-backend/](judgment-backend/) |
 
 > `idt/docs/archive/2026-10/` 에는 백엔드 전용 사이클(hwp-parser)이 별도로 있다.
 
@@ -21,3 +22,6 @@
 | prompt-guard | 판정 지연 1.3~2.7초 vs timeout 3초 — 여유 적음 | 운영 관측 필요 | `judge_error=timeout` 비율·REVIEW 비율 로그 1~2주 후 조정 |
 | prompt-guard | 간접 인젹션(RAG·도구 결과), 출력 검사, 에이전트별 토글, 관리자 화면, 멀티턴 분할 공격, 인코딩 우회 | Plan Out of Scope | 후속 Plan — `InputSource` 확장으로 같은 Port 재사용 |
 | prompt-guard | **코드 미커밋** — src·tests·docs 전부 워킹트리. `main.py`·`config.py` 에 무관한 excel_preview 변경이 섞여 있어 분리 커밋 필요 | 작업 관리 | 커밋 시 prompt_guard 파일만 선택 |
+| **judgment-backend** | **실호출 미검증** — Jev 키·AnyJev 서버 미확보로 `-m llm` 스모크 2종은 작성만(skip). 양성 대조군 벤치(웹검색 필요 N + 불필요 M)로 임계값·백엔드별 캘리브레이션을 본 뒤 `JUDGMENT_BACKEND` on | 환경 확보 후 0.5일 | **운영 활성화 전 필수** — 기본값 off 라 배포는 안전 |
+| judgment-backend | 테스트 보강 5건 — G4 폴백 자체 예외 시뮬레이션, G7 `typesafe_base_url=None` 시 SDK 기본 URL 명시, G8 실패 케이스 Choice parametrize, G10 스모크 `/health` 선조건, G11 `aclose` 실패 warning | 각 0.2~0.5h | 다음 judgment 소비 지점 사이클에 묶어 처리 |
+| judgment-backend | 두 번째 소비 지점(RAG 관련성 `relevance_adapter` / prompt_guard judge)·Score 프리미티브·관리자 UI | Plan Out of Scope | 벤치 결과 양호 시 후속 Plan |

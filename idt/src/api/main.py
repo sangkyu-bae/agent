@@ -457,6 +457,10 @@ from src.application.hallucination.use_case import HallucinationEvaluatorUseCase
 from src.infrastructure.hallucination.adapter import HallucinationEvaluatorAdapter
 from src.infrastructure.intent.adapter import LLMIntentAnalyzerAdapter
 from src.infrastructure.search_decision.adapter import LLMSearchDecisionAdapter
+from src.infrastructure.search_decision.judgment_adapter import (
+    JudgmentSearchDecisionAdapter,
+)
+from src.domain.judgment.interfaces import JudgmentPort
 from src.infrastructure.persistence.database import (
     get_engine,
     get_session,
@@ -905,6 +909,66 @@ def _build_prompt_guard() -> "PromptGuardService":
     )
 
 
+# judgment-backend Design §4.4: 타입 판정 백엔드(Jev/AnyJev) 앱 수명 싱글톤, lazy.
+# JUDGMENT_BACKEND=off(기본) 또는 조립 실패 시 None — search_decision 은 기존 LLM
+# 어댑터 그대로(탈착형 이음매). 실패는 한 번만 기록하고 재시도하지 않는다.
+_judgment_backend: Optional[JudgmentPort] = None
+_judgment_backend_built = False
+
+
+def get_judgment_backend() -> Optional[JudgmentPort]:
+    """judgment-backend Design §4.4 — None 이면 판정 백엔드 비활성 (FR-09)."""
+    global _judgment_backend, _judgment_backend_built
+    if _judgment_backend_built:
+        return _judgment_backend
+    _judgment_backend_built = True
+    if (settings.judgment_backend or "").strip().lower() == "off":
+        return None
+    try:
+        from src.infrastructure.judgment.factory import build_judgment_backend
+
+        _judgment_backend = build_judgment_backend(settings, get_app_logger())
+    except Exception as e:  # noqa: BLE001 — 판정 백엔드 조립 실패가 앱 기동을 막으면 안 된다
+        get_app_logger().warning(
+            "judgment backend assembly failed — disabled", exception=e
+        )
+    return _judgment_backend
+
+
+def _build_search_decision(
+    llm_search_decision: LLMSearchDecisionAdapter, app_logger: StructuredLogger
+):
+    """judgment-backend Design §4.4 (FR-12) — 백엔드가 있으면 Noul 판정으로 감싸고
+    실패 시 기존 LLM 어댑터로 폴백. 없으면(off·조립 실패) 기존 어댑터 그대로.
+    Check G5: 임계값 범위 오류 같은 생성자 예외도 조립 실패로 흡수한다(기동 불중단)."""
+    judgment_backend = get_judgment_backend()
+    if judgment_backend is None:
+        return llm_search_decision
+    try:
+        return JudgmentSearchDecisionAdapter(
+            backend=judgment_backend,
+            fallback=llm_search_decision,
+            threshold=settings.search_decision_judgment_threshold,
+            timeout_seconds=settings.judgment_timeout_seconds,
+            logger=app_logger,
+        )
+    except Exception as e:  # noqa: BLE001 — 판정 어댑터 조립 실패가 앱 기동을 막으면 안 된다
+        app_logger.warning(
+            "judgment search decision assembly failed — using LLM adapter", exception=e
+        )
+        return llm_search_decision
+
+
+async def _close_judgment_backend() -> None:
+    """lifespan shutdown — best-effort (Design D15)."""
+    if _judgment_backend is None:
+        return
+    try:
+        await _judgment_backend.aclose()
+    except Exception as e:  # noqa: BLE001 — 종료 정리 실패는 경고만
+        get_app_logger().warning("judgment backend close failed", exception=e)
+
+
 # Global logger instance
 _app_logger: Optional[StructuredLogger] = None
 
@@ -1141,9 +1205,11 @@ def create_analyze_excel_use_case() -> AnalyzeExcelUseCase:
         evaluator_adapter=hallucination_adapter,
     )
 
-    search_decision = LLMSearchDecisionAdapter(
+    llm_search_decision = LLMSearchDecisionAdapter(
         logger=app_logger, llm_provider=get_utility_llm_provider()
     )
+    # judgment-backend Design §4.4 (FR-12): 판정 백엔드 결선 (None 이면 기존 어댑터)
+    search_decision = _build_search_decision(llm_search_decision, app_logger)
 
     # supervisor-chart-builder-node: 엑셀 분석 결과 시각화용 chart_builder.
     # _default_llm_model 미로드(None) 시 빌더 비활성 → chart_router→END 하위호환.
@@ -5352,6 +5418,9 @@ async def lifespan(app: FastAPI):
     # background-jobs D7: 루프·활성 job 취소 + failed 마킹 시도 (reconcile 이중 방어)
     if _background_job_worker is not None:
         await _background_job_worker.stop()
+
+    # judgment-backend D15: 판정 백엔드 HTTP 클라이언트 정리 (best-effort)
+    await _close_judgment_backend()
 
     # Shutdown: Cleanup (if needed)
     _document_processor = None

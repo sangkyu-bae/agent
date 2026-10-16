@@ -91,6 +91,13 @@ dev = [
 eval = [
     "ragas>=0.2.0",
 ]
+# judgment-backend Design D7/D8 — Jev(TypeSafe) 판정 백엔드용 공식 SDK. httpx2 에 의존해
+# 기존 httpx 와 충돌하지 않는다. JUDGMENT_BACKEND=jev 일 때만 필요하며, 미설치면
+# 팩토리가 ImportError 를 None 으로 흡수해 기존 LLM 판정 경로로 돌아간다.
+# 설치: `uv sync --extra judgment`
+judgment = [
+    "typesafe-sdk>=0.7.5,<0.8",
+]
 
 [build-system]
 requires = ["hatchling"]

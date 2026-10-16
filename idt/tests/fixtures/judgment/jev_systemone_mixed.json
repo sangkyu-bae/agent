@@ -1,0 +1,8 @@
+{
+  "model": "jev-1.13.0",
+  "answers": {
+    "needs_web_search": {"type": "noul", "noul": 0.73},
+    "chart": {"type": "choice", "choice": "bar", "confidence": 0.82, "probabilities": {"bar": 0.8, "line": 0.2}}
+  },
+  "usage": {"input_tokens": 240, "output_tokens": 0}
+}
