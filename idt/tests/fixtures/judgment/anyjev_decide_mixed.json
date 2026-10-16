@@ -1,0 +1,6 @@
+{
+  "decisions": [
+    {"answer": "Yes", "index": 0, "probs": {"Yes": 0.73, "No": 0.27}, "margin": 0.99, "route": "one_forward"},
+    {"answer": "bar", "index": 0, "probs": {"bar": 0.8, "line": 0.2}, "margin": 1.39, "route": "cot", "reasoning_tokens": 311}
+  ]
+}

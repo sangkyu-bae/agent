@@ -354,6 +354,32 @@ class Settings(BaseSettings):
     # 소비: main.py _build_prompt_guard() → PromptGuardService(judge_max_chars=).
     prompt_guard_judge_max_chars: int = 3000
 
+    # Judgment Backend (judgment-backend Design §4.3)
+    # 소비 지점은 전부 src/api/main.py get_judgment_backend()
+    # → src/infrastructure/judgment/factory.py build_judgment_backend().
+    # "jev" | "anyjev" | "off". off(기본)면 팩토리가 None → search_decision 은 기존
+    # LLM 어댑터 그대로. 오타는 ValueError → 조립 실패 → None + warning 1회
+    # (prompt_guard_mode 와 같은 함정 — 기동 로그 확인).
+    judgment_backend: str = "off"
+    # 판정 1회 타임아웃(초). 두 어댑터 모두 적용, 초과 시 JudgmentTimeoutError →
+    # 소비 지점 폴백. 소비: factory.py → *JudgmentAdapter(timeout_seconds=).
+    judgment_timeout_seconds: float = 3.0
+    # Jev(TypeSafe) — 소비: factory.py _build_jev(). 키 없으면 조립 실패 → None.
+    typesafe_api_key: str | None = None
+    # None 이면 SDK 기본(https://api.typesafe.ai).
+    typesafe_base_url: str | None = None
+    typesafe_model: str = "jev-latest"
+    # AnyJev(`python -m anyjev.serve`) — 소비: factory.py _build_anyjev().
+    # URL 없으면 조립 실패 → None. 서버는 인증이 없다 — 내부망 주소만 넣을 것
+    # (스킴 http/https 만 검증, 호스트는 검증하지 않는다 — Design D16).
+    anyjev_base_url: str | None = None
+    # 응답 model 표기용(요청엔 안 실림 — 서버 --model 이 결정, Design D4).
+    anyjev_model: str | None = None
+    # search_decision Noul 확률 → bool 임계값 (p >= thr 이면 웹검색 필요, Design D13).
+    # 소비: main.py create_analyze_excel_use_case()
+    # → JudgmentSearchDecisionAdapter(threshold=). 0~1 밖이면 ValueError.
+    search_decision_judgment_threshold: float = 0.5
+
     # Application
     debug: bool = False
 
