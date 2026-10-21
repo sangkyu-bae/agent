@@ -1,4 +1,6 @@
+// Design Ref: ui-redesign-chat §5.4 — 유저 버블·어시스턴트 아바타를 토큰 그라데이션으로, eyebrow 대문자 라벨은 제거.
 import { memo } from 'react';
+import { Sparkles } from 'lucide-react';
 import type { Message } from '@/types/chat';
 import SourceCitation from './SourceCitation';
 import ChartRenderer from './ChartRenderer';
@@ -11,38 +13,37 @@ interface MessageBubbleProps {
 
 const UserMessage = ({ content }: { content: string }) => (
   <div className="flex justify-end">
-    <div className="max-w-[85%] sm:max-w-[75%]">
-      <div
-        className="rounded-2xl rounded-br-sm px-5 py-3.5 text-[15px] leading-[1.65] text-white"
-        style={{ background: 'linear-gradient(135deg, #2d2d2d 0%, #1a1a1a 100%)' }}
-      >
+    <div className="max-w-[85%] lg:max-w-[75%]">
+      <div className="rounded-xl rounded-br-md bg-linear-to-br from-bubble-from to-bubble-to px-5 py-3.5 text-md leading-[1.65] text-white">
         <p className="whitespace-pre-wrap">{content}</p>
       </div>
     </div>
   </div>
 );
 
+/** 어시스턴트 아바타 — TypingIndicator와 공유 */
+export const AssistantAvatar = () => (
+  <div
+    aria-hidden="true"
+    className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-brand-600 to-brand-800 shadow-sm"
+  >
+    <Sparkles className="h-5 w-5 text-white" strokeWidth={1.75} />
+  </div>
+);
+
 const AssistantMessage = ({ message }: { message: Message }) => (
   <div className="flex items-start gap-4">
-    {/* 아바타 */}
-    <div
-      className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl shadow-md"
-      style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)' }}
-    >
-      <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z" />
-      </svg>
-    </div>
+    <AssistantAvatar />
 
-    {/* 메시지 내용 */}
     <div className="min-w-0 flex-1">
-      <p className="mb-2 text-[11.5px] font-semibold uppercase tracking-widest text-violet-500">
-        상플AI
-      </p>
-      <div className="text-[15px] leading-[1.8] text-zinc-800">
+      <p className="mb-1.5 text-xs font-medium text-fg-subtle">상플AI</p>
+      <div className="text-md leading-[1.7] text-fg">
         <MarkdownRenderer content={message.content} />
         {message.isStreaming && (
-          <span className="ml-1 inline-block h-[18px] w-[3px] animate-pulse rounded-full bg-violet-500 align-middle" />
+          <span
+            aria-hidden="true"
+            className="ml-1 inline-block h-4 w-0.5 animate-pulse rounded-full bg-brand-500 align-middle"
+          />
         )}
         {message.charts && message.charts.length > 0 && (
           <div className="flex flex-col gap-3">

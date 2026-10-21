@@ -148,27 +148,58 @@ export default MessageBubble;
 
 ### 디자인 방향
 Claude/ChatGPT 스타일의 모던 AI 채팅 UI. 깔끔하고 여백이 충분하며 타이포그래피가 명확하다.
+토큰과 공통 컴포넌트는 `docs/02-design/features/ui-redesign-chat.design.md` §5가 원본이다. 채팅 화면이 적용 완료 기준이며, 나머지 화면은 후속 사이클에서 같은 규칙으로 옮긴다.
 
-### 색상 토큰
+### 디자인 토큰 (`src/index.css` `@theme`)
 
-| 역할 | 값 | 사용처 |
-|------|-----|--------|
-| **Primary** | `linear-gradient(135deg, #7c3aed, #4f46e5)` | 아바타, 버튼 활성, 포인트 색 |
-| **Primary Text** | `text-violet-500` / `text-violet-600` | 강조 텍스트, 레이블, RAG 점수 |
-| **User Bubble** | `linear-gradient(135deg, #2d2d2d, #1a1a1a)` | 유저 메시지 배경 |
-| **Surface** | `#fff` | 메인 콘텐츠 영역 배경 |
-| **Sidebar BG** | `#0f0f0f` | 사이드바 배경 |
-| **Border** | `border-zinc-200` / `border-zinc-300` | 기본 선 |
-| **Muted Text** | `text-zinc-400` / `text-zinc-500` | 보조 텍스트, 힌트 |
-| **Destructive** | `hover:bg-red-50 hover:text-red-500` | 삭제 버튼 hover |
+토큰은 `index.css` 한 곳에만 정의한다. 컴포넌트에서 hex 리터럴, 인라인 `style={{ background }}`, 임의 글자 크기 `text-[Npx]`를 쓰지 않는다.
+
+| 역할 | 토큰 클래스 | 비고 |
+|------|------------|------|
+| **브랜드** | `bg-brand-600` `hover:bg-brand-700` `text-brand-600/700` `border-brand-200` `bg-brand-50` | violet 계열. `brand-800`은 그라데이션 종점 |
+| **그라데이션** | `bg-linear-to-br from-brand-600 to-brand-800` | AI 아바타. 인라인 style 금지 |
+| **유저 버블** | `bg-linear-to-br from-bubble-from to-bubble-to text-white` | |
+| **표면** | `bg-surface` / `bg-surface-muted` / `bg-surface-sunken` | 흰색 / zinc-50 / zinc-100 |
+| **선** | `border-border` / `border-border-strong` | zinc-200 / zinc-300 |
+| **텍스트** | `text-fg` / `text-fg-secondary` / `text-fg-muted` / `text-fg-subtle` | zinc-900 / 700 / 600 / 500. 힌트 하한은 `fg-subtle`(4.6:1). `zinc-400` 금지 |
+| **사이드바** | `bg-sidebar` `text-sidebar-fg` `text-sidebar-fg-muted` `hover:bg-sidebar-hover` `bg-sidebar-active` `border-sidebar-border` | 다크 사이드바 전용 |
+| **상태** | `text-success` `bg-success-bg` `border-success-border` (warning / danger / info 동일 구조) | 색만으로 의미 전달 금지, 텍스트 병행 |
+| **글자 크기** | `text-xs`(12) `text-sm`(13) `text-base`(14) `text-md`(16) `text-lg`(20) `text-xl`(24) `text-2xl`(30) | 7단만 사용. 채팅 본문은 `text-md` |
+| **라운드** | `rounded-md`(8, 컨트롤) / `rounded-xl`(14, 카드·패널·입력창) / `rounded-full`(알약) | 3단 |
+| **그림자** | `shadow-sm`(카드) / `shadow-lg`(떠 있는 패널·입력창) | 2단 |
+| **전환** | `transition-colors duration-150`, 레이아웃 전환 `duration-200` | reduced-motion은 전역에서 정지 |
+
+- 폰트: Pretendard Variable(`main.tsx`에서 CSS import). `--font-sans` 토큰으로 연결.
+- 포커스: 전역 `:focus-visible` 규칙이 브랜드 outline을 그린다. `outline-none`을 써도 키보드 포커스는 보인다. 별도 `focus:` 스타일을 추가하지 않는다.
+- Tailwind 스캔 범위는 `src`와 `index.html`로 제한(`source(none)` + `@source`). `.bkit`·`.claude`의 경로가 CSS 변수 후보로 읽혀 빌드가 깨지는 문제를 막는다.
+
+### 공통 컴포넌트 (`src/components/ui/`)
+
+새 화면은 아래 키트를 먼저 쓰고, 없을 때만 직접 그린다.
+
+| 컴포넌트 | 용도 | 핵심 props |
+|---------|------|-----------|
+| `Button` | 액션 버튼 | `variant` primary/secondary/ghost/danger, `size` sm/md, `isPending`+`pendingText`, `leadingIcon`/`trailingIcon` |
+| `IconButton` | 아이콘 전용 버튼 | `aria-label` 필수(타입 강제), `size`, `tone` neutral/danger, `isActive`(aria-pressed) |
+| `Input` / `Textarea` | 폼 입력 | `label` `hint` `error`(aria 자동 연결), `size`, Textarea `autoResize` `maxRows` `unstyled` |
+| `Tabs` | 밑줄형 탭 | `items[{key,label,count?,disabled?}]` `value` `onChange` `aria-label`. 좌우/Home/End 키 이동 |
+| `PageHeader` | 고정 헤더 바 | `title` `subtitle` `leading` `actions` `tabs` `compact`(52px) |
+| `Badge` | 상태 배지 | `tone` neutral/success/warning/danger/info/brand, `dot`, `pulse` |
+| `EmptyState` | 빈 상태 | `icon`(`iconUnstyled`) `title` `description` `action` `children` |
+
+- `common/LoadingButton`·`common/StatusBadge`는 위 키트의 호환 래퍼다. 새 코드는 `Button`·`Badge`를 직접 쓴다.
+- 아이콘은 `lucide-react`, 크기 16(sm)/20(md), `strokeWidth` 1.75. 장식 아이콘은 `aria-hidden`.
+- className 합성은 `@/utils/cn` 사용(falsy 제거만).
 
 ### 레이아웃 규칙
 
 ```
 전체 레이아웃: display:flex, height:100% (Tailwind h-screen 대신 인라인 스타일 사용)
-사이드바: w-64, bg-[#0f0f0f]
-메인 영역: flex-1, bg-white
+사이드바: AppSidebar — w-64(펼침) / w-16(접힘 레일), bg-sidebar. 접기 상태는 layoutStore.isSidebarCollapsed(persist)
+          768 이하 최초 진입 시 접힘. 접힌 상태에서도 모든 항목은 aria-label로 이름을 유지
+메인 영역: flex-1, bg-surface
 콘텐츠 최대 폭: max-w-3xl (768px), mx-auto
+채팅 히스토리 패널: 768 이하에서는 overlay(레일 옆, 바깥 클릭·ESC 닫힘)
 ```
 
 > **주의**: `h-screen`은 전역 CSS 충돌 가능성 있음. 레이아웃 컴포넌트는 `style={{ height: '100%' }}` 인라인 스타일 사용.
@@ -226,72 +257,64 @@ Claude/ChatGPT 스타일의 모던 AI 채팅 UI. 깔끔하고 여백이 충분�
 
 #### 아이콘 아바타 (AI)
 ```tsx
-<div
-  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl shadow-md"
-  style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)' }}
->
-  <svg className="h-5 w-5 text-white" ... />
+// MessageBubble.tsx의 AssistantAvatar 재사용
+<div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-brand-600 to-brand-800 shadow-sm">
+  <Sparkles className="h-5 w-5 text-white" strokeWidth={1.75} />
 </div>
 ```
 
 #### 유저 메시지 버블
 ```tsx
-<div
-  className="rounded-2xl rounded-br-sm px-5 py-3.5 text-[15px] leading-[1.65] text-white"
-  style={{ background: 'linear-gradient(135deg, #2d2d2d 0%, #1a1a1a 100%)' }}
->
+<div className="rounded-xl rounded-br-md bg-linear-to-br from-bubble-from to-bubble-to px-5 py-3.5 text-md leading-[1.65] text-white">
   <p className="whitespace-pre-wrap">{content}</p>
 </div>
 ```
 
 #### AI 메시지 (버블 없음, 자유 텍스트)
 ```tsx
-<div className="text-[15px] leading-[1.8] text-zinc-800">
-  <p className="whitespace-pre-wrap">{content}</p>
+<div className="text-md leading-[1.7] text-fg">
+  <MarkdownRenderer content={content} />
 </div>
 ```
 
-#### 기본 버튼 (Primary)
+#### 버튼
 ```tsx
-<button className="flex items-center justify-center rounded-xl bg-violet-600 px-4 py-2.5 text-[13.5px] font-medium text-white shadow-sm hover:bg-violet-700 active:scale-95 transition-all">
+<Button>저장</Button>                               // primary md
+<Button variant="secondary" size="sm">취소</Button>
+<Button isPending={mutation.isPending} pendingText="저장 중…">저장</Button>
+<IconButton aria-label="삭제" tone="danger"><Trash2 className="h-4 w-4" /></IconButton>
 ```
 
-#### 기본 버튼 (Secondary/Ghost)
+#### 입력창
 ```tsx
-<button className="flex items-center rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-[13.5px] font-medium text-zinc-600 hover:border-zinc-300 hover:bg-zinc-100 transition-all">
-```
-
-#### 입력창 (Input/Textarea)
-```tsx
-<div className="overflow-hidden rounded-2xl border border-zinc-300 bg-white shadow-xl shadow-zinc-200/50 transition-all focus-within:border-violet-400 focus-within:shadow-violet-100/60">
-  <textarea className="block w-full resize-none bg-transparent text-[15px] leading-relaxed text-zinc-900 placeholder-zinc-400 outline-none" />
+<Input label="이메일" hint="회사 메일" error={errors.email} />
+// 채팅처럼 바깥 컨테이너가 테두리를 그릴 때
+<div className="rounded-xl border border-border-strong bg-surface shadow-lg focus-within:border-brand-400">
+  <Textarea unstyled autoResize maxRows={8} aria-label="메시지 입력" />
 </div>
 ```
 
-#### 카드 (호버 lift 효과)
+#### 카드
 ```tsx
-<div className="group relative overflow-hidden rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-transparent hover:shadow-xl">
+<div className="rounded-xl border border-border bg-surface p-4 shadow-sm transition-colors duration-150 hover:border-brand-200">
 ```
+translate 애니메이션과 그림자 확대는 쓰지 않는다.
 
-#### 사이드바 내 세션 아이템
-```tsx
-// 활성 상태
-<button className="bg-white/[0.12] text-white rounded-xl px-4 py-3">
-// 비활성 상태
-<button className="text-white/45 hover:bg-white/[0.07] hover:text-white/80 rounded-xl px-4 py-3">
-```
+#### 사이드바 항목
+`AppSidebar.tsx`의 `SidebarItem`을 쓴다. 활성 `bg-sidebar-active text-sidebar-fg` + 좌측 2px 브랜드 바, 비활성 `text-sidebar-fg-muted hover:bg-sidebar-hover`.
 
 ### 타이포그래피
 
 | 용도 | 클래스 |
 |------|--------|
-| 페이지 타이틀 | `text-3xl font-bold tracking-tight text-zinc-900` |
-| 섹션 제목 | `text-[15px] font-semibold text-zinc-900` |
-| 본문 (AI 응답) | `text-[15px] leading-[1.8] text-zinc-800` |
-| 본문 (유저) | `text-[15px] leading-[1.65] text-white` |
-| 보조 레이블 | `text-[11.5px] font-semibold uppercase tracking-widest text-violet-500` |
-| 힌트/메타 | `text-[12px] text-zinc-400` |
-| 사이드바 본문 | `text-[13.5px] font-medium text-white` |
+| 페이지 타이틀 | `PageHeader`의 `title` (`text-lg font-semibold text-fg`) |
+| 빈 상태 제목 | `EmptyState`의 `title` (`text-xl font-semibold text-fg`) |
+| 섹션 제목 | `text-base font-semibold text-fg` |
+| 본문 (AI 응답) | `text-md leading-[1.7] text-fg` |
+| 본문 (유저) | `text-md leading-[1.65] text-white` |
+| 보조 레이블 | `text-xs font-medium text-fg-subtle` (대문자·트래킹 eyebrow 금지) |
+| 힌트/메타 | `text-xs text-fg-subtle` |
+| 사이드바 본문 | `text-sm text-sidebar-fg-muted`, 활성 `text-sidebar-fg` |
 
 ### 간격 규칙
 - 메시지 간 간격: `gap-8` (32px)
@@ -301,18 +324,22 @@ Claude/ChatGPT 스타일의 모던 AI 채팅 UI. 깔끔하고 여백이 충분�
 - 입력창 영역: `px-4 pb-5 sm:px-6`
 
 ### 애니메이션
-- 버튼 클릭: `active:scale-95`
-- 카드 hover: `hover:-translate-y-1`
-- 상태 전환: `transition-all duration-150` ~ `duration-200`
+- 버튼 클릭: `active:scale-95` (Button primary 내장)
+- 상태 전환: `transition-colors duration-150`, 폭·패널 전환 `duration-200`
 - 타이핑 인디케이터: `animate-bounce [animation-delay:-0.3s]` 등
 - 스트리밍 커서: `animate-pulse` (인라인 `<span>`)
-- 온라인 상태 dot: `animate-pulse bg-emerald-400`
+- 온라인 상태 dot: `<Badge tone="success" dot pulse>`
+- `prefers-reduced-motion: reduce`에서는 전역 규칙으로 모든 animation·transition이 정지된다. 개별 처리 불필요
+- 비사용자 트리거 애니메이션은 타이핑 인디케이터·스트리밍 커서 2종만 둔다
 
 ### Tailwind v4 설정 규칙
-- `index.css` 첫 줄: `@import "tailwindcss";`
+- `index.css` 첫 줄: `@import "tailwindcss" source(none);` + `@source "../src"; @source "../index.html";`
+- 토큰은 `@theme { ... }` 블록에만 정의
 - `vite.config.ts`에 `@tailwindcss/vite` 플러그인 등록 필수
 - 글로벌 CSS에서 `html, body, #root { height: 100%; width: 100%; }` 설정 필수
-- 글로벌 스타일에서 font-size, color, text-align 등 직접 지정 금지 (Tailwind 클래스 사용)
+- 글로벌 스타일에서 font-size, color, text-align 등 직접 지정 금지 (Tailwind 클래스 사용). 예외는 `index.css`의 폰트·포커스·reduced-motion 전역 규칙
+- 폰트 CSS(`pretendard/...css`)는 `main.tsx`에서 import한다. `index.css`에서 `@import`하면 Tailwind 파서가 unicode-range를 처리하지 못한다
+- `npm i`는 vite 8과 `@tailwindcss/vite` peer 범위 충돌로 `--legacy-peer-deps`가 필요하다
 
 ## TDD (Test-Driven Development)
 
@@ -561,3 +588,53 @@ npm run coverage     # 커버리지 리포트 생성
 | **컴포넌트** | `src/components/agent-store/AgentStoreTab.tsx` | 탭 네비게이션 (전체공개/부서별/내에이전트) |
 | **컴포넌트** | `src/components/agent-store/AgentDetailModal.tsx` | 에이전트 상세 팝업 (프롬프트, 도구, 통계) |
 | **컴포넌트** | `src/components/agent-store/PublishAgentModal.tsx` | 내 에이전트 공개 등록 모달 |
+
+# React UI Redesign Rules
+
+## Objective
+Redesign the existing React UI to achieve a
+modern, consistent, production-grade appearance.
+
+## Existing Architecture
+- Preserve the current React version and build system.
+- Preserve React Router v6 routing.
+- Preserve React Query v5 data-fetching behavior.
+- Preserve Zustand state management and persist keys.
+- Preserve API contracts and authentication flows.
+- Follow the existing styling approach.
+
+## Design Workflow
+1. Analyze existing UI before modifying code.
+2. Use UI UX Pro Max to define design tokens.
+3. Use Frontend Design to improve visual quality.
+4. Reuse existing components whenever possible.
+5. Modify only one target screen at a time.
+6. Validate changes using Chrome DevTools MCP.
+7. Review accessibility and UX guidelines.
+
+## Design Principles
+- Modern SaaS / enterprise dashboard aesthetic.
+- Consistent typography, spacing and visual hierarchy.
+- Use CSS variables for shared design tokens.
+- Support desktop and mobile layouts.
+- Include hover, focus, disabled and loading states.
+- Avoid excessive gradients, animations and shadows.
+- Respect prefers-reduced-motion.
+
+## Restrictions
+- Do not migrate frameworks or build tools.
+- Do not replace existing routing or state libraries.
+- Do not modify API request/response contracts.
+- Do not change business logic.
+- Do not add large dependencies without approval.
+- Do not make unnecessary global CSS changes.
+- Do not modify unrelated screens.
+- Preserve existing user-facing behavior.
+
+## Verification
+- Run existing lint, build and tests.
+- Compare before/after screenshots.
+- Check viewport widths 375, 768 and 1440.
+- Check console errors and network failures.
+- Verify navigation, forms and persistent state.
+- Report changed files and remaining issues.
