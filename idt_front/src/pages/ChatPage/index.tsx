@@ -2,10 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import ChatHeader from '@/components/layout/ChatHeader';
-import MessageList from '@/components/chat/MessageList';
+import MessageList, { SuggestionCards } from '@/components/chat/MessageList';
 import ChatInput from '@/components/chat/ChatInput';
 import ToolPreviewPanel from '@/components/chat/ToolPreviewPanel';
 import ExcelPreviewModal from '@/components/chat/ExcelPreviewModal';
+import EmptyState from '@/components/ui/EmptyState';
+import { AlertTriangle, Loader2 } from 'lucide-react';
 import { useAgentSessionMessages } from '@/hooks/useChat';
 import { useChatStream } from '@/hooks/useChatStream';
 import { useAgentRunStream } from '@/hooks/useAgentRunStream';
@@ -29,21 +31,27 @@ import type { ChatSource, ChatToolEvent } from '@/hooks/useChatStream';
 
 interface EmptyAgentStateProps {
   agent: AgentSummary | null;
+  onSuggestionClick?: (text: string) => void;
 }
 
-const EmptyAgentState = ({ agent }: EmptyAgentStateProps) => (
-  <div className="flex flex-col items-center justify-center h-full">
-    <img
-      src="/logo.png"
-      alt="상상인플러스저축은행"
-      className="h-16 w-16 rounded-2xl shadow-lg mb-6 object-contain"
-    />
-    <h2 className="text-2xl font-bold text-violet-600 mb-2">
-      {agent?.name ?? 'SUPER AI Agent'}와 대화하세요
-    </h2>
-    <p className="text-[14px] text-zinc-400">
-      {agent?.description ?? 'Auto-routing meta agent for all your agents'}
-    </p>
+// Design Ref: ui-redesign-chat §5.4 — ui/EmptyState 1종 + 제안 카드 (G-01)
+const EmptyAgentState = ({ agent, onSuggestionClick }: EmptyAgentStateProps) => (
+  <div className="flex h-full items-center justify-center pb-16">
+    <EmptyState
+      icon={
+        <img
+          src="/logo.png"
+          alt="상상인플러스저축은행"
+          className="h-14 w-14 rounded-xl object-contain shadow-sm"
+        />
+      }
+      iconUnstyled
+      title={`${agent?.name ?? 'SUPER AI Agent'}와 대화하세요`}
+      description={agent?.description ?? 'Auto-routing meta agent for all your agents'}
+      className="w-full max-w-xl"
+    >
+      <SuggestionCards onSuggestionClick={onSuggestionClick} />
+    </EmptyState>
   </div>
 );
 
@@ -133,6 +141,8 @@ const ChatPage = () => {
   const { data: myJobs } = useJobHistory({ type: 'manual', status: 'running' });
   const enqueueJob = useEnqueueJob();
   const [bgNotice, setBgNotice] = useState<string | null>(null);
+  // G-07: 오류 안내는 danger 톤으로 구분 (표현 분기만, 로직 동일)
+  const [bgNoticeIsError, setBgNoticeIsError] = useState(false);
   const activeSessionJob = useMemo(
     () =>
       (myJobs?.items ?? []).find(
@@ -364,16 +374,20 @@ const ChatPage = () => {
         data: { query: content, session_id: activeSessionId, source: 'chat' },
       },
       {
-        onSuccess: () =>
+        onSuccess: () => {
+          setBgNoticeIsError(false);
           setBgNotice(
             '백그라운드에서 실행 중입니다 — 채팅방을 나가도 계속 실행되며, 완료되면 상단 알림과 작업함에서 확인할 수 있어요.',
-          ),
-        onError: (e) =>
+          );
+        },
+        onError: (e) => {
+          setBgNoticeIsError(true);
           setBgNotice(
             isJobConflictError(e)
               ? '이미 이 대화에서 진행 중인 백그라운드 작업이 있어요. 완료된 뒤 다시 시도해 주세요.'
               : extractJobError(e),
-          ),
+          );
+        },
       },
     );
   };
@@ -383,7 +397,8 @@ const ChatPage = () => {
   const toolEvents = view?.toolEvents ?? [];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    // Design Ref: ui-redesign-chat §5.3 — CLAUDE.md 패턴 A(고정 헤더 + 스크롤 바디)를 클래스로
+    <div className="flex h-full flex-col">
       {/* excel-preview Design §5.3: 모달은 페이지 레벨 1회 마운트 (상태는 스토어 소유) */}
       <ExcelPreviewModal />
       <ChatHeader
@@ -392,10 +407,10 @@ const ChatPage = () => {
         agentId={selectedAgent && selectedAgent.id !== 'super' ? selectedAgent.id : undefined}
       />
 
-      <div style={{ flex: 1, overflowY: 'auto' }}>
-        <div style={{ maxWidth: '768px', margin: '0 auto', height: '100%' }}>
+      <div className="flex-1 overflow-y-auto">
+        <div className="mx-auto h-full w-full max-w-3xl">
           {messages.length === 0 ? (
-            <EmptyAgentState agent={selectedAgent} />
+            <EmptyAgentState agent={selectedAgent} onSuggestionClick={handleSend} />
           ) : (
             <MessageList
               messages={messages}
@@ -407,7 +422,7 @@ const ChatPage = () => {
       </div>
 
       {toolEvents.length > 0 && (
-        <div style={{ maxWidth: '768px', margin: '0 auto', width: '100%', padding: '0 16px 8px' }}>
+        <div className="mx-auto w-full max-w-3xl px-4 pb-2 sm:px-6">
           <ToolPreviewPanel
             events={toolEvents}
             visible={showToolPreview}
@@ -416,18 +431,23 @@ const ChatPage = () => {
         </div>
       )}
 
-      <div style={{ background: '#fff' }}>
+      <div className="bg-surface">
         {/* background-jobs S9: 진행중 배너 + 접수 안내 */}
         {(backgroundBlocked || bgNotice) && (
           <div className="mx-auto max-w-3xl px-4 pb-1 sm:px-6">
             <div
-              role="status"
-              className="flex items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-4 py-2.5 text-[13px] text-violet-700"
+              role={bgNotice && bgNoticeIsError ? 'alert' : 'status'}
+              className={
+                bgNotice && bgNoticeIsError
+                  ? 'flex items-center gap-2 rounded-xl border border-danger-border bg-danger-bg px-4 py-2.5 text-sm text-danger'
+                  : 'flex items-center gap-2 rounded-xl border border-info-border bg-info-bg px-4 py-2.5 text-sm text-info'
+              }
             >
-              <svg className="h-4 w-4 shrink-0 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
+              {bgNotice && bgNoticeIsError ? (
+                <AlertTriangle className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden="true" />
+              ) : (
+                <Loader2 className="h-4 w-4 shrink-0 animate-spin" strokeWidth={2} aria-hidden="true" />
+              )}
               <span>
                 {/* 에러/접수 안내(bgNotice) 우선 — 진행중 배너가 409 안내를 가리지 않는다 */}
                 {bgNotice ??

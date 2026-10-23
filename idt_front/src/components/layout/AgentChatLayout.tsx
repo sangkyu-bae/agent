@@ -2,8 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Outlet, useLocation, useSearchParams } from 'react-router-dom';
 import AppSidebar from '@/components/layout/AppSidebar';
 import ChatHistoryPanel from '@/components/layout/ChatHistoryPanel';
-import { useLayoutStore } from '@/store/layoutStore';
+import { hasPersistedSidebarPreference, useLayoutStore } from '@/store/layoutStore';
 import { useAuthStore } from '@/store/authStore';
+import { NARROW_VIEWPORT_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAgentSessions } from '@/hooks/useChat';
 import { useMyAgents } from '@/hooks/useAgentSubscription';
 import { toAgentSummary } from '@/services/agentSubscriptionService';
@@ -27,7 +28,18 @@ const AgentChatLayout = () => {
     selectedAgentId,
     toggleChatPanel,
     selectAgent,
+    setSidebarCollapsed,
   } = useLayoutStore();
+
+  // Design Ref: ui-redesign-chat §5.5 — ≤768 최초 진입 시 사이드바 접힘(저장값이 없을 때만), 히스토리 패널은 오버레이
+  const isNarrow = useMediaQuery(NARROW_VIEWPORT_QUERY);
+  useEffect(() => {
+    if (isNarrow && !hasPersistedSidebarPreference()) {
+      setSidebarCollapsed(true);
+    }
+    // 최초 마운트 1회만 판정한다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const user = useAuthStore((s) => s.user);
   const userId = user?.id != null ? String(user.id) : undefined;
@@ -159,10 +171,11 @@ const AgentChatLayout = () => {
           isLoading={sessionsLoading}
           isError={sessionsError}
           onRetry={() => refetchSessions()}
+          overlay={isNarrow}
         />
       )}
 
-      <main style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', background: '#fff' }}>
+      <main className="bg-surface" style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
         <Outlet context={outletContext} />
       </main>
     </div>

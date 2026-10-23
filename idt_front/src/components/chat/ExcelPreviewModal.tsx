@@ -1,10 +1,13 @@
 // excel-preview Design §5 — 산출 .xlsx 프리뷰 모달.
 // 상태는 excelPreviewStore가 소유(§5.3 확정), ChatPage에 1회 마운트.
 // 다운로드는 documentExtractorService.downloadGeneratedFile 재사용 (FR-13).
+// Design Ref: ui-redesign-chat §5.4 — Button·Tabs 키트와 토큰. 로직 변경 없음.
 import { useState } from 'react';
+import { AlertTriangle, Loader2 } from 'lucide-react';
 
 import Modal from '@/components/common/Modal';
-import LoadingButton from '@/components/common/LoadingButton';
+import Button from '@/components/ui/Button';
+import Tabs from '@/components/ui/Tabs';
 import ExcelPreviewGrid from './ExcelPreviewGrid';
 import { useExcelPreview } from '@/hooks/useExcelPreview';
 import { useExcelPreviewStore, type ExcelPreviewTarget } from '@/store/excelPreviewStore';
@@ -63,8 +66,10 @@ const ExcelPreviewModalContent = ({ target, onClose }: ContentProps) => {
 
   const failed = isError ? errorView(error) : null;
   const sheets = data?.sheets ?? [];
-  const active = sheets[Math.min(activeIdx, Math.max(sheets.length - 1, 0))];
+  const safeIdx = Math.min(activeIdx, Math.max(sheets.length - 1, 0));
+  const active = sheets[safeIdx];
   const showDownload = !isError || failed?.canDownload;
+  const tabItems = sheets.map((sheet, i) => ({ key: `${sheet.name}-${i}`, label: sheet.name }));
 
   return (
     <Modal
@@ -76,73 +81,52 @@ const ExcelPreviewModalContent = ({ target, onClose }: ContentProps) => {
       footer={
         <>
           {downloadError && (
-            <span role="alert" className="mr-auto self-center text-[12.5px] text-rose-500">
+            <span role="alert" className="mr-auto self-center text-xs text-danger">
               {downloadError}
             </span>
           )}
           {showDownload && (
-            <LoadingButton
-              isPending={downloading}
-              pendingText="다운로드 중…"
-              onClick={handleDownload}
-              className="rounded-lg bg-violet-600 px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-violet-700 disabled:opacity-50"
-            >
+            <Button size="sm" isPending={downloading} pendingText="다운로드 중…" onClick={handleDownload}>
               다운로드
-            </LoadingButton>
+            </Button>
           )}
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border border-zinc-200 px-4 py-2 text-[13px] font-medium text-zinc-600 transition-colors hover:bg-zinc-50"
-          >
+          <Button variant="secondary" size="sm" onClick={onClose}>
             닫기
-          </button>
+          </Button>
         </>
       }
     >
       {isPending && (
-        <div className="flex items-center justify-center gap-2 py-16 text-[13px] text-zinc-400">
-          <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-          </svg>
+        <div className="flex items-center justify-center gap-2 py-16 text-sm text-fg-subtle">
+          <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} aria-hidden="true" />
           미리보기를 불러오는 중…
         </div>
       )}
 
       {failed && (
-        <div role="alert" className="py-16 text-center text-[13.5px] text-zinc-500">
+        <div role="alert" className="py-16 text-center text-sm text-fg-muted">
           {failed.message}
         </div>
       )}
 
       {data && (
         <div className="flex min-h-0 flex-col gap-3">
-          <div role="tablist" aria-label="시트" className="flex flex-wrap gap-1 border-b border-zinc-200 pb-2">
-            {sheets.map((sheet, i) => (
-              <button
-                key={sheet.name + i}
-                type="button"
-                role="tab"
-                aria-selected={i === activeIdx}
-                onClick={() => setActiveIdx(i)}
-                className={`rounded-lg px-3 py-1.5 text-[13px] font-medium transition-colors ${
-                  i === activeIdx
-                    ? 'bg-violet-100 text-violet-700'
-                    : 'text-zinc-500 hover:bg-zinc-100'
-                }`}
-              >
-                {sheet.name}
-              </button>
-            ))}
-          </div>
+          <Tabs
+            aria-label="시트"
+            items={tabItems}
+            value={tabItems[safeIdx]?.key ?? ''}
+            onChange={(key) => setActiveIdx(Math.max(0, tabItems.findIndex((t) => t.key === key)))}
+          />
 
           {active && active.truncated && (
-            <p className="text-[12.5px] text-amber-600">⚠ {truncatedNotice(active)}</p>
+            <p className="flex items-center gap-1.5 text-xs text-warning">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden="true" />
+              {truncatedNotice(active)}
+            </p>
           )}
 
           {active && active.columns.length === 0 ? (
-            <div className="py-16 text-center text-[13.5px] text-zinc-400">데이터 없음</div>
+            <div className="py-16 text-center text-sm text-fg-subtle">데이터 없음</div>
           ) : (
             active && <ExcelPreviewGrid columns={active.columns} rows={active.rows} />
           )}

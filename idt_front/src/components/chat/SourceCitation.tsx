@@ -1,4 +1,6 @@
+// Design Ref: ui-redesign-chat §5.4 — 출처 칩. 위키 출처는 warning 톤, 문서 출처는 중립 톤 + hover brand.
 import { useNavigate } from 'react-router-dom';
+import { BookOpen } from 'lucide-react';
 
 import type { DocumentSource } from '@/types/chat';
 
@@ -12,37 +14,33 @@ const SourceCitation = ({ sources }: SourceCitationProps) => {
   if (sources.length === 0) return null;
 
   return (
-    <div className="mt-4 pt-3 border-t border-zinc-100">
-      <p className="mb-2.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
-        참고 문서
-      </p>
+    <div className="mt-4 border-t border-border pt-3">
+      <p className="mb-2 text-xs font-medium text-fg-subtle">참고 문서</p>
       <div className="flex flex-wrap gap-2">
         {sources.map((source, idx) =>
           source.source === 'wiki' ? (
             // wiki-user-facing: 위키 유래 출처 — chunk_id가 위키 문서 id
             <button
               key={source.chunk_id}
+              type="button"
               onClick={() => navigate(`/knowledge/${source.chunk_id}`)}
-              className="group flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11.5px] text-amber-700 shadow-sm transition-all hover:border-amber-400 hover:bg-amber-100 hover:shadow-md"
+              className="inline-flex items-center gap-1.5 rounded-full border border-warning-border bg-warning-bg px-2.5 py-1 text-xs text-warning transition-colors duration-150 hover:bg-warning-border/60"
             >
-              <span aria-hidden>📖</span>
+              <BookOpen className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
               <span>위키 근거</span>
-              <span className="font-semibold text-amber-600">
-                {Math.round(source.score * 100)}%
-              </span>
+              <span className="font-semibold">{Math.round(source.score * 100)}%</span>
             </button>
           ) : (
             <button
               key={source.chunk_id}
-              className="group flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-[11.5px] text-zinc-600 shadow-sm transition-all hover:border-violet-300 hover:bg-violet-50 hover:shadow-md"
+              type="button"
+              className="group inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-muted px-2.5 py-1 text-xs text-fg-muted transition-colors duration-150 hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
             >
-              <span className="flex h-4 w-4 items-center justify-center rounded bg-zinc-100 text-[10px] font-bold text-zinc-500 group-hover:bg-violet-100 group-hover:text-violet-600">
+              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-surface-sunken text-xs font-semibold text-fg-subtle group-hover:bg-brand-100 group-hover:text-brand-700">
                 {idx + 1}
               </span>
-              <span className="max-w-[140px] truncate">{source.source}</span>
-              <span className="font-semibold text-violet-500">
-                {Math.round(source.score * 100)}%
-              </span>
+              <span className="max-w-36 truncate">{source.source}</span>
+              <span className="font-semibold text-brand-600">{Math.round(source.score * 100)}%</span>
             </button>
           ),
         )}

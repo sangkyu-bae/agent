@@ -8,14 +8,14 @@ interface ExcelPreviewGridProps {
 }
 
 const ExcelPreviewGrid = ({ columns, rows }: ExcelPreviewGridProps) => (
-  <div className="overflow-auto rounded-lg border border-zinc-200">
-    <table className="min-w-full border-collapse text-[13px]">
-      <thead className="sticky top-0 bg-zinc-50">
+  <div className="overflow-auto rounded-md border border-border">
+    <table className="min-w-full border-collapse text-sm">
+      <thead className="sticky top-0 bg-surface-muted">
         <tr>
           {columns.map((col, i) => (
             <th
               key={i}
-              className="whitespace-nowrap border-b border-r border-zinc-200 px-3 py-2 text-left font-semibold text-zinc-900 last:border-r-0"
+              className="whitespace-nowrap border-b border-r border-border px-3 py-2 text-left font-semibold text-fg last:border-r-0"
             >
               {col}
             </th>
@@ -24,11 +24,11 @@ const ExcelPreviewGrid = ({ columns, rows }: ExcelPreviewGridProps) => (
       </thead>
       <tbody>
         {rows.map((row, r) => (
-          <tr key={r} className="odd:bg-white even:bg-zinc-50/50">
+          <tr key={r} className="odd:bg-surface even:bg-surface-muted">
             {row.map((cell, c) => (
               <td
                 key={c}
-                className="whitespace-nowrap border-b border-r border-zinc-100 px-3 py-1.5 text-zinc-700 last:border-r-0"
+                className="whitespace-nowrap border-b border-r border-border px-3 py-1.5 text-fg-secondary last:border-r-0"
               >
                 {cell}
               </td>

@@ -1,7 +1,12 @@
 // agent-eval-gate: 답변 아래 👍/👎 평가 버튼 — 낙관적 토글, 실패 시 서버 값으로 복원.
 // eval-feedback-loop §3-6: 👎 상태면 이유 칩 + 자유 코멘트 패널 노출(기존 comment 필드 재사용).
+// Design Ref: ui-redesign-chat §5.4 — IconButton(isActive→aria-pressed) + 토큰. 로직 변경 없음.
 import { useState } from 'react';
+import { ThumbsDown, ThumbsUp } from 'lucide-react';
 
+import Button from '@/components/ui/Button';
+import IconButton from '@/components/ui/IconButton';
+import Input from '@/components/ui/Input';
 import { useMessageFeedback, useSubmitFeedback } from '@/hooks/useMessageFeedback';
 import type { Rating } from '@/types/messageFeedback';
 
@@ -32,37 +37,34 @@ const MessageFeedback = ({ messageId }: MessageFeedbackProps) => {
     setEditing(false);
   };
 
-  const btn = (rating: Rating, label: string, icon: string) => (
-    <button
-      type="button"
-      aria-label={label}
-      aria-pressed={current === rating}
-      onClick={() => onRate(rating)}
-      disabled={submit.isPending}
-      className={`rounded-lg border px-2 py-1 text-[13px] transition-colors ${
-        current === rating
-          ? 'border-violet-300 bg-violet-50 text-violet-700'
-          : 'border-zinc-200 text-zinc-400 hover:bg-zinc-50 hover:text-zinc-600'
-      }`}
-    >
-      {icon}
-    </button>
-  );
-
   const showPanel = current === 'down' && (!comment || editing);
 
   return (
     <div className="mt-2">
       <div className="flex items-center gap-1">
-        {btn('up', '좋아요', '👍')}
-        {btn('down', '싫어요', '👎')}
+        <IconButton
+          aria-label="좋아요"
+          size="sm"
+          isActive={current === 'up'}
+          onClick={() => onRate('up')}
+          disabled={submit.isPending}
+          className={current === 'up' ? 'text-brand-700' : undefined}
+        >
+          <ThumbsUp className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+        </IconButton>
+        <IconButton
+          aria-label="싫어요"
+          size="sm"
+          isActive={current === 'down'}
+          onClick={() => onRate('down')}
+          disabled={submit.isPending}
+          className={current === 'down' ? 'text-danger' : undefined}
+        >
+          <ThumbsDown className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+        </IconButton>
       </div>
       {showPanel && (
-        <div
-          role="group"
-          aria-label="싫어요 이유"
-          className="mt-2 flex flex-wrap items-center gap-1.5"
-        >
+        <div role="group" aria-label="싫어요 이유" className="mt-2 flex flex-wrap items-center gap-1.5">
           {REASON_CHIPS.map((chip) => (
             <button
               key={chip}
@@ -70,36 +72,37 @@ const MessageFeedback = ({ messageId }: MessageFeedbackProps) => {
               aria-pressed={comment === chip}
               onClick={() => sendReason(chip)}
               disabled={submit.isPending}
-              className="rounded-full border border-zinc-200 px-2.5 py-1 text-[12px] text-zinc-500 transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
+              className="rounded-full border border-border px-2.5 py-1 text-xs text-fg-muted transition-colors duration-150 hover:border-danger-border hover:bg-danger-bg hover:text-danger disabled:opacity-50"
             >
               {chip}
             </button>
           ))}
-          <input
-            type="text"
+          <Input
+            aria-label="싫어요 이유 직접 입력"
+            size="sm"
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="무엇이 아쉬웠나요?"
             maxLength={500}
-            className="min-w-[160px] flex-1 rounded-lg border border-zinc-200 px-2 py-1 text-[12px] focus:border-violet-300 focus:outline-none"
+            wrapperClassName="min-w-40 flex-1"
           />
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={() => sendReason(text)}
             disabled={submit.isPending || !text.trim()}
-            className="rounded-lg border border-zinc-200 px-2 py-1 text-[12px] text-zinc-500 transition-colors hover:bg-zinc-50 disabled:opacity-40"
           >
             보내기
-          </button>
+          </Button>
         </div>
       )}
       {current === 'down' && comment && !editing && (
-        <div className="mt-1.5 flex items-center gap-2 text-[12px] text-zinc-500">
+        <div className="mt-1.5 flex items-center gap-2 text-xs text-fg-muted">
           <span>이유: {comment}</span>
           <button
             type="button"
             onClick={() => setEditing(true)}
-            className="text-zinc-400 underline-offset-2 hover:text-zinc-600 hover:underline"
+            className="text-fg-subtle underline-offset-2 hover:text-fg hover:underline"
           >
             수정
           </button>

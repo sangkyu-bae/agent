@@ -19,7 +19,7 @@ const ChartRenderer = ({ payload, height = 320 }: ChartRendererProps) => {
 
   if (!valid) {
     return (
-      <div className="mt-3 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-[13px] text-zinc-500">
+      <div className="mt-3 rounded-xl border border-border bg-surface-muted px-4 py-3 text-sm text-fg-muted">
         차트를 표시할 수 없습니다. (지원하지 않는 형식)
       </div>
     );
@@ -27,7 +27,7 @@ const ChartRenderer = ({ payload, height = 320 }: ChartRendererProps) => {
 
   return (
     <div
-      className="mt-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm"
+      className="mt-3 rounded-xl border border-border bg-surface p-4 shadow-sm"
       style={{ height }}
     >
       <canvas ref={canvasRef} />
