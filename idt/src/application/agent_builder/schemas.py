@@ -1,8 +1,15 @@
 """애플리케이션 레이어 요청/응답 스키마."""
-from pydantic import BaseModel, Field
+from typing import Annotated
+
+from pydantic import BaseModel, Field, StringConstraints
 
 from src.application.document_extractor.schemas import TemplateSlotDto
 
+
+
+# agent-opener D4: 항목 길이 상한(strip 전 기준). 개수 상한은 각 요청의 Field(max_length=12).
+# 정규화(strip·빈 항목·중복)는 도메인 OpenerPolicy — 상한 숫자는 그 정책 상수와 같아야 한다.
+OpenerText = Annotated[str, StringConstraints(max_length=200)]
 
 class DocumentTemplateRequest(BaseModel):
     """document-template-extractor Design §3-4: 확정 템플릿 저장 요청.
@@ -118,6 +125,8 @@ class CreateAgentRequest(BaseModel):
     document_generation_type: DocumentGenerationTypeRequest | None = None
     # golden-sample-blueprint D7: 발표자료 설정 (presentation_generator 도구 필요)
     presentation_generator: PresentationGeneratorConfigRequest | None = None
+    # agent-opener D4: 대화 시작 예시 질문. None/[] = 없음. 13개↑·201자↑는 여기서 422.
+    openers: list[OpenerText] | None = Field(None, max_length=12)
     # agent-instruction-required: 지침 필수. None/빈 값이면 생성 시 에러(자동생성 제거).
     # 자동 구성은 Fix 에이전트(agent_composer)가 초안을 프리필하는 방식으로만 제공.
     #
@@ -152,6 +161,8 @@ class CreateAgentResponse(BaseModel):
     department_id: str | None = None
     temperature: float
     max_iterations: int = 25
+    # agent-opener D4: 저장된 오프너(정규화 후). 미주입·없음 = []
+    openers: list[str] = []
     created_at: str
     has_sub_agents: bool = False
 
@@ -181,6 +192,8 @@ class UpdateAgentRequest(BaseModel):
     # doc-generator: None = 문서 유형 변경 안 함, 값 = 교체(기존 soft-delete)
     document_generation_type: DocumentGenerationTypeRequest | None = None
     presentation_generator: PresentationGeneratorConfigRequest | None = None
+    # agent-opener D4: None = 변경 안 함, [] = 전부 삭제, [...] = 목표 상태 전체 교체.
+    openers: list[OpenerText] | None = Field(None, max_length=12)
     # agent-builder-edit-mapping FR-5: None = 모델 변경 안 함
     llm_model_id: str | None = None
     # builtin-middleware D5: None = 미들웨어 변경 안 함, 값 = 전체 교체
@@ -230,6 +243,8 @@ class GetAgentResponse(BaseModel):
     max_iterations: int = 25
     # builtin-middleware D5: 적용 미들웨어 스냅샷 — edit 폼 프라임용
     middleware_types: list[str] = []
+    # agent-opener D4: sort_order ASC — edit 폼 프라임용
+    openers: list[str] = []
     # doc-generator FR-12: 활성 문서 유형 — edit 폼 프리필용 (없으면 None)
     document_generation_type: DocumentGenerationTypeInfo | None = None
     owner_user_id: str
@@ -368,6 +383,8 @@ class MyAgentSummary(BaseModel):
     owner_user_id: str
     forked_from: str | None = None
     is_pinned: bool = False
+    # agent-opener D4: 채팅 빈 상태 노출용 — 목록 use case가 배치 1쿼리로 부착
+    openers: list[str] = []
     created_at: str
 
 

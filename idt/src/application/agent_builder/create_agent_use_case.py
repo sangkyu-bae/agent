@@ -57,6 +57,8 @@ from src.application.agent_builder.gated_worker_validation import (
 )
 from src.domain.agent_create_pipeline.policies import DegradedPromptPolicy
 from src.domain.prompt_composer.interfaces import PromptRepositoryPort
+from src.domain.agent_opener.interfaces import AgentOpenerRepositoryInterface
+from src.domain.agent_opener.policies import OpenerPolicy
 from src.domain.tool_catalog.interfaces import ToolCatalogRepositoryInterface
 
 
@@ -80,6 +82,7 @@ class CreateAgentUseCase:
         tool_catalog_repo: "ToolCatalogRepositoryInterface | None" = None,
         middleware_catalog_repo=None,
         prompt_version_reader: PromptRepositoryPort | None = None,
+        opener_repo: AgentOpenerRepositoryInterface | None = None,
     ) -> None:
         self._repository = repository
         self._llm_model_repository = llm_model_repository
@@ -88,6 +91,8 @@ class CreateAgentUseCase:
         self._subscription_repo = subscription_repo
         self._dept_repo = dept_repo
         self._skill_sync = skill_sync
+        # agent-opener D4.3: 대화 시작 예시 질문 저장 (미주입 시 무시 — 무회귀)
+        self._opener_repo = opener_repo
         # document-template-extractor Design §3-4 (미주입 시 템플릿 요청은 에러)
         self._document_template_repo = document_template_repo
         self._source_archiver = source_archiver
@@ -237,6 +242,11 @@ class CreateAgentUseCase:
 
             # Step 4: AgentDefinition 저장
             now = datetime.now(timezone.utc)
+            # agent-opener D4.3: save 전에 정규화 — 무효면 에이전트도 저장하지 않는다 (FR-02/06)
+            openers: list[str] = []
+            if request.openers and self._opener_repo is not None:
+                openers = OpenerPolicy.normalize(request.openers)
+
             agent = AgentDefinition(
                 id=str(uuid.uuid4()),
                 user_id=request.user_id,
@@ -264,6 +274,9 @@ class CreateAgentUseCase:
                     saved.id, request.skill_ids, request_id,
                     viewer_user_id=request.user_id, viewer_role=viewer_role,
                 )
+
+            if openers:
+                await self._opener_repo.replace(saved.id, openers, request_id)
 
             # Step 4.6 (document-template-extractor GA4): 원본 승격(D3) +
             # document_template 저장 — 동일 세션 트랜잭션 편승(R6).
@@ -310,6 +323,7 @@ class CreateAgentUseCase:
                 department_id=saved.department_id,
                 temperature=saved.temperature,
                 max_iterations=saved.max_iterations,
+                openers=openers,
                 created_at=saved.created_at.isoformat(),
                 has_sub_agents=any(w.worker_type == "sub_agent" for w in saved.workers),
             )

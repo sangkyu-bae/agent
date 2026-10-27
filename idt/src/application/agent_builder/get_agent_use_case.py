@@ -12,6 +12,7 @@ from src.domain.agent_builder.interfaces import AgentDefinitionRepositoryInterfa
 from src.domain.agent_builder.policies import AccessCheckInput, VisibilityPolicy
 from src.domain.agent_skill.interfaces import AgentSkillRepositoryInterface
 from src.domain.department.interfaces import DepartmentRepositoryInterface
+from src.domain.agent_opener.interfaces import AgentOpenerRepositoryInterface
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 
 
@@ -24,6 +25,7 @@ class GetAgentUseCase:
         agent_skill_repo: AgentSkillRepositoryInterface | None = None,
         agent_middleware_repo=None,
         document_generation_type_repo=None,
+        opener_repo: AgentOpenerRepositoryInterface | None = None,
     ) -> None:
         self._repository = repository
         self._dept_repository = dept_repository
@@ -33,6 +35,8 @@ class GetAgentUseCase:
         self._agent_middleware_repo = agent_middleware_repo
         # doc-generator FR-12: edit 폼 프리필용 활성 유형 조회 (미주입 시 None)
         self._document_generation_type_repo = document_generation_type_repo
+        # agent-opener D4.3: edit 폼 프라임용 (미주입 시 빈 목록)
+        self._opener_repo = opener_repo
 
     async def execute(
         self,
@@ -104,6 +108,12 @@ class GetAgentUseCase:
                 )
                 middleware_types = [r.middleware_type for r in records]
 
+            openers: list[str] = []
+            if self._opener_repo is not None:
+                openers = await self._opener_repo.list_by_agent_id(
+                    agent_id, request_id
+                )
+
             generation_type_info = await self._load_generation_type_info(
                 agent, request_id
             )
@@ -125,6 +135,7 @@ class GetAgentUseCase:
                 temperature=agent.temperature,
                 max_iterations=agent.max_iterations,
                 middleware_types=middleware_types,
+                openers=openers,
                 document_generation_type=generation_type_info,
                 owner_user_id=agent.user_id,
                 can_edit=can_edit,

@@ -52,6 +52,8 @@ from src.domain.document_generator.policies import DEFAULT_MAX_SECTIONS
 from src.domain.knowledge_base.interfaces import KnowledgeBaseRepositoryInterface
 from src.domain.knowledge_base.policy import KnowledgeBasePolicy
 from src.domain.llm_model.interfaces import LlmModelRepositoryInterface
+from src.domain.agent_opener.interfaces import AgentOpenerRepositoryInterface
+from src.domain.agent_opener.policies import OpenerPolicy
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 
 
@@ -122,8 +124,11 @@ class UpdateAgentUseCase:
         middleware_catalog_repo=None,
         tool_catalog_repo=None,
         mcp_server_repo=None,
+        opener_repo: AgentOpenerRepositoryInterface | None = None,
     ) -> None:
         self._repository = repository
+        # agent-opener D4.3: None = 변경 안 함 / [] = 전부 삭제 / [...] = 전체 교체
+        self._opener_repo = opener_repo
         # approval-gate Check G10: 단독 워커 제약 검증용 (미주입 시 생략 — 무회귀)
         self._tool_catalog_repo = tool_catalog_repo
         self._perm_repo = perm_repo
@@ -243,6 +248,12 @@ class UpdateAgentUseCase:
                     agent.id, request.skill_ids, request_id,
                     viewer_user_id=viewer_user_id or agent.user_id,
                     viewer_role=viewer_role,
+                )
+
+            # 오프너 교체 (agent-opener FR-03): None = 변경 안 함, [] = 전부 삭제.
+            if request.openers is not None and self._opener_repo is not None:
+                await self._opener_repo.replace(
+                    agent.id, OpenerPolicy.normalize(request.openers), request_id
                 )
 
             # 문서 템플릿 교체 (document-template-extractor D4): None = 변경 안 함.

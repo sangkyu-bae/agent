@@ -446,3 +446,150 @@ class TestDeleteAgent:
         client = _make_client({get_delete_agent_use_case: lambda: mock_uc})
         resp = client.delete("/api/v1/agents/agent-1")
         assert resp.status_code == 403
+
+
+# ── agent-opener Design §8.2 — openers 계약 (L1, mock UseCase) ─────────
+
+
+class TestAgentOpenerContract:
+    """Plan FR-02/03/04/06 + Design §6.3 (중복은 409 아닌 422)."""
+
+    def _create_client(self, mock_uc=None):
+        uc = mock_uc or MagicMock()
+        return _make_client({get_create_agent_use_case: lambda: uc}), uc
+
+    def _create_body(self, openers):
+        return {
+            "user_request": "테스트", "name": "테스트",
+            "system_prompt": "지침", "openers": openers,
+        }
+
+    def test_create_with_openers_echoes_response(self):
+        resp_obj = _make_create_response()
+        resp_obj.openers = ["질문 A", "질문 B"]
+        mock_uc = MagicMock()
+        mock_uc.execute = AsyncMock(return_value=resp_obj)
+        client, _ = self._create_client(mock_uc)
+        resp = client.post("/api/v1/agents", json=self._create_body(["질문 A", "질문 B"]))
+        assert resp.status_code == 201
+        assert resp.json()["openers"] == ["질문 A", "질문 B"]
+
+    def test_create_without_openers_defaults_to_empty(self):
+        mock_uc = MagicMock()
+        mock_uc.execute = AsyncMock(return_value=_make_create_response())
+        client, _ = self._create_client(mock_uc)
+        body = self._create_body([])
+        del body["openers"]
+        resp = client.post("/api/v1/agents", json=body)
+        assert resp.status_code == 201
+        assert resp.json()["openers"] == []
+        sent = mock_uc.execute.await_args[0][0]
+        assert sent.openers is None
+
+    def test_create_thirteen_openers_returns_422(self):
+        client, uc = self._create_client()
+        resp = client.post(
+            "/api/v1/agents", json=self._create_body([f"q{i}" for i in range(13)])
+        )
+        assert resp.status_code == 422
+        uc.execute.assert_not_called()
+
+    def test_create_201_char_opener_returns_422(self):
+        client, uc = self._create_client()
+        resp = client.post("/api/v1/agents", json=self._create_body(["x" * 201]))
+        assert resp.status_code == 422
+        uc.execute.assert_not_called()
+
+    def test_create_duplicate_opener_returns_422_not_409(self):
+        from src.domain.agent_opener.policies import OpenerPolicy
+        mock_uc = MagicMock()
+
+        async def _raise(body, request_id, **kw):
+            OpenerPolicy.normalize(body.openers)
+
+        mock_uc.execute = AsyncMock(side_effect=_raise)
+        client, _ = self._create_client(mock_uc)
+        resp = client.post("/api/v1/agents", json=self._create_body(["a", "a"]))
+        assert resp.status_code == 422
+
+    def test_update_duplicate_opener_returns_422_not_409(self):
+        from src.domain.agent_opener.policies import OpenerPolicy
+        mock_uc = MagicMock()
+
+        async def _raise(agent_id, body, request_id, **kw):
+            OpenerPolicy.normalize(body.openers)
+
+        mock_uc.execute = AsyncMock(side_effect=_raise)
+        client = _make_client({get_update_agent_use_case: lambda: mock_uc})
+        resp = client.patch("/api/v1/agents/some-id", json={"openers": [" a ", "a"]})
+        assert resp.status_code == 422
+
+    def test_update_duplicate_with_trigger_word_returns_422(self):
+        """Check G1: 중복 항목 본문에 '최대'가 있어도 409 가 아니라 422."""
+        from src.domain.agent_opener.policies import OpenerPolicy
+        mock_uc = MagicMock()
+
+        async def _raise(agent_id, body, request_id, **kw):
+            OpenerPolicy.normalize(body.openers)
+
+        mock_uc.execute = AsyncMock(side_effect=_raise)
+        client = _make_client({get_update_agent_use_case: lambda: mock_uc})
+        resp = client.patch(
+            "/api/v1/agents/some-id",
+            json={"openers": ["최대 한도 알려줘", "최대 한도 알려줘"]},
+        )
+        assert resp.status_code == 422
+
+    def test_create_duplicate_with_trigger_word_returns_422(self):
+        from src.domain.agent_opener.policies import OpenerPolicy
+        mock_uc = MagicMock()
+
+        async def _raise(body, request_id, **kw):
+            OpenerPolicy.normalize(body.openers)
+
+        mock_uc.execute = AsyncMock(side_effect=_raise)
+        client, _ = self._create_client(mock_uc)
+        resp = client.post(
+            "/api/v1/agents",
+            json=self._create_body(["찾을 수 없는 자료", "찾을 수 없는 자료"]),
+        )
+        assert resp.status_code == 422
+
+    def test_update_thirteen_openers_returns_422(self):
+        mock_uc = MagicMock()
+        client = _make_client({get_update_agent_use_case: lambda: mock_uc})
+        resp = client.patch(
+            "/api/v1/agents/some-id", json={"openers": [f"q{i}" for i in range(13)]}
+        )
+        assert resp.status_code == 422
+        mock_uc.execute.assert_not_called()
+
+    def test_update_empty_list_passes_through(self):
+        agent_id = str(uuid.uuid4())
+        mock_uc = MagicMock()
+        mock_uc.execute = AsyncMock(return_value=_make_update_response(agent_id))
+        client = _make_client({get_update_agent_use_case: lambda: mock_uc})
+        resp = client.patch(f"/api/v1/agents/{agent_id}", json={"openers": []})
+        assert resp.status_code == 200
+        sent = mock_uc.execute.await_args[0][1]
+        assert sent.openers == []
+
+    def test_update_without_openers_is_none(self):
+        agent_id = str(uuid.uuid4())
+        mock_uc = MagicMock()
+        mock_uc.execute = AsyncMock(return_value=_make_update_response(agent_id))
+        client = _make_client({get_update_agent_use_case: lambda: mock_uc})
+        client.patch(f"/api/v1/agents/{agent_id}", json={"name": "n"})
+        sent = mock_uc.execute.await_args[0][1]
+        assert sent.openers is None
+
+    def test_get_agent_response_includes_openers(self):
+        agent_id = str(uuid.uuid4())
+        resp_obj = _make_get_response(agent_id)
+        resp_obj.openers = ["a"]
+        mock_uc = MagicMock()
+        mock_uc.execute = AsyncMock(return_value=resp_obj)
+        client = _make_client({get_get_agent_use_case: lambda: mock_uc})
+        resp = client.get(f"/api/v1/agents/{agent_id}")
+        assert resp.status_code == 200
+        assert resp.json()["openers"] == ["a"]

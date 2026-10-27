@@ -6,6 +6,7 @@ from src.application.agent_builder.schemas import ForkAgentResponse, WorkerInfo
 from src.domain.agent_builder.interfaces import AgentDefinitionRepositoryInterface
 from src.domain.agent_builder.policies import AccessCheckInput, ForkPolicy
 from src.domain.agent_builder.schemas import AgentDefinition
+from src.domain.agent_opener.interfaces import AgentOpenerRepositoryInterface
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 
 
@@ -14,9 +15,12 @@ class ForkAgentUseCase:
         self,
         agent_repo: AgentDefinitionRepositoryInterface,
         logger: LoggerInterface,
+        opener_repo: AgentOpenerRepositoryInterface | None = None,
     ) -> None:
         self._agent_repo = agent_repo
         self._logger = logger
+        # agent-opener FR-07: 포크 시 원본 오프너 복사 (미주입 시 생략)
+        self._opener_repo = opener_repo
 
     async def execute(
         self,
@@ -77,6 +81,15 @@ class ForkAgentUseCase:
             )
 
             await self._agent_repo.save(forked, request_id)
+
+            if self._opener_repo is not None:
+                source_openers = await self._opener_repo.list_by_agent_id(
+                    source_agent_id, request_id
+                )
+                if source_openers:
+                    await self._opener_repo.replace(
+                        new_id, source_openers, request_id
+                    )
 
             self._logger.info(
                 "ForkAgentUseCase done",
