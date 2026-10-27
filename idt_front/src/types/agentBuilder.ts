@@ -72,6 +72,8 @@ export interface CreateBuilderAgentRequest {
   presentation_generator?: PresentationGeneratorConfigRequest;
   // agent-settings-tab D5: supervisor 반복 한도 (백엔드 기본 25, 범위 10~1000)
   max_iterations?: number;
+  // agent-opener D4: 대화 시작 예시 질문 (최대 12개·200자). 미전달 = 없음
+  openers?: string[];
   // prompt-fallback-visibility FR-01: 위저드가 생성한 프롬프트 버전 id.
   // 서버가 이 id 로 prompt_version 을 재조회해 degraded + 미편집이면 422 로 거부한다.
   // 미전달이면 게이트 skip (수동 생성·Fix 경로). 배선은 module-2.
@@ -97,6 +99,8 @@ export interface CreateBuilderAgentResponse {
   max_visibility: string | null;
   department_id: string | null;
   temperature: number;
+  // agent-opener D4: 저장된 오프너(정규화 후)
+  openers?: string[];
   created_at: string;
 }
 
@@ -131,6 +135,8 @@ export interface UpdateBuilderAgentRequest {
   middleware_types?: string[];
   // agent-settings-tab D5: undefined = 변경 안 함 (폼은 프라임 값 기반으로 항상 전송)
   max_iterations?: number;
+  // agent-opener D4: undefined = 변경 안 함, [] = 전부 삭제, [...] = 전체 교체
+  openers?: string[];
 }
 
 export interface UpdateBuilderAgentResponse {
@@ -187,12 +193,14 @@ export interface AgentBuilderFormData {
   middlewares: string[];
   // agent-settings-tab: supervisor 반복 한도 (설정 탭 — 저장 시 max_iterations로 전송)
   maxIterations: number;
+  // agent-opener: 오프너 탭 staged 목록 (빈 행 포함 가능, 저장 시 빈 행 제거 후 openers로 전송)
+  openers: string[];
 }
 
 // ── Studio UI (프론트엔드 전용) ────────────────
 // agent-builder-studio-ui Design §3.1
 
-/** 우측 패널 탭. 'test'/'skill'만 활성, 나머지는 비활성 placeholder. */
+/** 우측 패널 탭. 'file'만 비활성 placeholder (agent-opener: 'opener' 활성). */
 export type RightTabId =
   | 'test'
   | 'skill'

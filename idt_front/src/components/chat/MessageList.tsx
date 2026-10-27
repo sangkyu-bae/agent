@@ -12,7 +12,7 @@ interface MessageListProps {
   onSuggestionClick?: (text: string) => void;
 }
 
-interface Suggestion {
+export interface Suggestion {
   label: string;
   text: string;
   icon: ComponentType<LucideProps>;
@@ -25,12 +25,21 @@ const SUGGESTIONS: Suggestion[] = [
   { label: '자유 대화', text: '자유롭게 질문하기', icon: MessageSquare },
 ];
 
-/** 빈 상태 제안 카드. ChatPage의 EmptyAgentState에서도 쓴다 (G-01). */
-export const SuggestionCards = ({ onSuggestionClick }: { onSuggestionClick?: (text: string) => void }) => (
+/**
+ * 빈 상태 제안 카드. ChatPage의 EmptyAgentState에서도 쓴다 (G-01).
+ * agent-opener §5.2: `items`를 주면 그 목록(에이전트 오프너), 없으면 고정 4종.
+ */
+export const SuggestionCards = ({
+  onSuggestionClick,
+  items = SUGGESTIONS,
+}: {
+  onSuggestionClick?: (text: string) => void;
+  items?: Suggestion[];
+}) => (
   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-    {SUGGESTIONS.map(({ label, text, icon: Icon }) => (
+    {items.map(({ label, text, icon: Icon }, index) => (
       <button
-        key={text}
+        key={`${index}:${text}`}
         type="button"
         onClick={() => onSuggestionClick?.(text)}
         className="flex items-start gap-3 rounded-xl border border-border bg-surface p-4 text-left shadow-sm transition-colors duration-150 hover:border-brand-200 hover:bg-brand-50/40"
@@ -40,7 +49,9 @@ export const SuggestionCards = ({ onSuggestionClick }: { onSuggestionClick?: (te
         </span>
         <span className="min-w-0">
           <span className="block text-sm font-semibold text-fg">{label}</span>
-          <span className="mt-0.5 block text-xs text-fg-muted">{text}</span>
+          {text !== label && (
+            <span className="mt-0.5 block text-xs text-fg-muted">{text}</span>
+          )}
         </span>
       </button>
     ))}

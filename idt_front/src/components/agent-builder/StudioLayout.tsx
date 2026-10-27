@@ -26,6 +26,8 @@ interface StudioLayoutProps {
   onStagedScheduleRemove: (localId: string) => void;
   /** agent-settings-tab D6: 설정 탭 반복 한도 확정값 반영 */
   onMaxIterationsChange: (value: number) => void;
+  /** agent-opener §5.1: 오프너 탭 staged 목록 반영 */
+  onOpenersChange: (next: string[]) => void;
   onApplyDraft: (draft: ComposeAgentDraftResponse) => void;
   onSave: () => void;
   onCancel: () => void;
@@ -61,6 +63,7 @@ const StudioLayout = ({
   onStagedScheduleAdd,
   onStagedScheduleRemove,
   onMaxIterationsChange,
+  onOpenersChange,
   onApplyDraft,
   onSave,
   onCancel,
@@ -127,6 +130,7 @@ const StudioLayout = ({
             onStagedScheduleAdd={onStagedScheduleAdd}
             onStagedScheduleRemove={onStagedScheduleRemove}
             onMaxIterationsChange={onMaxIterationsChange}
+            onOpenersChange={onOpenersChange}
           />
         </div>
       </div>

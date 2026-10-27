@@ -28,6 +28,7 @@ const baseForm: AgentBuilderFormData = {
   excludedBuiltinMiddlewares: [],
   middlewares: [],
   maxIterations: MAX_ITERATIONS.DEFAULT,
+  openers: [],
 };
 
 const tool = (tool_id: string, is_builtin = false): CatalogTool => ({

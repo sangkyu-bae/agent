@@ -8,6 +8,7 @@ import AgentSkillPanel from './AgentSkillPanel';
 import SchedulePanel from './schedule/SchedulePanel';
 import FixAgentPanel from './fix/FixAgentPanel';
 import SettingsPanel from './settings/SettingsPanel';
+import OpenerPanel from './opener/OpenerPanel';
 
 interface AgentTestPanelProps {
   mode: 'create' | 'edit';
@@ -23,6 +24,8 @@ interface AgentTestPanelProps {
   onStagedScheduleRemove: (localId: string) => void;
   /** agent-settings-tab D6: 반복 한도 확정값 반영 (clamp는 SettingsPanel 책임) */
   onMaxIterationsChange: (value: number) => void;
+  /** agent-opener §5.1: 오프너 탭 staged 목록 반영 */
+  onOpenersChange: (next: string[]) => void;
 }
 
 interface TabDef {
@@ -37,7 +40,8 @@ interface TabDef {
  * 스킬은 생성·수정 모두 활성(agent-skill-toggle, staged),
  * 스케줄은 생성=staged/수정=즉시 CRUD (agent-schedule),
  * 설정은 생성·수정 모두 활성 (agent-settings-tab — Recursion Limit 실기능).
- * 나머지(오프너/파일)는 비활성 placeholder — Design §5.1.
+ * 오프너는 생성·수정 모두 활성 (agent-opener — 폼 staged, 상단 저장 통합),
+ * 파일은 비활성 placeholder — Design §5.1.
  */
 const AgentTestPanel = ({
   mode,
@@ -52,13 +56,14 @@ const AgentTestPanel = ({
   onStagedScheduleAdd,
   onStagedScheduleRemove,
   onMaxIterationsChange,
+  onOpenersChange,
 }: AgentTestPanelProps) => {
   const [tab, setTab] = useState<RightTabId>('test');
 
   const tabs: TabDef[] = [
     { id: 'fix', label: 'Fix 에이전트', enabled: true },
     { id: 'test', label: '테스트', enabled: true },
-    { id: 'opener', label: '오프너', enabled: false },
+    { id: 'opener', label: '오프너', enabled: true },
     { id: 'file', label: '파일', enabled: false },
     { id: 'skill', label: '스킬', enabled: true },
     { id: 'schedule', label: '스케줄', enabled: true },
@@ -110,6 +115,8 @@ const AgentTestPanel = ({
             onStagedAdd={onStagedScheduleAdd}
             onStagedRemove={onStagedScheduleRemove}
           />
+        ) : tab === 'opener' ? (
+          <OpenerPanel openers={form.openers} onChange={onOpenersChange} />
         ) : tab === 'settings' ? (
           <SettingsPanel
             agentId={agentId}
