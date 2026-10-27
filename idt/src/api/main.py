@@ -3772,6 +3772,9 @@ def create_background_job_factories(
         MarkSeenUseCase,
     )
     from src.application.background_job.worker import BackgroundJobWorker
+    from src.infrastructure.agent_schedule.schedule_repository import (
+        ScheduleRepository,
+    )
     from src.infrastructure.agent_schedule.schedule_run_repository import (
         ScheduleRunRepository,
     )
