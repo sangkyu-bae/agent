@@ -2,12 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import ChatHeader from '@/components/layout/ChatHeader';
-import MessageList, { SuggestionCards } from '@/components/chat/MessageList';
+import MessageList, { SuggestionCards, type Suggestion } from '@/components/chat/MessageList';
 import ChatInput from '@/components/chat/ChatInput';
 import ToolPreviewPanel from '@/components/chat/ToolPreviewPanel';
 import ExcelPreviewModal from '@/components/chat/ExcelPreviewModal';
 import EmptyState from '@/components/ui/EmptyState';
-import { AlertTriangle, Loader2 } from 'lucide-react';
+import { AlertTriangle, Loader2, MessageSquare } from 'lucide-react';
 import { useAgentSessionMessages } from '@/hooks/useChat';
 import { useChatStream } from '@/hooks/useChatStream';
 import { useAgentRunStream } from '@/hooks/useAgentRunStream';
@@ -34,6 +34,14 @@ interface EmptyAgentStateProps {
   onSuggestionClick?: (text: string) => void;
 }
 
+// agent-opener §5.2: 에이전트 오프너 → 제안 카드 항목. super·없음이면 undefined(고정 4종 유지)
+const openerSuggestions = (agent: AgentSummary | null): Suggestion[] | undefined => {
+  if (!agent || agent.id === 'super' || !agent.openers || agent.openers.length === 0) {
+    return undefined;
+  }
+  return agent.openers.map((text) => ({ label: text, text, icon: MessageSquare }));
+};
+
 // Design Ref: ui-redesign-chat §5.4 — ui/EmptyState 1종 + 제안 카드 (G-01)
 const EmptyAgentState = ({ agent, onSuggestionClick }: EmptyAgentStateProps) => (
   <div className="flex h-full items-center justify-center pb-16">
@@ -50,7 +58,7 @@ const EmptyAgentState = ({ agent, onSuggestionClick }: EmptyAgentStateProps) => 
       description={agent?.description ?? 'Auto-routing meta agent for all your agents'}
       className="w-full max-w-xl"
     >
-      <SuggestionCards onSuggestionClick={onSuggestionClick} />
+      <SuggestionCards onSuggestionClick={onSuggestionClick} items={openerSuggestions(agent)} />
     </EmptyState>
   </div>
 );

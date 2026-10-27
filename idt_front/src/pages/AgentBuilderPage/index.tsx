@@ -39,6 +39,7 @@ import type { CatalogTool } from '@/types/toolCatalog';
 import type { LlmModel } from '@/types/llmModel';
 import { mapDetailToForm, RAG_CATALOG_TOOL_ID } from '@/utils/agentDetailMapping';
 import { buildToolConfigsForSave } from '@/utils/toolConfigPayload';
+import { buildOpenersForSave } from '@/utils/openerPayload';
 
 type ViewMode = 'list' | 'create' | 'edit';
 
@@ -111,6 +112,7 @@ const DEFAULT_FORM: AgentBuilderFormData = {
   excludedBuiltinMiddlewares: [],
   middlewares: [],
   maxIterations: MAX_ITERATIONS.DEFAULT,
+  openers: [],
 };
 
 /** 핸드오프 의도 → 초기 폼. 종류별 변환은 각각의 순수 함수가 담당한다. */
@@ -283,6 +285,8 @@ const AgentBuilderPage = () => {
             middleware_types: form.middlewares,
             // agent-settings-tab D5: 프라임 값 기반 항상 전송
             max_iterations: form.maxIterations,
+            // agent-opener FR-09: 프라임 기준 전체 교체 (빈 행 제거, 빈 배열=전부 삭제)
+            openers: buildOpenersForSave(form.openers),
             // undefined = 템플릿 변경 안 함, 값 = 교체 (기존 soft-delete)
             document_template: buildDocumentTemplateRequest(
               form.documentExtractorDraft,
@@ -367,6 +371,11 @@ const AgentBuilderPage = () => {
           ),
           // agent-settings-tab D5: 설정 탭 반복 한도 (기본 25)
           max_iterations: form.maxIterations,
+          // agent-opener FR-09: 빈 행 제거 후 전송 (없으면 생략)
+          openers: (() => {
+            const cleaned = buildOpenersForSave(form.openers);
+            return cleaned.length > 0 ? cleaned : undefined;
+          })(),
         },
         {
           onSuccess: async (response) => {
@@ -506,6 +515,11 @@ const AgentBuilderPage = () => {
     setForm((prev) => ({ ...prev, maxIterations: value }));
   };
 
+  // agent-opener §5.1: 오프너 탭은 staged 배열만 올린다 (검증은 서버 — 422는 기존 실패 경로)
+  const handleOpenersChange = (next: string[]) => {
+    setForm((prev) => ({ ...prev, openers: next }));
+  };
+
   const handleStagedScheduleAdd = (item: StagedSchedule) => {
     setForm((prev) => ({ ...prev, schedules: [...prev.schedules, item] }));
   };
@@ -626,6 +640,7 @@ const AgentBuilderPage = () => {
           onStagedScheduleAdd={handleStagedScheduleAdd}
           onStagedScheduleRemove={handleStagedScheduleRemove}
           onMaxIterationsChange={handleMaxIterationsChange}
+          onOpenersChange={handleOpenersChange}
           onApplyDraft={handleApplyDraft}
           onSave={handleSave}
           onCancel={handleCancel}

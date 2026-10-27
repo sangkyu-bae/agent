@@ -409,6 +409,7 @@ from src.application.tool_catalog.list_tool_catalog_use_case import ListToolCata
 from src.application.tool_catalog.sync_mcp_tools_use_case import SyncMcpToolsUseCase
 from src.infrastructure.agent_builder.agent_definition_repository import AgentDefinitionRepository
 from src.infrastructure.agent_skill.agent_skill_repository import AgentSkillRepository
+from src.infrastructure.agent_opener.agent_opener_repository import AgentOpenerRepository
 from src.infrastructure.agent_builder.subscription_repository import SubscriptionRepository
 from src.infrastructure.department.department_repository import DepartmentRepository
 from src.infrastructure.tool_catalog.tool_catalog_repository import ToolCatalogRepository
@@ -3099,6 +3100,10 @@ def create_agent_builder_factories():
     def _make_agent_skill_repo(session: AsyncSession):
         return AgentSkillRepository(session=session, logger=app_logger)
 
+    # agent-opener D4.4: 오프너 저장소 (동일 세션 편승 — 세션 분리 금지 규칙)
+    def _make_agent_opener_repo(session: AsyncSession):
+        return AgentOpenerRepository(session=session, logger=app_logger)
+
     def _make_skill_sync(session: AsyncSession):
         from src.application.agent_skill.sync_agent_skills_use_case import (
             SyncAgentSkillsUseCase,
@@ -3179,6 +3184,8 @@ def create_agent_builder_factories():
             # 동일 세션 편승 — DB-001 "한 UseCase 안에서 repository 별 서로 다른
             # 세션 사용 금지". 조회 전용이라 트랜잭션에 쓰기를 더하지 않는다.
             prompt_version_reader=_make_prompt_version_reader(session),
+            # agent-opener D4.4
+            opener_repo=_make_agent_opener_repo(session),
         )
 
     def update_uc_factory(session: AsyncSession = Depends(get_session)):
@@ -3210,6 +3217,8 @@ def create_agent_builder_factories():
             mcp_server_repo=MCPServerRepository(
                 session=session, logger=app_logger, cipher=_mcp_cipher()
             ),
+            # agent-opener D4.4
+            opener_repo=_make_agent_opener_repo(session),
         )
 
     # agent-schedule Design §6.2: RunAgentUseCase 조립 본문을 함수로 추출해
@@ -3264,6 +3273,8 @@ def create_agent_builder_factories():
             document_generation_type_repo=_make_document_generation_type_repo(
                 session
             ),
+            # agent-opener D4.4: edit 폼 프라임
+            opener_repo=_make_agent_opener_repo(session),
         )
 
     def list_uc_factory(session: AsyncSession = Depends(get_session)):
@@ -3304,6 +3315,8 @@ def create_agent_builder_factories():
         return ForkAgentUseCase(
             agent_repo=_make_repo(session),
             logger=app_logger,
+            # agent-opener FR-07: 포크 시 오프너 복사
+            opener_repo=_make_agent_opener_repo(session),
         )
 
     def list_my_uc_factory(session: AsyncSession = Depends(get_session)):
@@ -3311,6 +3324,8 @@ def create_agent_builder_factories():
             agent_repo=_make_repo(session),
             subscription_repo=_make_sub_repo(session),
             logger=app_logger,
+            # agent-opener FR-05: 채팅 빈 상태용 배치 조회
+            opener_repo=_make_agent_opener_repo(session),
         )
 
     def list_available_sub_agents_uc_factory(session: AsyncSession = Depends(get_session)):

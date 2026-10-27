@@ -16,6 +16,8 @@ export interface MyAgent {
   forked_from: string | null;
   is_pinned: boolean;
   created_at: string;
+  // agent-opener D4: 채팅 빈 상태 노출용 (구 서버 응답 호환 optional)
+  openers?: string[];
 }
 
 export interface MyAgentsResponse {
@@ -100,6 +102,8 @@ export interface AgentSummary {
   description: string;
   category: string;
   isDefault?: boolean;
+  // agent-opener §5.2: 빈 상태 카드. 없거나 []면 고정 제안 카드 유지
+  openers?: string[];
 }
 
 export interface AgentChatOutletContext {

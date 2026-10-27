@@ -921,3 +921,124 @@ describe('AgentBuilderPage 도구 설정 전송 (agent-update-tool-editing F-02)
     expect(configs['internal:internal_document_search'].top_k).toBe(9);
   });
 });
+
+
+// ── agent-opener Design §8.3 #5·#6 — 오프너 탭 저장 페이로드·프라임 ─────────
+
+describe('AgentBuilderPage 오프너 탭 (agent-opener)', () => {
+  it('create 저장 → 빈 행은 제거되고 openers에 1건만 실린다', async () => {
+    useBuilderHandlers();
+    let captured: Record<string, unknown> | null = null;
+    server.use(
+      http.post('*/api/v1/agents', async ({ request }) => {
+        captured = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({
+          agent_id: 'a-1',
+          name: '테스트 에이전트',
+          system_prompt: '테스트 지침',
+          tool_ids: [],
+          workers: [],
+          flow_hint: '',
+          llm_model_id: 'model-1',
+          visibility: 'private',
+          temperature: 0.7,
+          max_iterations: 25,
+          openers: ['첫 질문'],
+          created_at: '2026-08-01T00:00:00Z',
+          has_sub_agents: false,
+        });
+      }),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await enterCreateView(user);
+
+    // 오프너 탭이 활성화되어 진입 가능하다 (placeholder 아님)
+    await user.click(screen.getByRole('button', { name: '오프너' }));
+    expect(screen.getByText('0/12')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '추가' }));
+    await user.type(screen.getByRole('textbox', { name: '오프너 1' }), '첫 질문');
+    await user.click(screen.getByRole('button', { name: '추가' }));
+    expect(screen.getByText('2/12')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '저장' }));
+    await waitFor(() => expect(captured).not.toBeNull());
+    expect(captured!.openers).toEqual(['첫 질문']);
+  });
+
+  it('edit 프라임(2건) → 1건 삭제 후 저장 → update openers에 전체 교체 기준선이 실린다', async () => {
+    useBuilderHandlers();
+    let captured: Record<string, unknown> | null = null;
+    server.use(
+      http.get('*/api/v1/agents', () =>
+        HttpResponse.json({ agents: [EDIT_SUMMARY], total: 1, page: 1, size: 20 }),
+      ),
+      http.get('*/api/v1/agents/a-9', () =>
+        HttpResponse.json({ ...EDIT_DETAIL, openers: ['질문 A', '질문 B'] }),
+      ),
+      http.patch('*/api/v1/agents/a-9', async ({ request }) => {
+        captured = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({
+          agent_id: 'a-9',
+          name: '수정용 봇',
+          system_prompt: '기존 지침',
+          updated_at: '2026-08-02T00:00:00Z',
+        });
+      }),
+    );
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: '수정용 봇 수정' }));
+    await waitFor(() =>
+      expect(screen.getByLabelText('에이전트 이름')).toHaveValue('수정용 봇'),
+    );
+
+    await user.click(screen.getByRole('button', { name: '오프너' }));
+    expect(screen.getByRole('textbox', { name: '오프너 1' })).toHaveValue('질문 A');
+    expect(screen.getByRole('textbox', { name: '오프너 2' })).toHaveValue('질문 B');
+
+    await user.click(screen.getByRole('button', { name: '오프너 1 삭제' }));
+    expect(screen.getByText('1/12')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '저장' }));
+    await waitFor(() => expect(captured).not.toBeNull());
+    expect(captured!.openers).toEqual(['질문 B']);
+  });
+
+  // Check G3 — Design §8.3 #7: 서버 422(중복) → 실패 메시지 표시, 입력 행 유지
+  it('edit 저장 시 서버 422 → 메시지가 표시되고 오프너 행은 유지된다', async () => {
+    useBuilderHandlers();
+    server.use(
+      http.get('*/api/v1/agents', () =>
+        HttpResponse.json({ agents: [EDIT_SUMMARY], total: 1, page: 1, size: 20 }),
+      ),
+      http.get('*/api/v1/agents/a-9', () =>
+        HttpResponse.json({ ...EDIT_DETAIL, openers: ['질문 A', '질문 A'] }),
+      ),
+      http.patch('*/api/v1/agents/a-9', () =>
+        HttpResponse.json(
+          { detail: '오프너 2번째 항목이 앞의 항목과 중복됩니다' },
+          { status: 422 },
+        ),
+      ),
+    );
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: '수정용 봇 수정' }));
+    await waitFor(() =>
+      expect(screen.getByLabelText('에이전트 이름')).toHaveValue('수정용 봇'),
+    );
+    await user.click(screen.getByRole('button', { name: '오프너' }));
+    await user.click(screen.getByRole('button', { name: '저장' }));
+
+    expect(
+      await screen.findByText(/오프너 2번째 항목이 앞의 항목과 중복됩니다/),
+    ).toBeInTheDocument();
+    // 행은 그대로 — 사용자가 고쳐서 다시 저장할 수 있어야 한다
+    expect(screen.getByRole('textbox', { name: '오프너 1' })).toHaveValue('질문 A');
+    expect(screen.getByRole('textbox', { name: '오프너 2' })).toHaveValue('질문 A');
+  });
+});

@@ -86,5 +86,7 @@ export function mapDetailToForm(
     ),
     // agent-settings-tab D5: 서버는 항상 값을 반환 — 폴백은 방어용
     maxIterations: detail.max_iterations ?? MAX_ITERATIONS.DEFAULT,
+    // agent-opener FR-10: edit 프라임 (구 서버 응답은 필드 부재 → [])
+    openers: detail.openers ?? [],
   };
 }

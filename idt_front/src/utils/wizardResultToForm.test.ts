@@ -21,6 +21,7 @@ const FORM: AgentBuilderFormData = {
   excludedBuiltinMiddlewares: [],
   middlewares: [],
   maxIterations: 25,
+  openers: [],
 };
 
 const tool = (id: string, isBuiltin = false): CatalogTool => ({

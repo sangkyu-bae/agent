@@ -17,6 +17,8 @@ export const toAgentSummary = (agent: MyAgent): AgentSummary => ({
   description: agent.description,
   category: agent.source_type,
   isDefault: false,
+  // agent-opener §5.2
+  openers: agent.openers ?? [],
 });
 
 export const agentSubscriptionService = {

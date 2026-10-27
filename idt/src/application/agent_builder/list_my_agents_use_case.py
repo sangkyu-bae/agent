@@ -8,6 +8,7 @@ from src.domain.agent_builder.interfaces import (
     SubscriptionRepositoryInterface,
 )
 from src.domain.agent_builder.schemas import AgentDefinition
+from src.domain.agent_opener.interfaces import AgentOpenerRepositoryInterface
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 
 
@@ -17,10 +18,13 @@ class ListMyAgentsUseCase:
         agent_repo: AgentDefinitionRepositoryInterface,
         subscription_repo: SubscriptionRepositoryInterface,
         logger: LoggerInterface,
+        opener_repo: AgentOpenerRepositoryInterface | None = None,
     ) -> None:
         self._agent_repo = agent_repo
         self._subscription_repo = subscription_repo
         self._logger = logger
+        # agent-opener D4.3: 채팅 빈 상태용 — 페이지 항목만 배치 1쿼리 (FR-05)
+        self._opener_repo = opener_repo
 
     async def execute(
         self,
@@ -80,6 +84,7 @@ class ListMyAgentsUseCase:
             total = len(all_items)
             offset = (page - 1) * size
             paged = all_items[offset : offset + size]
+            await self._attach_openers(paged, request_id)
 
             self._logger.info(
                 "ListMyAgentsUseCase done",
@@ -97,6 +102,18 @@ class ListMyAgentsUseCase:
                 "ListMyAgentsUseCase failed", exception=e, request_id=request_id
             )
             raise
+
+    async def _attach_openers(
+        self, items: list[MyAgentSummary], request_id: str
+    ) -> None:
+        """Plan SC FR-05: 에이전트 수와 무관하게 리포지토리 호출 1회."""
+        if self._opener_repo is None or not items:
+            return
+        by_id = await self._opener_repo.list_by_agent_ids(
+            [item.agent_id for item in items], request_id
+        )
+        for item in items:
+            item.openers = by_id.get(item.agent_id, [])
 
     def _to_summary(
         self, agent: AgentDefinition, source_type: str
