@@ -594,9 +594,13 @@ class WorkflowCompiler:
         include_user_context: bool = True,
         agent_id: str | None = None,
         subject_user_id: str | None = None,
+        memory_block: str = "",
     ):
         # subject_user_id — mcp-identity-header §1.1: MCP 신원 헤더의 실행 주체.
         # 인증 컨텍스트가 없는 스케줄·승인 재개 런도 채우므로 auth_ctx 와 별개다.
+        # memory_block — agent-memory-injection §6.1 D1: 호출자(RunAgentUseCase)가
+        # 조립한 사용자 메모리 블록. 기본 "" 이면 변경 전과 프롬프트 바이트 동일(D5).
+        # 서브에이전트 재귀(_compile_sub_agent)에는 넘기지 않는다 — depth=0 한정(D4).
         NestingDepthPolicy.validate_depth(depth)
 
         config = supervisor_config or SupervisorConfig()
@@ -612,34 +616,20 @@ class WorkflowCompiler:
             llm = self._llm_factory.create(llm_model, temperature)
             policy = QualityGatePolicy()
 
-            # agent-user-context Design §4.4.2:
-            # supervisor_prompt 앞에 사용자 컨텍스트 블록 prepend.
-            # include_user_context=False면 prepend 생략 (system bot 등).
-            # auth_ctx=None이면 render_user_context_block이 빈 문자열 반환 — graceful.
-            # rag-auth-filter-fix D5: search 파이프라인에도 동일 게이팅으로 전달.
-            user_context_block = (
-                render_user_context_block(auth_ctx) if include_user_context else ""
+            # Design Ref: agent-memory-injection §6.1 D2 — prepend 블록 조립 헬퍼.
+            # user_context_block·datetime_block은 검색 파이프라인·워커에도 전달되고,
+            # 메모리·wiki 목차는 supervisor/final_answer 프롬프트(prefix)에만 실린다.
+            (
+                user_context_block, datetime_block, wiki_toc_block, prefix,
+            ) = await self._render_prepend_blocks(
+                auth_ctx=auth_ctx,
+                include_user_context=include_user_context,
+                memory_block=memory_block,
+                workflow=workflow,
+                agent_id=agent_id,
+                request_id=request_id,
             )
-            # Design Ref: runtime-datetime-context §D6/§D7 — 요청당 1회 렌더 후
-            # 수퍼바이저·워커·서브에이전트에 배포. include_user_context와 무관
-            # (시스템 봇도 날짜는 받는다). 자정 경계에서 한 요청 내 날짜 불일치 방지.
-            datetime_block = render_datetime_block(
-                self._agent_timezone, logger=self._logger
-            )
-            # wiki-agentic-navigation D1/D2: wiki_read 워커 선택 + provider 주입 +
-            # agent_id 전달(최상위 컴파일만 — sub_agent 재귀 미전달)일 때만 목차 조회.
-            # 목차는 supervisor prepend + wiki_read 워커 prompt 이중 주입.
-            wiki_toc_block = ""
-            has_wiki_read = any(w.tool_id == "wiki_read" for w in workflow.workers)
-            if has_wiki_read and self._wiki_toc_provider is not None and agent_id:
-                wiki_toc_block = await self._wiki_toc_provider.render_block(
-                    agent_id, request_id
-                )
-            # 블록 순서: 날짜 → 사용자 → wiki 목차 → 본문 (§D6)
-            effective_supervisor_prompt = (
-                datetime_block + user_context_block + wiki_toc_block
-                + workflow.supervisor_prompt
-            )
+            effective_supervisor_prompt = prefix + workflow.supervisor_prompt
 
             # ToolFactory가 bind_auth_ctx를 지원하면 현재 auth_ctx 주입.
             # (Phase 5에서 ToolFactory에 메서드 추가됨)
@@ -1268,6 +1258,46 @@ class WorkflowCompiler:
                 "WorkflowCompiler compile failed", exception=e, request_id=request_id,
             )
             raise
+
+    async def _render_prepend_blocks(
+        self,
+        *,
+        auth_ctx: AuthContext | None,
+        include_user_context: bool,
+        memory_block: str,
+        workflow: WorkflowDefinition,
+        agent_id: str | None,
+        request_id: str,
+    ) -> tuple[str, str, str, str]:
+        """(user_context_block, datetime_block, wiki_toc_block, prefix) 조립.
+
+        Design Ref: agent-memory-injection §6.1 D2/D3 —
+        순서: 날짜 → 사용자 → 메모리 → wiki 목차 (→ 본문은 호출자가 붙인다).
+
+        - agent-user-context §4.4.2: include_user_context=False면 사용자 블록 생략
+          (system bot 등). auth_ctx=None이면 렌더가 빈 문자열 — graceful.
+          rag-auth-filter-fix D5: 같은 게이팅의 사용자 블록을 search 파이프라인에도 전달.
+        - Plan FR-02: 메모리 블록은 사용자 블록과 게이팅을 공유한다.
+        - runtime-datetime-context §D6/§D7: 날짜는 include_user_context와 무관
+          (시스템 봇도 날짜는 받는다). 요청당 1회 렌더 → 자정 경계 불일치 방지.
+        - wiki-agentic-navigation D1/D2: wiki_read 워커 + provider + agent_id(최상위만)
+          일 때만 목차 조회. 목차는 supervisor prepend + wiki_read 워커 prompt 이중 주입.
+        """
+        user_context_block = (
+            render_user_context_block(auth_ctx) if include_user_context else ""
+        )
+        effective_memory = memory_block if include_user_context else ""
+        datetime_block = render_datetime_block(
+            self._agent_timezone, logger=self._logger
+        )
+        wiki_toc_block = ""
+        has_wiki_read = any(w.tool_id == "wiki_read" for w in workflow.workers)
+        if has_wiki_read and self._wiki_toc_provider is not None and agent_id:
+            wiki_toc_block = await self._wiki_toc_provider.render_block(
+                agent_id, request_id
+            )
+        prefix = datetime_block + user_context_block + effective_memory + wiki_toc_block
+        return user_context_block, datetime_block, wiki_toc_block, prefix
 
     async def _compile_sub_agent(
         self,

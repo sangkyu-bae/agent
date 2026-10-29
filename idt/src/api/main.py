@@ -3254,6 +3254,9 @@ def create_agent_builder_factories():
             approval_gate_config_resolver=_resolve_approval_gate_config,
             # prompt-guard Design §4.5: 킬스위치 off면 None → 가드 비활성
             prompt_guard=get_prompt_guard(),
+            # agent-memory-injection D10: General Chat과 같은 조립기 싱글톤 공유 —
+            # 에이전트 대화 런 supervisor 프롬프트에 개인∪부서 메모리 상주 주입.
+            memory_assembler=get_memory_assembler(),
         )
 
     def run_uc_factory(session: AsyncSession = Depends(get_session)):

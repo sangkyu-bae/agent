@@ -95,6 +95,7 @@ def _bare_run_uc() -> RunAgentUseCase:
     uc._logger = MagicMock()
     uc._tracker = None
     uc._agent_skill_repo = None
+    uc._memory_assembler = None  # agent-memory-injection: optional 의존성 (None=비활성)
     uc._compiler = MagicMock()
     uc._compiler.compile = AsyncMock(return_value=MagicMock(
         ainvoke=AsyncMock(return_value={"messages": []})
