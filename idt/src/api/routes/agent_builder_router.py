@@ -288,6 +288,8 @@ async def run_agent(
             auth_ctx=auth_ctx,
             viewer_user_id=str(auth_ctx.user_id),
             viewer_department_ids=list(auth_ctx.department_ids),
+            # agent-memory-injection Act-1: 대화 라우트만 메모리 주입 opt-in.
+            inject_memory=True,
         )
     except PermissionError:
         raise HTTPException(
@@ -335,6 +337,8 @@ async def run_agent_stream(
             auth_ctx=auth_ctx,
             viewer_user_id=str(auth_ctx.user_id),
             viewer_department_ids=list(auth_ctx.department_ids),
+            # agent-memory-injection Act-1: 대화 라우트만 메모리 주입 opt-in.
+            inject_memory=True,
         ).__aiter__()
         try:
             while True:

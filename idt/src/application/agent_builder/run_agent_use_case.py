@@ -241,9 +241,14 @@ class RunAgentUseCase:
         # prompt-guard Design §4.5: 채팅 입력 인젹션 가드. None 이면 비활성 —
         # 가드가 없던 상태와 동일하게 동작한다 (FR-10, 탈착형 이음매).
         prompt_guard: Optional[PromptGuardPort] = None,
+        # agent-memory-injection Design §6.2 D6: 사용자 메모리 블록 조립기
+        # (MemoryContextAssembler 동형, build_block 덕타입). None 이면 주입 비활성 —
+        # 메모리가 없던 상태와 동일하게 동작한다 (Plan FR-06, 탈착형 이음매).
+        memory_assembler=None,
     ) -> None:
         self._repository = repository
         self._prompt_guard = prompt_guard
+        self._memory_assembler = memory_assembler
         self._approval_repo_factory = approval_repo_factory
         self._approval_gate_config = approval_gate_config
         self._approval_gate_config_resolver = approval_gate_config_resolver
@@ -276,8 +281,14 @@ class RunAgentUseCase:
         viewer_department_ids: list[str] | None = None,
         *,
         auth_ctx: AuthContext | None = None,
+        inject_memory: bool = False,
     ) -> AsyncIterator[AgentRunEvent]:
         """transport-독립 SSE/WS용 이벤트 스트림 (Design §5.2.2).
+
+        inject_memory — agent-memory-injection Act-1 (Analysis G1): 사용자 메모리
+        주입은 **대화 라우트(WS·REST·SSE)만 True 로 opt-in** 한다. 웹훅·백그라운드
+        잡도 auth_ctx 를 넘기므로 auth_ctx 유무로는 대화 여부를 구분할 수 없다 —
+        기본 False(fail-closed)로 소유자 메모리가 외부 발송 결과에 섞이지 않게 한다.
 
         이벤트 시퀀스:
             RUN_STARTED → (NODE_STARTED|NODE_COMPLETED|TOOL_*|TOKEN)*
@@ -342,7 +353,7 @@ class RunAgentUseCase:
             graph, initial_state, graph_config = await self._prepare_graph(
                 agent=agent, request=request, session_id=session_id,
                 callback=callback, run_id=run_id, request_id=request_id,
-                auth_ctx=auth_ctx,
+                auth_ctx=auth_ctx, inject_memory=inject_memory,
             )
             node_names = _collect_node_names(agent.to_workflow_definition())
 
@@ -451,11 +462,14 @@ class RunAgentUseCase:
         viewer_department_ids: list[str] | None = None,
         *,
         auth_ctx: AuthContext | None = None,
+        inject_memory: bool = False,
     ) -> RunAgentResponse:
         """기존 시그니처. stream()을 내부 소비하여 RunAgentResponse 조립.
 
         Breaking change 0: 호출자(테스트, 라우터, 외부)는 코드 변경 불필요.
         auth_ctx는 키워드 전용으로 추가 — 기존 호출자는 영향 없음.
+        inject_memory 는 stream() 과 같은 opt-in (기본 False) — 웹훅·백그라운드·
+        스케줄·RAGAS 호출자는 그대로 두면 메모리가 주입되지 않는다.
         """
         final_answer = ""
         tools_used: list[str] = []
@@ -466,7 +480,7 @@ class RunAgentUseCase:
         async for ev in self.stream(
             agent_id, request, request_id,
             viewer_user_id, viewer_department_ids,
-            auth_ctx=auth_ctx,
+            auth_ctx=auth_ctx, inject_memory=inject_memory,
         ):
             if ev.event_type == AgentRunEventType.RUN_STARTED:
                 run_id_str = ev.payload.get("run_id")
@@ -726,6 +740,7 @@ class RunAgentUseCase:
         run_id: Optional[RunId],
         request_id: str,
         auth_ctx: AuthContext | None = None,
+        inject_memory: bool = False,
     ) -> tuple[Any, dict, dict]:
         """messages 빌드 + llm_model 로드 + compile + initial_state + graph_config."""
         messages = await self._build_messages(
@@ -748,6 +763,13 @@ class RunAgentUseCase:
         workflow = await self._inject_attached_skills(workflow, agent, request_id)
         # agent-recursion-limit D1: 에이전트별 반복 한도를 단일 소스로 주입.
         sv_config = SupervisorConfig(max_iterations=agent.max_iterations)
+        # agent-memory-injection §6.2 D8: 대화 실행 경로에서만, compile 직전 1회.
+        # Act-1 (Analysis G1): 대화 여부는 호출자의 inject_memory opt-in 으로만
+        # 판정한다 — 웹훅·백그라운드 잡도 auth_ctx 를 넘기므로 auth_ctx 유무는
+        # 기준이 못 된다. _resume_graph(승인 재개)·스케줄은 이 메서드를 안 탄다.
+        memory_block = await self._build_memory_block(
+            agent, request, auth_ctx, request_id, inject_memory=inject_memory,
+        )
         graph = await self._compiler.compile(
             workflow=workflow,
             llm_model=llm_model,
@@ -766,6 +788,7 @@ class RunAgentUseCase:
             # mcp-identity-header §2.1: 대화·스케줄·웹훅(소유자 대리)·백그라운드
             # 모두 RunAgentRequest.user_id 를 채운다 — 스케줄엔 auth_ctx 가 없다.
             subject_user_id=request.user_id,
+            memory_block=memory_block,
         )
 
         initial_state = build_initial_state(
@@ -780,6 +803,42 @@ class RunAgentUseCase:
             user_id=request.user_id, callback=callback,
         )
         return graph, initial_state, graph_config
+
+    async def _build_memory_block(
+        self,
+        agent: AgentDefinition,
+        request: RunAgentRequest,
+        auth_ctx: AuthContext | None,
+        request_id: str,
+        *,
+        inject_memory: bool = False,
+    ) -> str:
+        """사용자 메모리 블록 조립 — 대화 실행 경로 전용.
+
+        Design Ref: agent-memory-injection §6.2 D7 / Act-1 (Analysis G1).
+        - Plan FR-04: 호출자가 inject_memory=True 로 opt-in 한 대화 런에서만
+          조립한다. 웹훅·백그라운드·스케줄·RAGAS 는 기본 False 라 조회 0회
+          (fail-closed — 소유자 메모리가 외부 발송 결과에 섞이지 않는다).
+        - Plan FR-09: auth_ctx 없음 또는 include_user_context=False 면
+          조회 자체를 건너뛴다 (노출 범위 최소).
+        - Plan FR-05: 개인∪부서 병합 — dept_ids 는 서버 조립 권한 컨텍스트에서만.
+        - Plan FR-07: 조립기 밖 예외(DI·속성 오류)도 런을 죽이지 않는다 — "" 격리.
+        """
+        if not inject_memory or self._memory_assembler is None or auth_ctx is None:
+            return ""
+        if not agent.include_user_context:
+            return ""
+        try:
+            return await self._memory_assembler.build_block(
+                request.user_id, request_id,
+                dept_ids=list(auth_ctx.department_ids),
+            )
+        except Exception as e:
+            self._logger.warning(
+                "memory block build failed — run continues without",
+                request_id=request_id, agent_id=agent.id, exception=e,
+            )
+            return ""
 
     async def _inject_attached_skills(
         self,
