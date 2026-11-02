@@ -51,6 +51,8 @@ def _approval(*, schema_version=1, state_json=None, agent_updated=_NOW,
 def _uc(*, agent_found=True, agent_updated=_NOW, final_answer="완료했습니다"):
     uc = RunAgentUseCase.__new__(RunAgentUseCase)
     uc._logger = MagicMock()
+    # agent-run-turn-index-fix: __new__ 우회 픽스처 — legacy(요청 세션) 저장 경로.
+    uc._session_factory = None
 
     agent = MagicMock(id="ag1", updated_at=agent_updated, max_iterations=25)
     agent.to_workflow_definition.return_value = MagicMock(workers=[])

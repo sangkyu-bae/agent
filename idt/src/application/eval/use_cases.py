@@ -12,7 +12,6 @@ from src.application.repositories.conversation_repository import (
 )
 from src.application.wiki.feedback_service import FeedbackWikiService
 from src.domain.conversation.entities import ConversationMessage, MessageId
-from src.domain.conversation.value_objects import MessageRole
 from src.domain.eval.entity import MessageFeedback, Rating
 from src.domain.eval.interfaces import MessageFeedbackRepositoryInterface
 from src.domain.eval.policies import EvalPolicy
@@ -139,15 +138,15 @@ class SubmitFeedbackUseCase:
     async def _find_question(
         self, message: ConversationMessage,
     ) -> ConversationMessage | None:
-        """같은 세션에서 직전 turn의 user 메시지(질문) 복원 — 모호하면 None."""
+        """같은 세션의 user 메시지(질문) 복원 — 규칙은 EvalPolicy, 여기선 조회만.
+
+        Design Ref: agent-run-turn-index-fix §6.3 D7 — turn-1 USER 우선, 과거
+        중복 turn 행은 같은 turn USER 로 폴백, 모호하면 None (조회 1회 불변).
+        """
         messages = await self._msg_repo.find_by_session(
             message.user_id, message.session_id
         )
-        target_turn = message.turn_index.value - 1
-        for m in messages:
-            if m.turn_index.value == target_turn and m.role == MessageRole.USER:
-                return m
-        return None
+        return EvalPolicy.find_question(messages, message)
 
     @staticmethod
     def _parse_rating(rating: str) -> Rating:
