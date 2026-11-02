@@ -17,7 +17,6 @@ from src.domain.llm_model.entity import LlmModel
 from src.infrastructure.image_generation.openai_image_generator import (
     OpenAIImageGenerator,
     quality_param,
-    wants_b64_response_format,
 )
 
 
@@ -60,9 +59,6 @@ class TestParamMapping:
     def test_quality_param(self, model, q, expected) -> None:
         assert quality_param(model, q) == expected
 
-    def test_dalle_needs_b64_response_format(self) -> None:
-        assert wants_b64_response_format("dall-e-3") is True
-        assert wants_b64_response_format("gpt-image-1") is False
 
 
 class TestGenerate:
@@ -78,13 +74,40 @@ class TestGenerate:
         assert out.data.startswith(b"\x89PNG")
 
     @pytest.mark.asyncio
-    async def test_dalle3_adds_response_format(self, monkeypatch) -> None:
+    async def test_dalle3_never_sends_response_format(self, monkeypatch) -> None:
+        # 2026-11 실측: Images API 가 response_format 을 unknown_parameter 로 거부한다.
         monkeypatch.setenv("OPENAI_API_KEY", "k")
         client = _client()
         gen = OpenAIImageGenerator(llm_model=_model("dall-e-3"), logger=MagicMock(), client=client)
         await gen.generate(prompt="p", size=ImageSize.SQUARE_1024, quality=ImageQuality.STANDARD)
         kwargs = client.images.generate.await_args.kwargs
-        assert kwargs["response_format"] == "b64_json" and kwargs["quality"] == "standard"
+        assert "response_format" not in kwargs and kwargs["quality"] == "standard"
+        await gen.edit(prompt="e", source=b"\x89PNG", source_mime="image/png", size=ImageSize.SQUARE_1024)
+        assert "response_format" not in client.images.edit.await_args.kwargs
+
+    @pytest.mark.asyncio
+    async def test_bad_request_surfaces_provider_message_and_logs(self, monkeypatch) -> None:
+        # 2026-11 실측: 미인증 조직은 gpt-image-1 에 400 "does not exist" — 관리자가 원인을 알 수 있어야 한다
+        import openai
+
+        monkeypatch.setenv("OPENAI_API_KEY", "k")
+        resp = MagicMock(); resp.status_code = 400; resp.headers = {}
+        err = openai.BadRequestError(
+            "Error code: 400", response=resp,
+            body={"message": "The model 'gpt-image-1' does not exist.", "type": "image_generation_user_error",
+                  "param": "model", "code": "invalid_value"},
+        )
+        client = MagicMock()
+        client.images.generate = AsyncMock(side_effect=err)
+        logger = MagicMock()
+        gen = OpenAIImageGenerator(llm_model=_model(), logger=logger, client=client, retry_delay_sec=0)
+        with pytest.raises(ImageProviderError) as ei:
+            await gen.generate(prompt="p", size=ImageSize.SQUARE_1024, quality=ImageQuality.STANDARD)
+        assert ei.value.retryable is False
+        assert "does not exist" in ei.value.user_message
+        assert "gpt-image-1" in ei.value.user_message
+        logger.warning.assert_called_once()
+        assert "does not exist" in str(logger.warning.call_args)
 
     @pytest.mark.asyncio
     async def test_edit_passes_file_tuple(self, monkeypatch) -> None:

@@ -2198,9 +2198,9 @@ class WorkflowCompiler:
             except ImageGenerationError as e:
                 logger.warning(
                     "image_generate_node rejected", request_id=request_id,
-                    reason=e.__class__.__name__,
+                    reason=e.__class__.__name__, detail=str(e)[:300],
                 )
-                return _reply(state, e.user_message)
+                return _reply(state, _rejection_notice(e))
             except Exception as e:
                 logger.error(
                     "image_generate_node failed", exception=e, request_id=request_id,
@@ -2955,6 +2955,22 @@ def _build_image_command(
         mode=mode, source_image=source if mode == GenerationMode.EDIT else None,
         owner_user_id=owner_user_id, request_id=request_id, fell_back_to_generate=fell_back,
     )
+
+
+_NO_RETRY_HINT = (
+    "(같은 요청을 다시 시도해도 결과가 같습니다. 재시도하지 말고 이 사유를 "
+    "사용자에게 그대로 안내한 뒤 마무리하세요.)"
+)
+
+
+def _rejection_notice(e: ImageGenerationError) -> str:
+    """거부 안내 본문. 재시도 무의미(retryable=False)면 supervisor 재시도 루프를 끊는 힌트를 붙인다.
+
+    2026-11 실런: 모델 미접근 400 에 supervisor 가 같은 워커를 8회 재호출했다.
+    """
+    if getattr(e, "retryable", True) is False:
+        return f"{e.user_message}\n{_NO_RETRY_HINT}"
+    return e.user_message
 
 
 def _turn_has_images(state: SupervisorState) -> bool:

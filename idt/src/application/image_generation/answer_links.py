@@ -8,6 +8,8 @@
 """
 from __future__ import annotations
 
+import re
+
 from src.domain.image_generation.value_objects import GeneratedImage
 
 FILES_PATH_PREFIX = "/api/v1/document-extractor/files/"
@@ -34,13 +36,24 @@ def render_image_summary(result: GeneratedImage) -> str:
     return "\n".join(lines)
 
 
+def has_inline_image(answer: str, file_id: str) -> bool:
+    """`![…](/files/{file_id})` 형태의 인라인 이미지가 본문에 있는가.
+
+    다운로드 링크(`[name](/files/{id})`)만 있고 이미지 마크다운이 없으면 False.
+    2026-11 실런: final_answer 가 이미지 URL 을 `<insert-image-url-here>` 로 바꿔 쓴 채
+    다운로드 링크만 남겨, file_id 포함 여부로는 유실을 잡지 못했다.
+    """
+    pattern = r"!\[[^\]]*\]\(" + re.escape(FILES_PATH_PREFIX + file_id) + r"\)"
+    return re.search(pattern, answer or "") is not None
+
+
 def append_generated_images(answer: str, images: list[dict] | None) -> str:
-    """본문에 없는 생성 이미지의 마크다운 줄을 끝에 덧붙인다 (D-03)."""
+    """인라인 이미지가 없는 생성 이미지의 마크다운 줄을 끝에 덧붙인다 (D-03)."""
     if not images:
         return answer
     missing = [
         img for img in images
-        if img.get("file_id") and str(img["file_id"]) not in (answer or "")
+        if img.get("file_id") and not has_inline_image(answer, str(img["file_id"]))
     ]
     if not missing:
         return answer
