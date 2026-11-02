@@ -24,6 +24,16 @@ class TestAppendGeneratedImages:
         answer = f"결과: ![x]({FILES_PATH_PREFIX}{'f' * 32})"
         assert append_generated_images(answer, [IMG]) == answer
 
+    def test_appends_when_only_download_link_remains(self) -> None:
+        # 2026-11 실런: final_answer 가 이미지 URL 을 placeholder 로 바꿈
+        answer = (
+            "배너를 생성했습니다.\n\n![배너](<insert-image-url-here>)\n\n"
+            f"다운로드 링크: [generated-1.png]({FILES_PATH_PREFIX}{'f' * 32})"
+        )
+        out = append_generated_images(answer, [IMG])
+        assert out.endswith(f"![generated-1.png]({FILES_PATH_PREFIX}{'f' * 32})")
+        assert out.startswith(answer)
+
     def test_empty_inputs(self) -> None:
         assert append_generated_images("a", []) == "a"
         assert append_generated_images("a", None) == "a"

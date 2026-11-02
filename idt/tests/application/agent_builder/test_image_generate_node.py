@@ -147,6 +147,22 @@ class TestNode:
         assert "generated_image_count" not in out or out["generated_image_count"] == 0
 
     @pytest.mark.asyncio
+    async def test_non_retryable_error_adds_no_retry_hint(self) -> None:
+        # 2026-11 실런: 모델 미접근 400 에 supervisor 가 같은 워커를 8회 재호출했다
+        uc = MagicMock()
+        uc.run = AsyncMock(side_effect=ImageProviderError("모델 없음", retryable=False))
+        node = _compiler(uc)._create_image_generate_node(
+            _llm(), _worker(), auth_ctx=None, request_id="r",
+        )
+        out = await node(_state())
+        assert "재시도하지 말고" in out["messages"][0].content
+
+        uc.run = AsyncMock(side_effect=ImageProviderError("일시 오류", retryable=True))
+        out = await node(_state())
+        assert "일시 오류" in out["messages"][0].content
+        assert "재시도하지 말고" not in out["messages"][0].content
+
+    @pytest.mark.asyncio
     async def test_missing_use_case_replies_not_wired(self) -> None:
         node = _compiler(None)._create_image_generate_node(_llm(), _worker(), auth_ctx=None, request_id="r")
         out = await node(_state())

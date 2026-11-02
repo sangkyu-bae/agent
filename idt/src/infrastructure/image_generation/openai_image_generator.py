@@ -49,9 +49,16 @@ def quality_param(model_name: str, quality: ImageQuality) -> str | None:
     return None
 
 
-def wants_b64_response_format(model_name: str) -> bool:
-    """dall-e 계열만 response_format 을 받는다 (gpt-image 는 인자 자체를 거부)."""
-    return model_name.lower().startswith("dall-e")
+def _provider_message(e: Exception, limit: int = 200) -> str:
+    """OpenAI 오류 본문에서 사람이 읽을 메시지만 뽑는다 (키·본문 바이트 미포함)."""
+    body = getattr(e, "body", None)
+    msg = ""
+    if isinstance(body, dict):
+        inner = body.get("error") if isinstance(body.get("error"), dict) else body
+        msg = str(inner.get("message") or "")
+    if not msg:
+        msg = str(getattr(e, "message", "") or e)
+    return msg.strip()[:limit]
 
 
 class OpenAIImageGenerator:
@@ -93,8 +100,8 @@ class OpenAIImageGenerator:
         q = quality_param(self._model.model_name, quality)
         if q is not None:
             params["quality"] = q
-        if wants_b64_response_format(self._model.model_name):
-            params["response_format"] = "b64_json"
+        # response_format 은 보내지 않는다 — 2026-11 실측에서 Images API 가
+        # unknown_parameter(400)로 거부. gpt-image 계열은 항상 b64_json 을 돌려준다.
         resp = await self._with_retry(lambda: self._client.images.generate(**params))
         return self._decode(resp)
 
@@ -106,8 +113,6 @@ class OpenAIImageGenerator:
             "image": ("source.png", source, source_mime),
             "prompt": prompt, "size": size.value, "n": 1,
         }
-        if wants_b64_response_format(self._model.model_name):
-            params["response_format"] = "b64_json"
         resp = await self._with_retry(lambda: self._client.images.edit(**params))
         return self._decode(resp)
 
@@ -141,8 +146,14 @@ class OpenAIImageGenerator:
                 ) from e
         raise AssertionError("unreachable")
 
-    @staticmethod
-    def _translate_bad_request(e: openai.BadRequestError) -> ImageProviderError:
+    def _translate_bad_request(self, e: openai.BadRequestError) -> ImageProviderError:
+        provider_msg = _provider_message(e)
+        # 원인(모델 미접근·파라미터 오류)을 로그와 안내문 양쪽에 남긴다.
+        # 2026-11 실측: 미인증 조직의 gpt-image-1 은 400 "does not exist" 로 거부됐다.
+        self._logger.warning(
+            "image generation bad request",
+            model_name=self._model.model_name, provider_message=provider_msg,
+        )
         text = f"{e} {getattr(e, 'body', '')}".lower()
         if any(h in text for h in _POLICY_HINTS):
             return ImageProviderError(
@@ -150,9 +161,10 @@ class OpenAIImageGenerator:
                 "표현을 바꿔 다시 요청해 주세요.",
                 retryable=False,
             )
+        detail = provider_msg or "크기·모델·프롬프트를 확인해 주세요."
+        name = self._model.model_name
         return ImageProviderError(
-            "이미지 생성 요청이 올바르지 않아 거부되었습니다 "
-            "(크기·모델·프롬프트를 확인해 주세요).",
+            f"이미지 생성 요청이 거부되었습니다 (모델 {name}): {detail}",
             retryable=False,
         )
 
