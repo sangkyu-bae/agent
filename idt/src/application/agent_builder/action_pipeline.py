@@ -43,6 +43,7 @@ from src.application.agent_builder.search_pipeline import (
 from src.application.agent_builder.supervisor_state import SupervisorState
 from src.application.agent_run.step_tracking import STEP_OUTPUT_SUMMARY_KEY
 from src.application.hallucination.grounded_generation import GroundedGenerator
+from src.application.agent_builder.message_content import message_text
 from src.domain.agent_builder.policies import ActionArgumentPolicy, ToolErrorPolicy
 from src.domain.agent_builder.rag_tool_config import clamp_llm_name
 from src.domain.approval.policies import ApprovalSignalPolicy
@@ -93,7 +94,7 @@ def _is_tool_message(msg) -> bool:
 def _evidence_block(messages: list) -> str:
     """선행 워커 산출(검색·수집·분석)을 근거 블록으로 직렬화한다."""
     parts = [
-        f"[{getattr(m, 'name', '')}]\n{getattr(m, 'content', '')}"
+        f"[{getattr(m, 'name', '')}]\n{message_text(m)}"
         for m in messages if is_worker_output(m)
     ]
     if not parts:
@@ -107,8 +108,7 @@ def _conversation_messages(messages: list) -> list:
 
 
 def _text_of(response) -> str:
-    content = getattr(response, "content", response)
-    return content if isinstance(content, str) else str(content)
+    return message_text(response)
 
 
 @dataclass
@@ -165,18 +165,13 @@ class _ComposeFailed(Exception):
     """근거 루프 첫 작성 실패 — 루프를 멈추고 기존 작성 실패 경로로 보낸다."""
 
 
-def _message_text(m) -> str:
-    content = m.get("content", "") if isinstance(m, dict) else getattr(m, "content", "")
-    return content if isinstance(content, str) else str(content)
-
-
 def _grounding_sources(messages: list, context_block: str) -> str:
     """판정 근거 코퍼스 — 지침 → 최신 워커 산출 → 대화 순 (D-10: 상한 절단 시 앞쪽 우선)."""
     evidence = [
-        f"[{getattr(m, 'name', '')}]\n{_message_text(m)}"
+        f"[{getattr(m, 'name', '')}]\n{message_text(m)}"
         for m in reversed(messages) if is_worker_output(m)
     ]
-    conversation = [_message_text(m) for m in _conversation_messages(messages)]
+    conversation = [message_text(m) for m in _conversation_messages(messages)]
     return "\n\n".join(p for p in (context_block, *evidence, *conversation) if p.strip())
 
 

@@ -49,6 +49,18 @@ class DocumentGenerationTypeRequest(BaseModel):
     mcp_html_to_doc_tool_id: str = ""           # 빈 값 = settings 폴백 (D5)
 
 
+class ImageGenerationConfigRequest(BaseModel):
+    """image-generation-tool Design §4.2: image_generate 워커 설정 (영속 엔티티 없음).
+
+    상세 검증은 ImageGenerationToolConfig(도메인) — 위반 시 422 IMAGE_CONFIG_INVALID.
+    모델은 저장 UseCase 가 활성 image 종류인지 검증 — 위반 시 422 IMAGE_MODEL_INVALID.
+    """
+
+    llm_model_id: str = ""
+    default_size: str = "1024x1024"
+    quality: str = "standard"
+
+
 class PresentationGeneratorConfigRequest(BaseModel):
     """golden-sample-blueprint D7: presentation_generator 워커 설정 (영속 엔티티 없음).
 
@@ -125,6 +137,8 @@ class CreateAgentRequest(BaseModel):
     document_generation_type: DocumentGenerationTypeRequest | None = None
     # golden-sample-blueprint D7: 발표자료 설정 (presentation_generator 도구 필요)
     presentation_generator: PresentationGeneratorConfigRequest | None = None
+    # image-generation-tool Design §4.2: 이미지 생성 설정 (image_generate 도구 필요)
+    image_generation: ImageGenerationConfigRequest | None = None
     # agent-opener D4: 대화 시작 예시 질문. None/[] = 없음. 13개↑·201자↑는 여기서 422.
     openers: list[OpenerText] | None = Field(None, max_length=12)
     # agent-instruction-required: 지침 필수. None/빈 값이면 생성 시 에러(자동생성 제거).
@@ -192,6 +206,8 @@ class UpdateAgentRequest(BaseModel):
     # doc-generator: None = 문서 유형 변경 안 함, 값 = 교체(기존 soft-delete)
     document_generation_type: DocumentGenerationTypeRequest | None = None
     presentation_generator: PresentationGeneratorConfigRequest | None = None
+    # image-generation-tool Design §4.2: 이미지 생성 설정 (image_generate 도구 필요)
+    image_generation: ImageGenerationConfigRequest | None = None
     # agent-opener D4: None = 변경 안 함, [] = 전부 삭제, [...] = 목표 상태 전체 교체.
     openers: list[OpenerText] | None = Field(None, max_length=12)
     # agent-builder-edit-mapping FR-5: None = 모델 변경 안 함
@@ -385,6 +401,8 @@ class MyAgentSummary(BaseModel):
     is_pinned: bool = False
     # agent-opener D4: 채팅 빈 상태 노출용 — 목록 use case가 배치 1쿼리로 부착
     openers: list[str] = []
+    # chat-image-attachment D-09: 프론트가 LLM 모델 목록과 대조해 비전 여부를 안내 (additive)
+    llm_model_id: str | None = None
     created_at: str
 
 

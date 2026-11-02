@@ -437,6 +437,52 @@ class TestUpdateLlmModel:
             await use_case.execute(agent.id, request, "req-1")
 
 
+class TestUpdateAgentImageGenerationRevalidation:
+    """image-generation-tool G-I4: 이미지 모델 재검증은 설정을 바꿀 때만 (Plan §6.3)."""
+
+    def _agent_with_image_worker(self) -> AgentDefinition:
+        config = {
+            "llm_model_id": "img-gone",
+            "default_size": "1024x1024",
+            "quality": "standard",
+        }
+        return _make_agent(
+            workers=[
+                WorkerDefinition(
+                    tool_id="image_generate", worker_id="image_generate_worker",
+                    description="이미지", sort_order=0, tool_config=config,
+                ),
+            ],
+        )
+
+    @pytest.mark.asyncio
+    async def test_unrelated_update_passes_even_if_image_model_is_gone(self):
+        # 이미지 모델이 삭제·비활성화돼도 이름만 바꾸는 수정은 막히지 않는다
+        use_case, repository, agent = _make_use_case(
+            agent=self._agent_with_image_worker(), llm_models={},
+        )
+        request = UpdateAgentRequest(name="새 이름")
+        result = await use_case.execute(agent.id, request, "req-1")
+        assert result.name == "새 이름"
+        repository.update.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_changing_image_config_still_validates_model(self):
+        from src.application.agent_builder.schemas import ImageGenerationConfigRequest
+
+        use_case, repository, agent = _make_use_case(
+            agent=self._agent_with_image_worker(), llm_models={},
+        )
+        request = UpdateAgentRequest(
+            image_generation=ImageGenerationConfigRequest(
+                llm_model_id="img-gone", default_size="1024x1024", quality="standard",
+            ),
+        )
+        with pytest.raises(ValueError, match="IMAGE_MODEL_INVALID"):
+            await use_case.execute(agent.id, request, "req-1")
+        repository.update.assert_not_awaited()
+
+
 class TestUpdateAgentSkillSync:
     """agent-skill-toggle: 수정 시점 부착 스킬 동기화."""
 

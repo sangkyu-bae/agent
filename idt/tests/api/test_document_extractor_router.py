@@ -196,3 +196,19 @@ class TestFileDownload:
         assert res.headers["content-type"] == (
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
+
+    def test_generated_png_downloads_with_image_media_type(self, tmp_path):
+        # image-generation-tool D-02/D-10 (G-I3): 인라인 표시용 blob 타입은 image/*
+        path = tmp_path / "generated-1.png"
+        path.write_bytes(b"\x89PNG-fake")
+        name = "generated-20261030-153012-a1b2c3.png"
+        store = MagicMock()
+        store.load.return_value = StoredAttachment(
+            file_id="e" * 32, type=AttachmentType.DOCUMENT,
+            filename=name, size=9, owner_user_id="7", file_path=str(path),
+        )
+        client = TestClient(_make_app(store=store))
+        res = client.get(f"/api/v1/document-extractor/files/{'e' * 32}")
+        assert res.status_code == 200
+        assert res.headers["content-type"] == "image/png"
+        assert name in res.headers["content-disposition"]

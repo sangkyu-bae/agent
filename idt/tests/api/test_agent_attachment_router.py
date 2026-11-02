@@ -90,3 +90,28 @@ class TestUploadErrors:
         res = client.post("/api/v1/agent/attachments", files=files)
         assert res.status_code == 413
         assert res.json()["detail"]["code"] == "ATTACHMENT_TOO_LARGE"
+
+
+# ── chat-image-attachment Design §4.2 / §8.2 #9 ──────────────────────────────
+
+class TestUploadImage:
+    def test_image_response_includes_dimensions(self) -> None:
+        uc = MagicMock()
+        uc.execute.return_value = StoredAttachment(
+            file_id="b" * 32, type=AttachmentType.IMAGE,
+            filename="shot.png", size=99, owner_user_id="7",
+            file_path="/tmp/b.png", width=1568, height=882,
+        )
+        client = TestClient(_make_app(uc))
+        files = {"file": ("shot.png", b"\x89PNG\r\n\x1a\n", "image/png")}
+        res = client.post("/api/v1/agent/attachments", files=files)
+        assert res.status_code == 201
+        body = res.json()
+        assert body["type"] == "image"
+        assert (body["width"], body["height"]) == (1568, 882)
+
+    def test_excel_response_has_null_dimensions(self) -> None:
+        client = TestClient(_make_app(_ok_uc()))
+        files = {"file": ("sales.xlsx", b"hello-excel", "application/vnd.ms-excel")}
+        body = client.post("/api/v1/agent/attachments", files=files).json()
+        assert body["width"] is None and body["height"] is None

@@ -55,6 +55,9 @@ class UpdateLlmModelPricingUseCase:
         now = datetime.now(timezone.utc)
         model.input_price_per_1k_usd = request.input_price_per_1k_usd
         model.output_price_per_1k_usd = request.output_price_per_1k_usd
+        # image-generation-tool D-04: 장당 단가 (생략 시 유지)
+        if request.price_per_image_usd is not None:
+            model.price_per_image_usd = request.price_per_image_usd
         model.pricing_updated_at = now
         model.updated_at = now
 

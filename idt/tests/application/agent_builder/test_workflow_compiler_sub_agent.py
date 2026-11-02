@@ -343,7 +343,10 @@ class TestSubAgentContextWiring:
             )
 
         resolve.assert_called_once_with(worker, fake)
-        wrap.assert_called_once_with(worker.worker_id, "G", fake)
+        # chat-image-attachment D-03: 서브 모델 비전 여부·provider 가 래퍼로 함께 간다.
+        wrap.assert_called_once_with(
+            worker.worker_id, "G", fake, supports_vision=False, provider="openai",
+        )
 
     @pytest.mark.asyncio
     async def test_C4_요약을_싣고_기존_출력_계약은_유지(self):

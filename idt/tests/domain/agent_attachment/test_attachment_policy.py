@@ -16,7 +16,7 @@ class TestResolveType:
     def test_excel_extensions_resolve_to_excel(self, name: str) -> None:
         assert AttachmentPolicy.resolve_type(name) == AttachmentType.EXCEL
 
-    @pytest.mark.parametrize("name", ["data.csv", "image.png", "noext", "x.pdf"])
+    @pytest.mark.parametrize("name", ["data.csv", "image.gif", "noext", "x.pdf"])
     def test_unsupported_extension_raises(self, name: str) -> None:
         with pytest.raises(InvalidAttachmentError):
             AttachmentPolicy.resolve_type(name)

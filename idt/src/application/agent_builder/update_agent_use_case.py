@@ -16,6 +16,10 @@ from src.application.agent_builder.document_template_binding import (
 from src.application.agent_builder.presentation_generator_binding import (
     apply_presentation_generator_config,
 )
+from src.application.image_generation.binding import (
+    apply_image_generation_config,
+    validate_image_generation_model,
+)
 from src.application.agent_builder.schemas import (
     UpdateAgentRequest,
     UpdateAgentResponse,
@@ -52,6 +56,7 @@ from src.domain.document_generator.policies import DEFAULT_MAX_SECTIONS
 from src.domain.knowledge_base.interfaces import KnowledgeBaseRepositoryInterface
 from src.domain.knowledge_base.policy import KnowledgeBasePolicy
 from src.domain.llm_model.interfaces import LlmModelRepositoryInterface
+from src.domain.llm_model.policies import LlmModelPolicy
 from src.domain.agent_opener.interfaces import AgentOpenerRepositoryInterface
 from src.domain.agent_opener.policies import OpenerPolicy
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
@@ -275,6 +280,15 @@ class UpdateAgentUseCase:
                     request.presentation_generator, agent.workers
                 )
 
+            # 이미지 생성 설정 교체 (image-generation-tool §4.2): None = 변경 안 함.
+            # 모델 재검증도 설정을 바꿀 때만 — 이미지 모델이 비활성화돼도 이름·지침
+            # 같은 무관한 수정은 막지 않는다 (Plan §6.3, G-I4). 실행 시 노드가 안내.
+            if request.image_generation is not None:
+                apply_image_generation_config(request.image_generation, agent.workers)
+                await validate_image_generation_model(
+                    agent.workers, self._llm_model_repo, request_id
+                )
+
             updated = await self._repository.update(agent, request_id)
 
             self._logger.info(
@@ -459,6 +473,8 @@ class UpdateAgentUseCase:
         found = await self._llm_model_repo.find_by_id(llm_model_id, request_id)
         if found is None:
             raise ValueError(f"LLM 모델을 찾을 수 없습니다: {llm_model_id}")
+        # image-generation-tool Design §4.2: 이미지 생성 모델은 에이전트 모델 불가
+        LlmModelPolicy.require_chat_model(found)
 
     async def _replace_document_template(
         self,

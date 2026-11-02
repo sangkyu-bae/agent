@@ -49,3 +49,12 @@ class LlmModelModel(Base):
         Boolean, nullable=False, default=False,
         comment="이미지 입력(비전) 지원 여부 — 1이면 멀티모달 추출 모델로 선택 가능",
     )
+    # image-generation-tool Design §3.3: V081 매핑. 모델 종류 + 이미지 장당 단가.
+    model_kind: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="chat",
+        comment="모델 종류 — chat(대화·비전) 또는 image(이미지 생성). 채팅 드롭다운은 chat 만 노출",
+    )
+    price_per_image_usd: Mapped[Decimal | None] = mapped_column(
+        Numeric(10, 4),
+        comment="이미지 생성 1장당 USD 단가 — model_kind=image 일 때만 사용하며 비용 원장에 합산",
+    )

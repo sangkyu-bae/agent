@@ -78,3 +78,95 @@ class TestResolver:
         # 존재 + 비존재 file_id 혼합 — 예외 없이 정리
         resolver.cleanup([saved.file_id, "f" * 32])
         assert store.load(saved.file_id) is None
+
+
+# ── chat-image-attachment Design §8.2 #8 ─────────────────────────────────────
+
+_PNG_HEAD = b"\x89PNG\r\n\x1a\n" + b"\x00" * 8
+
+
+def _normalizer(out: bytes = b"normalized", w: int = 12, h: int = 34) -> MagicMock:
+    from src.domain.agent_attachment.value_objects import ImageDimensions
+
+    n = MagicMock()
+    n.normalize.return_value = (out, ImageDimensions(width=w, height=h, mime="image/png"))
+    return n
+
+
+class TestUploadImage:
+    def test_image_calls_normalizer_and_stores_result(self, tmp_path: Path) -> None:
+        norm = _normalizer()
+        uc = UploadAttachmentUseCase(
+            _store(tmp_path), MAX, MagicMock(),
+            image_normalizer=norm, image_max_edge_px=1568, image_jpeg_quality=90,
+        )
+        stored = uc.execute(file_bytes=_PNG_HEAD, filename="shot.png", owner_user_id="9")
+        norm.normalize.assert_called_once_with(_PNG_HEAD, max_edge_px=1568, jpeg_quality=90)
+        assert stored.type == AttachmentType.IMAGE
+        assert (stored.width, stored.height) == (12, 34)
+        assert Path(stored.file_path).read_bytes() == b"normalized"
+        assert stored.size == len(b"normalized")
+
+    def test_excel_does_not_call_normalizer(self, tmp_path: Path) -> None:
+        norm = _normalizer()
+        uc = UploadAttachmentUseCase(
+            _store(tmp_path), MAX, MagicMock(), image_normalizer=norm,
+        )
+        stored = uc.execute(file_bytes=b"abc", filename="a.xlsx", owner_user_id="9")
+        norm.normalize.assert_not_called()
+        assert stored.width is None
+
+    def test_magic_mismatch_raises_before_normalizer(self, tmp_path: Path) -> None:
+        norm = _normalizer()
+        uc = UploadAttachmentUseCase(
+            _store(tmp_path), MAX, MagicMock(), image_normalizer=norm,
+        )
+        with pytest.raises(InvalidAttachmentError):
+            uc.execute(file_bytes=b"GIF89a" + b"\x00" * 10, filename="a.png", owner_user_id="9")
+        norm.normalize.assert_not_called()
+
+    def test_oversize_checked_on_original_bytes(self, tmp_path: Path) -> None:
+        from src.domain.agent_attachment.exceptions import AttachmentTooLargeError
+
+        uc = UploadAttachmentUseCase(
+            _store(tmp_path), 16, MagicMock(), image_normalizer=_normalizer(),
+        )
+        with pytest.raises(AttachmentTooLargeError):
+            uc.execute(file_bytes=_PNG_HEAD + b"\x00" * 100, filename="a.png", owner_user_id="9")
+
+    def test_dimensions_survive_store_roundtrip(self, tmp_path: Path) -> None:
+        store = _store(tmp_path)
+        uc = UploadAttachmentUseCase(store, MAX, MagicMock(), image_normalizer=_normalizer())
+        stored = uc.execute(file_bytes=_PNG_HEAD, filename="shot.png", owner_user_id="9")
+        loaded = store.load(stored.file_id)
+        assert loaded is not None
+        assert (loaded.width, loaded.height) == (12, 34)
+
+
+class TestResolverImage:
+    def test_image_dict_includes_mime_and_file_name(self, tmp_path: Path) -> None:
+        store = _store(tmp_path)
+        saved = store.save(
+            file_bytes=b"x", filename="chart.webp",
+            attachment_type=AttachmentType.IMAGE, owner_user_id="5",
+            width=3, height=4,
+        )
+        out = AttachmentResolver(store, MagicMock()).resolve(saved.file_id, viewer_user_id="5")
+        assert out == {
+            "type": "image",
+            "file_path": saved.file_path,
+            "user_id": "5",
+            "mime": "image/webp",
+            "file_name": "chart.webp",
+            "width": 3,
+            "height": 4,
+        }
+
+    def test_excel_dict_unchanged(self, tmp_path: Path) -> None:
+        store = _store(tmp_path)
+        saved = store.save(
+            file_bytes=b"x", filename="a.xlsx",
+            attachment_type=AttachmentType.EXCEL, owner_user_id="5",
+        )
+        out = AttachmentResolver(store, MagicMock()).resolve(saved.file_id, viewer_user_id="5")
+        assert out == {"type": "excel", "file_path": saved.file_path, "user_id": "5"}

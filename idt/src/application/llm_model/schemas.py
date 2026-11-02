@@ -5,9 +5,10 @@ LLM-MODEL-REG-001 §5-1 + M4 (가격 필드 additive 노출 + UpdatePricingReque
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from src.domain.llm_model.entity import LlmModel
+from src.domain.llm_model.policies import LlmModelPolicy
 
 
 class CreateLlmModelRequest(BaseModel):
@@ -23,6 +24,15 @@ class CreateLlmModelRequest(BaseModel):
     base_url: str | None = Field(None, max_length=500)
     # multimodal-extractor Design §3.3 (V064): 비전(이미지 입력) 지원 여부.
     supports_vision: bool = False
+    # image-generation-tool Design §4.1 (V081): 종류·장당 단가 (additive).
+    model_kind: str = "chat"
+    price_per_image_usd: Decimal | None = Field(None, ge=0)
+
+    @field_validator("model_kind")
+    @classmethod
+    def _check_kind(cls, v: str) -> str:
+        LlmModelPolicy.validate_model_kind(v)
+        return v
 
 
 class UpdateLlmModelRequest(BaseModel):
@@ -33,6 +43,15 @@ class UpdateLlmModelRequest(BaseModel):
     is_default: bool | None = None
     base_url: str | None = Field(None, max_length=500)
     supports_vision: bool | None = None
+    model_kind: str | None = None
+    price_per_image_usd: Decimal | None = Field(None, ge=0)
+
+    @field_validator("model_kind")
+    @classmethod
+    def _check_kind(cls, v: str | None) -> str | None:
+        if v is not None:
+            LlmModelPolicy.validate_model_kind(v)
+        return v
 
 
 class UpdatePricingRequest(BaseModel):
@@ -40,6 +59,8 @@ class UpdatePricingRequest(BaseModel):
 
     input_price_per_1k_usd: Decimal = Field(..., ge=0)
     output_price_per_1k_usd: Decimal = Field(..., ge=0)
+    # image-generation-tool: 생략하면 기존 값 유지
+    price_per_image_usd: Decimal | None = Field(None, ge=0)
 
 
 class LlmModelResponse(BaseModel):
@@ -58,6 +79,9 @@ class LlmModelResponse(BaseModel):
     base_url: str | None = None
     # multimodal-extractor: additive 옵셔널 (기존 frontend 영향 0)
     supports_vision: bool = False
+    # image-generation-tool: additive
+    model_kind: str = "chat"
+    price_per_image_usd: Decimal | None = None
 
     @classmethod
     def from_domain(cls, model: LlmModel) -> "LlmModelResponse":
@@ -75,6 +99,8 @@ class LlmModelResponse(BaseModel):
             pricing_updated_at=model.pricing_updated_at,
             base_url=model.base_url,
             supports_vision=model.supports_vision,
+            model_kind=model.model_kind,
+            price_per_image_usd=model.price_per_image_usd,
         )
 
 

@@ -206,6 +206,17 @@ class Settings(BaseSettings):
     agent_attachment_upload_dir: str = ""
     agent_attachment_max_bytes: int = 10 * 1024 * 1024  # 10 MiB
     agent_attachment_ttl_seconds: int = 3600  # TTL 백업 정리 기준
+    # chat-image-attachment Design §10.3: 채팅 이미지 첨부
+    agent_attachment_image_max_count: int = 5        # 턴당 이미지 장수 상한
+    agent_attachment_image_max_edge_px: int = 1568   # 업로드 시 긴 변 축소 기준
+    agent_attachment_image_jpeg_quality: int = 90    # jpeg/webp 재인코딩 품질
+    agent_attachment_image_max_pixels: int = 40_000_000  # 디코딩 폭탄 차단(PIL)
+    agent_attachment_image_detail: str = "high"      # openai image detail (high|low|auto)
+    # image-generation-tool Design §10.3: 이미지 생성 도구
+    image_generation_max_per_turn: int = 4          # 턴당 생성 상한 (서브 그래프는 절반)
+    image_generation_default_size: str = "1024x1024"
+    image_generation_timeout_sec: float = 60.0      # provider 호출 1건 타임아웃
+    image_generation_max_prompt_chars: int = 2000
 
     # Document Extractor (document-template-extractor Design §5)
     document_extractor_max_file_mb: int = 20          # 업로드 상한 (R8)

@@ -121,6 +121,8 @@ class LlmModelRepository(LlmModelRepositoryInterface):
             row.is_default = model.is_default
             row.base_url = model.base_url
             row.supports_vision = model.supports_vision
+            row.model_kind = model.model_kind
+            row.price_per_image_usd = model.price_per_image_usd
             row.updated_at = model.updated_at
             await self._session.flush()
             return model
@@ -165,6 +167,8 @@ class LlmModelRepository(LlmModelRepositoryInterface):
             pricing_updated_at=model.pricing_updated_at,
             base_url=model.base_url,
             supports_vision=model.supports_vision,
+            model_kind=model.model_kind,
+            price_per_image_usd=model.price_per_image_usd,
         )
 
     def _to_domain(self, row: LlmModelModel) -> LlmModel:
@@ -185,4 +189,6 @@ class LlmModelRepository(LlmModelRepositoryInterface):
             pricing_updated_at=row.pricing_updated_at,
             base_url=row.base_url,
             supports_vision=bool(row.supports_vision),
+            model_kind=row.model_kind or "chat",
+            price_per_image_usd=row.price_per_image_usd,
         )

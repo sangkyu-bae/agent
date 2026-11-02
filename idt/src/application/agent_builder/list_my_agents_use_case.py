@@ -128,5 +128,6 @@ class ListMyAgentsUseCase:
             owner_user_id=agent.user_id,
             forked_from=agent.forked_from,
             is_pinned=False,
+            llm_model_id=agent.llm_model_id,
             created_at=agent.created_at.isoformat(),
         )

@@ -15,6 +15,10 @@ from src.application.agent_builder.document_template_binding import (
 from src.application.agent_builder.presentation_generator_binding import (
     apply_presentation_generator_config,
 )
+from src.application.image_generation.binding import (
+    apply_image_generation_config,
+    validate_image_generation_model,
+)
 from src.application.agent_builder.schemas import (
     CreateAgentRequest,
     CreateAgentResponse,
@@ -51,6 +55,7 @@ from src.domain.knowledge_base.entities import KnowledgeBase
 from src.domain.knowledge_base.interfaces import KnowledgeBaseRepositoryInterface
 from src.domain.knowledge_base.policy import KnowledgeBasePolicy
 from src.domain.llm_model.interfaces import LlmModelRepositoryInterface
+from src.domain.llm_model.policies import LlmModelPolicy
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.application.agent_builder.gated_worker_validation import (
     validate_gated_workers,
@@ -194,6 +199,16 @@ class CreateAgentUseCase:
                 apply_presentation_generator_config(
                     request.presentation_generator, skeleton.workers
                 )
+
+            # Step 1.10 (image-generation-tool Design §4.2): 이미지 생성 워커 설정 주입 +
+            # 모델이 활성 image 종류인지 검증. 실패 시 예외 전파 = 생성 전체 롤백.
+            if request.image_generation is not None:
+                apply_image_generation_config(
+                    request.image_generation, skeleton.workers
+                )
+            await validate_image_generation_model(
+                skeleton.workers, self._llm_model_repository, request_id
+            )
 
             # Step 2: Policy 검증
             if sub_agent_workers:
@@ -549,6 +564,8 @@ class CreateAgentUseCase:
             )
             if found is None:
                 raise ValueError(f"LLM 모델을 찾을 수 없습니다: {llm_model_id}")
+            # image-generation-tool Design §4.2: 이미지 생성 모델은 에이전트 모델 불가
+            LlmModelPolicy.require_chat_model(found)
             return found.id
 
         default = await self._llm_model_repository.find_default(request_id)

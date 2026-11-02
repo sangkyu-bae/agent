@@ -23,6 +23,8 @@ from src.api.routes.ws_schemas import SubscribeAgentRunPayload, SubscribeChatPay
 from src.domain.agent_attachment.exceptions import (
     AttachmentAccessDeniedError,
     AttachmentNotFoundError,
+    TooManyImagesError,
+    VisionNotSupportedError,
 )
 from src.domain.agent_run.auth_context import AuthContext
 from src.domain.auth.entities import User
@@ -133,6 +135,11 @@ def _resolve_ws_attachments(
     return resolved, [a.file_id for a in sub.attachments]
 
 
+def _has_image_attachment(attachments: list[dict] | None) -> bool:
+    """이미지가 없는 턴은 사전 검사를 호출하지 않는다 (기존 경로 바이트 동일)."""
+    return any(a.get("type") == "image" for a in attachments or [])
+
+
 async def _reject_subscribe(
     manager: ConnectionManagerInterface,
     websocket: WebSocket,
@@ -207,7 +214,7 @@ async def ws_agent_run(
     Wire protocol:
         C → S (첫 메시지):
             { type: "subscribe", agent_id, query, session_id?,
-              attachments?: [{type:"excel", file_id}] }
+              attachments?: [{type:"excel"|"image", file_id}] }  (이미지 최대 N장)
         S → C: AgentRunEventWsAdapter.to_ws_message(event)  (loop)
         S closes(1000) on RUN_COMPLETED, closes(4500) on internal error.
 
@@ -240,6 +247,30 @@ async def ws_agent_run(
         except _AttachmentResolveError as ae:
             await _reject_subscribe(
                 manager, websocket, user.id, run_id, ae.code, ae.message,
+            )
+            return
+
+        # chat-image-attachment Design §4.2 / D-05: 이미지 첨부는 실행 전에
+        # 장수·비전 지원을 검사해 거절한다 (RUN_STARTED 미발생, finally 가 파일 정리).
+        try:
+            if _has_image_attachment(attachments):
+                await use_case.precheck_attachments(
+                    agent_id=sub.agent_id,
+                    attachments=attachments,
+                    request_id=run_id,
+                    viewer_user_id=str(user.id),
+                    viewer_department_ids=list(auth_ctx.department_ids),
+                )
+        except TooManyImagesError as e:
+            await _reject_subscribe(
+                manager, websocket, user.id, run_id,
+                "ATTACHMENT_LIMIT_EXCEEDED", str(e),
+            )
+            return
+        except VisionNotSupportedError as e:
+            await _reject_subscribe(
+                manager, websocket, user.id, run_id,
+                "VISION_NOT_SUPPORTED", str(e),
             )
             return
 

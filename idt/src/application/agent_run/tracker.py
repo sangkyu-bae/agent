@@ -458,6 +458,8 @@ class RunTracker:
         latency_ms: Optional[int],
         status: str,
         error_text: Optional[str] = None,
+        # image-generation-tool D-04: 토큰 단가 대신 장당 단가 비용을 그대로 기록
+        cost_usd_override: Optional[CostUsd] = None,
     ) -> None:
         """UsageCallback에서 호출. model_name→llm_model_id 매핑 + 가격조회 + 비용계산 + INSERT."""
         try:
@@ -473,7 +475,7 @@ class RunTracker:
 
         input_price: Optional[Decimal] = None
         output_price: Optional[Decimal] = None
-        if llm_model_id is not None:
+        if llm_model_id is not None and cost_usd_override is None:
             try:
                 input_price, output_price = await self._cost_calc.get_pricing(
                     llm_model_id
@@ -485,7 +487,11 @@ class RunTracker:
                     llm_model_id=llm_model_id,
                 )
 
-        cost_usd = CostCalculationPolicy.compute(token_usage, input_price, output_price)
+        cost_usd = (
+            cost_usd_override
+            if cost_usd_override is not None
+            else CostCalculationPolicy.compute(token_usage, input_price, output_price)
+        )
 
         call = LlmCall(
             id=str(uuid.uuid4()),

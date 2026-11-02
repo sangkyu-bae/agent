@@ -16,6 +16,17 @@ class AttachmentType(str, Enum):
     EXCEL = "excel"
     # document-template-extractor Design §4-4: 원본(빌드타임)·산출물(런타임) 문서 파일
     DOCUMENT = "document"
+    # chat-image-attachment Design §3.1: 채팅 이미지 첨부(png/jpg/webp)
+    IMAGE = "image"
+
+
+@dataclass(frozen=True)
+class ImageDimensions:
+    """정규화(리사이즈) 결과 — chat-image-attachment Design §3.1."""
+
+    width: int
+    height: int
+    mime: str
 
 
 @dataclass(frozen=True)
@@ -41,3 +52,6 @@ class StoredAttachment:
     size: int
     owner_user_id: str
     file_path: str
+    # chat-image-attachment Design §3.1: 이미지일 때만 채워진다 (additive)
+    width: int | None = None
+    height: int | None = None

@@ -140,6 +140,11 @@ _MEDIA_TYPES = {
     ".xlsx": (
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     ),
+    # image-generation-tool D-02 / D-10: 생성 이미지 인라인 표시 (blob type image/*)
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
 }
 
 

@@ -202,3 +202,34 @@ class TestNoAttachmentRegression:
             m["content"] for m in sent_messages if m.get("role") == "system"
         )
         assert "[첨부된 데이터]" not in joined  # 블록 미삽입
+
+
+# ── chat-image-attachment Design FR-10 / §8.2 #15 ─────────────────────────────
+
+class TestRenderImageAttachmentBlock:
+    def test_images_are_counted_and_named(self):
+        block = _render_attachment_block([
+            {"type": "image", "file_name": "a.png"},
+            {"type": "image", "file_name": "b.jpg"},
+        ])
+        assert "이미지 2장" in block
+        assert "a.png" in block and "b.jpg" in block
+        assert "직접 보고" in block  # 모델이 이미지를 직접 본다는 안내
+
+    def test_images_do_not_trigger_worker_routing_sentence(self):
+        block = _render_attachment_block([{"type": "image", "file_name": "a.png"}])
+        assert "라우팅" not in block
+
+    def test_excel_and_images_both_rendered(self):
+        block = _render_attachment_block([
+            {"type": "excel", "file_name": "s.xlsx"},
+            {"type": "image", "file_name": "a.png"},
+        ])
+        assert "excel(s.xlsx)" in block and "이미지 1장" in block
+        assert "라우팅" in block  # 엑셀 문구는 유지
+
+    def test_file_path_never_rendered(self):
+        block = _render_attachment_block([
+            {"type": "image", "file_name": "a.png", "file_path": "/tmp/secret/a.png"},
+        ])
+        assert "/tmp/secret" not in block

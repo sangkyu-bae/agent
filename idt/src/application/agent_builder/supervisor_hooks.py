@@ -6,6 +6,7 @@ from src.application.agent_builder.search_pipeline import (
     latest_user_question,
 )
 from src.application.agent_builder.supervisor_state import SupervisorState
+from src.application.agent_builder.message_content import message_text
 from src.domain.conversation.analysis_snapshot_policy import AnalysisSnapshotPolicy
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.domain.visualization.policies import VisualizationRoutingPolicy
@@ -20,7 +21,7 @@ def is_current_turn_search_result(msg) -> bool:
     같은 기준으로 판정해야 하므로 공개 이름을 부여했다(판정 규칙 단일 출처).
     """
     return is_search_result(msg) and not AnalysisSnapshotPolicy.is_reinjected(
-        getattr(msg, "content", "")
+        message_text(msg)
     )
 
 

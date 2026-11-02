@@ -14,6 +14,7 @@ from typing import Protocol, runtime_checkable
 
 from src.application.agent_builder.search_pipeline import QUALITY_FEEDBACK_PREFIX
 from src.application.agent_builder.supervisor_state import SupervisorState
+from src.application.agent_builder.message_content import message_text
 from src.domain.agent_builder.rag_tool_config import clamp_llm_name
 from src.domain.agent_builder.schemas import WorkerDefinition
 from src.domain.agent_builder.sub_agent_context_policy import (
@@ -45,15 +46,14 @@ def _to_view(msg) -> MessageView:
     if isinstance(msg, dict):
         raw_role = msg.get("role")
         name = msg.get("name")
-        content = msg.get("content", "")
     else:
         raw_role = getattr(msg, "type", None)
         name = getattr(msg, "name", None)
-        content = getattr(msg, "content", "")
     return MessageView(
         role=SubAgentContextPolicy.normalize_role(raw_role),
         name=name if isinstance(name, str) else "",
-        content=content if isinstance(content, str) else str(content),
+        # chat-image-attachment D-04: 입력 블록은 텍스트만 — 이미지 전달은 _wrap_sub_agent 가 결정
+        content=message_text(msg),
     )
 
 
@@ -61,8 +61,7 @@ def _legacy_content(messages: list) -> str:
     """현행 동작(마지막 메시지 1건)과 바이트 동일한 본문 — fail-safe 경로 (D-08)."""
     if not messages:
         return ""
-    last = messages[-1]
-    return last.content if hasattr(last, "content") else str(last)
+    return message_text(messages[-1])
 
 
 def legacy_input(messages: list) -> SubAgentInput:
@@ -90,7 +89,7 @@ class TaskWithOriginStrategy:
         messages = state.get("messages", [])
         views = to_message_views(messages)
         origin_index = self._policy.find_origin_index(views)
-        origin = views[origin_index].content if origin_index is not None else ""
+        origin = message_text(views[origin_index]) if origin_index is not None else ""
         task = (state.get("worker_task") or "").strip()
 
         # Design Ref: §3.4 fallback — 원 질문도 과제도 없으면 현행 입력 그대로.

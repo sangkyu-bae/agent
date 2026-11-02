@@ -206,6 +206,13 @@ from src.infrastructure.mcp_registry.session_scoped_repository import (
 from src.application.agent_attachment.resolver import AttachmentResolver
 from src.application.agent_attachment.upload_use_case import UploadAttachmentUseCase
 from src.application.intent.use_case import AnalyzeIntentUseCase
+from src.infrastructure.agent_attachment.image_block_builder import VendorImageBlockBuilder
+from src.infrastructure.agent_attachment.image_normalizer import PilImageNormalizer
+from src.application.image_generation.registries import ImageGeneratorRegistry
+from src.application.image_generation.use_case import GenerateImageUseCase
+from src.infrastructure.image_generation.openai_image_generator import (
+    OpenAIImageGenerator,
+)
 from src.infrastructure.agent_attachment.store import AgentAttachmentStore
 from src.application.agent_run.ws_auth_context import WsAuthContextResolver
 from src.infrastructure.general_chat.stream_cache import InMemoryChatStreamCache
@@ -755,6 +762,8 @@ _excel_upload_use_case: Optional[ExcelUploadUseCase] = None
 
 # ws-agent-excel-attachment: Global attachment store (initialized on startup)
 _attachment_store: Optional[AgentAttachmentStore] = None
+# chat-image-attachment D-08: 무상태 빌더 — 컴파일러·RunAgentUseCase 가 공유
+_image_block_builder = VendorImageBlockBuilder()
 
 # background-jobs: 워커 루프 싱글턴 (create_app 에서 조립, lifespan 에서 start/stop)
 _background_job_worker = None
@@ -1113,6 +1122,12 @@ def get_configured_upload_attachment_use_case() -> UploadAttachmentUseCase:
         store=_attachment_store,
         max_bytes=settings.agent_attachment_max_bytes,
         logger=get_app_logger(),
+        # chat-image-attachment Design §2.1: 이미지는 업로드 시 서버 리사이즈 (D-07)
+        image_normalizer=PilImageNormalizer(
+            max_pixels=settings.agent_attachment_image_max_pixels
+        ),
+        image_max_edge_px=settings.agent_attachment_image_max_edge_px,
+        image_jpeg_quality=settings.agent_attachment_image_jpeg_quality,
     )
 
 
@@ -3045,8 +3060,30 @@ def create_agent_builder_factories():
         SessionScopedLlmModelRepository,
     )
 
+    # ★ image-generation-tool Design §4.3: provider 레지스트리 + 생성 UseCase (D-06)
+    _ig_registry = ImageGeneratorRegistry()
+    _ig_registry.register(OpenAIImageGenerator, keys=("openai", "openai_compatible"))
+    _ig_use_case = GenerateImageUseCase(
+        registry=_ig_registry,
+        llm_model_repo=SessionScopedLlmModelRepository(
+            session_factory=get_session_factory(), logger=app_logger,
+        ),
+        store=_attachment_store or create_attachment_store(),
+        tracker=get_run_tracker(),
+        logger=app_logger,
+        max_prompt_chars=settings.image_generation_max_prompt_chars,
+        timeout_sec=settings.image_generation_timeout_sec,
+        max_pixels=settings.agent_attachment_image_max_pixels,
+    )
+
     workflow_compiler = WorkflowCompiler(
         tool_factory=tool_factory, llm_factory=_llm_factory, logger=app_logger,
+        # ★ image-generation-tool Design §4.3: 이미지 생성 전용 노드 의존
+        image_generation_use_case=_ig_use_case,
+        image_generation_max_per_turn=settings.image_generation_max_per_turn,
+        # chat-image-attachment D-03: 서브에이전트 provider 용 이미지 블록 재생성
+        image_block_builder=_image_block_builder,
+        image_detail=settings.agent_attachment_image_detail,
         hooks=DefaultHooks(),
         agent_repository=SessionScopedAgentDefinitionRepository(
             session_factory=get_session_factory(), logger=app_logger,
@@ -3254,6 +3291,10 @@ def create_agent_builder_factories():
             approval_gate_config_resolver=_resolve_approval_gate_config,
             # prompt-guard Design §4.5: 킬스위치 off면 None → 가드 비활성
             prompt_guard=get_prompt_guard(),
+            # chat-image-attachment D-05: 이미지 사전 검사·블록 조립
+            image_block_builder=_image_block_builder,
+            image_max_count=settings.agent_attachment_image_max_count,
+            image_detail=settings.agent_attachment_image_detail,
             # agent-memory-injection D10: General Chat과 같은 조립기 싱글톤 공유 —
             # 에이전트 대화 런 supervisor 프롬프트에 개인∪부서 메모리 상주 주입.
             memory_assembler=get_memory_assembler(),

@@ -299,3 +299,24 @@ class TestFork:
         )
         await uc.execute("src", "forker", None, [], "req-1")
         assert repo.replace_calls == []
+
+
+# ── chat-image-attachment D-09: my-agents 응답에 llm_model_id (프론트 비전 여부 안내용) ──
+
+
+class TestListMyLlmModelId:
+    @pytest.mark.asyncio
+    async def test_summary_carries_llm_model_id(self):
+        owned = [_agent(agent_id="a0")]
+        agent_repo = MagicMock()
+        agent_repo.list_by_user = AsyncMock(return_value=owned)
+        sub_repo = MagicMock()
+        sub_repo.list_by_user = AsyncMock(return_value=[])
+        uc = ListMyAgentsUseCase(
+            agent_repo=agent_repo, subscription_repo=sub_repo, logger=MagicMock(),
+        )
+        result = await uc.execute(
+            user_id="user-1", filter_type="owned", search=None,
+            page=1, size=10, request_id="req-1",
+        )
+        assert result.agents[0].llm_model_id == owned[0].llm_model_id

@@ -15,6 +15,7 @@ EXPECTED_TOOL_IDS = {
     "document_extractor",
     "document_generator",
     "presentation_generator",
+    "image_generate",  # image-generation-tool
     "wiki_read",
     "wiki_list",
 }

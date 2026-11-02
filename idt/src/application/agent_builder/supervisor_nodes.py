@@ -11,6 +11,7 @@ from src.application.agent_builder.search_pipeline import (
 from src.application.agent_builder.supervisor_hooks import SupervisorHooks
 from src.application.agent_builder.supervisor_state import SupervisorState
 from src.application.agent_run.context import get_current_run_context
+from src.application.agent_builder.message_content import message_text
 from src.domain.agent_builder.policies import GatedWorkerHintPolicy, QualityGatePolicy
 from src.domain.conversation.analysis_snapshot_policy import AnalysisSnapshotPolicy
 from src.domain.agent_builder.schemas import SupervisorConfig, WorkerDefinition
@@ -26,17 +27,29 @@ def _render_attachment_block(attachments: list[dict] | None) -> str:
     """
     if not attachments:
         return ""
-    labels = []
-    for a in attachments:
-        kind = a.get("type", "파일")
-        name = a.get("file_name")
-        labels.append(f"{kind}({name})" if name else kind)
-    joined = ", ".join(labels)
-    return (
-        f"\n\n[첨부된 데이터]\n사용자가 다음을 첨부했습니다: {joined}.\n"
-        f"이 데이터를 분석할 수 있는 워커가 사용 가능 목록에 있으면, "
-        f"권한이 없다고 거부하지 말고 반드시 그 워커로 라우팅하세요."
-    )
+    # chat-image-attachment FR-10: 이미지는 모델이 직접 보므로 워커 라우팅 문구와 분리한다.
+    images = [a for a in attachments if a.get("type") == "image"]
+    others = [a for a in attachments if a.get("type") != "image"]
+    parts = []
+    if others:
+        labels = []
+        for a in others:
+            kind = a.get("type", "파일")
+            name = a.get("file_name")
+            labels.append(f"{kind}({name})" if name else kind)
+        joined = ", ".join(labels)
+        parts.append(
+            f"사용자가 다음을 첨부했습니다: {joined}.\n"
+            f"이 데이터를 분석할 수 있는 워커가 사용 가능 목록에 있으면, "
+            f"권한이 없다고 거부하지 말고 반드시 그 워커로 라우팅하세요."
+        )
+    if images:
+        names = ", ".join(a.get("file_name") or "image" for a in images)
+        parts.append(
+            f"사용자가 이미지 {len(images)}장({names})을 첨부했습니다. "
+            f"이미지는 메시지에 함께 실려 있으니 질문과 함께 직접 보고 판단하세요."
+        )
+    return "\n\n[첨부된 데이터]\n" + "\n".join(parts)
 
 
 def _current_turn_messages(messages: list) -> list:
@@ -56,7 +69,7 @@ def _wiki_read_this_turn(messages: list, wiki_worker_id: str) -> bool:
     for msg in _current_turn_messages(messages):
         if getattr(msg, "name", None) != wiki_worker_id:
             continue
-        if not AnalysisSnapshotPolicy.is_reinjected(getattr(msg, "content", "")):
+        if not AnalysisSnapshotPolicy.is_reinjected(message_text(msg)):
             return True
     return False
 
@@ -236,7 +249,7 @@ def _summarize_data_entry(index: int, msg) -> str:
     data-inventory-requery D3: 수집 구분([이번 턴 수집]/[이전 턴 보유])과
     재주입 항목의 원 질문을 노출해 LLM의 범위 커버리지 판단 근거를 제공한다.
     """
-    content = getattr(msg, "content", "")
+    content = message_text(msg)
     body_lines = content.splitlines()[1:]  # 첫 줄은 "[worker 검색결과]" 헤더
     reinjected = AnalysisSnapshotPolicy.is_reinjected(content)
     label = "[이전 턴 보유]" if reinjected else "[이번 턴 수집]"
@@ -317,6 +330,7 @@ def build_initial_state(
     config: SupervisorConfig,
     available_workers: list[str],
     attachments: list[dict] | None = None,
+    image_generation_max_per_turn: int | None = None,
 ) -> SupervisorState:
     return {
         "messages": messages,
@@ -347,6 +361,10 @@ def build_initial_state(
         "charts": [],
         "visualization_done": False,
         "analysis_source": [],
+        # image-generation-tool Design §3.2
+        "generated_images": [],
+        "generated_image_count": 0,
+        "image_generation_max_per_turn": image_generation_max_per_turn,
     }
 
 
@@ -606,7 +624,7 @@ def create_quality_gate_node(
         if last_ai_msg is None:
             return {"next_worker": "", "quality_gate_result": "skipped"}
 
-        is_acceptable = policy.check_response(last_ai_msg.content)
+        is_acceptable = policy.check_response(message_text(last_ai_msg))
 
         if is_acceptable:
             logger.info("quality_gate passed", worker_id=last_worker)

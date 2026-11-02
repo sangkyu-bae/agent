@@ -259,12 +259,7 @@ async def update_agent(
             detail=str(e) or "수정 권한 없음",
         )
     except ValueError as e:
-        msg = str(e)
-        if "찾을 수 없" in msg:
-            raise HTTPException(status_code=404, detail=msg)
-        if ("이미 부착" in msg) or ("최대" in msg):
-            raise HTTPException(status_code=409, detail=msg)
-        raise HTTPException(status_code=422, detail=msg)
+        raise save_error_http_exception(e)
 
 
 @router.post("/{agent_id}/run", response_model=RunAgentResponse)
@@ -568,13 +563,29 @@ def get_list_attached_skills_use_case():
     raise NotImplementedError
 
 
-def _attach_skill_http_error(e: ValueError) -> HTTPException:
+# image-generation-tool Design §4.2 / §6.1: 코드 접두어가 붙은 검증 오류는 본문에
+# "찾을 수 없"이 들어 있어도 404 가 아니라 422 (필드 오류) 다.
+_VALIDATION_CODE_PREFIXES = (
+    "IMAGE_MODEL_INVALID",
+    "IMAGE_CONFIG_INVALID",
+    "MODEL_KIND_MISMATCH",
+)
+
+
+def save_error_http_exception(e: ValueError) -> HTTPException:
+    """에이전트 생성·수정·스킬 부착의 ValueError → HTTP 상태 매핑 (단일 규칙)."""
     msg = str(e)
+    if msg.startswith(_VALIDATION_CODE_PREFIXES):
+        return HTTPException(status_code=422, detail=msg)
     if "찾을 수 없" in msg:
         return HTTPException(status_code=404, detail=msg)
     if ("이미 부착" in msg) or ("최대" in msg):
         return HTTPException(status_code=409, detail=msg)
     return HTTPException(status_code=422, detail=msg)
+
+
+def _attach_skill_http_error(e: ValueError) -> HTTPException:
+    return save_error_http_exception(e)
 
 
 @router.get("/{agent_id}/skills", response_model=ListAttachedSkillsResponse)
