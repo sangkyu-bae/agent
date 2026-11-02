@@ -90,6 +90,9 @@ npm run dev
 ```
 /fullstack-feature   → 풀스택 기능 구현 순서 가이드
 /api-contract-sync   → 백엔드↔프론트 타입 동기화 체크리스트
+/doc-writer          → 독자별(채용·경영진·실무자·개발자) 소개 문서 구조
+/project-story       → 소개 글 내용 선택 (문제→장치→바뀐 것, 작업량 수치 금지, 사람 일 하는 에이전트 강조)
+/plain-tone          → 소개 글 어투 교정 (조어·과장·모호어·AI 습관 문장 제거)
 ```
 
 백엔드/프론트엔드 전용 스킬은 각 서브프로젝트의 `.claude/skills/` 참조.

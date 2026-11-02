@@ -227,6 +227,22 @@ class TestFeedbackTrigger:
         ext.kickoff_feedback.assert_not_called()
         logger.warning.assert_called_once()
 
+    async def test_E1_과거_중복_turn_행도_질문을_복원한다(self):
+        """agent-run-turn-index-fix D6/D7: 에이전트 경로 기존 결함으로 user/assistant 가
+        같은 turn_index 로 저장된 과거 행 — EvalPolicy.find_question 폴백."""
+        ext = _extraction()
+        question = _message(turn=4, content="같은 turn 질문", role=MessageRole.USER)
+        uc, _, msg_repo, logger = self._qa_setup(
+            extraction=ext, session_msgs=[question, _message(turn=4)],
+        )
+
+        await uc.execute("u1", 1, "down", "근거 부족", "r")
+
+        ext.kickoff_feedback.assert_called_once()
+        assert ext.kickoff_feedback.call_args.args[1] == "같은 turn 질문"
+        assert msg_repo.find_by_session.await_count == 1  # 조회 1회 불변
+        logger.warning.assert_not_called()
+
 
 class TestWikiFanout:
     """wiki-feedback-loop Design §3-5 — memory·wiki 팬아웃, Q/A 복원 1회 공유."""

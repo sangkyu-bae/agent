@@ -29,6 +29,8 @@ class LlmModel:
         pricing_updated_at: 가격 최종 갱신 시각
         base_url: self-host 엔드포인트(vLLM/OpenAI 호환 등). None이면 provider 기본값 (LLM-MODEL-REG-002)
         supports_vision: 이미지 입력(비전) 지원 여부. multimodal-extractor 의 선택 후보 조건 (V064)
+        model_kind: 'chat'(대화·비전) | 'image'(이미지 생성). image-generation-tool (V081)
+        price_per_image_usd: 이미지 생성 1장당 USD 단가 (model_kind=image 전용)
     """
 
     id: str
@@ -48,3 +50,14 @@ class LlmModel:
     base_url: str | None = None
     # multimodal-extractor Design §3.3 (V064): 비전 모델 선택 후보 조건. additive(기본 False).
     supports_vision: bool = False
+    # image-generation-tool Design §3.3 (V081): 모델 종류. additive(기본 'chat').
+    model_kind: str = "chat"
+    price_per_image_usd: Decimal | None = None
+
+    @property
+    def is_chat_model(self) -> bool:
+        return self.model_kind == "chat"
+
+    @property
+    def is_image_model(self) -> bool:
+        return self.model_kind == "image"

@@ -9,6 +9,8 @@ from src.domain.agent_attachment.exceptions import (
     AttachmentNotFoundError,
 )
 from src.domain.agent_attachment.interfaces import AttachmentStoreInterface
+from src.domain.agent_attachment.policies import ImageAttachmentPolicy
+from src.domain.agent_attachment.value_objects import AttachmentType
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 
 
@@ -35,11 +37,20 @@ class AttachmentResolver:
             raise AttachmentNotFoundError(file_id)
         if stored.owner_user_id != viewer_user_id:
             raise AttachmentAccessDeniedError(file_id)
-        return {
+        out = {
             "type": stored.type.value,
             "file_path": stored.file_path,
             "user_id": stored.owner_user_id,
         }
+        if stored.type == AttachmentType.IMAGE:
+            # chat-image-attachment Design §3.2: 메시지 조립·마커에 필요한 메타 (바이트 없음)
+            out.update(
+                mime=ImageAttachmentPolicy.mime_for(stored.filename),
+                file_name=stored.filename,
+                width=stored.width,
+                height=stored.height,
+            )
+        return out
 
     def resolve_many(
         self,

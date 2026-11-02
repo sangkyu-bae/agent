@@ -103,10 +103,17 @@ class TestDefensiveBehavior:
         assert out["last_worker_denial"] == ""
 
     @pytest.mark.asyncio
-    async def test_non_string_content(self):
+    async def test_text_block_list_content_is_detected(self):
+        # chat-image-attachment D-02: list content 는 message_text 로 평탄화돼 판정된다.
         node = _with_denial_signal(
             _node_returning([{"type": "text", "text": _DENIAL}]), PATTERNS,
         )
+        out = await node({})
+        assert out["last_worker_denial"] != ""
+
+    @pytest.mark.asyncio
+    async def test_non_text_content(self):
+        node = _with_denial_signal(_node_returning([{"type": "tool_use", "id": "x"}]), PATTERNS)
         out = await node({})
         assert out["last_worker_denial"] == ""
 

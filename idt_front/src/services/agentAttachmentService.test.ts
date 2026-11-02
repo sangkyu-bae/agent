@@ -39,3 +39,21 @@ describe('agentAttachmentService.uploadExcel', () => {
     expect(res.size).toBe(2048);
   });
 });
+
+describe('agentAttachmentService.uploadImage', () => {
+  it('이미지 업로드 응답(width/height 포함)을 반환한다 — chat-image-attachment', async () => {
+    server.use(
+      http.post(`*${API_ENDPOINTS.AGENT_ATTACHMENT_UPLOAD}`, () =>
+        HttpResponse.json(
+          { file_id: 'img1', type: 'image', filename: 'shot.png', size: 99, width: 1568, height: 882 },
+          { status: 201 },
+        ),
+      ),
+    );
+    const file = new File([new Uint8Array([0x89, 0x50])], 'shot.png', { type: 'image/png' });
+    const res = await agentAttachmentService.uploadImage(file);
+    expect(res.type).toBe('image');
+    expect(res.width).toBe(1568);
+    expect(res.height).toBe(882);
+  });
+});

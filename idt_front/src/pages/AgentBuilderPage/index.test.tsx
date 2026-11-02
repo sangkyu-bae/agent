@@ -1042,3 +1042,142 @@ describe('AgentBuilderPage 오프너 탭 (agent-opener)', () => {
     expect(screen.getByRole('textbox', { name: '오프너 2' })).toHaveValue('질문 A');
   });
 });
+
+// ── image-generation-tool Design §5.1 / §8.3 L2 #7·#8·#10 ─────────────────
+
+const IMAGE_CATALOG = {
+  tools: [
+    ...CATALOG.tools,
+    {
+      tool_id: 'internal:image_generate',
+      source: 'internal',
+      name: '이미지 생성',
+      description: '이미지 생성 모델로 이미지를 만든다',
+      mcp_server_id: null,
+      mcp_server_name: null,
+      requires_env: [],
+      is_builtin: false,
+    },
+  ],
+};
+
+const IMAGE_LLM_MODELS = [
+  { ...LLM_MODELS[0], model_kind: 'chat', price_per_image_usd: null },
+  {
+    id: 'img-1',
+    provider: 'openai',
+    model_name: 'gpt-image-1',
+    display_name: 'GPT Image 1',
+    description: null,
+    max_tokens: null,
+    is_active: true,
+    is_default: false,
+    base_url: null,
+    model_kind: 'image',
+    price_per_image_usd: '0.0400',
+    input_price_per_1k_usd: null,
+    output_price_per_1k_usd: null,
+    pricing_updated_at: null,
+  },
+];
+
+const CREATED_IMAGE_AGENT = {
+  agent_id: 'a-1',
+  name: '테스트 에이전트',
+  system_prompt: '테스트 지침',
+  tool_ids: ['image_generate'],
+  workers: [],
+  flow_hint: '',
+  llm_model_id: 'model-1',
+  visibility: 'private',
+  temperature: 0.7,
+  max_iterations: 25,
+  created_at: '2026-08-01T00:00:00Z',
+  has_sub_agents: false,
+};
+
+describe('AgentBuilderPage 이미지 생성 도구 (image-generation-tool)', () => {
+  const useImageHandlers = () => {
+    let captured: Record<string, unknown> | null = null;
+    server.use(
+      http.get('*/api/v1/tool-catalog', () => HttpResponse.json(IMAGE_CATALOG)),
+      http.get('*/api/v1/llm-models', () => HttpResponse.json({ models: IMAGE_LLM_MODELS })),
+      http.post('*/api/v1/agents', async ({ request }) => {
+        captured = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json(CREATED_IMAGE_AGENT);
+      }),
+    );
+    return () => captured;
+  };
+
+  it('#7 create: 도구 추가 → 모델·크기 선택 → 저장 시 image_generation 전송', async () => {
+    const getCaptured = useImageHandlers();
+    const user = userEvent.setup();
+    renderPage();
+    await enterCreateView(user);
+
+    await user.click(screen.getByRole('button', { name: '도구' }));
+    await user.click(await screen.findByRole('button', { name: /이미지 생성/ }));
+    expect(await screen.findByText('이미지 생성 — 모델·크기·품질')).toBeInTheDocument();
+
+    await user.selectOptions(await screen.findByLabelText('이미지 모델'), 'img-1');
+    await user.click(screen.getByLabelText(/1536×1024/));
+    await user.click(screen.getByRole('button', { name: '완료' }));
+    expect(screen.getByText(/GPT Image 1 · 1536×1024/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '저장' }));
+    await waitFor(() => expect(getCaptured()).not.toBeNull());
+    expect(getCaptured()!.image_generation).toEqual({
+      llm_model_id: 'img-1',
+      default_size: '1536x1024',
+      quality: 'standard',
+    });
+    expect(getCaptured()!.tool_ids).toContain('internal:image_generate');
+  });
+
+  it('#8 도구 제거 시 설정이 삭제되어 image_generation 을 전송하지 않는다', async () => {
+    const getCaptured = useImageHandlers();
+    const user = userEvent.setup();
+    renderPage();
+    await enterCreateView(user);
+
+    await user.click(screen.getByRole('button', { name: '도구' }));
+    await user.click(await screen.findByRole('button', { name: /이미지 생성/ }));
+    await user.selectOptions(await screen.findByLabelText('이미지 모델'), 'img-1');
+    await user.click(screen.getByRole('button', { name: '완료' }));
+    await user.click(screen.getByRole('button', { name: '이미지 생성 제거' }));
+
+    await user.click(screen.getByRole('button', { name: '저장' }));
+    await waitFor(() => expect(getCaptured()).not.toBeNull());
+    expect(getCaptured()!.image_generation).toBeUndefined();
+    expect(getCaptured()!.tool_ids ?? []).not.toContain('internal:image_generate');
+  });
+
+  it('#7b 도구는 부착했지만 모델 미선택이면 저장을 차단하고 안내한다', async () => {
+    const getCaptured = useImageHandlers();
+    const user = userEvent.setup();
+    renderPage();
+    await enterCreateView(user);
+
+    await user.click(screen.getByRole('button', { name: '도구' }));
+    await user.click(await screen.findByRole('button', { name: /이미지 생성/ }));
+    await screen.findByLabelText('이미지 모델');
+    await user.click(screen.getByRole('button', { name: '완료' }));
+
+    await user.click(screen.getByRole('button', { name: '저장' }));
+    expect(await screen.findByText(/이미지 생성 모델을 선택/)).toBeInTheDocument();
+    expect(getCaptured()).toBeNull();
+  });
+
+  it('#10 에이전트 모델 설정 드롭다운에 이미지 모델이 노출되지 않는다', async () => {
+    useImageHandlers();
+    const user = userEvent.setup();
+    renderPage();
+    await enterCreateView(user);
+
+    await user.click(screen.getByRole('button', { name: '모델 설정' }));
+    await user.click(await screen.findByRole('combobox'));
+    expect(await screen.findByRole('option', { name: /GPT-4o/ })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /GPT Image 1/ })).not.toBeInTheDocument();
+  });
+});

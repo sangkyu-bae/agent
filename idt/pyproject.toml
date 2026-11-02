@@ -30,6 +30,10 @@ dependencies = [
     # PDF Parsing
     "pymupdf>=1.24.0",
     "pymupdf4llm>=0.0.17",
+    # chat-image-attachment: 채팅 이미지 첨부 리사이즈 (전이 의존이던 것을 명시)
+    "pillow>=10.0",
+    # image-generation-tool: 이미지 생성 API(images.generate/edit). langchain-openai 전이 의존을 명시
+    "openai>=1.60",
     "llama-parse>=0.4.0",
     # HWP 5.0 OLE 컨테이너 읽기 (hwp-parser Design §2.3 — BSD, pyhwp는 AGPL이라 미사용)
     "olefile>=0.47",

@@ -23,6 +23,7 @@ import {
   validateMultimodalNumeric,
   type MultimodalNumericKey,
 } from '@/utils/multimodalValidators';
+import { isChatModel } from '@/utils/llmModelKind';
 
 const inputCls =
   'w-full rounded-xl border border-zinc-300 px-4 py-2.5 text-[14px] text-zinc-900 outline-none transition-all focus:border-violet-400 focus:ring-2 focus:ring-violet-100';
@@ -96,8 +97,9 @@ const MultimodalSettingsForm = () => {
     setForm(fromResponse(settings.data));
   }
 
+  // image-generation-tool D-05: 비전 후보는 chat 종류만 (image 종류는 생성 전용)
   const visionModels = useMemo(
-    () => (models.data ?? []).filter((m) => m.is_active && m.supports_vision === true),
+    () => (models.data ?? []).filter((m) => m.is_active && m.supports_vision === true && isChatModel(m)),
     [models.data]
   );
 

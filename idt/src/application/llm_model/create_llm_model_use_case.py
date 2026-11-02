@@ -79,7 +79,7 @@ class CreateLlmModelUseCase:
 def _build_model(request: CreateLlmModelRequest) -> LlmModel:
     """등록 요청 → 신규 LlmModel 엔티티."""
     now = datetime.now(timezone.utc)
-    return LlmModel(
+    model = LlmModel(
         id=str(uuid.uuid4()),
         provider=request.provider,
         model_name=request.model_name,
@@ -94,4 +94,9 @@ def _build_model(request: CreateLlmModelRequest) -> LlmModel:
         # 빈 문자열은 self-host 미사용으로 간주 → None 정규화.
         base_url=request.base_url or None,
         supports_vision=request.supports_vision,
+        model_kind=request.model_kind,
+        price_per_image_usd=request.price_per_image_usd,
     )
+    # image-generation-tool D-05: 기본 모델은 chat 만
+    LlmModelPolicy.validate_default_is_chat(model)
+    return model

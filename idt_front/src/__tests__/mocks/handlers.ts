@@ -517,6 +517,9 @@ export const handlers = [
         is_default: true,
         base_url: null,
         supports_vision: true,
+        // image-generation-tool Design §4.2: 종류·장당 단가 (additive)
+        model_kind: 'chat',
+        price_per_image_usd: null,
         input_price_per_1k_usd: '0.0025',
         output_price_per_1k_usd: '0.0100',
         pricing_updated_at: '2026-07-01T00:00:00',
@@ -532,6 +535,8 @@ export const handlers = [
         is_default: false,
         base_url: null,
         supports_vision: true,
+        model_kind: 'chat',
+        price_per_image_usd: null,
         input_price_per_1k_usd: null,
         output_price_per_1k_usd: null,
         pricing_updated_at: null,
@@ -549,6 +554,8 @@ export const handlers = [
         is_default: false,
         base_url: 'http://vllm.internal:8000/v1',
         supports_vision: false,
+        model_kind: 'chat',
+        price_per_image_usd: null,
         input_price_per_1k_usd: null,
         output_price_per_1k_usd: null,
         pricing_updated_at: null,
@@ -593,6 +600,7 @@ export const handlers = [
     const body = (await request.json()) as {
       input_price_per_1k_usd: number;
       output_price_per_1k_usd: number;
+      price_per_image_usd?: number;
     };
     return HttpResponse.json({
       id: params.id,
@@ -604,6 +612,9 @@ export const handlers = [
       is_active: true,
       is_default: true,
       base_url: null,
+      model_kind: 'chat',
+      price_per_image_usd:
+        body.price_per_image_usd != null ? String(body.price_per_image_usd) : null,
       input_price_per_1k_usd: String(body.input_price_per_1k_usd),
       output_price_per_1k_usd: String(body.output_price_per_1k_usd),
       pricing_updated_at: '2026-07-11T00:00:00',

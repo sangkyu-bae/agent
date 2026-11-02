@@ -19,6 +19,8 @@ export const toAgentSummary = (agent: MyAgent): AgentSummary => ({
   isDefault: false,
   // agent-opener §5.2
   openers: agent.openers ?? [],
+  // chat-image-attachment D-09
+  llmModelId: agent.llm_model_id,
 });
 
 export const agentSubscriptionService = {

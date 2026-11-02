@@ -51,6 +51,8 @@ class AgentAttachmentStore:
         filename: str,
         attachment_type: AttachmentType,
         owner_user_id: str,
+        width: int | None = None,
+        height: int | None = None,
     ) -> StoredAttachment:
         if self._ttl_seconds > 0:
             self.purge_expired(self._ttl_seconds)  # lazy TTL 백업 정리
@@ -69,6 +71,9 @@ class AgentAttachmentStore:
             "owner_user_id": owner_user_id,
             "created_at": _utcnow_iso(),
             "ext": ext,
+            # chat-image-attachment Design §3.1: 이미지 치수(없으면 null)
+            "width": width,
+            "height": height,
         }
         self._meta_path(file_id).write_text(
             json.dumps(meta, ensure_ascii=False), encoding="utf-8"
@@ -80,6 +85,8 @@ class AgentAttachmentStore:
             size=len(file_bytes),
             owner_user_id=owner_user_id,
             file_path=str(data_path),
+            width=width,
+            height=height,
         )
 
     def load(self, file_id: str) -> Optional[StoredAttachment]:
@@ -99,6 +106,8 @@ class AgentAttachmentStore:
             size=meta["size"],
             owner_user_id=str(meta["owner_user_id"]),
             file_path=str(data_path),
+            width=meta.get("width"),
+            height=meta.get("height"),
         )
 
     def delete(self, file_id: str) -> None:

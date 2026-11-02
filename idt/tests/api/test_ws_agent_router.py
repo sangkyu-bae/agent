@@ -393,3 +393,84 @@ class TestAttachments:
 
         resolver.resolve_many.assert_not_called()
         resolver.cleanup.assert_not_called()
+
+
+class TestImageAttachmentPrecheck:
+    """chat-image-attachment Design §4.2 / §8.2 #12: 실행 전 거절 코드 2종."""
+
+    def _resolver_with_image(self) -> MagicMock:
+        resolver = _make_attachment_resolver()
+        resolver.resolve_many = MagicMock(return_value=[
+            {"type": "image", "file_path": "/tmp/a.png", "user_id": "1",
+             "mime": "image/png", "file_name": "a.png"},
+        ])
+        return resolver
+
+    def _uc_with_precheck(self, exc: Exception | None):
+        from unittest.mock import AsyncMock
+
+        uc = MagicMock()
+        uc.precheck_attachments = AsyncMock(side_effect=exc)
+        uc.stream = MagicMock()
+        return uc
+
+    def _subscribe_and_collect(self, app) -> dict:
+        client = TestClient(app)
+        with client.websocket_connect("/ws/agent/rid?token=t") as ws:
+            ws.send_json({
+                "type": "subscribe", "agent_id": "a", "query": "이미지 질문",
+                "attachments": [{"type": "image", "file_id": "f" * 32}],
+            })
+            msg = ws.receive_json()
+            with pytest.raises(WebSocketDisconnect):
+                ws.receive_json()
+        return msg
+
+    def test_vision_not_supported_rejects_before_stream(self) -> None:
+        from src.domain.agent_attachment.exceptions import VisionNotSupportedError
+
+        resolver = self._resolver_with_image()
+        uc = self._uc_with_precheck(VisionNotSupportedError("GPT-X"))
+        msg = self._subscribe_and_collect(_make_app(use_case=uc, attachment_resolver=resolver))
+        assert msg["type"] == "error"
+        assert msg["data"]["code"] == "VISION_NOT_SUPPORTED"
+        assert "GPT-X" in msg["data"]["message"]
+        uc.stream.assert_not_called()
+        resolver.cleanup.assert_called_once_with(["f" * 32])
+
+    def test_limit_exceeded_rejects(self) -> None:
+        from src.domain.agent_attachment.exceptions import TooManyImagesError
+
+        resolver = self._resolver_with_image()
+        uc = self._uc_with_precheck(TooManyImagesError("최대 5장"))
+        msg = self._subscribe_and_collect(_make_app(use_case=uc, attachment_resolver=resolver))
+        assert msg["data"]["code"] == "ATTACHMENT_LIMIT_EXCEEDED"
+        uc.stream.assert_not_called()
+
+    def test_precheck_receives_resolved_attachments_and_viewer(self) -> None:
+        from unittest.mock import AsyncMock
+
+        resolver = self._resolver_with_image()
+        uc = MagicMock()
+        uc.precheck_attachments = AsyncMock(return_value=None)
+
+        def _stream(*args, **kwargs):
+            async def _gen():
+                yield _ev(1, AgentRunEventType.RUN_STARTED, {"run_id": "rid", "session_id": "s", "agent_id": "a"})
+                yield _ev(2, AgentRunEventType.RUN_COMPLETED, {"run_id": "rid", "langsmith_run_url": None})
+            return _gen()
+
+        uc.stream = _stream
+        client = TestClient(_make_app(use_case=uc, attachment_resolver=resolver))
+        with client.websocket_connect("/ws/agent/rid?token=t") as ws:
+            ws.send_json({
+                "type": "subscribe", "agent_id": "a", "query": "q",
+                "attachments": [{"type": "image", "file_id": "f" * 32}],
+            })
+            ws.receive_json(); ws.receive_json()
+            with pytest.raises(WebSocketDisconnect):
+                ws.receive_json()
+        kwargs = uc.precheck_attachments.await_args.kwargs
+        assert kwargs["agent_id"] == "a"
+        assert kwargs["attachments"][0]["type"] == "image"
+        assert kwargs["viewer_user_id"] == "1"

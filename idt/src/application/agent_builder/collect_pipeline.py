@@ -29,6 +29,7 @@ from src.application.agent_builder.search_pipeline import (
 )
 from src.application.agent_builder.supervisor_state import SupervisorState
 from src.application.agent_run.step_tracking import STEP_OUTPUT_SUMMARY_KEY
+from src.application.agent_builder.message_content import message_text
 from src.domain.agent_builder.rag_tool_config import clamp_llm_name
 from src.domain.agent_builder.policies import CollectPipelinePolicy
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
@@ -96,12 +97,6 @@ COMPRESS_SYSTEM_PROMPT = """수집된 원문을 질문에 답하는 데 필요�
 # ── 순수 헬퍼 ────────────────────────────────────────────────────
 
 
-def _message_text(msg) -> str:
-    if isinstance(msg, dict):
-        return str(msg.get("content", ""))
-    return str(getattr(msg, "content", ""))
-
-
 def _message_role(msg) -> str:
     if isinstance(msg, dict):
         return str(msg.get("role", ""))
@@ -116,7 +111,7 @@ def collect_recent_context(messages: list) -> str:
     """
     recent = messages[-_CONTEXT_MAX_MESSAGES:]
     return "\n".join(
-        f"{_message_role(m)}: {_message_text(m)[:_CONTEXT_MSG_SLICE]}" for m in recent
+        f"{_message_role(m)}: {message_text(m)[:_CONTEXT_MSG_SLICE]}" for m in recent
     )
 
 
@@ -261,7 +256,7 @@ async def _maybe_compress(
             {"role": "system", "content": user_context + COMPRESS_SYSTEM_PROMPT},
             {"role": "user", "content": user_content},
         ])
-        compressed = str(getattr(out, "content", "")).strip()
+        compressed = message_text(out).strip()
         if compressed:
             return compressed, len(compressed), True
         logger.warning("collect_node compress returned empty, keeping original")
@@ -359,7 +354,7 @@ def create_collect_node(
 
     async def collect_node(state: SupervisorState) -> dict:
         messages = state["messages"]
-        question = latest_user_question(messages) or _message_text(messages[-1])
+        question = latest_user_question(messages) or message_text(messages[-1])
 
         plan = await _build_arguments(
             pipeline_llm, tool, question, collect_recent_context(messages), logger,

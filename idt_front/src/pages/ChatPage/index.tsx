@@ -22,10 +22,24 @@ import {
 } from '@/hooks/useBackgroundJobs';
 import { isJobActive } from '@/types/backgroundJob';
 import agentAttachmentService from '@/services/agentAttachmentService';
+import { ApiError } from '@/services/api/ApiError';
+import { useLlmModels } from '@/hooks/useLlmModels';
 import { queryKeys } from '@/lib/queryKeys';
 import type { Message } from '@/types/chat';
 import type { ChartPayload } from '@/types/chart';
-import type { AgentAttachmentRef } from '@/types/agentAttachment';
+import {
+  ATTACHMENT_ERROR_MESSAGES,
+  VISION_DISABLED_REASON,
+  type AgentAttachmentRef,
+  type AttachmentErrorCode,
+  type PendingAttachment,
+} from '@/types/agentAttachment';
+import {
+  isExcelFile,
+  isImageFile,
+  rejectReasonMessage,
+  validateImageFiles,
+} from '@/utils/imageAttachmentValidators';
 import type { AgentChatOutletContext, AgentSummary } from '@/types/agent';
 import type { ChatSource, ChatToolEvent } from '@/hooks/useChatStream';
 
@@ -33,6 +47,19 @@ interface EmptyAgentStateProps {
   agent: AgentSummary | null;
   onSuggestionClick?: (text: string) => void;
 }
+
+// chat-image-attachment §6.1 (Analysis G-I6): 업로드 오류를 코드·상태별 안내로 바꾼다.
+const uploadErrorMessage = (e: unknown): string => {
+  if (e instanceof ApiError) {
+    if (e.code === 'ATTACHMENT_TOO_LARGE' || e.status === 413) {
+      return '파일이 너무 큽니다. 이미지는 장당 10MB, 엑셀도 10MB 이하여야 합니다.';
+    }
+    if (e.code === 'INVALID_ATTACHMENT' || e.status === 400) {
+      return '지원하지 않는 파일입니다. 이미지는 png/jpg/webp, 엑셀은 xlsx/xls 만 첨부할 수 있습니다.';
+    }
+  }
+  return '첨부 업로드에 실패했습니다. 형식과 크기 제한을 확인해 주세요.';
+};
 
 // agent-opener §5.2: 에이전트 오프너 → 제안 카드 항목. super·없음이면 undefined(고정 4종 유지)
 const openerSuggestions = (agent: AgentSummary | null): Suggestion[] | undefined => {
@@ -113,13 +140,22 @@ const ChatPage = () => {
   const [messagesBySession, setMessagesBySession] = useState<Record<string, Message[]>>({});
   const [useRag, setUseRag] = useState(true);
 
-  // ws-agent-excel-attachment: 전송 전 대기 중인 엑셀 첨부
-  const [pendingAttachment, setPendingAttachment] = useState<
-    { ref: AgentAttachmentRef; name: string } | null
-  >(null);
+  // ws-agent-excel-attachment / chat-image-attachment §5.3: 전송 전 대기 첨부 (엑셀 1 + 이미지 N)
+  const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const [attachmentUploading, setAttachmentUploading] = useState(false);
+  const [attachmentNotice, setAttachmentNotice] = useState<string | null>(null);
+  // 서버가 첨부를 거절하면(비전 미지원·장수 초과) 재시도할 수 있게 되돌린다 (§5.2)
+  const lastSentAttachmentsRef = useRef<PendingAttachment[]>([]);
 
   const agentId = selectedAgent?.id ?? null;
+
+  // chat-image-attachment D-09: 비전 여부 안내 — 모델 목록에서 찾았고 supports_vision=false 일 때만 비활성.
+  // 목록 미로드·미발견은 허용(권위는 서버 precheck).
+  const { data: llmModels } = useLlmModels();
+  const visionSupported = useMemo(() => {
+    const model = llmModels?.find((m) => m.id === selectedAgent?.llmModelId);
+    return model ? model.supports_vision !== false : true;
+  }, [llmModels, selectedAgent?.llmModelId]);
 
   const draftSessionIds = useMemo(
     () => new Set(sessions.filter((s) => s.title === '새 대화' && s.messages.length === 0).map((s) => s.id)),
@@ -280,8 +316,14 @@ const ChatPage = () => {
     if (!view.isDone) return;
 
     if (view.error) {
+      // chat-image-attachment §6.1: 첨부 거절 코드는 안내 문구로 바꾸고 첨부를 되돌린다
+      const friendly = ATTACHMENT_ERROR_MESSAGES[view.error.code as AttachmentErrorCode];
+      if (friendly && lastSentAttachmentsRef.current.length > 0) {
+        setPendingAttachments(lastSentAttachmentsRef.current);
+        setAttachmentNotice(friendly);
+      }
       updateMessage(activeStream.sessionId, activeStream.placeholderId, {
-        content: `[${view.error.code}] ${view.error.message}`,
+        content: friendly ?? `[${view.error.code}] ${view.error.message}`,
         isStreaming: false,
       });
     } else if (view.answer) {
@@ -304,33 +346,77 @@ const ChatPage = () => {
     setActiveStream(null);
   }, [view?.streamId, view?.isDone, view?.answer, view?.error, view?.sources, view?.charts, activeStream, agentId, userId, queryClient]);
 
-  // ws-agent-excel-attachment: 엑셀 업로드 → file_id 발급 후 대기 첨부로 보관.
-  const handleAttachFile = async (file: File) => {
+  // ws-agent-excel-attachment: 엑셀 업로드 → file_id 발급 후 대기 첨부로 보관 (턴당 1건, 교체).
+  const uploadExcel = async (file: File) => {
+    const res = await agentAttachmentService.uploadExcel(file);
+    setPendingAttachments((prev) => [
+      ...prev.filter((a) => a.ref.type !== 'excel'),
+      { id: res.file_id, ref: { type: res.type, file_id: res.file_id }, name: res.filename },
+    ]);
+  };
+
+  // chat-image-attachment §5.2: 사전 검증 → 순차 업로드 → 썸네일 칩. 실패 항목은 안내만.
+  const uploadImages = async (files: File[]) => {
+    const imageCount = pendingAttachments.filter((a) => a.ref.type === 'image').length;
+    const { accepted, rejected } = validateImageFiles(files, imageCount);
+    if (rejected.length > 0) setAttachmentNotice(rejectReasonMessage(rejected[0].reason));
+    for (const file of accepted) {
+      const res = await agentAttachmentService.uploadImage(file);
+      setPendingAttachments((prev) => [
+        ...prev,
+        {
+          id: res.file_id,
+          ref: { type: res.type, file_id: res.file_id },
+          name: res.filename,
+          previewUrl: URL.createObjectURL(file),
+        },
+      ]);
+    }
+  };
+
+  const handleAttachFiles = async (files: File[]) => {
+    if (files.length === 0) return;
+    setAttachmentNotice(null);
     setAttachmentUploading(true);
     try {
-      const res = await agentAttachmentService.uploadExcel(file);
-      setPendingAttachment({
-        ref: { type: res.type, file_id: res.file_id },
-        name: res.filename,
-      });
-    } catch {
-      setPendingAttachment(null);
-      // eslint-disable-next-line no-alert
-      alert('엑셀 업로드에 실패했습니다. (.xlsx/.xls, 크기 제한 확인)');
+      const excel = files.find(isExcelFile);
+      const images = files.filter(isImageFile);
+      if (excel) await uploadExcel(excel);
+      if (images.length > 0) {
+        if (!visionSupported) setAttachmentNotice(VISION_DISABLED_REASON);
+        else await uploadImages(images);
+      }
+      if (!excel && images.length === 0) {
+        setAttachmentNotice('엑셀(.xlsx/.xls) 또는 이미지(png/jpg/webp)만 첨부할 수 있습니다.');
+      }
+    } catch (e) {
+      setAttachmentNotice(uploadErrorMessage(e));
     } finally {
       setAttachmentUploading(false);
     }
+  };
+
+  const handleRemoveAttachment = (id: string) => {
+    setPendingAttachments((prev) => {
+      const target = prev.find((a) => a.id === id);
+      if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
+      return prev.filter((a) => a.id !== id);
+    });
   };
 
   const handleSend = (content: string) => {
     if (!activeSessionId) return;
     if (isPending) return; // Q1 mutex: 진행 중이면 무시 (ChatInput isLoading도 차단함)
 
+    const isAgentMode = !!selectedAgent && selectedAgent.id !== 'super';
+    const sentAttachments = isAgentMode ? pendingAttachments : [];
     const userMessage: Message = {
       id: crypto.randomUUID(),
       role: 'user',
       content,
       createdAt: new Date().toISOString(),
+      // chat-image-attachment FR-17: 말풍선 썸네일 (object URL 은 세션 동안 유지)
+      imagePreviews: sentAttachments.flatMap((a) => (a.previewUrl ? [a.previewUrl] : [])),
     };
     addMessage(activeSessionId, userMessage);
 
@@ -357,9 +443,14 @@ const ChatPage = () => {
         sessionId: activeSessionId,
         message: content,
         placeholderId,
-        attachments: pendingAttachment ? [pendingAttachment.ref] : undefined,
+        attachments:
+          sentAttachments.length > 0
+            ? sentAttachments.map((a): AgentAttachmentRef => a.ref)
+            : undefined,
       });
-      setPendingAttachment(null); // 전송과 함께 첨부 소진(run 1회성)
+      lastSentAttachmentsRef.current = sentAttachments;
+      setPendingAttachments([]); // 전송과 함께 첨부 소진(run 1회성)
+      setAttachmentNotice(null);
     } else {
       setActiveStream({
         kind: 'chat',
@@ -470,10 +561,13 @@ const ChatPage = () => {
           useRag={useRag}
           onToggleRag={() => setUseRag((v) => !v)}
           attachmentEnabled={!!selectedAgent && selectedAgent.id !== 'super'}
-          attachmentName={pendingAttachment?.name ?? null}
+          attachments={pendingAttachments}
           attachmentUploading={attachmentUploading}
-          onAttachFile={handleAttachFile}
-          onRemoveAttachment={() => setPendingAttachment(null)}
+          onAttachFiles={handleAttachFiles}
+          onRemoveAttachment={handleRemoveAttachment}
+          imageAttachmentEnabled={visionSupported}
+          imageDisabledReason={visionSupported ? null : VISION_DISABLED_REASON}
+          attachmentNotice={attachmentNotice}
           backgroundEnabled={!!selectedAgent && selectedAgent.id !== 'super'}
           onSendBackground={handleSendBackground}
         />

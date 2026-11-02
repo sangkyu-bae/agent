@@ -25,6 +25,8 @@ export interface Message {
    * assistant_message_id로 채워진다. 부재 시 평가 미노출.
    */
   feedbackMessageId?: number;
+  /** chat-image-attachment §5.3 FR-17 — 전송한 이미지 썸네일(object URL, 세션 메모리). 히스토리 재조회 시 없음 */
+  imagePreviews?: string[];
 }
 
 /** @deprecated Use DocumentSource instead */

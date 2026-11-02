@@ -63,6 +63,19 @@ TOOL_REGISTRY: dict[str, ToolMeta] = {
         ),
         requires_env=[],
     ),
+    # image-generation-tool Design §4.3 / FR-03: 전용 합성 노드로 컴파일 (ToolFactory 미경유).
+    "image_generate": ToolMeta(
+        tool_id="image_generate",
+        name="이미지 생성",
+        description=(
+            "사용자 요청을 바탕으로 이미지를 새로 생성하거나, 사용자가 이번 메시지에 "
+            "첨부한 이미지를 바탕으로 편집(배경·스타일·구성 변경)합니다. 배너·삽화·"
+            "시안처럼 '그려 달라', '만들어 달라', '이미지로 바꿔 달라'는 요청에 사용하세요. "
+            "차트·표는 데이터 분석 도구를 쓰세요."
+        ),
+        requires_env=[],
+        category="action",
+    ),
     "presentation_generator": ToolMeta(
         tool_id="presentation_generator",
         name="발표자료생성기",

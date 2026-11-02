@@ -21,6 +21,25 @@ from src.application.agent_builder.search_pipeline import (
 )
 from src.application.deep_search.workflow import create_deep_search_node
 from src.application.hallucination.grounded_generation import GroundedGenerator
+from src.application.agent_run.context import get_current_run_context
+from src.application.image_generation.answer_links import render_image_summary
+from src.domain.image_generation.exceptions import ImageGenerationError
+from src.domain.image_generation.policies import ImageGenerationPolicy
+from src.domain.image_generation.schemas import ImageRequestDraft
+from src.domain.image_generation.tool_config import ImageGenerationToolConfig
+from src.domain.image_generation.value_objects import (
+    GenerateImageCommand,
+    GenerationMode,
+    ImageQuality,
+    ImageSize,
+    SourceImage,
+)
+from src.application.agent_builder.message_content import (
+    image_blocks,
+    is_multimodal,
+    message_text,
+)
+from src.domain.agent_attachment.policies import ImageAttachmentPolicy
 from src.domain.deep_search.policies import DeepSearchBudgetPolicy
 from src.domain.hallucination.grounding import INTERNAL_LLM_TAG
 from src.domain.agent_builder.rag_tool_config import clamp_llm_name
@@ -244,7 +263,7 @@ def _with_empty_signal(fn, patterns):
             out["last_worker_empty"] = ""
             return out
         messages = out.get("messages") or []
-        body = getattr(messages[-1], "content", None) if messages else None
+        body = message_text(messages[-1]) if messages else None
         # 정상일 때도 항상 덮어쓴다 — 이전 턴 신호가 잔류하지 않도록.
         out["last_worker_empty"] = EmptyResultPolicy.detect(body, patterns)
         return out
@@ -274,7 +293,7 @@ def _with_denial_signal(fn, patterns: tuple[str, ...] | None):
             out["last_worker_denial"] = ""
             return out
         messages = out.get("messages") or []
-        body = getattr(messages[-1], "content", None) if messages else None
+        body = message_text(messages[-1]) if messages else None
         # 정상일 때도 항상 덮어쓴다 — 이전 턴 신호가 잔류하지 않도록.
         out["last_worker_denial"] = CapabilityDenialPolicy.detect(body, patterns)
         return out
@@ -307,7 +326,7 @@ def _render_denial_notice(
     for msg in _current_turn_messages(messages):
         if not _is_worker_output(msg):
             continue
-        reason = CapabilityDenialPolicy.detect(getattr(msg, "content", None), patterns)
+        reason = CapabilityDenialPolicy.detect(message_text(msg), patterns)
         if not reason:
             continue
         catalog = (
@@ -344,11 +363,11 @@ def _blocked_step_summary(messages: list) -> str:
     """
     blocked = [
         m for m in messages
-        if ToolArgumentPolicy.is_blocked_message(getattr(m, "content", None))
+        if ToolArgumentPolicy.is_blocked_message(message_text(m))
     ]
     if not blocked:
         return ""
-    first = getattr(blocked[0], "content", "")
+    first = message_text(blocked[0])
     detail = first.split("\n")[1] if "\n" in first else ""
     return f"도구 호출 {len(blocked)}건 차단 (근거 없는 인자). {detail}".strip()
 
@@ -443,7 +462,7 @@ def _draft_context(worker_outputs: list):
             draft_names.add(parsed[0])
             absorbed.add(id(m))
         elif getattr(m, "name", None) in draft_names:
-            later_outputs[getattr(m, "name")] = str(getattr(m, "content", ""))
+            later_outputs[getattr(m, "name")] = message_text(m)
             absorbed.add(id(m))
     ctx = FinalAnswerDraftPolicy.detect(sections, later_outputs)
     return ctx, (absorbed if ctx is not None else set())
@@ -523,6 +542,13 @@ class WorkflowCompiler:
         # subagent-context-scope FR-08: 서브에이전트 입력 조립 전략. 미주입이면
         # 기본 전략([원 질문]+[참고 자료]+[현재 작업]).
         sub_agent_context_strategy: SubAgentContextStrategy | None = None,
+        # chat-image-attachment D-03: 서브에이전트 provider 용 이미지 블록 재생성.
+        # None 이면 서브에이전트는 이미지를 받지 못한다(마커).
+        image_block_builder=None,
+        image_detail: str = "high",
+        # image-generation-tool Design §4.3: 이미지 생성 전용 노드 의존. None 이면 안내 노옵.
+        image_generation_use_case=None,
+        image_generation_max_per_turn: int = 4,
     ) -> None:
         self._tool_factory = tool_factory
         self._llm_factory = llm_factory
@@ -576,6 +602,10 @@ class WorkflowCompiler:
         self._sub_agent_context_strategy = (
             sub_agent_context_strategy or TaskWithOriginStrategy()
         )
+        self._image_block_builder = image_block_builder
+        self._image_detail = image_detail
+        self._image_generation_use_case = image_generation_use_case
+        self._image_generation_max_per_turn = image_generation_max_per_turn
 
     async def compile(
         self,
@@ -758,6 +788,20 @@ class WorkflowCompiler:
                             auth_ctx=auth_ctx, request_id=request_id,
                             callback=callback,
                             worker_context_block=generator_context_block,
+                        )
+                    )
+                    function_node_ids.add(worker_def.worker_id)
+                    continue
+
+                # image-generation-tool Design §4.3 / D-01: 이미지 생성 전용 노드.
+                # ToolFactory 미경유 — 구조화 출력·생성·저장·상한·원장을 노드가 완결.
+                if worker_def.tool_id == "image_generate":
+                    worker_map[worker_def.worker_id] = (
+                        self._create_image_generate_node(
+                            llm, worker_def,
+                            auth_ctx=auth_ctx, request_id=request_id,
+                            worker_context_block=generator_context_block,
+                            subject_user_id=subject_user_id,
                         )
                     )
                     function_node_ids.add(worker_def.worker_id)
@@ -1356,7 +1400,12 @@ class WorkflowCompiler:
 
         # subagent-context-scope FR-09: 연결별 전략 선택 지점 (현재는 항상 기본값).
         strategy = resolve_strategy(worker_def, self._sub_agent_context_strategy)
-        return self._wrap_sub_agent(worker_def.worker_id, sub_graph, strategy)
+        return self._wrap_sub_agent(
+            worker_def.worker_id, sub_graph, strategy,
+            # chat-image-attachment D-03: 서브 모델 비전 여부로 이미지 전달/마커 결정
+            supports_vision=bool(getattr(sub_llm_model, "supports_vision", False)),
+            provider=str(getattr(sub_llm_model, "provider", "")),
+        )
 
     @staticmethod
     def _should_gate_worker(
@@ -1612,14 +1661,14 @@ class WorkflowCompiler:
             messages = state["messages"]
             worker_outputs = [m for m in messages if _is_worker_output(m)]
             search_results = [
-                getattr(m, "content", "")
+                message_text(m)
                 for m in worker_outputs if _is_search_result(m)
             ]
             # action-category-compose-node FR-17/D-07: 초안 워커 산출은 정책 블록으로
             # 한 번만 싣는다 — [워커 작업 결과]에 중복 게재하지 않는다.
             draft_ctx, draft_related = _draft_context(worker_outputs)
             work_results = [
-                f"[{getattr(m, 'name', '')}]\n{getattr(m, 'content', '')}"
+                f"[{getattr(m, 'name', '')}]\n{message_text(m)}"
                 for m in worker_outputs
                 if not _is_search_result(m) and id(m) not in draft_related
             ]
@@ -1719,7 +1768,7 @@ class WorkflowCompiler:
                 latest_user_question(messages), request_id,
             )
 
-            token_delta = len(response.content) // 4 if hasattr(response, "content") else 0
+            token_delta = len(message_text(response)) // 4
 
             return {
                 "messages": [response],
@@ -1741,12 +1790,13 @@ class WorkflowCompiler:
         if not worker_outputs:
             return ""
         evidence = [
-            f"[{getattr(m, 'name', '')}]\n{getattr(m, 'content', '')}"
+            f"[{getattr(m, 'name', '')}]\n{message_text(m)}"
             for m in reversed(worker_outputs)
         ]
+        # chat-image-attachment D-04: 근거 판정에는 텍스트만 (이미지 블록 제외)
         conversation = [
-            c for c in (getattr(m, "content", "") for m in conversation_messages)
-            if isinstance(c, str) and c.strip()
+            c for c in (message_text(m) for m in conversation_messages)
+            if c.strip()
         ]
         return "\n\n".join([system_prompt, *evidence, *conversation])
 
@@ -1768,8 +1818,7 @@ class WorkflowCompiler:
                 system = {**llm_messages[0], "content": llm_messages[0]["content"] + "\n\n" + feedback}
                 messages = [system, *llm_messages[1:]]
             last["response"] = await llm.ainvoke(messages, config={"tags": [INTERNAL_LLM_TAG]})
-            content = getattr(last["response"], "content", "")
-            return content if isinstance(content, str) else str(content)
+            return message_text(last["response"])
 
         result = await self._grounded.run(
             generate=generate, question=question, sources=sources,
@@ -1777,7 +1826,7 @@ class WorkflowCompiler:
             request_id=request_id,
         )
         response = last["response"]
-        if getattr(response, "content", None) == result.text:
+        if message_text(response) == result.text:
             return response
         # Analysis G-5: 문장 제거로 본문만 바뀐다 — usage·response_metadata 는 보존.
         if isinstance(response, AIMessage):
@@ -2078,6 +2127,128 @@ class WorkflowCompiler:
             )
         return "\n".join(lines)
 
+    # ── image-generation-tool Design §4.3: 이미지 생성 전용 노드 ──────────────
+
+    def _effective_image_cap(self, state: SupervisorState) -> int:
+        cap = state.get("image_generation_max_per_turn")
+        return int(cap) if cap else int(getattr(self, "_image_generation_max_per_turn", 4))
+
+    def _create_image_generate_node(
+        self, llm, worker_def: WorkerDefinition, *, auth_ctx, request_id: str,
+        worker_context_block: str = "", subject_user_id: str | None = None,
+    ):
+        """이미지 생성 전용 노드 (문서생성기 D9 동형 — 실패는 안내 노옵).
+
+        상한 확인 → 워커 LLM 구조화 출력(프롬프트·크기·모드) → GenerateImageUseCase →
+        AIMessage(name) 1건 + generated_images 채널 + 건수 증가.
+        """
+        logger = self._logger
+        use_case = getattr(self, "_image_generation_use_case", None)
+        worker_id = worker_def.worker_id
+        tool_config = worker_def.tool_config or {}
+        owner_user_id = (
+            str(auth_ctx.user_id) if auth_ctx is not None else str(subject_user_id or "")
+        )
+
+        def _reply(state: SupervisorState, content: str) -> dict:
+            from langchain_core.messages import AIMessage
+
+            return {
+                "messages": [AIMessage(content=content, name=clamp_llm_name(worker_id))],
+                "last_worker_id": worker_id,
+                "token_usage": state["token_usage"] + len(content) // 4,
+            }
+
+        async def image_generate_node(state: SupervisorState) -> dict:
+            if use_case is None:
+                return _reply(state, "이미지 생성기가 아직 구성되지 않았습니다 (image_generation_use_case 미배선).")
+            try:
+                config = ImageGenerationToolConfig(**tool_config)
+            except (TypeError, ValueError):
+                return _reply(state, (
+                    "이미지 모델이 설정되지 않았습니다. "
+                    "에이전트 편집에서 이미지 생성 모델을 선택해 주세요."
+                ))
+            count = int(state.get("generated_image_count", 0) or 0)
+            try:
+                ImageGenerationPolicy.check_turn_cap(
+                    count, max_per_turn=self._effective_image_cap(state)
+                )
+            except ImageGenerationError as e:
+                return _reply(state, e.user_message)
+
+            attachments = [
+                a for a in (state.get("attachments") or []) if a.get("type") == "image"
+            ]
+            try:
+                draft = await self._draft_image_request(
+                    llm, state, config, attachments, worker_context_block
+                )
+            except Exception as e:
+                logger.error(
+                    "image_generate_node draft failed", exception=e, request_id=request_id,
+                )
+                return _reply(state, "이미지 생성 실패: 요청을 해석하지 못했습니다. 다시 시도해 주세요.")
+
+            cmd = _build_image_command(draft, attachments, owner_user_id, request_id)
+            try:
+                result = await use_case.run(
+                    cmd, llm_model_id=config.llm_model_id, run_ctx=get_current_run_context(),
+                )
+            except ImageGenerationError as e:
+                logger.warning(
+                    "image_generate_node rejected", request_id=request_id,
+                    reason=e.__class__.__name__,
+                )
+                return _reply(state, e.user_message)
+            except Exception as e:
+                logger.error(
+                    "image_generate_node failed", exception=e, request_id=request_id,
+                )
+                return _reply(state, "이미지 생성 실패: 잠시 후 다시 시도해 주세요.")
+
+            logger.info(
+                "image_generate_node done", request_id=request_id,
+                file_id=result.file_id, mode=result.mode.value, elapsed_ms=result.elapsed_ms,
+            )
+            out = _reply(state, render_image_summary(result))
+            out["generated_images"] = [
+                *(state.get("generated_images") or []), result.to_state_dict(),
+            ]
+            out["generated_image_count"] = count + 1
+            return out
+
+        return image_generate_node
+
+    async def _draft_image_request(
+        self, llm, state: SupervisorState, config: ImageGenerationToolConfig,
+        attachments: list[dict], worker_context_block: str,
+    ) -> ImageRequestDraft:
+        """워커 LLM 구조화 출력 — 사용자 원문·대화 문맥·첨부 목록 → ImageRequestDraft."""
+        evidence_block, conversation_block = self._split_fill_context(state["messages"])
+        names = [a.get("file_name") or "image" for a in attachments]
+        system = "\n\n".join(filter(None, [
+            worker_context_block,
+            "[이미지 생성 요청 해석 규칙]\n"
+            "- 사용자 요청과 대화 문맥에서 생성할 이미지의 프롬프트를 구체적으로 작성한다.\n"
+            f"- 기본 크기 {config.default_size}, 기본 품질 {config.quality}. 사용자가 비율·품질을 "
+            "말했으면 그에 맞춘다.\n"
+            "- 첨부 이미지가 있고 사용자가 그 이미지를 바꾸거나 바탕으로 삼기를 원하면 mode=edit 과 "
+            "source_image_index 를 지정한다. 첨부가 없으면 반드시 mode=generate.\n"
+            f"- 첨부 이미지 목록(순번: 이름): {', '.join(f'{i}: {n}' for i, n in enumerate(names)) or '없음'}",
+        ]))
+        human = "\n\n".join(filter(None, [
+            f"[사용자 요청]\n{_last_human_text(state['messages'])}",
+            f"[현재 작업]\n{state.get('worker_task') or ''}".strip(),
+            f"[참고 자료]\n{evidence_block[:4000]}" if evidence_block else "",
+            f"[대화 문맥]\n{conversation_block[-2000:]}" if conversation_block else "",
+        ]))
+        structured = llm.with_structured_output(ImageRequestDraft)
+        return await structured.ainvoke([
+            {"role": "system", "content": system},
+            {"role": "user", "content": human},
+        ])
+
     def _create_excel_generator_node(
         self, llm, worker_def: WorkerDefinition, *, auth_ctx, request_id: str,
         worker_context_block: str = "",
@@ -2366,11 +2537,12 @@ class WorkflowCompiler:
         worker_outputs = [m for m in messages if _is_worker_output(m)]
         conversation = [m for m in messages if not _is_worker_output(m)]
         evidence_block = "\n\n---\n\n".join(
-            f"[{getattr(m, 'name', '')}]\n{getattr(m, 'content', '')}"
+            f"[{getattr(m, 'name', '')}]\n{message_text(m)}"
             for m in worker_outputs
         )
+        # chat-image-attachment D-04: 대화 블록은 텍스트만 (이미지 블록 제외)
         conversation_block = "\n".join(
-            str(getattr(m, "content", m)) for m in conversation
+            message_text(m) for m in conversation
         )
         return evidence_block, conversation_block
 
@@ -2504,7 +2676,7 @@ class WorkflowCompiler:
     ) -> str:
         """검색결과(있으면)/전체 대화 문맥(없으면)을 데이터로 질문에 대한 분석 수행."""
         search_results = [
-            getattr(m, "content", "") for m in messages if _is_search_result(m)
+            message_text(m) for m in messages if _is_search_result(m)
         ]
         if search_results:
             context = "\n\n---\n\n".join(search_results)
@@ -2536,7 +2708,7 @@ class WorkflowCompiler:
         response = await llm.ainvoke(
             [{"role": "system", "content": analysis_prompt}, *conversation]
         )
-        content = response.content if hasattr(response, "content") else str(response)
+        content = message_text(response)
         # 새어 나온 코드블록/JSON 제거 → chart_router/품질검증이 깨끗한 텍스트 수신.
         return ANALYSIS_OUTPUT_SANITIZER.strip(content)
 
@@ -2566,7 +2738,7 @@ class WorkflowCompiler:
             if result_messages:
                 last = result_messages[-1]
                 answer_content = (
-                    last.content if hasattr(last, "content") else str(last)
+                    message_text(last)
                 )
 
             answer_msg = AIMessage(content=answer_content, name=clamp_llm_name(worker_id))
@@ -2635,11 +2807,52 @@ class WorkflowCompiler:
         )
         return built
 
+    def _forward_turn_images(
+        self, messages: list[dict], state: SupervisorState,
+        supports_vision: bool, provider: str,
+    ) -> list[dict]:
+        """서브에이전트 입력의 마지막 user 블록에 이미지(또는 마커)를 덧붙인다 (D-03)."""
+        if not messages or not _turn_has_images(state):
+            return messages
+        images = [a for a in state.get("attachments", []) or [] if a.get("type") == "image"]
+        names = [a.get("file_name") or "image" for a in images]
+        last = messages[-1]
+        builder = getattr(self, "_image_block_builder", None)
+        blocks = self._rebuild_image_blocks(images, provider) if (
+            supports_vision and builder is not None
+        ) else []
+        if blocks:
+            content = [{"type": "text", "text": message_text(last)}, *blocks]
+            return [*messages[:-1], {**last, "content": content}]
+        marker = ImageAttachmentPolicy.unsupported_marker(names)
+        return [*messages[:-1], {**last, "content": f"{message_text(last)}\n{marker}"}]
+
+    def _rebuild_image_blocks(self, images: list[dict], provider: str) -> list[dict]:
+        """저장된 첨부 파일로 서브 provider 포맷 블록 생성. 실패하면 빈 목록(→ 마커)."""
+        builder = getattr(self, "_image_block_builder", None)
+        detail = getattr(self, "_image_detail", "high")
+        try:
+            return [
+                builder.build_from_path(
+                    provider, mime=a["mime"], path=a["file_path"], detail=detail,
+                )
+                for a in images
+            ]
+        except Exception as e:
+            self._logger.warning(
+                "sub_agent image forward failed, falling back to marker",
+                exception=e, provider=provider, count=len(images),
+            )
+            return []
+
     def _wrap_sub_agent(
         self,
         worker_id: str,
         sub_graph,
         strategy: SubAgentContextStrategy | None = None,
+        *,
+        supports_vision: bool = False,
+        provider: str = "",
     ):
         # D-07: 인자로 받는다 — __init__을 거치지 않은 인스턴스(테스트)도 동작.
         strategy = strategy or TaskWithOriginStrategy()
@@ -2647,6 +2860,11 @@ class WorkflowCompiler:
         async def wrapped(state: SupervisorState) -> dict:
             # Plan SC: SC-1/SC-2 — [원 질문]+[참고 자료]+[현재 작업(+재시도 사유)].
             sub_input = self._build_sub_agent_input(state, worker_id, strategy)
+            # chat-image-attachment FR-07: 이번 턴 이미지를 서브 모델이 볼 수 있으면
+            # provider 포맷으로 재생성해 덧붙이고, 아니면 마커 문장만 덧붙인다.
+            sub_messages_in = self._forward_turn_images(
+                sub_input.messages, state, supports_vision, provider,
+            )
 
             # agent-recursion-limit D8: 반복 한도는 부모의 절반(정책 상수, 하한 보장).
             # 기존 state(키 부재) 하위호환을 위해 get + 정책 기본값.
@@ -2654,12 +2872,16 @@ class WorkflowCompiler:
                 state.get("max_iterations", IterationLimitPolicy.DEFAULT)
             )
             sub_initial = build_initial_state(
-                messages=sub_input.messages,
+                messages=sub_messages_in,
                 config=SupervisorConfig(
                     max_iterations=sub_limit,
                     token_limit=state["token_limit"] // 2,
                 ),
                 available_workers=[],
+                # image-generation-tool D-09: 서브 그래프 이미지 상한 = 부모의 절반
+                image_generation_max_per_turn=ImageGenerationPolicy.sub_agent_cap(
+                    self._effective_image_cap(state)
+                ),
             )
 
             # 서브 그래프도 config 미전달 시 기본 recursion_limit(25 스텝)에
@@ -2677,7 +2899,7 @@ class WorkflowCompiler:
             answer_content = ""
             if sub_messages:
                 last = sub_messages[-1]
-                answer_content = last.content if hasattr(last, "content") else str(last)
+                answer_content = message_text(last)
 
             from langchain_core.messages import AIMessage
             answer_msg = AIMessage(content=answer_content, name=clamp_llm_name(worker_id))
@@ -2690,6 +2912,16 @@ class WorkflowCompiler:
                 # FR-07: 입력 요약(길이·개수만) — 실행 이력 step output_summary.
                 STEP_OUTPUT_SUMMARY_KEY: sub_input.summary,
             }
+            # image-generation-tool D-09: 서브 그래프 생성 이미지·건수를 부모에 합산
+            sub_images = result.get("generated_images") or []
+            if sub_images:
+                out["generated_images"] = [
+                    *(state.get("generated_images") or []), *sub_images,
+                ]
+                out["generated_image_count"] = (
+                    state.get("generated_image_count", 0)
+                    + int(result.get("generated_image_count") or len(sub_images))
+                )
             # approval-gate-run-termination Analysis G3: 서브 그래프의 승인 대기 신호를
             # 부모로 올려 부모 런도 종료시킨다. 재개는 부모 그래프 워커에 결과를
             # 주입하므로 worker_id 를 이 래퍼(부모 워커)로 바꾼다.
@@ -2701,12 +2933,44 @@ class WorkflowCompiler:
         return wrapped
 
 
+def _build_image_command(
+    draft: ImageRequestDraft, attachments: list[dict], owner_user_id: str, request_id: str,
+) -> GenerateImageCommand:
+    """ImageRequestDraft + 이번 턴 첨부 → GenerateImageCommand (D-08 폴백 포함)."""
+    requested = GenerationMode(draft.mode)
+    idx = draft.source_image_index if draft.source_image_index is not None else 0
+    source = None
+    if requested == GenerationMode.EDIT and attachments:
+        chosen = attachments[idx] if 0 <= idx < len(attachments) else attachments[0]
+        source = SourceImage(
+            file_path=str(chosen.get("file_path", "")),
+            mime=str(chosen.get("mime") or "image/png"),
+            file_name=str(chosen.get("file_name") or "image"),
+        )
+    mode, fell_back = ImageGenerationPolicy.resolve_mode(
+        requested, has_attachment=source is not None,
+    )
+    return GenerateImageCommand(
+        prompt=draft.prompt, size=ImageSize(draft.size), quality=ImageQuality(draft.quality),
+        mode=mode, source_image=source if mode == GenerationMode.EDIT else None,
+        owner_user_id=owner_user_id, request_id=request_id, fell_back_to_generate=fell_back,
+    )
+
+
+def _turn_has_images(state: SupervisorState) -> bool:
+    """이번 턴 사용자 메시지에 이미지 블록이 있는가 (마지막 human 기준)."""
+    for m in reversed(state.get("messages", []) or []):
+        role = m.get("role") if isinstance(m, dict) else getattr(m, "type", "")
+        if role in ("human", "user"):
+            return is_multimodal(m) and bool(image_blocks(m))
+    return False
+
+
 def _last_human_text(messages: list) -> str:
     """사용자 지시 = 마지막 HumanMessage 본문 (없으면 빈 문자열)."""
     for m in reversed(messages):
         if getattr(m, "type", "") == "human":
-            content = getattr(m, "content", "")
-            return content if isinstance(content, str) else str(content)
+            return message_text(m)
     return ""
 
 

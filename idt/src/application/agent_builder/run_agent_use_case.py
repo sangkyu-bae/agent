@@ -16,7 +16,7 @@ import json
 import uuid
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
-from typing import Any, AsyncIterator, Optional
+from typing import Any, AsyncIterator, Callable, Optional
 
 from langchain_core.messages import AIMessage
 from langgraph.errors import GraphRecursionError
@@ -41,6 +41,15 @@ from src.application.agent_run.context import (
     reset_run_context,
     set_current_run_context,
 )
+from src.application.agent_builder.message_content import (
+    message_text,
+    redact_messages,
+)
+from src.application.image_generation.answer_links import append_generated_images
+from src.domain.agent_attachment.exceptions import VisionNotSupportedError
+from src.domain.agent_attachment.interfaces import ImageBlockBuilderPort
+from src.domain.agent_attachment.policies import ImageAttachmentPolicy
+from src.domain.llm_model.entity import LlmModel
 from src.domain.agent_run.auth_context import AuthContext
 from src.application.agent_run.step_tracking import (
     _INPUT_SUMMARY_MAX_CHARS,
@@ -93,7 +102,6 @@ from src.domain.conversation.value_objects import (
     TurnIndex,
     UserId,
 )
-from src.domain.llm.message_content import coerce_message_text
 from src.domain.llm_model.interfaces import LlmModelRepositoryInterface
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.domain.prompt_guard.interfaces import PromptGuardPort
@@ -141,11 +149,37 @@ class _StreamState:
     charts: list = field(default_factory=list)
     # analysis-source-preservation: analysis_node가 방출한 원천 데이터 채널.
     analysis_source: list = field(default_factory=list)
+    # image-generation-tool D-03: 이번 턴 생성 이미지 메타 (답변 본문 후처리용).
+    generated_images: list = field(default_factory=list)
     # approval-gate Design §2.1 ④: 게이트가 차단한 도구 호출 신호 (limit_reached 동형).
     approval_pending: dict = field(default_factory=dict)
     # approval-gate Design §3.1(v0.2): 재개용 최종 SupervisorState 스냅샷.
     # 최상위 chain_end 출력이 전체 상태다 — 워커 진입 후크가 없어 최종 상태를 쓴다.
     final_state: dict = field(default_factory=dict)
+
+
+def _redact_state_images(state: dict) -> dict:
+    """그래프 상태 복사본 — messages 의 이미지 블록을 마커로 (G-C1)."""
+    if not state.get("messages"):
+        return state
+    return {**state, "messages": redact_messages(state["messages"])}
+
+
+def _image_attachments(attachments: list[dict] | None) -> list[dict]:
+    """첨부 dict 중 이미지만 (chat-image-attachment Design §3.2)."""
+    return [a for a in attachments or [] if a.get("type") == "image"]
+
+
+def _persisted_query(request: RunAgentRequest) -> str:
+    """대화 기록에 저장할 본문 — 질문 + 이미지 마커 (FR-09).
+
+    이미지가 없으면 질문 그대로.
+    """
+    names = [
+        a.get("file_name") or "image" for a in _image_attachments(request.attachments)
+    ]
+    marker = ImageAttachmentPolicy.marker(names)
+    return f"{request.query}\n{marker}" if marker else request.query
 
 
 def _effective_model_id(agent: Any, request: RunAgentRequest) -> str:
@@ -245,8 +279,16 @@ class RunAgentUseCase:
         # (MemoryContextAssembler 동형, build_block 덕타입). None 이면 주입 비활성 —
         # 메모리가 없던 상태와 동일하게 동작한다 (Plan FR-06, 탈착형 이음매).
         memory_assembler=None,
+        # chat-image-attachment Design §4.3 / D-05: 이미지 블록 빌더(provider 별 포맷).
+        # None 이면 이미지 첨부를 받지 않는다 (precheck 가 VisionNotSupportedError).
+        image_block_builder: Optional[ImageBlockBuilderPort] = None,
+        image_max_count: int = 5,
+        image_detail: str = "high",
     ) -> None:
         self._repository = repository
+        self._image_block_builder = image_block_builder
+        self._image_max_count = image_max_count
+        self._image_detail = image_detail
         self._prompt_guard = prompt_guard
         self._memory_assembler = memory_assembler
         self._approval_repo_factory = approval_repo_factory
@@ -309,8 +351,9 @@ class RunAgentUseCase:
             agent_id, request_id, viewer_user_id, viewer_department_ids,
         )
         session_id = request.session_id or str(uuid.uuid4())
+        # chat-image-attachment FR-09: DB 에는 질문 + 이미지 마커만 (바이트 없음)
         user_message_id = await self._save_user_message(
-            request.query, request.user_id, session_id, agent_id,
+            _persisted_query(request), request.user_id, session_id, agent_id,
             persist=request.persist_conversation,
         )
 
@@ -653,6 +696,77 @@ class RunAgentUseCase:
 
     # ── Stream helpers ─────────────────────────────────────────────────
 
+    async def precheck_attachments(
+        self,
+        *,
+        agent_id: str,
+        attachments: list[dict] | None,
+        request_id: str,
+        viewer_user_id: str | None,
+        viewer_department_ids: list[str] | None,
+        llm_model_id_override: str | None = None,
+    ) -> None:
+        """이미지 첨부 사전 검사 — chat-image-attachment Design §4.3 / D-05.
+
+        실행(RUN_STARTED) 전에 호출자가 부른다. 이미지가 없으면 즉시 반환.
+        Raises:
+            TooManyImagesError: 장수 상한 초과
+            VisionNotSupportedError: 실효 모델 비전 미지원 / provider 미지원 / 빌더 미주입
+        """
+        images = _image_attachments(attachments)
+        if not images:
+            return
+        ImageAttachmentPolicy.validate_count(
+            len(images), max_count=self._image_max_count
+        )
+        agent = await self._authorize_and_load(
+            agent_id, request_id, viewer_user_id, viewer_department_ids,
+        )
+        # Analysis G-I3: 실행(_prepare_graph)과 같은 실효 모델로 판정한다.
+        model_id = llm_model_id_override or agent.llm_model_id
+        llm_model = await self._llm_model_repository.find_by_id(model_id, request_id)
+        if llm_model is None:
+            raise ValueError(
+                f"에이전트에 연결된 LLM 모델을 찾을 수 없습니다: {model_id}"
+            )
+        builder = self._image_block_builder
+        if (
+            not llm_model.supports_vision
+            or builder is None
+            or not builder.supports(llm_model.provider)
+        ):
+            raise VisionNotSupportedError(llm_model.display_name)
+
+    def _attach_turn_images(
+        self, messages: list, request: RunAgentRequest, llm_model: LlmModel,
+    ) -> list:
+        """이번 턴 user 메시지를 [text, image×N] 다중 콘텐츠로 (Design §3.3 / D-01).
+
+        이미지가 없으면 messages 를 그대로 돌려준다 — 기존 턴은 str 유지.
+        """
+        images = _image_attachments(request.attachments)
+        if not images or self._image_block_builder is None:
+            return messages
+        blocks = [
+            self._image_block_builder.build_from_path(
+                llm_model.provider,
+                mime=img["mime"],
+                path=img["file_path"],
+                detail=self._image_detail,
+            )
+            for img in images
+        ]
+        self._logger.info(
+            "chat image attachments composed",
+            provider=llm_model.provider,
+            count=len(blocks),
+            names=[img.get("file_name") for img in images],
+        )
+        last = messages[-1]
+        content = [{"type": "text", "text": request.query}, *blocks]
+        composed = {**last, "content": content}
+        return [*messages[:-1], composed]
+
     async def _authorize_and_load(
         self,
         agent_id: str,
@@ -742,22 +856,25 @@ class RunAgentUseCase:
         auth_ctx: AuthContext | None = None,
         inject_memory: bool = False,
     ) -> tuple[Any, dict, dict]:
-        """messages 빌드 + llm_model 로드 + compile + initial_state + graph_config."""
-        messages = await self._build_messages(
-            request.query,
-            request.user_id,
-            session_id,
-            request.session_id is not None,
-        )
-
+        """llm_model 로드 + messages 빌드 + compile + initial_state + graph_config."""
         # agent-model-benchmark D1: 모델·temperature 오버라이드 해석 단일 지점.
         # 하위 컴포넌트(컴파일러·워커·툴)는 오버라이드의 존재를 알지 못한다.
+        # chat-image-attachment D-06: provider 별 이미지 블록 생성에 모델이 필요해
+        # 메시지 조립보다 먼저 해석한다.
         model_id = _effective_model_id(agent, request)
         llm_model = await self._llm_model_repository.find_by_id(model_id, request_id)
         if llm_model is None:
             raise ValueError(
                 f"에이전트에 연결된 LLM 모델을 찾을 수 없습니다: {model_id}"
             )
+
+        messages = await self._build_messages(
+            request.query,
+            request.user_id,
+            session_id,
+            request.session_id is not None,
+        )
+        messages = self._attach_turn_images(messages, request, llm_model)
 
         workflow = agent.to_workflow_definition()
         workflow = await self._inject_attached_skills(workflow, agent, request_id)
@@ -1114,7 +1231,8 @@ class RunAgentUseCase:
         )
         result = await graph.ainvoke(state)
         answer, _ = self._parse_result(result)
-        return answer
+        # image-generation-tool D-03: 재개 답변에도 생성 이미지 링크 보존
+        return append_generated_images(answer, result.get("generated_images"))
 
     async def _persist_approval_if_pending(
         self, *, agent, state, run_id, request, request_id: str,
@@ -1140,8 +1258,12 @@ class RunAgentUseCase:
             )
             return None
 
+        # chat-image-attachment Analysis G-C1 / Plan FR-09: 재개 스냅샷에는 이미지
+        # 바이트를 남기지 않는다 — 재개 시 이미지가 다시 전달되지도 않는다(해당 턴만).
         payload, truncated = SnapshotSerializer.dumps_with_limit(
-            state.final_state or {"messages": state.final_messages}
+            _redact_state_images(
+                state.final_state or {"messages": state.final_messages}
+            )
         )
         if truncated:
             self._logger.warning(
@@ -1236,6 +1358,9 @@ class RunAgentUseCase:
         # analysis-source-preservation: analysis_node output의 원천 데이터 캡처.
         if isinstance(output, dict) and output.get("analysis_source"):
             state.analysis_source = list(output["analysis_source"])
+        # image-generation-tool D-03: 생성 이미지 채널 캡처 (charts 동형, truthy 만).
+        if isinstance(output, dict) and output.get("generated_images"):
+            state.generated_images = list(output["generated_images"])
         # approval-gate Design §2.1 ④: 게이트 신호 + 재개 스냅샷 캡처.
         # truthy일 때만 갱신 — 뒤따르는 빈 델타가 유효 신호를 덮지 않는다
         # (charts 캡처와 동형). 스냅샷은 messages를 가진 최신 출력을 쓴다.
@@ -1329,7 +1454,7 @@ class RunAgentUseCase:
         chunk_obj = data.get("chunk")
         # content가 content block 리스트로 내려올 수 있어 평탄화 문자열로 정규화.
         # (정규화하지 않으면 WS payload에 list가 실려 프론트에서 [object Object]로 표시됨)
-        chunk_text = coerce_message_text(getattr(chunk_obj, "content", None))
+        chunk_text = message_text(chunk_obj)
         if not chunk_text:
             return None
         metadata = raw.get("metadata", {}) or {}
@@ -1378,15 +1503,15 @@ class RunAgentUseCase:
         policy = self._snapshot_policy
         items = [
             {"origin": getattr(m, "name", ""), "kind": "search",
-             "content": getattr(m, "content", "")}
+             "content": message_text(m)}
             for m in final_messages
             if is_search_result(m)
-            and not policy.is_reinjected(getattr(m, "content", ""))
+            and not policy.is_reinjected(message_text(m))
         ]
         if _has_excel_attachment(getattr(request, "attachments", None)):
             items += [
                 {"origin": getattr(m, "name", ""), "kind": "excel",
-                 "content": getattr(m, "content", "")}
+                 "content": message_text(m)}
                 for m in final_messages
                 if is_worker_output(m) and not is_search_result(m)
             ]
@@ -1446,7 +1571,7 @@ class RunAgentUseCase:
             )
         else:
             messages = [
-                {"role": msg.role.value, "content": msg.content}
+                {"role": msg.role.value, "content": message_text(msg)}
                 for msg in sorted(existing, key=lambda m: m.turn_index.value)
             ]
             messages.append({"role": "user", "content": query})
@@ -1481,7 +1606,7 @@ class RunAgentUseCase:
             {"role": "system", "content": f"[이전 대화 요약]\n{summary_text}"}
         ]
         for msg in sorted(recent, key=lambda m: m.turn_index.value):
-            messages.append({"role": msg.role.value, "content": msg.content})
+            messages.append({"role": msg.role.value, "content": message_text(msg)})
         messages.append({"role": "user", "content": query})
         return messages
 
@@ -1507,44 +1632,51 @@ class RunAgentUseCase:
         """
         if not persist:
             return None
+
+        def _build(turn: int) -> ConversationMessage:
+            return ConversationMessage(
+                id=None,
+                user_id=UserId(user_id),
+                session_id=SessionId(session_id),
+                agent_id=AgentId(agent_id),
+                role=MessageRole.USER,
+                content=query,
+                turn_index=TurnIndex(turn),
+                created_at=datetime.now(timezone.utc),
+            )
+
+        # Design Ref: agent-run-turn-index-fix §6.1 D2 — 저장·turn 계산은 공용 헬퍼.
+        saved = await self._persist_message(user_id, session_id, _build)
+        return saved.id.value if saved is not None and saved.id is not None else None
+
+    async def _persist_message(
+        self,
+        user_id: str,
+        session_id: str,
+        build: Callable[[int], ConversationMessage],
+    ) -> ConversationMessage | None:
+        """대화 메시지 저장 — turn_index 계산과 세션 경로를 한 곳에.
+
+        Design Ref: agent-run-turn-index-fix §6.1 D1.
+        - Plan FR-01/FR-02: session_factory 주입 시 별도 세션에서 **최신 commit 기준**
+          len+1 을 계산하고 즉시 commit 한다. user 저장(AGENT-OBS-001)만 이 경로를
+          타고 assistant 는 요청 세션(REPEATABLE READ 스냅샷)으로 계산하던 결함 —
+          방금 commit 된 user 행이 안 보여 같은 turn 이 저장됐다 — 를 양쪽이 같은
+          헬퍼를 타게 해 제거한다. 불변식: user turn=N → assistant turn=N+1
+          (일반 채팅 _persist_messages 와 같은 규칙).
+        - Plan FR-04: session_factory 미주입은 테스트 전용 legacy 경로 — 요청
+          세션(self._message_repo) 으로 같은 계산. 운영 DI(main.py)는 항상 주입한다.
+        - Plan FR-08: 저장 실패는 그대로 전파한다 (session.begin() 롤백).
+        """
+        uid, sid = UserId(user_id), SessionId(session_id)
         if self._session_factory is not None:
             async with self._session_factory() as session:
                 async with session.begin():
                     repo = SQLAlchemyConversationMessageRepository(session)
-                    existing = await repo.find_by_session(
-                        UserId(user_id), SessionId(session_id)
-                    )
-                    base_turn = len(existing)
-                    user_msg = ConversationMessage(
-                        id=None,
-                        user_id=UserId(user_id),
-                        session_id=SessionId(session_id),
-                        agent_id=AgentId(agent_id),
-                        role=MessageRole.USER,
-                        content=query,
-                        turn_index=TurnIndex(base_turn + 1),
-                        created_at=datetime.now(timezone.utc),
-                    )
-                    saved = await repo.save(user_msg)
-                    return saved.id.value if saved.id is not None else None
-
-        # legacy fallback (session_factory 미주입 시) — 기존 동작 유지
-        existing = await self._message_repo.find_by_session(
-            UserId(user_id), SessionId(session_id)
-        )
-        base_turn = len(existing)
-        user_msg = ConversationMessage(
-            id=None,
-            user_id=UserId(user_id),
-            session_id=SessionId(session_id),
-            agent_id=AgentId(agent_id),
-            role=MessageRole.USER,
-            content=query,
-            turn_index=TurnIndex(base_turn + 1),
-            created_at=datetime.now(timezone.utc),
-        )
-        saved = await self._message_repo.save(user_msg)
-        return saved.id.value if saved.id is not None else None
+                    turn = len(await repo.find_by_session(uid, sid)) + 1
+                    return await repo.save(build(turn))
+        turn = len(await self._message_repo.find_by_session(uid, sid)) + 1
+        return await self._message_repo.save(build(turn))
 
     async def _save_assistant_message(
         self,
@@ -1567,23 +1699,25 @@ class RunAgentUseCase:
         """
         if not persist:
             return
-        existing = await self._message_repo.find_by_session(
-            UserId(user_id), SessionId(session_id)
-        )
-        base_turn = len(existing)
-        assistant_msg = ConversationMessage(
-            id=None,
-            user_id=UserId(user_id),
-            session_id=SessionId(session_id),
-            agent_id=AgentId(agent_id),
-            role=MessageRole.ASSISTANT,
-            content=answer,
-            turn_index=TurnIndex(base_turn + 1),
-            created_at=datetime.now(timezone.utc),
-            charts=charts,
-            analysis_data=analysis_data,
-        )
-        await self._message_repo.save(assistant_msg)
+
+        def _build(turn: int) -> ConversationMessage:
+            return ConversationMessage(
+                id=None,
+                user_id=UserId(user_id),
+                session_id=SessionId(session_id),
+                agent_id=AgentId(agent_id),
+                role=MessageRole.ASSISTANT,
+                content=answer,
+                turn_index=TurnIndex(turn),
+                created_at=datetime.now(timezone.utc),
+                charts=charts,
+                analysis_data=analysis_data,
+            )
+
+        # Design Ref: agent-run-turn-index-fix §6.1 D3 — user 저장과 같은 별도 세션
+        # 경로. 요청 세션 스냅샷으로 계산하던 기존 결함(같은 turn 저장) 제거.
+        # 반환값(None)은 유지 — id 반환은 agent-run-feedback-wiring(#2) 범위.
+        await self._persist_message(user_id, session_id, _build)
 
     def _resolve_answer(self, state: "_StreamState") -> tuple[str, list[str]]:
         """런의 최종 답변 결정 — 승인 대기면 결정적 템플릿.
@@ -1594,6 +1728,8 @@ class RunAgentUseCase:
         백그라운드 잡이 모두 stream 을 소비하므로 여기 한 곳에서 교체한다.
         """
         answer, tools_used = self._parse_result({"messages": state.final_messages})
+        # image-generation-tool D-03: final_answer 가 링크를 지웠어도 본문에 결정적으로 덧붙인다.
+        answer = append_generated_images(answer, state.generated_images)
         pending = state.approval_pending
         if not pending:
             return answer, tools_used
@@ -1613,7 +1749,7 @@ class RunAgentUseCase:
         answer = ""
         if messages:
             last = messages[-1]
-            answer = last.content if hasattr(last, "content") else str(last)
+            answer = message_text(last)
 
         tools_used = list({
             getattr(m, "name", None)

@@ -64,6 +64,8 @@ class RunPurpose(str, Enum):
     SUMMARIZER = "summarizer"
     QUERY_REWRITE = "query_rewrite"
     RERANK = "rerank"
+    # image-generation-tool D-04: 이미지 생성 1건 = 토큰 0·cost=장당 단가인 호출 행
+    IMAGE_GENERATION = "image_generation"
     HALLUCINATION_CHECK = "hallucination_check"
     OTHER = "other"
 

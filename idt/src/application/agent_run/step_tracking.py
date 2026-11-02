@@ -15,6 +15,8 @@ from typing import Any, AsyncIterator, Final, Mapping, Optional, TYPE_CHECKING
 
 from langchain_core.messages import AIMessage, BaseMessage
 
+from src.application.agent_builder.message_content import message_text
+
 from src.application.agent_run.context import (
     get_current_run_context,
     set_current_run_context,
@@ -51,11 +53,12 @@ def _truncate(text: Optional[str], max_chars: int) -> Optional[str]:
     return text[:max_chars] if len(text) > max_chars else text
 
 
-def _extract_content(msg: Any) -> str:
-    """BaseMessage 또는 dict 모두 안전하게 content 추출."""
-    if isinstance(msg, dict):
-        return str(msg.get("content", ""))
-    return str(getattr(msg, "content", ""))
+def _content_for_summary(msg: Any) -> str:
+    """BaseMessage 또는 dict → 요약용 텍스트.
+
+    chat-image-attachment Design §7: 이미지 블록은 base64 대신 `[image:<mime>]` 마커로.
+    """
+    return message_text(msg, keep_image_markers=True)
 
 
 def _find_last_message(
@@ -94,7 +97,7 @@ def _summarize_state_input(state: Mapping[str, Any]) -> Optional[str]:
         if last_user is None:
             user_text = "(no user message)"
         else:
-            user_text = _extract_content(last_user)
+            user_text = _content_for_summary(last_user)
         parts = [
             f"iter={state.get('iteration_count', 0)}",
             f"last_worker={state.get('last_worker_id', '')}",
@@ -118,7 +121,7 @@ def _summarize_state_output(result: Any) -> Optional[str]:
         new_messages = result.get("messages") or []
         last_ai = _find_last_message(new_messages, kind=AIMessage)
         if last_ai is not None:
-            content = _extract_content(last_ai)
+            content = _content_for_summary(last_ai)
             if content:
                 return content[:_OUTPUT_SUMMARY_MAX_CHARS]
         keys = ["next_worker", "quality_gate_result", "retry_counts"]

@@ -1,10 +1,20 @@
-// Design Ref: ui-redesign-chat §5.4 — Textarea(unstyled, autoResize) + Button + IconButton. props·전송 로직 변경 없음.
-import { useState, useRef, type ChangeEvent, type KeyboardEvent } from 'react';
-import { Clock, FileText, Loader2, Paperclip, Send, X } from 'lucide-react';
-import Badge from '@/components/ui/Badge';
+// Design Ref: ui-redesign-chat §5.4 — Textarea(unstyled, autoResize) + Button + IconButton.
+// Design Ref: chat-image-attachment §5.1/§5.4 — 이미지 첨부(선택·붙여넣기·드롭), 첨부 칩 배열, 비전 미지원 비활성.
+import {
+  useState,
+  useRef,
+  type ChangeEvent,
+  type ClipboardEvent,
+  type DragEvent,
+  type KeyboardEvent,
+} from 'react';
+import { Clock, FileText, Image as ImageIcon, Loader2, Paperclip, Send } from 'lucide-react';
+import AttachmentChip from '@/components/chat/AttachmentChip';
 import Button from '@/components/ui/Button';
 import IconButton from '@/components/ui/IconButton';
 import Textarea from '@/components/ui/Textarea';
+import { IMAGE_ATTACHMENT_LIMITS, type PendingAttachment } from '@/types/agentAttachment';
+import { isImageFile } from '@/utils/imageAttachmentValidators';
 import { cn } from '@/utils/cn';
 
 interface ChatInputProps {
@@ -12,16 +22,24 @@ interface ChatInputProps {
   isLoading?: boolean;
   useRag?: boolean;
   onToggleRag?: () => void;
-  // ws-agent-excel-attachment: 엑셀 첨부 (agent 선택 시에만 노출)
+  // ws-agent-excel-attachment / chat-image-attachment: 첨부 (agent 선택 시에만 노출)
   attachmentEnabled?: boolean;
-  attachmentName?: string | null;
+  attachments?: PendingAttachment[];
   attachmentUploading?: boolean;
-  onAttachFile?: (file: File) => void;
-  onRemoveAttachment?: () => void;
+  /** 엑셀·이미지 공통 — 어떤 파일인지는 페이지가 판별한다 */
+  onAttachFiles?: (files: File[]) => void;
+  onRemoveAttachment?: (id: string) => void;
+  /** 비전 지원 모델일 때만 true. false 면 버튼 비활성 + 붙여넣기/드롭 무시 */
+  imageAttachmentEnabled?: boolean;
+  imageDisabledReason?: string | null;
+  /** 검증·업로드 실패 안내 (인라인) */
+  attachmentNotice?: string | null;
   // background-jobs S9: 백그라운드 전환 (agent 모드에서만 노출)
   backgroundEnabled?: boolean;
   onSendBackground?: (content: string) => void;
 }
+
+const filesOf = (list: FileList | File[] | null | undefined): File[] => Array.from(list ?? []);
 
 const ChatInput = ({
   onSend,
@@ -29,20 +47,55 @@ const ChatInput = ({
   useRag = false,
   onToggleRag,
   attachmentEnabled = false,
-  attachmentName = null,
+  attachments = [],
   attachmentUploading = false,
-  onAttachFile,
+  onAttachFiles,
   onRemoveAttachment,
+  imageAttachmentEnabled = true,
+  imageDisabledReason = null,
+  attachmentNotice = null,
   backgroundEnabled = false,
   onSendBackground,
 }: ChatInputProps) => {
   const [value, setValue] = useState('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const excelInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
-  const handlePickFile = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file && onAttachFile) onAttachFile(file);
+  // 파일을 받을 수 있는 상태. 어떤 파일인지(엑셀/이미지/기타)와 비전 지원 여부는 페이지가
+  // 판별해 안내한다 (Analysis G-I5: 비이미지 드롭·비전 미지원 드롭도 조용히 버리지 않는다).
+  const canReceiveFiles = attachmentEnabled && !!onAttachFiles;
+
+  const handlePickFiles = (e: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length > 0 && onAttachFiles) onAttachFiles(files);
     e.target.value = ''; // 같은 파일 재선택 허용
+  };
+
+  // §5.4: 클립보드에 이미지 파일이 있을 때만 가로채고, 텍스트 붙여넣기는 기본 동작 유지.
+  // 비전 미지원이어도 페이지로 넘겨 사유를 안내한다 (G-I5).
+  const handlePaste = (e: ClipboardEvent<HTMLTextAreaElement>) => {
+    if (!canReceiveFiles) return;
+    const images = filesOf(e.clipboardData?.files).filter(isImageFile);
+    if (images.length === 0) return;
+    e.preventDefault();
+    onAttachFiles?.(images);
+  };
+
+  // 드래그 기본 동작(브라우저가 파일을 여는 것)은 첨부 가능 여부와 무관하게 막는다 (G-I5)
+  const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
+    if (!attachmentEnabled) return;
+    e.preventDefault();
+    if (imageAttachmentEnabled) setIsDragging(true);
+  };
+
+  const handleDrop = (e: DragEvent<HTMLDivElement>) => {
+    setIsDragging(false);
+    if (!attachmentEnabled) return;
+    e.preventDefault();
+    if (!canReceiveFiles) return;
+    const files = filesOf(e.dataTransfer?.files);
+    if (files.length > 0) onAttachFiles?.(files); // 비이미지·엑셀 포함 — 페이지가 분류·안내
   };
 
   const handleSend = () => {
@@ -59,7 +112,9 @@ const ChatInput = ({
     }
   };
 
-  const canSend = value.trim().length > 0 && !isLoading;
+  // Analysis G-I2 (Design §5.4 #7): 업로드가 끝나기 전에는 전송하지 않는다 — 업로드 중인
+  // 이미지가 빠진 채 전송되는 것을 막는다.
+  const canSend = value.trim().length > 0 && !isLoading && !attachmentUploading;
 
   // background-jobs S9: 현재 입력을 백그라운드 작업으로 등록하고 입력창을 비운다.
   const handleSendBackground = () => {
@@ -69,27 +124,45 @@ const ChatInput = ({
     setValue('');
   };
 
+  const showChips = attachmentEnabled && (attachments.length > 0 || attachmentUploading);
+
   return (
     <div className="px-4 pb-5 pt-2 sm:px-6">
       <div className="mx-auto max-w-3xl">
-        <div className="overflow-hidden rounded-xl border border-border-strong bg-surface shadow-lg transition-colors duration-150 focus-within:border-brand-400">
-          {/* ws-agent-excel-attachment: 첨부 칩 */}
-          {attachmentEnabled && (attachmentName || attachmentUploading) && (
-            <div className="flex items-center gap-2 px-4 pt-3">
-              <Badge tone="brand" className="max-w-xs gap-1.5 py-1">
-                <Paperclip className="h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden="true" />
-                <span className="truncate">{attachmentUploading ? '업로드 중…' : attachmentName}</span>
-                {!attachmentUploading && onRemoveAttachment && (
-                  <button
-                    type="button"
-                    onClick={onRemoveAttachment}
-                    aria-label="첨부 제거"
-                    className="-my-1 ml-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-brand-500 hover:bg-brand-100 hover:text-brand-700"
-                  >
-                    <X className="h-3 w-3" strokeWidth={2} aria-hidden="true" />
-                  </button>
-                )}
-              </Badge>
+        {/* chat-image-attachment §5.4: 검증·업로드 실패 안내 */}
+        {attachmentNotice && (
+          <p role="status" className="mb-2 text-xs text-danger-600">
+            {attachmentNotice}
+          </p>
+        )}
+        <div
+          data-testid="chat-input-dropzone"
+          onDragOver={handleDragOver}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={handleDrop}
+          className={cn(
+            'relative overflow-hidden rounded-xl border bg-surface shadow-lg transition-colors duration-150 focus-within:border-brand-400',
+            isDragging ? 'border-dashed border-brand-400' : 'border-border-strong',
+          )}
+        >
+          {isDragging && (
+            <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-brand-50/80 text-sm font-medium text-brand-700">
+              이미지를 놓으세요
+            </div>
+          )}
+
+          {/* 첨부 칩 행 — 엑셀 1 + 이미지 N */}
+          {showChips && (
+            <div className="flex flex-wrap items-center gap-2 px-4 pt-3">
+              {attachments.map((a) => (
+                <AttachmentChip key={a.id} attachment={a} onRemove={onRemoveAttachment} />
+              ))}
+              {attachmentUploading && (
+                <AttachmentChip
+                  attachment={{ id: '__uploading', ref: { type: 'image', file_id: '' }, name: '' }}
+                  uploading
+                />
+              )}
             </div>
           )}
 
@@ -103,6 +176,7 @@ const ChatInput = ({
               value={value}
               onChange={(e) => setValue(e.target.value)}
               onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
               placeholder="상플AI에게 메시지 보내기..."
               disabled={isLoading}
             />
@@ -126,21 +200,48 @@ const ChatInput = ({
               {attachmentEnabled && (
                 <>
                   <input
-                    ref={fileInputRef}
+                    ref={excelInputRef}
+                    data-testid="excel-file-input"
                     type="file"
                     accept=".xlsx,.xls"
                     className="hidden"
-                    onChange={handlePickFile}
+                    onChange={handlePickFiles}
                   />
                   <Button
                     variant="secondary"
                     size="sm"
-                    onClick={() => fileInputRef.current?.click()}
+                    onClick={() => excelInputRef.current?.click()}
                     disabled={isLoading || attachmentUploading}
                     title="엑셀 첨부 (데이터 분석)"
                     leadingIcon={<Paperclip className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />}
                   >
                     엑셀
+                  </Button>
+
+                  {/* chat-image-attachment: 이미지 첨부 — 비전 미지원이면 비활성 + 사유 */}
+                  <input
+                    ref={imageInputRef}
+                    data-testid="image-file-input"
+                    type="file"
+                    accept={IMAGE_ATTACHMENT_LIMITS.accept}
+                    multiple
+                    className="hidden"
+                    onChange={handlePickFiles}
+                  />
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => imageInputRef.current?.click()}
+                    disabled={isLoading || attachmentUploading || !imageAttachmentEnabled}
+                    aria-label="이미지 첨부"
+                    title={
+                      imageAttachmentEnabled
+                        ? `이미지 첨부 (png/jpg/webp, 최대 ${IMAGE_ATTACHMENT_LIMITS.maxCount}장)`
+                        : (imageDisabledReason ?? '이미지 첨부를 사용할 수 없습니다')
+                    }
+                    leadingIcon={<ImageIcon className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />}
+                  >
+                    이미지
                   </Button>
                 </>
               )}

@@ -11,6 +11,7 @@ from src.application.llm_model.cache_invalidation import (
 from src.domain.llm.interfaces import UtilityLLMProviderPort
 from src.domain.llm_model.entity import LlmModel
 from src.domain.llm_model.interfaces import LlmModelRepositoryInterface
+from src.domain.llm_model.policies import LlmModelPolicy
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 
 
@@ -101,3 +102,9 @@ def _apply_field_updates(
         model.base_url = request.base_url or None
     if request.supports_vision is not None:
         model.supports_vision = request.supports_vision
+    # image-generation-tool Design §4.1
+    if request.model_kind is not None:
+        model.model_kind = request.model_kind
+    if request.price_per_image_usd is not None:
+        model.price_per_image_usd = request.price_per_image_usd
+    LlmModelPolicy.validate_default_is_chat(model)

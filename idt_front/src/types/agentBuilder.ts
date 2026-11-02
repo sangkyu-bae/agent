@@ -12,6 +12,10 @@ import type {
   PresentationGeneratorConfigRequest,
   PresentationGeneratorDraft,
 } from './presentationGenerator';
+import type {
+  ImageGenerationConfigRequest,
+  ImageGenerationDraft,
+} from './imageGeneration';
 
 // ── Sub-Agent ──────────────────────────────────
 
@@ -70,6 +74,8 @@ export interface CreateBuilderAgentRequest {
   document_generation_type?: DocumentGenerationTypeRequest;
   // golden-sample-blueprint D7: 발표자료 설정 (presentation_generator 도구 필요)
   presentation_generator?: PresentationGeneratorConfigRequest;
+  // image-generation-tool Design §4.2: 이미지 생성 설정 (image_generate 도구 필요)
+  image_generation?: ImageGenerationConfigRequest;
   // agent-settings-tab D5: supervisor 반복 한도 (백엔드 기본 25, 범위 10~1000)
   max_iterations?: number;
   // agent-opener D4: 대화 시작 예시 질문 (최대 12개·200자). 미전달 = 없음
@@ -129,6 +135,8 @@ export interface UpdateBuilderAgentRequest {
   document_generation_type?: DocumentGenerationTypeRequest;
   // golden-sample-blueprint D7: 발표자료 설정 (presentation_generator 도구 필요)
   presentation_generator?: PresentationGeneratorConfigRequest;
+  // image-generation-tool Design §4.2: undefined = 변경 안 함, 값 = 교체
+  image_generation?: ImageGenerationConfigRequest;
   // agent-builder-edit-mapping FR-5: undefined = 모델 변경 안 함
   llm_model_id?: string;
   // builtin-middleware D5: undefined = 변경 안 함, [] = 전부 해제, [...] = 전체 교체
@@ -181,6 +189,8 @@ export interface AgentBuilderFormData {
   documentGeneratorDraft?: DocumentGeneratorDraft | null;
   // golden-sample-blueprint: 발표자료 설정 드래프트 (저장 시 presentation_generator로 전송)
   presentationGeneratorDraft?: PresentationGeneratorDraft | null;
+  // image-generation-tool: 이미지 생성 설정 드래프트 (저장 시 image_generation으로 전송)
+  imageGenerationDraft?: ImageGenerationDraft | null;
   // agent-schedule: 생성 모드 전용 staged 스케줄 (생성 성공 후 순차 POST, edit에선 미사용)
   schedules: StagedSchedule[];
   // builtin-tools D8: 수동 해제된 빌트인 도구(카탈로그 형식) — ToolPickerModal에서만

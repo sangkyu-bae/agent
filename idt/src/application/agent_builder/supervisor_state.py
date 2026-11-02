@@ -95,3 +95,12 @@ class SupervisorState(TypedDict):
     # [{"origin": worker_id, "kind": "raw_source", "excel": ExcelData.to_dict()}]
     # charts 채널 동형(replace 시맨틱) — run_agent_use_case가 스냅샷 캡처에 소비.
     analysis_source: list[dict]
+
+    # image-generation-tool Design §3.2 / D-03: 이번 턴 생성 이미지 메타(바이트 없음).
+    # [{file_id, filename, mime, width, height, prompt, mode}] — replace 시맨틱.
+    # run_agent_use_case 가 답변 본문에 마크다운 이미지를 결정적으로 덧붙이는 데 소비.
+    generated_images: list[dict]
+    # FR-10: 이번 턴 생성 건수(상한 판정). 서브 그래프 결과는 부모가 합산한다.
+    generated_image_count: int
+    # D-09: 이 그래프의 턴당 상한. None 이면 컴파일러 설정값. 서브 그래프엔 절반.
+    image_generation_max_per_turn: int | None

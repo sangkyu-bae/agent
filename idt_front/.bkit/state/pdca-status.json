@@ -1,6 +1,6 @@
 {
   "version": "3.0",
-  "lastUpdated": "2026-08-20T06:30:00.000Z",
+  "lastUpdated": "2026-10-21T06:17:01.000Z",
   "activeFeatures": [
     "mutation-pending-guard",
     "llm-register",
@@ -52,7 +52,7 @@
     "utility-page",
     "question-card"
   ],
-  "primaryFeature": "question-card",
+  "primaryFeature": null,
   "features": {
     "utility-page": {
       "phase": "archived",
@@ -1958,6 +1958,15 @@
       },
       "phaseTimestamps": {},
       "automationLevel": 2
+    },
+    "ui-redesign-chat": {
+      "phase": "archived",
+      "matchRate": 98.5,
+      "iterationCount": 1,
+      "startedAt": "2026-10-20T08:25:42.000Z",
+      "completedAt": "2026-10-21T05:05:18.000Z",
+      "archivedAt": "2026-10-21T06:17:01.000Z",
+      "archivedTo": "docs/archive/2026-10/ui-redesign-chat/"
     }
   },
   "pipeline": {
@@ -1968,27 +1977,9 @@
   "session": {
     "startedAt": "2026-03-16T14:41:16.262Z",
     "onboardingCompleted": false,
-    "lastActivity": "2026-08-20T00:30:08.505Z"
+    "lastActivity": "2026-10-21T05:02:57.072Z"
   },
   "history": [
-    {
-      "timestamp": "2026-07-03T05:49:19.698Z",
-      "feature": "AgentBuilderPage",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-07-03T05:49:21.709Z",
-      "feature": "AgentBuilderPage",
-      "phase": "do",
-      "action": "updated"
-    },
-    {
-      "timestamp": "2026-07-03T05:49:24.044Z",
-      "feature": "AgentBuilderPage",
-      "phase": "do",
-      "action": "updated"
-    },
     {
       "timestamp": "2026-07-03T05:49:25.866Z",
       "feature": "AgentBuilderPage",
@@ -2586,6 +2577,33 @@
       "event": "DESIGN_DONE",
       "from": "design",
       "to": "do",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "timestamp": "2026-10-20T08:25:58.647Z",
+      "feature": "ui-redesign-chat",
+      "event": "PLAN_DONE",
+      "from": "plan",
+      "to": "design",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "timestamp": "2026-10-20T08:39:15.041Z",
+      "feature": "ui-redesign-chat",
+      "event": "DESIGN_DONE",
+      "from": "design",
+      "to": "do",
+      "action": "state_transition",
+      "automationLevel": 2
+    },
+    {
+      "timestamp": "2026-10-21T05:02:57.072Z",
+      "feature": "ui-redesign-chat",
+      "event": "ANALYZE_DONE",
+      "from": "act",
+      "to": "check",
       "action": "state_transition",
       "automationLevel": 2
     }

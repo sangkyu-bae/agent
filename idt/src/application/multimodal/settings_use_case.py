@@ -193,7 +193,8 @@ class MultimodalSettingsUseCase:
         model = await self._llm_model_repo.find_by_id(model_id, request_id)
         if model is None:
             raise VisionModelNotFoundError(f"llm model '{model_id}' not found")
-        if not model.is_active or not model.supports_vision:
+        # image-generation-tool Design §4.2: 비전 후보는 chat 종류만
+        if not model.is_active or not model.supports_vision or not model.is_chat_model:
             raise VisionModelNotCapableError(
                 f"llm model '{model.model_name}' is inactive or not vision-capable"
             )

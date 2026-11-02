@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 
 from src.application.agent_builder.supervisor_state import SupervisorState
 from src.application.agent_run.step_tracking import STEP_OUTPUT_SUMMARY_KEY
+from src.application.agent_builder.message_content import message_text
 from src.domain.agent_builder.rag_tool_config import clamp_llm_name
 from src.domain.agent_builder.policies import SearchPipelinePolicy
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
@@ -51,7 +52,7 @@ def is_search_result(msg) -> bool:
     if isinstance(msg, dict):
         return False
     name = getattr(msg, "name", None)
-    content = getattr(msg, "content", "")
+    content = message_text(msg)
     return bool(name) and SEARCH_RESULT_MARKER in content
 
 
@@ -79,8 +80,8 @@ def is_draft_output(msg) -> bool:
     if isinstance(msg, dict) or getattr(msg, "type", "") != "ai":
         return False
     name = getattr(msg, "name", None)
-    content = getattr(msg, "content", "")
-    if not name or not isinstance(content, str):
+    content = message_text(msg)
+    if not name or not content:
         return False
     first_line = content.split("\n", 1)[0]
     return first_line == f"[{name} {DRAFT_OUTPUT_MARKER}]"
@@ -95,7 +96,7 @@ def split_draft_output(msg) -> tuple[str, str, str] | None:
     if not is_draft_output(msg):
         return None
     worker_id = str(getattr(msg, "name"))
-    content: str = getattr(msg, "content")
+    content: str = message_text(msg)
     head_line = f"[{worker_id} {DRAFT_OUTPUT_MARKER}]\n"
     boundary = f"\n\n[{worker_id} {DRAFT_OUTCOME_MARKER}]\n"
     body = content[len(head_line):]
@@ -115,12 +116,6 @@ def is_worker_output(msg) -> bool:
     return bool(getattr(msg, "name", None)) and getattr(msg, "type", "") == "ai"
 
 
-def _message_text(msg) -> str:
-    if isinstance(msg, dict):
-        return str(msg.get("content", ""))
-    return str(getattr(msg, "content", ""))
-
-
 def _message_role(msg) -> str:
     if isinstance(msg, dict):
         return str(msg.get("role", ""))
@@ -135,7 +130,7 @@ def latest_user_question(messages: list) -> str:
     for msg in reversed(messages):
         if _message_role(msg) not in ("user", "human"):
             continue
-        content = _message_text(msg)
+        content = message_text(msg)
         if content.startswith(QUALITY_FEEDBACK_PREFIX):
             continue
         return content
@@ -209,7 +204,7 @@ def _collect_context(messages: list) -> str:
     conversation = [m for m in messages if not is_worker_output(m)]
     recent = conversation[-_CONTEXT_MAX_MESSAGES:]
     return "\n".join(
-        f"{_message_role(m)}: {_message_text(m)[:_CONTEXT_MSG_SLICE]}" for m in recent
+        f"{_message_role(m)}: {message_text(m)[:_CONTEXT_MSG_SLICE]}" for m in recent
     )
 
 
@@ -276,7 +271,7 @@ async def _compress_result(
             {"role": "system", "content": user_context + COMPRESS_SYSTEM_PROMPT},
             {"role": "user", "content": user_content},
         ])
-        compressed = str(getattr(out, "content", "")).strip()
+        compressed = message_text(out).strip()
         if compressed:
             return compressed, len(compressed)
         logger.warning("search_pipeline compress returned empty, keeping original")
@@ -369,7 +364,7 @@ def create_search_pipeline_node(
 
     async def search_node(state: SupervisorState) -> dict:
         messages = state["messages"]
-        question = latest_user_question(messages) or _message_text(messages[-1])
+        question = latest_user_question(messages) or message_text(messages[-1])
         context = _collect_context(messages)
 
         query, llm_chars = await _rewrite_query(
