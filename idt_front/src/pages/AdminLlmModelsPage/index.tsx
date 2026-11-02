@@ -9,12 +9,27 @@ import {
   useDeactivateLlmModel,
 } from '@/hooks/useLlmModels';
 import { formatDate } from '@/utils/formatters';
-import { LLM_PROVIDER } from '@/types/llmModel';
+import { LLM_MODEL_KIND, LLM_PROVIDER } from '@/types/llmModel';
 import type {
   CreateLlmModelRequest,
   LlmModel,
+  LlmModelKind,
   UpdateLlmModelRequest,
 } from '@/types/llmModel';
+import { isImageModel } from '@/utils/llmModelKind';
+
+/** image-generation-tool Design §5.1: 종류 라디오 표기 */
+const MODEL_KIND_LABELS: Record<LlmModelKind, string> = {
+  [LLM_MODEL_KIND.CHAT]: '대화',
+  [LLM_MODEL_KIND.IMAGE]: '이미지 생성',
+};
+
+/** 장당 단가 문자열 → number|null (빈 값 = 미설정). 음수·비숫자는 undefined 로 거부. */
+const parsePerImagePrice = (raw: string): number | null | undefined => {
+  if (!raw.trim()) return null;
+  const value = parseFloat(raw);
+  return Number.isNaN(value) || value < 0 ? undefined : value;
+};
 
 const inputCls =
   'w-full rounded-xl border border-zinc-300 px-4 py-2.5 text-[14px] text-zinc-900 placeholder-zinc-400 outline-none transition-all focus:border-violet-400 focus:ring-2 focus:ring-violet-100';
@@ -39,6 +54,8 @@ interface FormState {
   is_active: boolean;
   is_default: boolean;
   supports_vision: boolean; // multimodal-extractor: 비전(이미지 입력) 지원
+  model_kind: LlmModelKind; // image-generation-tool: 대화 / 이미지 생성
+  price_per_image: string; // image-generation-tool: 장당 단가 USD (image 종류 전용)
 }
 
 const emptyForm: FormState = {
@@ -52,6 +69,8 @@ const emptyForm: FormState = {
   is_active: true,
   is_default: false,
   supports_vision: false,
+  model_kind: LLM_MODEL_KIND.CHAT,
+  price_per_image: '',
 };
 
 const fromModel = (m: LlmModel): FormState => ({
@@ -65,6 +84,8 @@ const fromModel = (m: LlmModel): FormState => ({
   is_active: m.is_active,
   is_default: m.is_default,
   supports_vision: m.supports_vision ?? false,
+  model_kind: m.model_kind ?? LLM_MODEL_KIND.CHAT,
+  price_per_image: m.price_per_image_usd ?? '',
 });
 
 interface FormModalProps {
@@ -125,6 +146,23 @@ const LlmModelFormModal = ({
     }
     const baseUrl = form.base_url.trim() || null;
 
+    // image-generation-tool Design §5.1: 이미지 종류는 비전 플래그를 내리고 장당 단가를 받는다.
+    const isImage = form.model_kind === LLM_MODEL_KIND.IMAGE;
+    const pricePerImage = isImage ? parsePerImagePrice(form.price_per_image) : null;
+    if (pricePerImage === undefined) {
+      setError('장당 단가는 0 이상의 숫자여야 합니다.');
+      return;
+    }
+    if (isImage && form.is_default) {
+      setError('이미지 생성 모델은 기본 모델로 지정할 수 없습니다.');
+      return;
+    }
+    const kindFields = {
+      supports_vision: isImage ? false : form.supports_vision,
+      model_kind: form.model_kind,
+      price_per_image_usd: pricePerImage,
+    };
+
     if (isEdit) {
       onSubmitUpdate({
         display_name: form.display_name.trim(),
@@ -133,7 +171,7 @@ const LlmModelFormModal = ({
         base_url: baseUrl,
         is_active: form.is_active,
         is_default: form.is_default,
-        supports_vision: form.supports_vision,
+        ...kindFields,
       });
     } else {
       onSubmitCreate({
@@ -146,10 +184,12 @@ const LlmModelFormModal = ({
         base_url: baseUrl,
         is_active: form.is_active,
         is_default: form.is_default,
-        supports_vision: form.supports_vision,
+        ...kindFields,
       });
     }
   };
+
+  const isImageKind = form.model_kind === LLM_MODEL_KIND.IMAGE;
 
   return (
     <Modal
@@ -193,13 +233,36 @@ const LlmModelFormModal = ({
                 type="text"
                 value={form.model_name}
                 onChange={(e) => set('model_name', e.target.value)}
-                placeholder="예: gpt-4o"
+                placeholder={isImageKind ? '예: gpt-image-1' : '예: gpt-4o'}
                 maxLength={150}
                 className={inputCls}
               />
             )}
           </div>
         </div>
+
+        {/* image-generation-tool Design §5.1: 종류 — 이미지 선택 시 비전 체크를 숨기고 장당 단가를 받는다 */}
+        <fieldset>
+          <legend className={labelCls}>종류</legend>
+          <div className="flex gap-6 text-[13px] text-zinc-700">
+            {(Object.values(LLM_MODEL_KIND) as LlmModelKind[]).map((kind) => (
+              <label key={kind} className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="llm-model-kind"
+                  value={kind}
+                  checked={form.model_kind === kind}
+                  onChange={() => set('model_kind', kind)}
+                  className="h-4 w-4 border-zinc-300 text-violet-600"
+                />
+                {MODEL_KIND_LABELS[kind]}
+              </label>
+            ))}
+          </div>
+          <p className="mt-1 text-[12px] text-zinc-400">
+            이미지 생성 모델은 에이전트 대화 모델·비전 모델로 선택되지 않으며, 이미지 생성 도구에서만 쓰입니다.
+          </p>
+        </fieldset>
 
         <div>
           <label className={labelCls}>
@@ -292,21 +355,41 @@ const LlmModelFormModal = ({
             />
             기본 모델
           </label>
-          <label className="flex items-center gap-2 text-[13px] text-zinc-700">
-            <input
-              type="checkbox"
-              checked={form.supports_vision}
-              onChange={(e) => set('supports_vision', e.target.checked)}
-              className="h-4 w-4 rounded border-zinc-300 text-violet-600"
-            />
-            비전 지원
-          </label>
+          {!isImageKind && (
+            <label className="flex items-center gap-2 text-[13px] text-zinc-700">
+              <input
+                type="checkbox"
+                checked={form.supports_vision}
+                onChange={(e) => set('supports_vision', e.target.checked)}
+                className="h-4 w-4 rounded border-zinc-300 text-violet-600"
+              />
+              비전 지원
+            </label>
+          )}
           <span className="text-[12px] text-zinc-400">
             기본 모델 지정 시 기존 기본 모델은 자동 해제됩니다.
           </span>
         </div>
 
-        {!isEdit && (
+        {isImageKind && (
+          <div>
+            <label htmlFor="llm-price-per-image" className={labelCls}>
+              장당 단가 (USD)
+            </label>
+            <input
+              id="llm-price-per-image"
+              type="number"
+              value={form.price_per_image}
+              onChange={(e) => set('price_per_image', e.target.value)}
+              placeholder="예: 0.0400 (비우면 비용 0 으로 기록)"
+              min={0}
+              step="0.0001"
+              className={inputCls}
+            />
+          </div>
+        )}
+
+        {!isEdit && !isImageKind && (
           <p className="rounded-lg bg-zinc-50 px-3 py-2 text-[12.5px] text-zinc-500">
             가격은 등록 후 목록의 &quot;가격&quot; 버튼으로 설정합니다.
           </p>
@@ -339,10 +422,17 @@ const LlmModelFormModal = ({
 
 // ── 가격 변경 모달 ─────────────────────────────────────────
 
+/** 가격 모달 제출값 — 이미지 종류는 장당 단가만 바뀌고 토큰 단가는 기존 값(없으면 0) 유지 */
+interface PricingSubmit {
+  input: number;
+  output: number;
+  perImage?: number;
+}
+
 interface PricingModalProps {
   model: LlmModel | null;
   onClose: () => void;
-  onSubmit: (input: number, output: number) => void;
+  onSubmit: (values: PricingSubmit) => void;
   isPending: boolean;
   error: string | null;
   setError: (msg: string | null) => void;
@@ -358,64 +448,105 @@ const LlmModelPricingModal = ({
 }: PricingModalProps) => {
   const [inputPrice, setInputPrice] = useState('');
   const [outputPrice, setOutputPrice] = useState('');
+  const [perImagePrice, setPerImagePrice] = useState('');
   const [initialized, setInitialized] = useState(false);
 
   const isOpen = !!model;
   if (isOpen && !initialized) {
     setInputPrice(model.input_price_per_1k_usd ?? '');
     setOutputPrice(model.output_price_per_1k_usd ?? '');
+    setPerImagePrice(model.price_per_image_usd ?? '');
     setInitialized(true);
   }
   if (!isOpen && initialized) setInitialized(false);
   if (!isOpen) return null;
 
+  const isImage = isImageModel(model);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    if (isImage) {
+      // image-generation-tool: 토큰 단가는 필수 필드라 기존 값(없으면 0)을 그대로 보낸다
+      const perImage = parseFloat(perImagePrice);
+      if (Number.isNaN(perImage) || perImage < 0) {
+        setError('0 이상의 숫자를 입력하세요');
+        return;
+      }
+      onSubmit({
+        input: parseFloat(model.input_price_per_1k_usd ?? '0') || 0,
+        output: parseFloat(model.output_price_per_1k_usd ?? '0') || 0,
+        perImage,
+      });
+      return;
+    }
     const input = parseFloat(inputPrice);
     const output = parseFloat(outputPrice);
     if (Number.isNaN(input) || Number.isNaN(output) || input < 0 || output < 0) {
       setError('0 이상의 숫자를 입력하세요');
       return;
     }
-    onSubmit(input, output);
+    onSubmit({ input, output });
   };
 
   return (
     <Modal
       onClose={onClose}
       title="가격 설정"
-      subtitle={`${model.display_name} · 1,000 토큰당 USD`}
+      subtitle={`${model.display_name} · ${isImage ? '이미지 1장당 USD' : '1,000 토큰당 USD'}`}
       size="sm"
       showCloseButton={false}
     >
       {/* noValidate: 브라우저 기본 검증 대신 커스텀 인라인 에러로 통일 */}
       <form onSubmit={handleSubmit} noValidate className="space-y-4">
-        <div>
-          <label className={labelCls}>입력 단가 (USD/1K)</label>
-          <input
-            type="number"
-            value={inputPrice}
-            onChange={(e) => setInputPrice(e.target.value)}
-            placeholder="예: 0.0025"
-            min={0}
-            step="0.0001"
-            className={inputCls}
-            autoFocus
-          />
-        </div>
-        <div>
-          <label className={labelCls}>출력 단가 (USD/1K)</label>
-          <input
-            type="number"
-            value={outputPrice}
-            onChange={(e) => setOutputPrice(e.target.value)}
-            placeholder="예: 0.0100"
-            min={0}
-            step="0.0001"
-            className={inputCls}
-          />
-        </div>
+        {isImage ? (
+          <div>
+            <label htmlFor="llm-pricing-per-image" className={labelCls}>
+              장당 단가 (USD)
+            </label>
+            <input
+              id="llm-pricing-per-image"
+              type="number"
+              value={perImagePrice}
+              onChange={(e) => setPerImagePrice(e.target.value)}
+              placeholder="예: 0.0400"
+              min={0}
+              step="0.0001"
+              className={inputCls}
+              autoFocus
+            />
+          </div>
+        ) : (
+          <>
+            <div>
+              <label htmlFor="llm-pricing-input" className={labelCls}>입력 단가 (USD/1K)</label>
+              <input
+                id="llm-pricing-input"
+                type="number"
+                value={inputPrice}
+                onChange={(e) => setInputPrice(e.target.value)}
+                placeholder="예: 0.0025"
+                min={0}
+                step="0.0001"
+                className={inputCls}
+                autoFocus
+              />
+            </div>
+            <div>
+              <label htmlFor="llm-pricing-output" className={labelCls}>출력 단가 (USD/1K)</label>
+              <input
+                id="llm-pricing-output"
+                type="number"
+                value={outputPrice}
+                onChange={(e) => setOutputPrice(e.target.value)}
+                placeholder="예: 0.0100"
+                min={0}
+                step="0.0001"
+                className={inputCls}
+              />
+            </div>
+          </>
+        )}
 
         {model.pricing_updated_at && (
           <p className="text-[12px] text-zinc-400">
@@ -450,7 +581,7 @@ const LlmModelPricingModal = ({
 
 // ── 페이지 ─────────────────────────────────────────────────
 
-const PriceCell = ({ value }: { value?: string | null }) => {
+const PriceCell = ({ value, unit = '/1K' }: { value?: string | null; unit?: string }) => {
   if (value == null) {
     return (
       <span className="rounded-md bg-amber-50 px-2 py-1 text-[11.5px] font-medium text-amber-600">
@@ -460,7 +591,7 @@ const PriceCell = ({ value }: { value?: string | null }) => {
   }
   return (
     <span className="text-[13px] text-zinc-600">
-      ${value} <span className="text-[11px] text-zinc-400">/1K</span>
+      ${value} <span className="text-[11px] text-zinc-400">{unit}</span>
     </span>
   );
 };
@@ -504,12 +635,17 @@ const AdminLlmModelsPage = () => {
     );
   };
 
-  const handlePricing = (input: number, output: number) => {
+  const handlePricing = ({ input, output, perImage }: PricingSubmit) => {
     if (!pricingTarget) return;
     pricingMutation.mutate(
       {
         id: pricingTarget.id,
-        data: { input_price_per_1k_usd: input, output_price_per_1k_usd: output },
+        data: {
+          input_price_per_1k_usd: input,
+          output_price_per_1k_usd: output,
+          // image-generation-tool: 이미지 종류만 전송 (생략 = 기존 값 유지)
+          ...(perImage !== undefined ? { price_per_image_usd: perImage } : {}),
+        },
       },
       {
         onSuccess: () => setPricingTarget(null),
@@ -639,6 +775,14 @@ const AdminLlmModelsPage = () => {
                           Vision
                         </span>
                       )}
+                      {isImageModel(m) && (
+                        <span
+                          className="rounded-md bg-fuchsia-50 px-2 py-0.5 text-[11px] font-medium text-fuchsia-600"
+                          title="이미지 생성 전용 — 에이전트 대화·비전 모델로는 선택되지 않음"
+                        >
+                          이미지 생성
+                        </span>
+                      )}
                     </div>
                     {m.description && (
                       <div className="text-[12px] text-zinc-400">{m.description}</div>
@@ -659,12 +803,23 @@ const AdminLlmModelsPage = () => {
                       {m.is_active ? '활성' : '비활성'}
                     </span>
                   </td>
-                  <td className="px-5 py-4">
-                    <PriceCell value={m.input_price_per_1k_usd} />
-                  </td>
-                  <td className="px-5 py-4">
-                    <PriceCell value={m.output_price_per_1k_usd} />
-                  </td>
+                  {isImageModel(m) ? (
+                    <>
+                      <td className="px-5 py-4">
+                        <PriceCell value={m.price_per_image_usd} unit="/장" />
+                      </td>
+                      <td className="px-5 py-4 text-[12px] text-zinc-400">–</td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="px-5 py-4">
+                        <PriceCell value={m.input_price_per_1k_usd} />
+                      </td>
+                      <td className="px-5 py-4">
+                        <PriceCell value={m.output_price_per_1k_usd} />
+                      </td>
+                    </>
+                  )}
                   <td
                     className="max-w-[160px] truncate px-5 py-4 font-mono text-[12px] text-zinc-500"
                     title={m.base_url ?? undefined}

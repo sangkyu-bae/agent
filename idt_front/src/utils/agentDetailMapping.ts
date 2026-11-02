@@ -13,6 +13,8 @@ import { MAX_ITERATIONS } from '@/constants/agentSettings';
 import { mapDraftToolIdsToCatalog } from './draftToolMapping';
 import { draftFromGenerationTypeInfo } from './documentGenerator';
 import { draftFromWorkerToolConfig } from '@/utils/presentationGenerator';
+import { draftFromImageWorkerToolConfig } from '@/utils/imageGeneration';
+import { IMAGE_GENERATE_WORKER_TOOL_ID } from '@/types/imageGeneration';
 import { draftArgKeysFromWorkers } from '@/utils/toolConfigPayload';
 
 /** RAG 도구의 저장 형식 tool_id (worker.tool_id) */
@@ -83,6 +85,10 @@ export function mapDetailToForm(
     // golden-sample-blueprint D7: presentation_generator 워커 tool_config 프리필
     presentationGeneratorDraft: draftFromWorkerToolConfig(
       detail.workers.find((w) => w.tool_id === 'presentation_generator')?.tool_config,
+    ),
+    // image-generation-tool Design §4.2: image_generate 워커 tool_config 프리필
+    imageGenerationDraft: draftFromImageWorkerToolConfig(
+      detail.workers.find((w) => w.tool_id === IMAGE_GENERATE_WORKER_TOOL_ID)?.tool_config,
     ),
     // agent-settings-tab D5: 서버는 항상 값을 반환 — 폴백은 방어용
     maxIterations: detail.max_iterations ?? MAX_ITERATIONS.DEFAULT,

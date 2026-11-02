@@ -11,10 +11,23 @@ interface MessageBubbleProps {
   message: Message;
 }
 
-const UserMessage = ({ content }: { content: string }) => (
+const UserMessage = ({ content, imagePreviews }: { content: string; imagePreviews?: string[] }) => (
   <div className="flex justify-end">
     <div className="max-w-[85%] lg:max-w-[75%]">
       <div className="rounded-xl rounded-br-md bg-linear-to-br from-bubble-from to-bubble-to px-5 py-3.5 text-md leading-[1.65] text-white">
+        {/* chat-image-attachment FR-17: 전송한 이미지 썸네일 (세션 메모리의 object URL) */}
+        {imagePreviews && imagePreviews.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-2" data-testid="user-image-previews">
+            {imagePreviews.map((src, i) => (
+              <img
+                key={`${src}-${i}`}
+                src={src}
+                alt={`첨부 이미지 ${i + 1}`}
+                className="h-24 max-w-[160px] rounded-lg object-cover"
+              />
+            ))}
+          </div>
+        )}
         <p className="whitespace-pre-wrap">{content}</p>
       </div>
     </div>
@@ -75,7 +88,9 @@ const feedbackId = (message: Message): number | null => {
 };
 
 const MessageBubble = ({ message }: MessageBubbleProps) => {
-  if (message.role === 'user') return <UserMessage content={message.content} />;
+  if (message.role === 'user') {
+    return <UserMessage content={message.content} imagePreviews={message.imagePreviews} />;
+  }
   return <AssistantMessage message={message} />;
 };
 

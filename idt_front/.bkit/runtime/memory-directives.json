@@ -1,0 +1,54 @@
+{
+  "version": "2.1.14",
+  "count": 8,
+  "items": [
+    {
+      "pattern": "migrate frameworks or build tools",
+      "action": "deny",
+      "rule": "do-not",
+      "source": "CLAUDE.md"
+    },
+    {
+      "pattern": "replace existing routing or state libraries",
+      "action": "deny",
+      "rule": "do-not",
+      "source": "CLAUDE.md"
+    },
+    {
+      "pattern": "modify API request/response contracts",
+      "action": "deny",
+      "rule": "do-not",
+      "source": "CLAUDE.md"
+    },
+    {
+      "pattern": "change business logic",
+      "action": "deny",
+      "rule": "do-not",
+      "source": "CLAUDE.md"
+    },
+    {
+      "pattern": "add large dependencies without approval",
+      "action": "deny",
+      "rule": "do-not",
+      "source": "CLAUDE.md"
+    },
+    {
+      "pattern": "make unnecessary global CSS changes",
+      "action": "deny",
+      "rule": "do-not",
+      "source": "CLAUDE.md"
+    },
+    {
+      "pattern": "modify unrelated screens",
+      "action": "deny",
+      "rule": "do-not",
+      "source": "CLAUDE.md"
+    },
+    {
+      "pattern": "excessive gradients, animations and shadows",
+      "action": "warn",
+      "rule": "avoid",
+      "source": "CLAUDE.md"
+    }
+  ]
+}

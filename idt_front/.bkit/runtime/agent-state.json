@@ -2,12 +2,12 @@
   "version": "1.0",
   "enabled": false,
   "teamName": "",
-  "feature": "question-card",
-  "pdcaPhase": "archived",
+  "feature": "ui-redesign-chat",
+  "pdcaPhase": "do",
   "orchestrationPattern": "leader",
   "ctoAgent": "fable",
-  "startedAt": "2026-08-20T13:34:47.623Z",
-  "lastUpdated": "2026-08-20T13:44:44.875Z",
+  "startedAt": "2026-10-21T04:17:46.760Z",
+  "lastUpdated": "2026-10-22T05:36:31.748Z",
   "teammates": [],
   "progress": {
     "totalTasks": 0,
@@ -17,5 +17,5 @@
     "pendingTasks": 0
   },
   "recentMessages": [],
-  "sessionId": "5c46467d-266d-4818-b87b-a72b82dc4ba1"
+  "sessionId": "6af0fc81-eed8-4c48-8787-91c398a06cab"
 }

@@ -18,6 +18,8 @@ export interface MyAgent {
   created_at: string;
   // agent-opener D4: 채팅 빈 상태 노출용 (구 서버 응답 호환 optional)
   openers?: string[];
+  // chat-image-attachment D-09: 비전 여부 안내용 (구 서버 응답 호환 optional)
+  llm_model_id?: string;
 }
 
 export interface MyAgentsResponse {
@@ -104,6 +106,8 @@ export interface AgentSummary {
   isDefault?: boolean;
   // agent-opener §5.2: 빈 상태 카드. 없거나 []면 고정 제안 카드 유지
   openers?: string[];
+  // chat-image-attachment D-09: 비전 여부 안내용 (LLM 모델 목록과 대조). 권위는 서버 precheck.
+  llmModelId?: string;
 }
 
 export interface AgentChatOutletContext {

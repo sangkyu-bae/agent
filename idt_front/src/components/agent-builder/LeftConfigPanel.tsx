@@ -12,6 +12,7 @@ import RagConfigModal from './RagConfigModal';
 import DocumentExtractorConfigModal from './DocumentExtractorConfigModal';
 import DocumentGeneratorConfigModal from './DocumentGeneratorConfigModal';
 import PresentationGeneratorConfigModal from './PresentationGeneratorConfigModal';
+import ImageGenerationConfigModal from './ImageGenerationConfigModal';
 import SubAgentManagerModal from './SubAgentManagerModal';
 import { useSkills } from '@/hooks/useSkills';
 import { useMiddlewareCatalog } from '@/hooks/useMiddlewareCatalog';
@@ -28,6 +29,12 @@ import type { DocumentGeneratorDraft } from '@/types/documentGenerator';
 import type { PresentationGeneratorDraft } from '@/types/presentationGenerator';
 import { PRESENTATION_GENERATOR_TOOL_ID } from '@/types/presentationGenerator';
 import {
+  IMAGE_GENERATE_TOOL_ID,
+  IMAGE_SIZE_OPTIONS,
+  type ImageGenerationDraft,
+} from '@/types/imageGeneration';
+import { useLlmModels } from '@/hooks/useLlmModels';
+import {
   loadDraftFromSession,
   saveDraftToSession,
 } from '@/utils/documentTemplate';
@@ -43,6 +50,7 @@ const CONFIGURABLE_TOOL_IDS: readonly string[] = [
   DOCUMENT_EXTRACTOR_TOOL_ID,
   DOCUMENT_GENERATOR_TOOL_ID,
   PRESENTATION_GENERATOR_TOOL_ID,
+  IMAGE_GENERATE_TOOL_ID,
 ];
 
 interface LeftConfigPanelProps {
@@ -105,6 +113,7 @@ const LeftConfigPanel = ({
   const [isExtractorConfigOpen, setExtractorConfigOpen] = useState(false);
   const [isGeneratorConfigOpen, setGeneratorConfigOpen] = useState(false);
   const [isPresentationConfigOpen, setPresentationConfigOpen] = useState(false);
+  const [isImageConfigOpen, setImageConfigOpen] = useState(false);
 
   const subAgents = form.subAgents ?? [];
   const { data: skillList } = useSkills({ scope: 'all', size: 100 });
@@ -142,6 +151,7 @@ const LeftConfigPanel = ({
       if (toolId === RAG_TOOL_ID) setRagConfigOpen(true);
       else if (toolId === DOCUMENT_GENERATOR_TOOL_ID) setGeneratorConfigOpen(true);
       else if (toolId === PRESENTATION_GENERATOR_TOOL_ID) setPresentationConfigOpen(true);
+      else if (toolId === IMAGE_GENERATE_TOOL_ID) setImageConfigOpen(true);
       else setExtractorConfigOpen(true);
     }
   };
@@ -151,6 +161,7 @@ const LeftConfigPanel = ({
     else if (toolId === DOCUMENT_EXTRACTOR_TOOL_ID) setExtractorConfigOpen(true);
     else if (toolId === DOCUMENT_GENERATOR_TOOL_ID) setGeneratorConfigOpen(true);
     else if (toolId === PRESENTATION_GENERATOR_TOOL_ID) setPresentationConfigOpen(true);
+    else if (toolId === IMAGE_GENERATE_TOOL_ID) setImageConfigOpen(true);
   };
 
   const handleAddSubAgent = (candidate: SubAgentCandidate) => {
@@ -452,6 +463,9 @@ const LeftConfigPanel = ({
                     {tool.tool_id === PRESENTATION_GENERATOR_TOOL_ID && (
                       <PresentationSummaryBadge draft={form.presentationGeneratorDraft ?? null} />
                     )}
+                    {tool.tool_id === IMAGE_GENERATE_TOOL_ID && (
+                      <ImageGenerationSummaryBadge draft={form.imageGenerationDraft ?? null} />
+                    )}
                   </li>
                 );
               })}
@@ -580,6 +594,12 @@ const LeftConfigPanel = ({
         draft={form.presentationGeneratorDraft ?? null}
         onChange={(draft) => onChange({ ...form, presentationGeneratorDraft: draft })}
         onClose={() => setPresentationConfigOpen(false)}
+      />
+      <ImageGenerationConfigModal
+        isOpen={isImageConfigOpen}
+        draft={form.imageGenerationDraft ?? null}
+        onChange={(draft) => onChange({ ...form, imageGenerationDraft: draft })}
+        onClose={() => setImageConfigOpen(false)}
       />
       <SkillPickerModal
         isOpen={isSkillModalOpen}
@@ -812,6 +832,31 @@ const PresentationSummaryBadge = ({ draft }: PresentationSummaryBadgeProps) => {
   return (
     <p className="mt-1.5 inline-block rounded bg-emerald-50 px-1.5 py-0.5 text-[11.5px] font-medium text-emerald-700">
       ✓ 양식 선택됨 · 최대 {draft.maxSlides}장 · {draft.outputFormat.toUpperCase()}
+    </p>
+  );
+};
+
+// ── 이미지 생성 요약 배지 (image-generation-tool §5.1) ─────────────────
+
+interface ImageGenerationSummaryBadgeProps {
+  draft: ImageGenerationDraft | null;
+}
+
+const ImageGenerationSummaryBadge = ({ draft }: ImageGenerationSummaryBadgeProps) => {
+  // 모델 표시명은 캐시된 목록에서 역조회 (패널과 같은 쿼리 키 → 추가 요청 없음)
+  const { data: models } = useLlmModels();
+  if (!draft || !draft.llmModelId) {
+    return (
+      <p className="mt-1.5 inline-block rounded bg-amber-50 px-1.5 py-0.5 text-[11.5px] font-medium text-amber-600">
+        ⚠ 이미지 모델 미선택
+      </p>
+    );
+  }
+  const modelName = models?.find((m) => m.id === draft.llmModelId)?.display_name ?? '모델 선택됨';
+  const sizeLabel = IMAGE_SIZE_OPTIONS.find((o) => o.value === draft.defaultSize)?.label ?? draft.defaultSize;
+  return (
+    <p className="mt-1.5 inline-block rounded bg-emerald-50 px-1.5 py-0.5 text-[11.5px] font-medium text-emerald-700">
+      ✓ {modelName} · {sizeLabel} · {draft.quality === 'hd' ? '고품질' : '표준'}
     </p>
   );
 };

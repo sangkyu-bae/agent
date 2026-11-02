@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToolCatalog } from '@/hooks/useToolCatalog';
 import { useLlmModels } from '@/hooks/useLlmModels';
@@ -24,6 +24,13 @@ import { DOCUMENT_EXTRACTOR_TOOL_ID } from '@/types/documentExtractor';
 import { DOCUMENT_GENERATOR_TOOL_ID } from '@/types/documentGenerator';
 import { PRESENTATION_GENERATOR_TOOL_ID } from '@/types/presentationGenerator';
 import { buildPresentationGeneratorRequest } from '@/utils/presentationGenerator';
+import { IMAGE_GENERATE_TOOL_ID } from '@/types/imageGeneration';
+import {
+  buildImageGenerationRequest,
+  imageGenerationSaveErrorMessage,
+  validateImageGenerationDraft,
+} from '@/utils/imageGeneration';
+import { filterActiveImageModels, filterChatModels } from '@/utils/llmModelKind';
 import { buildToolIdsForSave } from '@/utils/agentToolPayload';
 import { buildDocumentTemplateRequest } from '@/utils/documentTemplate';
 import { buildDocumentGenerationTypeRequest } from '@/utils/documentGenerator';
@@ -145,7 +152,11 @@ const AgentBuilderPage = () => {
   const { data: agentsData, isLoading: isAgentsLoading, isError: isAgentsError, refetch: refetchAgents } = useMyBuilderAgents();
   const { data: editDetail } = useBuilderAgentDetail(editingId && view === 'edit' ? editingId : null);
   const { data: catalogTools, isLoading: isToolsLoading, isError: isToolsError, refetch: refetchTools } = useToolCatalog();
-  const { data: models, isLoading: isModelsLoading, isError: isModelsError, refetch: refetchModels } = useLlmModels();
+  const { data: allModels, isLoading: isModelsLoading, isError: isModelsError, refetch: refetchModels } = useLlmModels();
+  // image-generation-tool Design §4.2 / D-05: 에이전트(채팅) 모델 후보는 chat 종류만.
+  // 이미지 모델은 이미지 생성 설정 패널에서만 고른다.
+  const models = useMemo(() => (allModels ? filterChatModels(allModels) : undefined), [allModels]);
+  const hasImageModels = useMemo(() => filterActiveImageModels(allModels).length > 0, [allModels]);
 
   const createMutation = useCreateBuilderAgent();
   const updateMutation = useUpdateBuilderAgent();
@@ -255,6 +266,16 @@ const AgentBuilderPage = () => {
     }
     setPromptError(null);
 
+    // image-generation-tool Design §5.1: 도구를 부착했으면 모델 선택 없이는 저장 차단
+    // (서버는 설정 없는 부착을 허용하지만, 실행 시 안내만 나가므로 저장 전에 막는다)
+    if (form.tools.includes(IMAGE_GENERATE_TOOL_ID)) {
+      const imageError = validateImageGenerationDraft(form.imageGenerationDraft, { hasImageModels });
+      if (imageError) {
+        setSaveResult({ type: 'error', message: `이미지 생성 설정: ${imageError}` });
+        return;
+      }
+    }
+
     if (view === 'edit' && editingId) {
       updateMutation.mutate(
         {
@@ -301,6 +322,8 @@ const AgentBuilderPage = () => {
             presentation_generator: buildPresentationGeneratorRequest(
               form.presentationGeneratorDraft,
             ),
+            // image-generation-tool: undefined = 변경 안 함, 값 = 교체
+            image_generation: buildImageGenerationRequest(form.imageGenerationDraft),
           },
         },
         {
@@ -316,7 +339,7 @@ const AgentBuilderPage = () => {
             });
           },
           onError: (error) => {
-            setSaveResult({ type: 'error', message: error.message });
+            setSaveResult({ type: 'error', message: imageGenerationSaveErrorMessage(error.message) });
           },
         },
       );
@@ -369,6 +392,8 @@ const AgentBuilderPage = () => {
           presentation_generator: buildPresentationGeneratorRequest(
             form.presentationGeneratorDraft,
           ),
+          // image-generation-tool: 모델이 선택된 드래프트만 전송
+          image_generation: buildImageGenerationRequest(form.imageGenerationDraft),
           // agent-settings-tab D5: 설정 탭 반복 한도 (기본 25)
           max_iterations: form.maxIterations,
           // agent-opener FR-09: 빈 행 제거 후 전송 (없으면 생략)
@@ -418,7 +443,7 @@ const AgentBuilderPage = () => {
             });
           },
           onError: (error) => {
-            setSaveResult({ type: 'error', message: error.message });
+            setSaveResult({ type: 'error', message: imageGenerationSaveErrorMessage(error.message) });
           },
         },
       );
@@ -459,6 +484,10 @@ const AgentBuilderPage = () => {
       // 발표자료생성기 해제 시 드래프트 정리 (golden-sample-blueprint)
       if (toolId === PRESENTATION_GENERATOR_TOOL_ID && isRemoving) {
         next.presentationGeneratorDraft = null;
+      }
+      // 이미지 생성 해제 시 설정 삭제 (image-generation-tool §8.3 #8)
+      if (toolId === IMAGE_GENERATE_TOOL_ID && isRemoving) {
+        next.imageGenerationDraft = null;
       }
       return next;
     });

@@ -6,6 +6,7 @@ import { FileText } from 'lucide-react';
 import { documentExtractorService } from '@/services/documentExtractorService';
 import { useExcelPreviewStore } from '@/store/excelPreviewStore';
 import { EXCEL_PREVIEW_TRIGGER } from '@/types/excelPreview';
+import AuthenticatedImage from './AuthenticatedImage';
 
 interface MarkdownRendererProps {
   content: string;
@@ -119,6 +120,15 @@ const components: Components = {
         {children}
       </a>
     );
+  },
+  // image-generation-tool Design §5.3 / D-10: 산출 파일 경로 이미지는 JWT 가 필요해
+  // 인증 fetch → object URL 로 위임한다. 외부 URL 은 기본 <img>.
+  img: ({ src, alt }) => {
+    if (typeof src === 'string' && src.startsWith(DOC_EXTRACTOR_FILE_PREFIX)) {
+      const fileId = src.slice(DOC_EXTRACTOR_FILE_PREFIX.length);
+      return <AuthenticatedImage fileId={fileId} alt={alt ?? 'image'} />;
+    }
+    return <img src={src} alt={alt ?? ''} loading="lazy" className="my-2 block max-w-full rounded-xl" />;
   },
   hr: () => <hr className="my-4 border-border" />,
   strong: ({ children }) => <strong className="font-semibold text-fg">{children}</strong>,

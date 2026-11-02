@@ -11,6 +11,7 @@ import { DEFAULT_RAG_CONFIG } from '@/types/ragToolConfig';
 import { DOCUMENT_EXTRACTOR_TOOL_ID } from '@/types/documentExtractor';
 import { DOCUMENT_GENERATOR_TOOL_ID } from '@/types/documentGenerator';
 import { PRESENTATION_GENERATOR_TOOL_ID } from '@/types/presentationGenerator';
+import { IMAGE_GENERATE_TOOL_ID } from '@/types/imageGeneration';
 import { RAG_CATALOG_TOOL_ID } from './agentDetailMapping';
 import type { AgentBuilderFormData } from '@/types/agentBuilder';
 import type { CatalogTool } from '@/types/toolCatalog';
@@ -23,6 +24,7 @@ export type ToolPrefillSlice = Pick<
   | 'documentExtractorDraft'
   | 'documentGeneratorDraft'
   | 'presentationGeneratorDraft'
+  | 'imageGenerationDraft'
 >;
 
 /**
@@ -67,6 +69,9 @@ export const applyToolsToForm = (
       : null,
     presentationGeneratorDraft: tools.includes(PRESENTATION_GENERATOR_TOOL_ID)
       ? prev.presentationGeneratorDraft
+      : null,
+    imageGenerationDraft: tools.includes(IMAGE_GENERATE_TOOL_ID)
+      ? prev.imageGenerationDraft
       : null,
   };
 };

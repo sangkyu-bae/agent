@@ -290,3 +290,103 @@ describe('AdminLlmModelsPage', () => {
     expect(screen.getByText('비활성')).toBeInTheDocument();
   });
 });
+
+// ── image-generation-tool Design §5.1 / §8.3 L2 #9 ─────────────────────────
+
+describe('AdminLlmModelsPage 이미지 생성 모델 (image-generation-tool)', () => {
+  it('IG1: 종류 "이미지 생성" 선택 시 장당 단가 입력이 나타나고 비전 체크가 숨겨지며, POST 바디에 model_kind·price_per_image_usd 가 실린다', async () => {
+    let captured: Record<string, unknown> | null = null;
+    server.use(
+      http.post('*/api/v1/llm-models', async ({ request }) => {
+        captured = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json(
+          {
+            id: 'uuid-img',
+            provider: captured.provider,
+            model_name: captured.model_name,
+            display_name: captured.display_name,
+            description: null,
+            max_tokens: null,
+            is_active: true,
+            is_default: false,
+            base_url: null,
+            supports_vision: false,
+            model_kind: captured.model_kind,
+            price_per_image_usd: String(captured.price_per_image_usd),
+            input_price_per_1k_usd: null,
+            output_price_per_1k_usd: null,
+            pricing_updated_at: null,
+          },
+          { status: 201 },
+        );
+      }),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('GPT-4o');
+
+    await user.click(screen.getByRole('button', { name: '모델 등록' }));
+    expect(screen.getByRole('radio', { name: '대화' })).toBeChecked();
+    expect(screen.queryByLabelText('장당 단가 (USD)')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('radio', { name: '이미지 생성' }));
+    expect(screen.queryByRole('checkbox', { name: '비전 지원' })).not.toBeInTheDocument();
+    await user.type(screen.getByPlaceholderText('예: gpt-image-1'), 'gpt-image-1');
+    await user.type(screen.getByPlaceholderText('예: GPT-4o'), 'GPT Image 1');
+    await user.type(screen.getByPlaceholderText('예: OPENAI_API_KEY'), 'OPENAI_API_KEY');
+    await user.type(screen.getByLabelText('장당 단가 (USD)'), '0.04');
+    await user.click(screen.getByRole('button', { name: '등록' }));
+
+    await waitFor(() => expect(captured).not.toBeNull());
+    expect(captured).toMatchObject({
+      model_name: 'gpt-image-1',
+      model_kind: 'image',
+      price_per_image_usd: 0.04,
+    });
+  });
+
+  it('IG2: 목록에 종류 배지와 장당 단가를 표시하고, 이미지 모델의 가격 모달은 장당 단가만 받는다', async () => {
+    server.use(
+      http.get('*/api/v1/llm-models', () =>
+        HttpResponse.json({
+          models: [
+            {
+              id: 'uuid-img', provider: 'openai', model_name: 'gpt-image-1', display_name: 'GPT Image 1',
+              description: null, max_tokens: null, is_active: true, is_default: false, base_url: null,
+              supports_vision: false, model_kind: 'image', price_per_image_usd: '0.0400',
+              input_price_per_1k_usd: null, output_price_per_1k_usd: null, pricing_updated_at: null,
+            },
+          ],
+        }),
+      ),
+    );
+    let captured: Record<string, unknown> | null = null;
+    server.use(
+      http.patch('*/api/v1/llm-models/:id/pricing', async ({ request }) => {
+        captured = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({
+          id: 'uuid-img', provider: 'openai', model_name: 'gpt-image-1', display_name: 'GPT Image 1',
+          description: null, max_tokens: null, is_active: true, is_default: false, base_url: null,
+          model_kind: 'image', price_per_image_usd: '0.0800',
+          input_price_per_1k_usd: '0', output_price_per_1k_usd: '0', pricing_updated_at: '2026-11-01T00:00:00',
+        });
+      }),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('GPT Image 1');
+    expect(screen.getByText('이미지 생성')).toBeInTheDocument();
+    expect(screen.getByText(/\$0\.0400/)).toBeInTheDocument();
+    expect(screen.getByText('/장')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'GPT Image 1 가격' }));
+    expect(screen.queryByLabelText('입력 단가 (USD/1K)')).not.toBeInTheDocument();
+    const perImage = screen.getByLabelText('장당 단가 (USD)');
+    await user.clear(perImage);
+    await user.type(perImage, '0.08');
+    await user.click(screen.getByRole('button', { name: '저장' }));
+
+    await waitFor(() => expect(captured).not.toBeNull());
+    expect(captured).toMatchObject({ price_per_image_usd: 0.08 });
+  });
+});

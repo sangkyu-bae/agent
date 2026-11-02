@@ -14,5 +14,21 @@
     "feature": null,
     "phase": "archived",
     "progress": null
+  },
+  {
+    "sessionId": "unknown",
+    "reason": "other",
+    "endedAt": "2026-09-18T07:55:02.681Z",
+    "feature": null,
+    "phase": "archived",
+    "progress": null
+  },
+  {
+    "sessionId": "unknown",
+    "reason": "other",
+    "endedAt": "2026-10-20T08:25:18.200Z",
+    "feature": null,
+    "phase": "archived",
+    "progress": null
   }
 ]

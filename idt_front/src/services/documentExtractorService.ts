@@ -43,6 +43,18 @@ export const documentExtractorService = {
     return response.data;
   },
 
+  /**
+   * image-generation-tool D-10: 산출 파일을 blob 으로 조회만 한다 (인라인 표시용).
+   * 호출 측(AuthenticatedImage)이 object URL 생성·해제를 책임진다.
+   */
+  fetchGeneratedFileBlob: async (fileId: string): Promise<Blob> => {
+    const response = await authApiClient.get<Blob>(
+      API_ENDPOINTS.DOCUMENT_EXTRACTOR_FILE(fileId),
+      { responseType: 'blob', timeout: 120_000 },
+    );
+    return response.data;
+  },
+
   /** 런타임 산출 문서 다운로드 — JWT 필요라 <a href> 대신 blob 저장. */
   downloadGeneratedFile: async (
     fileId: string,
