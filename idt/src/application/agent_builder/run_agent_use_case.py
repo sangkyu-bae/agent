@@ -170,6 +170,15 @@ def _image_attachments(attachments: list[dict] | None) -> list[dict]:
     return [a for a in attachments or [] if a.get("type") == "image"]
 
 
+def _saved_message_id(saved: Any) -> int | None:
+    """저장 결과에서 정수 id 만 꺼낸다 (agent-run-feedback-wiring §6.1).
+
+    id 미발급·테스트 대역(MagicMock)이면 None — payload 에 키를 싣지 않는다.
+    """
+    message_id = getattr(getattr(saved, "id", None), "value", None)
+    return message_id if isinstance(message_id, int) else None
+
+
 def _persisted_query(request: RunAgentRequest) -> str:
     """대화 기록에 저장할 본문 — 질문 + 이미지 마커 (FR-09).
 
@@ -419,7 +428,7 @@ class RunAgentUseCase:
             )
             # chat-chart-persistence D5: 차트 페이로드를 메시지와 함께 영속화.
             # 빈 리스트는 None으로 저장 (D2) — 재진입 시 이력 API가 복원.
-            await self._save_assistant_message(
+            message_id = await self._save_assistant_message(
                 answer, request.user_id, session_id, agent_id,
                 charts=state.charts or None,
                 analysis_data=snapshot,
@@ -433,15 +442,13 @@ class RunAgentUseCase:
                 request=request, request_id=request_id,
                 session_id=session_id,
             )
-            answer_payload: dict = {"answer": answer, "tools_used": tools_used}
-            if approval_id:
-                answer_payload["approval_pending"] = True
-                answer_payload["approval_id"] = approval_id
-            # agent-recursion-limit D7: True일 때만 부착 (charts 선례와 동형).
-            if state.limit_reached:
-                answer_payload["limit_reached"] = True
-            if state.charts:
-                answer_payload["charts"] = state.charts
+            # Design Ref: agent-run-feedback-wiring §4.3 — payload 는 _answer_payload 가
+            # 만든다. agent-recursion-limit D7 / charts 선례: 플래그는 truthy 일 때만.
+            answer_payload = self._answer_payload(
+                answer, tools_used, message_id,
+                approval_pending=bool(approval_id), approval_id=approval_id,
+                limit_reached=state.limit_reached, charts=state.charts,
+            )
             yield self._build_event(
                 seq, AgentRunEventType.ANSWER_COMPLETED, run_id, answer_payload,
             )
@@ -519,6 +526,8 @@ class RunAgentUseCase:
         run_id_str: Optional[str] = None
         session_id: str = request.session_id or ""
         failure_message: Optional[str] = None
+        # agent-run-feedback-wiring G-M1: ANSWER 없이 끝나는 분기가 생겨도 미정의 금지
+        assistant_message_id: int | None = None
 
         async for ev in self.stream(
             agent_id, request, request_id,
@@ -531,6 +540,8 @@ class RunAgentUseCase:
             elif ev.event_type == AgentRunEventType.ANSWER_COMPLETED:
                 final_answer = ev.payload["answer"]
                 tools_used = list(ev.payload["tools_used"])
+                # agent-run-feedback-wiring D-05: 저장했을 때만 키가 있다.
+                assistant_message_id = ev.payload.get("assistant_message_id")
             elif ev.event_type == AgentRunEventType.RUN_FAILED:
                 failure_message = ev.payload.get("message", "unknown failure")
 
@@ -545,6 +556,7 @@ class RunAgentUseCase:
             request_id=request_id,
             session_id=session_id,
             run_id=run_id_str,
+            assistant_message_id=assistant_message_id,
         )
 
     # ── prompt-guard (Design §4.5) ──────────────────────────────────────
@@ -615,13 +627,14 @@ class RunAgentUseCase:
         안내문 저장 → ANSWER_COMPLETED(guard_blocked=True, D2) → complete_run
         → RUN_COMPLETED.
         """
-        await self._save_assistant_message(
+        message_id = await self._save_assistant_message(
             BLOCK_NOTICE_KO, request.user_id, session_id, agent_id,
             persist=request.persist_conversation,
         )
+        # Design Ref: agent-run-feedback-wiring §4.3 (D-04) — 차단 턴도 평가 대상.
         yield self._build_event(
             seq, AgentRunEventType.ANSWER_COMPLETED, run_id,
-            {"answer": BLOCK_NOTICE_KO, "tools_used": [], "guard_blocked": True},
+            self._answer_payload(BLOCK_NOTICE_KO, [], message_id, guard_blocked=True),
         )
         if self._tracker is not None and run_id is not None:
             await self._tracker.complete_run(
@@ -670,15 +683,16 @@ class RunAgentUseCase:
         snapshot = self._collect_snapshot(
             request, state.final_messages, state.analysis_source,
         )
-        await self._save_assistant_message(
+        message_id = await self._save_assistant_message(
             answer, request.user_id, session_id, agent_id,
             charts=state.charts or None,
             analysis_data=snapshot,
             persist=request.persist_conversation,
         )
+        # Design Ref: agent-run-feedback-wiring §4.3 (D-04) — 강등 답변도 평가 대상.
         yield self._build_event(
             seq, AgentRunEventType.ANSWER_COMPLETED, run_id,
-            {"answer": answer, "tools_used": tools_used, "limit_reached": True},
+            self._answer_payload(answer, tools_used, message_id, limit_reached=True),
         )
         run_url: Optional[str] = None
         if self._tracker is not None and run_id is not None:
@@ -1688,9 +1702,11 @@ class RunAgentUseCase:
         charts: Optional[list[dict]] = None,
         analysis_data: Optional[dict] = None,
         persist: bool = True,
-    ) -> None:
+    ) -> int | None:
         """assistant message 저장 (user message 이후 turn_index 자동 계산).
 
+        반환: 저장된 메시지 id — ANSWER_COMPLETED 의 `assistant_message_id`
+        (agent-run-feedback-wiring §4.3). persist=False 또는 id 미발급이면 None.
         agent-model-benchmark D2: persist=False면 건너뛴다 (강등 경로도 동시 적용).
         chat-chart-persistence: charts는 표시 전용 메타 — LLM 컨텍스트(_build_messages)
         에는 재투입하지 않는다 (Design D7).
@@ -1698,7 +1714,7 @@ class RunAgentUseCase:
         데이터 스냅샷 (요약 입력에는 미포함).
         """
         if not persist:
-            return
+            return None
 
         def _build(turn: int) -> ConversationMessage:
             return ConversationMessage(
@@ -1716,8 +1732,25 @@ class RunAgentUseCase:
 
         # Design Ref: agent-run-turn-index-fix §6.1 D3 — user 저장과 같은 별도 세션
         # 경로. 요청 세션 스냅샷으로 계산하던 기존 결함(같은 turn 저장) 제거.
-        # 반환값(None)은 유지 — id 반환은 agent-run-feedback-wiring(#2) 범위.
-        await self._persist_message(user_id, session_id, _build)
+        saved = await self._persist_message(user_id, session_id, _build)
+        return _saved_message_id(saved)
+
+    @staticmethod
+    def _answer_payload(
+        answer: str, tools_used: list[str], message_id: int | None, **flags,
+    ) -> dict:
+        """ANSWER_COMPLETED payload 의 단일 생성 지점 (agent-run-feedback-wiring D-02).
+
+        `assistant_message_id` 는 저장했을 때만, flags 는 truthy 일 때만 싣는다
+        (charts·limit_reached 선례). 헬퍼 우회는 test_answer_payload_contract 가 막는다.
+        """
+        payload: dict = {"answer": answer, "tools_used": tools_used}
+        if message_id is not None:
+            payload["assistant_message_id"] = message_id
+        for key, value in flags.items():
+            if value:
+                payload[key] = value
+        return payload
 
     def _resolve_answer(self, state: "_StreamState") -> tuple[str, list[str]]:
         """런의 최종 답변 결정 — 승인 대기면 결정적 템플릿.

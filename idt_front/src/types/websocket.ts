@@ -67,6 +67,11 @@ export interface AgentAnswerCompletedData {
    * 필드 부재 시 차트 미표시(하위호환).
    */
   charts?: ChartPayload[];
+  /**
+   * 저장된 assistant 메시지 id — 평가(👍/👎) 대상 키 (agent-run-feedback-wiring D-01).
+   * 저장하지 않은 실행(persist=False)·구 서버는 필드 부재 → 평가 버튼 미표시.
+   */
+  assistant_message_id?: number;
 }
 
 export interface AgentRunCompletedData {

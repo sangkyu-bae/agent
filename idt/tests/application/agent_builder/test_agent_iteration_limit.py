@@ -361,6 +361,8 @@ class TestAnswerCompletedLimitFlag:
             if e.event_type == AgentRunEventType.ANSWER_COMPLETED
         )
         assert answer.payload["limit_reached"] is True
+        # agent-run-feedback-wiring §8.2 #8: 강등 답변도 평가 대상 (저장 id 42)
+        assert answer.payload["assistant_message_id"] == 42
 
     @pytest.mark.asyncio
     async def test_flag_absent_when_not_reached(self):

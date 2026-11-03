@@ -234,6 +234,27 @@ class TestStreamHappyPath:
         )
         assert answer_idx < completed_idx
         assert events[answer_idx].payload["answer"] == "최종 답변입니다"
+        # agent-run-feedback-wiring §8.2 #6: 저장된 메시지 id(픽스처 42)가 실린다
+        assert events[answer_idx].payload["assistant_message_id"] == 42
+
+    @pytest.mark.asyncio
+    async def test_persist_false_omits_assistant_message_id(self):
+        """agent-run-feedback-wiring §8.2 #10 — persist=False 는 키 자체가 없다."""
+        use_case, agent, _, _, _ = _make_stream_use_case(
+            astream_event_list=[],
+            final_messages=[_ai_message("최종 답변입니다")],
+        )
+        request = RunAgentRequest(
+            query="안녕", user_id="user-1", persist_conversation=False,
+        )
+
+        events = await _collect(use_case.stream(agent.id, request, "req-1"))
+
+        answer = next(
+            e for e in events if e.event_type == AgentRunEventType.ANSWER_COMPLETED
+        )
+        assert "assistant_message_id" not in answer.payload
+        assert answer.payload["answer"] == "최종 답변입니다"
 
     @pytest.mark.asyncio
     async def test_seq_is_monotonic_starting_from_one(self):

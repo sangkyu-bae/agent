@@ -127,6 +127,43 @@ describe('useAgentRunStream', () => {
     expect(result.current.tokens).toBe('안녕');
   });
 
+  // agent-run-feedback-wiring Design §8.3 #1~#3
+  describe('assistantMessageId (agent-run-feedback-wiring)', () => {
+    it('stores assistant_message_id from agent_answer_completed', () => {
+      const { result } = renderHook(() =>
+        useAgentRunStream({ runId: 'r1', agentId: 'a', query: 'q' }),
+      );
+      expect(result.current.assistantMessageId).toBeNull();
+      act(() =>
+        emit('agent_answer_completed', { answer: '답', tools_used: [], assistant_message_id: 4821 }),
+      );
+      expect(result.current.answer).toBe('답');
+      expect(result.current.assistantMessageId).toBe(4821);
+    });
+
+    it('stays null when the event has no assistant_message_id (old server / persist=false)', () => {
+      const { result } = renderHook(() =>
+        useAgentRunStream({ runId: 'r1', agentId: 'a', query: 'q' }),
+      );
+      act(() => emit('agent_answer_completed', { answer: '답', tools_used: [] }));
+      expect(result.current.assistantMessageId).toBeNull();
+    });
+
+    it('resets to null when a new streamId starts', () => {
+      const { result, rerender } = renderHook(
+        (props: { streamId: string }) =>
+          useAgentRunStream({ runId: 'r1', agentId: 'a', query: 'q', streamId: props.streamId }),
+        { initialProps: { streamId: 's1' } },
+      );
+      act(() =>
+        emit('agent_answer_completed', { answer: '답', tools_used: [], assistant_message_id: 1 }),
+      );
+      expect(result.current.assistantMessageId).toBe(1);
+      rerender({ streamId: 's2' });
+      expect(result.current.assistantMessageId).toBeNull();
+    });
+  });
+
   // fix-chat-reasoning-object-render — chunk가 비정상(객체/배열)이어도 [object Object]가 새지 않음
   it('non-string chunk does not leak [object Object] into tokens', () => {
     const { result } = renderHook(() =>

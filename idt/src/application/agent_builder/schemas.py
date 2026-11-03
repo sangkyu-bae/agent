@@ -295,6 +295,9 @@ class RunAgentResponse(BaseModel):
     request_id: str
     session_id: str
     run_id: str | None = None  # AGENT-OBS-001: ai_run.id (관측성)
+    # agent-run-feedback-wiring Design §3.4 (D-05): 저장된 assistant 메시지 id —
+    # 평가(👍/👎) 대상 키. persist_conversation=False 면 None (additive).
+    assistant_message_id: int | None = None
 
 
 class ToolMetaResponse(BaseModel):
