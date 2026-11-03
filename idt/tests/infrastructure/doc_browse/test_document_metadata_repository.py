@@ -230,6 +230,7 @@ class TestFindByKbId:
         assert item.chunk_count == 1
         assert item.chunk_strategy == "clause_aware"
         assert item.created_at is not None
+        assert item.user_id == "u1"
 
     async def test_returns_empty_for_no_documents(
         self, repo: DocumentMetadataRepository, mock_session: AsyncMock

@@ -246,4 +246,5 @@ class DocumentMetadataRepository(DocumentMetadataRepositoryInterface):
             chunk_count=model.chunk_count,
             chunk_strategy=model.chunk_strategy,
             created_at=model.created_at,
+            user_id=model.user_id,
         )

@@ -76,6 +76,18 @@ export interface KbDocumentInfo {
   chunk_count: number;
   chunking_strategy: string;
   created_at: string | null;
+  /** 서버가 KB 정책으로 계산한 삭제 가능 여부 (kb-document-management FR-08) */
+  can_delete: boolean;
+}
+
+/** DELETE /knowledge-bases/{kbId}/documents/{docId} (kb-document-management §4.2) */
+export interface KbDocumentDeleteResponse {
+  kb_id: string;
+  document_id: string;
+  filename: string;
+  deleted_qdrant_chunks: number;
+  deleted_es_chunks: number;
+  status: string;
 }
 
 export interface KbDocumentListResponse {

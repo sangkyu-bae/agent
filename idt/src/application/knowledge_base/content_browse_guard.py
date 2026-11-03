@@ -14,6 +14,7 @@ from src.domain.auth.entities import User
 from src.domain.doc_browse.interfaces import (
     DocumentMetadataRepositoryInterface,
 )
+from src.domain.knowledge_base.entities import KnowledgeBase
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 
 
@@ -24,6 +25,9 @@ class KbDocumentContext:
     collection_name: str
     filename: str
     chunk_strategy: str
+    # kb-document-management §3: 삭제 권한 판정용 (kb 재조회 방지)
+    kb: KnowledgeBase | None = None
+    uploader_id: str = ""
 
 
 class KbDocumentGuard:
@@ -44,9 +48,9 @@ class KbDocumentGuard:
         user: User,
         request_id: str,
     ) -> KbDocumentContext:
-        await self._kb_use_case.get(kb_id, user, request_id)
+        kb = await self._kb_use_case.get(kb_id, user, request_id)
 
-        meta = await self._repo.find_by_document_id(document_id, request_id)
+        meta =await self._repo.find_by_document_id(document_id, request_id)
         if meta is None or meta.kb_id != kb_id:
             self._logger.warning(
                 "KB document guard rejected",
@@ -64,4 +68,6 @@ class KbDocumentGuard:
             collection_name=meta.collection_name,
             filename=meta.filename,
             chunk_strategy=meta.chunk_strategy,
+            kb=kb,
+            uploader_id=meta.user_id,
         )

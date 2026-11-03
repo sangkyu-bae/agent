@@ -217,6 +217,153 @@ describe('KnowledgeBaseDetailPage — kb-management-ui', () => {
   });
 });
 
+describe('KnowledgeBaseDetailPage — kb-document-management', () => {
+  const DOC_DELETE = `*${API_ENDPOINTS.KNOWLEDGE_BASE_DOCUMENT_DETAIL(':kbId', ':docId')}`;
+  const DOCS = `*${API_ENDPOINTS.KNOWLEDGE_BASE_DOCUMENTS(':kbId')}`;
+
+  const doc1 = {
+    document_id: 'doc-1', filename: '여신규정.pdf', chunk_count: 12,
+    chunking_strategy: 'clause_aware', created_at: '2026-07-09T10:00:00Z',
+    can_delete: true,
+  };
+  const doc2 = {
+    document_id: 'doc-2', filename: '내규집.pdf', chunk_count: 8,
+    chunking_strategy: 'parent_child', created_at: '2026-07-08T09:00:00Z',
+    can_delete: false,
+  };
+
+  /** 삭제 요청 수를 세고, 삭제 뒤에는 목록에서 doc-1을 뺀다. */
+  const useStatefulDocuments = (deleteDelayMs = 0) => {
+    const state = { deleteCalls: 0, deleted: false };
+    server.use(
+      http.get(DOCS, ({ params }) => {
+        const documents = state.deleted ? [doc2] : [doc1, doc2];
+        return HttpResponse.json({
+          kb_id: params.kbId, kb_name: '전사 규정', documents,
+          total: documents.length, offset: 0, limit: 20,
+        });
+      }),
+      http.delete(DOC_DELETE, async ({ params }) => {
+        state.deleteCalls += 1;
+        if (deleteDelayMs) {
+          await new Promise((resolve) => setTimeout(resolve, deleteDelayMs));
+        }
+        state.deleted = true;
+        return HttpResponse.json({
+          kb_id: params.kbId, document_id: params.docId, filename: '여신규정.pdf',
+          deleted_qdrant_chunks: 12, deleted_es_chunks: 12, status: 'deleted',
+        });
+      }),
+    );
+    return state;
+  };
+
+  const openDeleteDialog = async () => {
+    await userEvent.click(
+      await screen.findByRole('button', { name: '여신규정.pdf 삭제' }),
+    );
+    expect(screen.getByText('문서 삭제')).toBeInTheDocument();
+  };
+
+  it('삭제 권한이 있는 문서에만 삭제 버튼이 보인다', async () => {
+    renderPage();
+    await screen.findByText('내규집.pdf');
+
+    expect(
+      screen.getByRole('button', { name: '여신규정.pdf 삭제' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: '내규집.pdf 삭제' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('삭제 성공 시 목록에서 빠지고 드릴다운·검색 범위가 해제된다', async () => {
+    const state = useStatefulDocuments();
+    renderPage();
+    await userEvent.click(await screen.findByText('여신규정.pdf'));
+    await userEvent.click(
+      screen.getAllByRole('button', { name: '이 문서에서 검색' })[0],
+    );
+    expect(screen.getByText(/여신규정\.pdf에서 검색/)).toBeInTheDocument();
+
+    await openDeleteDialog();
+    await userEvent.click(screen.getByRole('button', { name: '삭제' }));
+
+    await waitFor(() =>
+      expect(screen.queryByText('여신규정.pdf')).not.toBeInTheDocument(),
+    );
+    expect(state.deleteCalls).toBe(1);
+    expect(screen.queryByText('문서 삭제')).not.toBeInTheDocument();
+    expect(screen.getByText('KB 전체에서 검색')).toBeInTheDocument();
+    expect(screen.getByText('내규집.pdf')).toBeInTheDocument();
+  });
+
+  it('409이면 서버 메시지를 보여주고 다이얼로그를 유지한다', async () => {
+    server.use(
+      http.delete(DOC_DELETE, () =>
+        HttpResponse.json(
+          {
+            detail:
+              '섹션 요약이 진행 중인 문서는 삭제할 수 없습니다. 요약이 끝난 뒤 다시 시도해 주세요.',
+          },
+          { status: 409 },
+        ),
+      ),
+    );
+    renderPage();
+    await openDeleteDialog();
+
+    await userEvent.click(screen.getByRole('button', { name: '삭제' }));
+
+    expect(
+      await screen.findByText(/섹션 요약이 진행 중인 문서는 삭제할 수 없습니다/),
+    ).toBeInTheDocument();
+    expect(screen.getByText('문서 삭제')).toBeInTheDocument();
+    expect(screen.getAllByText('여신규정.pdf').length).toBeGreaterThan(0);
+  });
+
+  it('다시 열면 이전 오류가 남아 있지 않다', async () => {
+    server.use(
+      http.delete(DOC_DELETE, () =>
+        HttpResponse.json(
+          { detail: '저장소에서 문서를 삭제하지 못했습니다.' },
+          { status: 503 },
+        ),
+      ),
+    );
+    renderPage();
+    await openDeleteDialog();
+    await userEvent.click(screen.getByRole('button', { name: '삭제' }));
+    await screen.findByText(/저장소에서 문서를 삭제하지 못했습니다/);
+
+    await userEvent.click(screen.getByRole('button', { name: '취소' }));
+    await openDeleteDialog();
+
+    expect(
+      screen.queryByText(/저장소에서 문서를 삭제하지 못했습니다/),
+    ).not.toBeInTheDocument();
+  });
+
+  it('대기 중에는 중복 요청과 닫기를 막는다', async () => {
+    // 지연은 클릭 두 번보다 충분히 길어야 대기 상태를 검증할 수 있다
+    const state = useStatefulDocuments(1500);
+    renderPage();
+    await openDeleteDialog();
+
+    const confirm = screen.getByRole('button', { name: '삭제' });
+    await userEvent.click(confirm);
+    expect(confirm).toBeDisabled();
+    await userEvent.click(screen.getByRole('button', { name: '취소' }));
+
+    expect(screen.getByText('문서 삭제')).toBeInTheDocument();
+    await waitFor(
+      () => expect(screen.queryByText('문서 삭제')).not.toBeInTheDocument(),
+      { timeout: 4000 },
+    );
+    expect(state.deleteCalls).toBe(1);
+  });
+});
+
 describe('KnowledgeBaseDetailPage — kb-retrieval-test', () => {
   it('상태 요약 카드 4종을 렌더링한다 (chunk_count 판정)', async () => {
     renderPage();

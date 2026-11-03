@@ -1,3 +1,5 @@
+import { Trash2 } from 'lucide-react';
+import IconButton from '@/components/ui/IconButton';
 import type { KbDocumentInfo } from '@/types/knowledgeBase';
 
 interface KbDocumentTableProps {
@@ -10,6 +12,8 @@ interface KbDocumentTableProps {
   selectedId?: string | null;
   /** 문서 단위 검색 스코프 지정 (kb-retrieval-test D10) — 드릴다운과 독립 */
   onSearchInDocument?: (doc: KbDocumentInfo) => void;
+  /** 문서 삭제 (kb-document-management FR-10) — can_delete 행에만 노출 */
+  onDeleteDocument?: (doc: KbDocumentInfo) => void;
 }
 
 const STRATEGY_LABELS: Record<string, string> = {
@@ -25,6 +29,7 @@ const KbDocumentTable = ({
   onRowClick,
   selectedId,
   onSearchInDocument,
+  onDeleteDocument,
 }: KbDocumentTableProps) => {
   if (isLoading) {
     return (
@@ -70,6 +75,9 @@ const KbDocumentTable = ({
             {onSearchInDocument && (
               <th className="px-4 py-3 font-medium">검색</th>
             )}
+            {onDeleteDocument && (
+              <th className="px-4 py-3 font-medium">관리</th>
+            )}
           </tr>
         </thead>
         <tbody className="divide-y divide-zinc-100">
@@ -106,6 +114,27 @@ const KbDocumentTable = ({
                   >
                     이 문서에서 검색
                   </button>
+                </td>
+              )}
+              {onDeleteDocument && (
+                <td className="px-4 py-3">
+                  {doc.can_delete && (
+                    <IconButton
+                      aria-label={`${doc.filename} 삭제`}
+                      tone="danger"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteDocument(doc);
+                      }}
+                    >
+                      <Trash2
+                        className="h-4 w-4"
+                        strokeWidth={1.75}
+                        aria-hidden
+                      />
+                    </IconButton>
+                  )}
                 </td>
               )}
             </tr>

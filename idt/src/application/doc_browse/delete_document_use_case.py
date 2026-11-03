@@ -33,6 +33,9 @@ class DeleteDocumentUseCase:
     class PermissionDeniedError(Exception):
         pass
 
+    class StoreDeleteFailedError(Exception):
+        pass
+
     def __init__(
         self,
         document_metadata_repo: DocumentMetadataRepositoryInterface,
@@ -108,6 +111,47 @@ class DeleteDocumentUseCase:
             document_id=document_id,
             collection_name=collection_name,
             filename=metadata.filename,
+            deleted_qdrant_chunks=deleted_qdrant,
+            deleted_es_chunks=deleted_es,
+            status="deleted",
+        )
+
+    async def delete_verified(
+        self,
+        collection_name: str,
+        document_id: str,
+        filename: str,
+        user_id: str,
+        request_id: str,
+        extra_detail: dict[str, Any] | None = None,
+    ) -> DeleteDocumentResult:
+        """호출자가 권한을 검증한 문서를 엄격하게 삭제한다.
+
+        권한을 검사하지 않으므로 호출은 DeleteKbDocumentUseCase로 제한한다(§7).
+        저장소 삭제가 모두 성공해야 메타데이터를 지워 재시도 경로를 남긴다.
+        """
+        deleted_qdrant, deleted_es = await self._purge_stores_strict(
+            collection_name, document_id, request_id
+        )
+        await self._metadata_repo.delete_by_document_id(
+            document_id, request_id
+        )
+        await self._log_activity(
+            collection_name, document_id, filename,
+            deleted_qdrant, user_id, request_id,
+            extra_detail=extra_detail,
+        )
+        self._logger.info(
+            "Verified document delete completed",
+            request_id=request_id,
+            document_id=document_id,
+            deleted_qdrant=deleted_qdrant,
+            deleted_es=deleted_es,
+        )
+        return DeleteDocumentResult(
+            document_id=document_id,
+            collection_name=collection_name,
+            filename=filename,
             deleted_qdrant_chunks=deleted_qdrant,
             deleted_es_chunks=deleted_es,
             status="deleted",
@@ -253,10 +297,7 @@ class DeleteDocumentUseCase:
         self, document_id: str, request_id: str
     ) -> int:
         try:
-            query = {"match": {"document_id": document_id}}
-            return await self._es_repo.delete_by_query(
-                self._es_index, query, request_id
-            )
+            return await self._delete_es_by_document(document_id, request_id)
         except Exception as e:
             self._logger.warning(
                 "ES delete failed, continuing",
@@ -264,6 +305,36 @@ class DeleteDocumentUseCase:
                 document_id=document_id,
             )
             return 0
+
+    async def _delete_es_by_document(
+        self, document_id: str, request_id: str
+    ) -> int:
+        query = {"match": {"document_id": document_id}}
+        return await self._es_repo.delete_by_query(
+            self._es_index, query, request_id
+        )
+
+    async def _purge_stores_strict(
+        self, collection_name: str, document_id: str, request_id: str
+    ) -> tuple[int, int]:
+        try:
+            deleted_qdrant = await self._delete_qdrant_chunks(
+                collection_name, document_id
+            )
+            deleted_es = await self._delete_es_by_document(
+                document_id, request_id
+            )
+        except Exception as e:
+            self._logger.error(
+                "Document store delete failed",
+                exception=e,
+                request_id=request_id,
+                document_id=document_id,
+            )
+            raise self.StoreDeleteFailedError(
+                f"Store delete failed: {document_id}"
+            ) from e
+        return deleted_qdrant, deleted_es
 
     async def _log_activity(
         self,
@@ -273,6 +344,7 @@ class DeleteDocumentUseCase:
         deleted_chunks: int,
         user_id: str,
         request_id: str,
+        extra_detail: dict[str, Any] | None = None,
     ) -> None:
         try:
             await self._activity_log_service.log(
@@ -284,6 +356,7 @@ class DeleteDocumentUseCase:
                     "document_id": document_id,
                     "filename": filename,
                     "deleted_chunks_count": deleted_chunks,
+                    **(extra_detail or {}),
                 },
             )
         except Exception as e:
