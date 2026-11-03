@@ -76,6 +76,18 @@ class MessageFeedbackRepository(MessageFeedbackRepositoryInterface):
         rows = (await self._session.execute(stmt)).scalars().all()
         return [self._to_entity(r) for r in rows]
 
+    async def has_negative(self, message_id: int, request_id: str) -> bool:
+        # Design Ref: negative-feedback-drilldown §3.3 — uq_feedback_msg_user 선두 컬럼
+        stmt = (
+            select(MessageFeedbackModel.id)
+            .where(
+                MessageFeedbackModel.message_id == message_id,
+                MessageFeedbackModel.rating == Rating.DOWN.value,
+            )
+            .limit(1)
+        )
+        return (await self._session.execute(stmt)).first() is not None
+
     async def _get_model(self, message_id: int, user_id: str):
         stmt = select(MessageFeedbackModel).where(
             MessageFeedbackModel.message_id == message_id,

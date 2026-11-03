@@ -17,6 +17,7 @@ from src.application.eval.api_schemas import (
 )
 from src.domain.auth.entities import User
 from src.interfaces.dependencies.auth import get_current_user, require_role
+from src.interfaces.schemas.eval_drilldown_response import NegativeDrilldownResponse
 
 router = APIRouter(prefix="/api/v1", tags=["Eval"])
 
@@ -36,6 +37,10 @@ def get_delete_feedback_use_case():
 
 
 def get_agent_eval_stats_use_case():
+    raise NotImplementedError
+
+
+def get_negative_drilldown_use_case():
     raise NotImplementedError
 
 
@@ -117,3 +122,24 @@ async def recent_negative(
     request_id = str(uuid.uuid4())
     items = await use_case.recent_negative(request_id)
     return [to_recent_negative_response(i) for i in items]
+
+
+@router.get(
+    "/admin/eval/negative/{message_id}/drilldown",
+    response_model=NegativeDrilldownResponse,
+)
+async def negative_drilldown(
+    message_id: int,
+    admin: User = Depends(require_role("admin")),
+    use_case=Depends(get_negative_drilldown_use_case),
+):
+    """👎 답변의 질문·답변·런·근거 (negative-feedback-drilldown §4.3).
+
+    down 평가가 없거나 assistant 메시지가 아니면 404.
+    """
+    request_id = str(uuid.uuid4())
+    try:
+        dto = await use_case.execute(message_id, str(admin.id), request_id)
+    except ValueError as e:
+        _raise_feedback_error(e)
+    return NegativeDrilldownResponse.from_dto(dto)

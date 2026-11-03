@@ -30,3 +30,7 @@ class MessageFeedbackRepositoryInterface(ABC):
         self, limit: int, request_id: str
     ) -> list[MessageFeedback]:
         """최근 부정(down) 피드백 — created_at desc."""
+
+    @abstractmethod
+    async def has_negative(self, message_id: int, request_id: str) -> bool:
+        """해당 메시지에 down 평가가 1건 이상 있으면 True."""
