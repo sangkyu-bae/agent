@@ -283,7 +283,9 @@ from src.api.routes.eval_router import (
     get_get_feedback_use_case,
     get_delete_feedback_use_case,
     get_agent_eval_stats_use_case,
+    get_negative_drilldown_use_case,
 )
+from src.application.eval.drilldown_use_case import GetNegativeDrilldownUseCase
 from src.application.eval.use_cases import (
     SubmitFeedbackUseCase,
     GetFeedbackUseCase,
@@ -5959,10 +5961,26 @@ def create_app() -> FastAPI:
             recent_negative_limit=settings.eval_recent_negative_limit,
         )
 
+    def _eval_drilldown_f(session: AsyncSession = Depends(get_session)):
+        # Design Ref: negative-feedback-drilldown §4.6 — 저장소 전부 같은 요청 세션
+        logger = get_app_logger()
+        message_repo = SQLAlchemyConversationMessageRepository(session)
+        return GetNegativeDrilldownUseCase(
+            feedback_repo=MessageFeedbackRepository(session, logger),
+            message_repo=message_repo,
+            retrievals=GetMessageRetrievalsUseCase(
+                agent_run_repo=SqlAlchemyAgentRunRepository(session),
+                message_repo=message_repo,
+                logger=logger,
+            ),
+            logger=logger,
+        )
+
     app.dependency_overrides[get_submit_feedback_use_case] = _eval_submit_f
     app.dependency_overrides[get_get_feedback_use_case] = _eval_get_f
     app.dependency_overrides[get_delete_feedback_use_case] = _eval_delete_f
     app.dependency_overrides[get_agent_eval_stats_use_case] = _eval_stats_f
+    app.dependency_overrides[get_negative_drilldown_use_case] = _eval_drilldown_f
 
     # Skill Builder DI
     (
