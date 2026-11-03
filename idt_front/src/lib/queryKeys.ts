@@ -193,6 +193,8 @@ export const queryKeys = {
       [...queryKeys.eval.all, 'feedback', messageId] as const,
     agents: () => [...queryKeys.eval.all, 'agents'] as const,
     recentNegative: () => [...queryKeys.eval.all, 'recentNegative'] as const,
+    negativeDrilldown: (messageId: number) =>
+      [...queryKeys.eval.all, 'negativeDrilldown', messageId] as const,
     // eval-hub: 평가 허브 (테스트셋·실행·메트릭·대시보드)
     testsets: (params?: { limit?: number; offset?: number }) =>
       [...queryKeys.eval.all, 'testsets', params] as const,

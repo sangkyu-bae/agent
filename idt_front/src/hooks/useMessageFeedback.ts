@@ -38,3 +38,11 @@ export const useRecentNegativeFeedback = () =>
     queryKey: queryKeys.eval.recentNegative(),
     queryFn: () => messageFeedbackService.getRecentNegative(),
   });
+
+// negative-feedback-drilldown Design §6.2: 404를 재시도하면 안내가 늦어진다.
+export const useNegativeDrilldown = (messageId: number) =>
+  useQuery({
+    queryKey: queryKeys.eval.negativeDrilldown(messageId),
+    queryFn: () => messageFeedbackService.getNegativeDrilldown(messageId),
+    retry: false,
+  });

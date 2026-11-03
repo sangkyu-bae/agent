@@ -4,6 +4,7 @@ import { API_ENDPOINTS } from '@/constants/api';
 import type {
   AgentEvalStat,
   MyFeedback,
+  NegativeDrilldown,
   Rating,
   RecentNegativeItem,
 } from '@/types/messageFeedback';
@@ -39,6 +40,13 @@ export const messageFeedbackService = {
   getRecentNegative: async (): Promise<RecentNegativeItem[]> => {
     const res = await authApiClient.get<RecentNegativeItem[]>(
       API_ENDPOINTS.ADMIN_EVAL_RECENT_NEGATIVE,
+    );
+    return res.data;
+  },
+
+  getNegativeDrilldown: async (messageId: number): Promise<NegativeDrilldown> => {
+    const res = await authApiClient.get<NegativeDrilldown>(
+      API_ENDPOINTS.ADMIN_EVAL_NEGATIVE_DRILLDOWN(messageId),
     );
     return res.data;
   },

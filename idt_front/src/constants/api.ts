@@ -346,4 +346,6 @@ export const API_ENDPOINTS = {
     `/api/v1/conversations/messages/${messageId}/feedback`,
   ADMIN_EVAL_AGENTS: '/api/v1/admin/eval/agents',
   ADMIN_EVAL_RECENT_NEGATIVE: '/api/v1/admin/eval/recent-negative',
+  ADMIN_EVAL_NEGATIVE_DRILLDOWN: (messageId: number) =>
+    `/api/v1/admin/eval/negative/${messageId}/drilldown`,
 } as const;
