@@ -719,10 +719,12 @@ export const handlers = [
           {
             document_id: 'doc-1', filename: '여신규정.pdf', chunk_count: 12,
             chunking_strategy: 'clause_aware', created_at: '2026-07-09T10:00:00Z',
+            can_delete: true,
           },
           {
             document_id: 'doc-2', filename: '내규집.pdf', chunk_count: 8,
             chunking_strategy: 'parent_child', created_at: '2026-07-08T09:00:00Z',
+            can_delete: false,
           },
         ],
         total: 2, offset: 0, limit: 20,
@@ -747,6 +749,18 @@ export const handlers = [
       kb_id: params.kbId,
       message: 'Knowledge base deleted. Stored vectors remain until cleanup.',
     })
+  ),
+
+  // KB (kb-document-management): 문서 단건 삭제
+  http.delete(
+    `*${API_ENDPOINTS.KNOWLEDGE_BASE_DOCUMENT_DETAIL(':kbId', ':docId')}`,
+    ({ params }) =>
+      HttpResponse.json({
+        kb_id: params.kbId, document_id: params.docId,
+        filename: '여신규정.pdf',
+        deleted_qdrant_chunks: 12, deleted_es_chunks: 12,
+        status: 'deleted',
+      })
   ),
 
   // KB (kb-management-ui): 문서 업로드
