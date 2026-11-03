@@ -18,6 +18,7 @@ import type {
   SessionMessagesResponse,
   AgentSessionListResponse,
   AgentSessionMessagesResponse,
+  SessionSourcesResponse,
 } from '@/types/chat';
 import type { ApiResponse, PaginatedResponse } from '@/types/api';
 
@@ -101,5 +102,16 @@ export const chatService = {
       { params: { user_id: userId } },
     );
     return res.data.messages.map(toMessage);
+  },
+
+  /** agent-run-source-citations §4.2 — 세션 답변 근거 (인증 필수라 authClient) */
+  getAgentSessionSources: async (
+    agentId: string,
+    sessionId: string,
+  ): Promise<SessionSourcesResponse> => {
+    const res = await authClient.get<SessionSourcesResponse>(
+      API_ENDPOINTS.CONVERSATION_AGENT_SESSION_SOURCES(agentId, sessionId),
+    );
+    return res.data;
   },
 };

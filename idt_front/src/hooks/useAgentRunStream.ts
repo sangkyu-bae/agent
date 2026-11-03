@@ -15,6 +15,7 @@ import { useAuthStore } from '@/store/authStore';
 import { useWebSocket, type WebSocketStatus } from '@/hooks/useWebSocket';
 import type { AgentAttachmentRef } from '@/types/agentAttachment';
 import type { ChartPayload } from '@/types/chart';
+import type { DocumentSource } from '@/types/chat';
 import type { AgentRunMessage } from '@/types/websocket';
 import { wsUrl } from '@/utils/wsUrl';
 
@@ -34,6 +35,8 @@ export interface AgentRunStreamState {
   answer: string | null;
   // supervisor-chart-builder-node: 답변 완료 시 함께 내려오는 Chart.js 페이로드.
   charts: ChartPayload[];
+  // agent-run-source-citations: 답변 근거 칩. 근거가 없으면 빈 배열.
+  sources: DocumentSource[];
   error: { code: string; message: string } | null;
   isDone: boolean;
   // chatpage-rerequest-stale-state-fix Design §3.3
@@ -58,6 +61,7 @@ const INITIAL_STATE: Omit<AgentRunStreamState, 'streamId'> = {
   tokens: '',
   answer: null,
   charts: [],
+  sources: [],
   error: null,
   isDone: false,
 };
@@ -141,6 +145,7 @@ export function useAgentRunStream(
           ...s,
           answer: msg.data.answer,
           charts: msg.data.charts ?? [],
+          sources: msg.data.sources ?? [],
         }));
         break;
       case 'agent_run_completed':

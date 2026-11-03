@@ -1,6 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { chatService } from '@/services/chatService';
 import { queryKeys } from '@/lib/queryKeys';
+import { GENERAL_CHAT_AGENT_ID } from '@/constants/agent';
+import {
+  attachSessionSources,
+  toSessionSourceMap,
+  type SessionSourceMap,
+} from '@/utils/sessionSources';
 import type {
   SendMessageRequest,
   ConversationChatRequest,
@@ -115,8 +121,27 @@ export const useAgentSessionMessages = (
     queryKey: queryKeys.chat.agentSessionMessages(
       agentId ?? '', sessionId ?? '', userId ?? '',
     ),
-    queryFn: () =>
-      chatService.getAgentSessionMessages(agentId!, sessionId!, userId!),
+    queryFn: async () => {
+      // agent-run-source-citations §6.1 — 근거는 부가 정보라 실패해도 메시지는 표시한다.
+      const [messages, sources] = await Promise.all([
+        chatService.getAgentSessionMessages(agentId!, sessionId!, userId!),
+        loadSessionSources(agentId!, sessionId!),
+      ]);
+      return attachSessionSources(messages, sources);
+    },
     enabled: !!agentId && !!sessionId && !!userId && (options?.enabled ?? true),
     staleTime: 60_000,
   });
+
+const loadSessionSources = async (
+  agentId: string,
+  sessionId: string,
+): Promise<SessionSourceMap> => {
+  // 일반 채팅은 에이전트 근거 계약의 범위 밖이다 (Plan §2.2).
+  if (agentId === GENERAL_CHAT_AGENT_ID) return {};
+  try {
+    return toSessionSourceMap(await chatService.getAgentSessionSources(agentId, sessionId));
+  } catch {
+    return {};
+  }
+};
