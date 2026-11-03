@@ -13,6 +13,7 @@ from src.domain.auth.entities import User
 from src.domain.doc_browse.interfaces import (
     DocumentMetadataRepositoryInterface,
 )
+from src.domain.knowledge_base.policy import KnowledgeBasePolicy
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.domain.mysql.schemas import MySQLPaginationParams
 
@@ -24,6 +25,8 @@ class KbDocumentItem:
     chunk_count: int
     chunk_strategy: str
     created_at: datetime | None
+    # kb-document-management FR-08: 화면 버튼 노출용 서버 계산값
+    can_delete: bool = False
 
 
 @dataclass(frozen=True)
@@ -77,6 +80,9 @@ class ListKbDocumentsUseCase:
                     chunk_count=item.chunk_count,
                     chunk_strategy=item.chunk_strategy,
                     created_at=item.created_at,
+                    can_delete=KnowledgeBasePolicy.can_delete_document(
+                        user, kb, item.user_id
+                    ),
                 )
                 for item in page.items
             ],

@@ -74,6 +74,87 @@ def deps():
     }
 
 
+class TestDeleteVerified:
+    """kb-document-management Design §6.2 — 저장소 실패 시 메타데이터 유지."""
+
+    @pytest.mark.asyncio
+    async def test_deletes_stores_metadata_and_logs(self, deps):
+        deps["qdrant_client"].count.return_value = _make_count_result(10)
+        deps["es_repo"].delete_by_query.return_value = 8
+
+        result = await deps["uc"].delete_verified(
+            "test-col", "doc-123", "a.pdf", "42", "req-1",
+            extra_detail={"kb_id": "kb-1"},
+        )
+
+        assert result.document_id == "doc-123"
+        assert result.collection_name == "test-col"
+        assert result.filename == "a.pdf"
+        assert result.deleted_qdrant_chunks == 10
+        assert result.deleted_es_chunks == 8
+        assert result.status == "deleted"
+        deps["qdrant_client"].delete.assert_awaited_once()
+        deps["metadata_repo"].delete_by_document_id.assert_awaited_once_with(
+            "doc-123", "req-1"
+        )
+        detail = deps["activity_log_service"].log.call_args.kwargs["detail"]
+        assert detail["kb_id"] == "kb-1"
+        assert detail["document_id"] == "doc-123"
+        assert detail["deleted_chunks_count"] == 10
+
+    @pytest.mark.asyncio
+    async def test_does_not_check_permission(self, deps):
+        deps["qdrant_client"].count.return_value = _make_count_result(1)
+        deps["es_repo"].delete_by_query.return_value = 1
+
+        await deps["uc"].delete_verified(
+            "test-col", "doc-123", "a.pdf", "42", "req-1"
+        )
+
+        deps["permission_service"].find_permission.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_es_failure_keeps_metadata(self, deps):
+        deps["qdrant_client"].count.return_value = _make_count_result(10)
+        deps["es_repo"].delete_by_query.side_effect = RuntimeError("es down")
+
+        with pytest.raises(DeleteDocumentUseCase.StoreDeleteFailedError):
+            await deps["uc"].delete_verified(
+                "test-col", "doc-123", "a.pdf", "42", "req-1"
+            )
+
+        deps["metadata_repo"].delete_by_document_id.assert_not_awaited()
+        deps["activity_log_service"].log.assert_not_awaited()
+        deps["logger"].error.assert_called_once()
+        assert isinstance(
+            deps["logger"].error.call_args.kwargs["exception"], RuntimeError
+        )
+
+    @pytest.mark.asyncio
+    async def test_qdrant_failure_skips_es_and_keeps_metadata(self, deps):
+        deps["qdrant_client"].count.side_effect = RuntimeError("qdrant down")
+
+        with pytest.raises(DeleteDocumentUseCase.StoreDeleteFailedError):
+            await deps["uc"].delete_verified(
+                "test-col", "doc-123", "a.pdf", "42", "req-1"
+            )
+
+        deps["es_repo"].delete_by_query.assert_not_awaited()
+        deps["metadata_repo"].delete_by_document_id.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_activity_log_failure_is_ignored(self, deps):
+        deps["qdrant_client"].count.return_value = _make_count_result(1)
+        deps["es_repo"].delete_by_query.return_value = 1
+        deps["activity_log_service"].log.side_effect = RuntimeError("log down")
+
+        result = await deps["uc"].delete_verified(
+            "test-col", "doc-123", "a.pdf", "42", "req-1"
+        )
+
+        assert result.status == "deleted"
+
+
 class TestExecuteSingle:
 
     @pytest.mark.asyncio

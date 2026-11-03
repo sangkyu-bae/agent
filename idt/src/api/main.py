@@ -334,6 +334,7 @@ from src.api.routes.knowledge_base_router import (
     router as knowledge_base_router,
     get_knowledge_base_use_case,
     get_kb_upload_use_case,
+    get_delete_kb_document_use_case,
     get_kb_document_chunks_use_case,
     get_kb_document_summary_use_case,
     get_kb_section_summaries_use_case,
@@ -4484,6 +4485,98 @@ def create_kb_browse_factories(kb_use_case_factory):
     return summary_factory, sections_factory, chunks_factory
 
 
+def create_kb_document_delete_factory(kb_use_case_factory):
+    """KB 문서 삭제 DI (kb-document-management Design §11.2).
+
+    Qdrant/ES 클라이언트는 싱글턴. 가드·메타·잡 행·활동 로그는 같은 요청 세션을
+    공유해 메타와 잡 행이 함께 커밋된다.
+    """
+    from src.application.collection.activity_log_service import ActivityLogService
+    from src.application.collection.permission_service import (
+        CollectionPermissionService,
+    )
+    from src.application.knowledge_base.content_browse_guard import (
+        KbDocumentGuard,
+    )
+    from src.application.knowledge_base.delete_document_use_case import (
+        DeleteKbDocumentUseCase,
+    )
+    from src.domain.collection.permission_policy import CollectionPermissionPolicy
+    from src.domain.doc_browse.policies import DocumentDeletePolicy
+    from src.domain.knowledge_base.policy import KnowledgeBasePolicy
+    from src.domain.section_summary.policy import SectionSummaryJobPolicy
+    from src.infrastructure.collection.activity_log_repository import (
+        ActivityLogRepository,
+    )
+    from src.infrastructure.collection.permission_repository import (
+        CollectionPermissionRepository,
+    )
+    from src.infrastructure.department.department_repository import (
+        DepartmentRepository,
+    )
+    from src.infrastructure.doc_browse.document_metadata_repository import (
+        DocumentMetadataRepository,
+    )
+    from src.infrastructure.section_summary.job_repository import (
+        SectionSummaryJobRepository,
+    )
+
+    app_logger = get_app_logger()
+    qdrant_client = AsyncQdrantClient(
+        host=settings.qdrant_host,
+        port=settings.qdrant_port,
+    )
+    es_config = ElasticsearchConfig(
+        ES_HOST=settings.es_host,
+        ES_PORT=settings.es_port,
+        ES_SCHEME=settings.es_scheme,
+    )
+    es_client = ElasticsearchClient.from_config(es_config)
+    es_repo = ElasticsearchRepository(
+        client=es_client, logger=StructuredLogger("kb_document_delete.es")
+    )
+
+    def _deleter(session: AsyncSession) -> DeleteDocumentUseCase:
+        log_repo = ActivityLogRepository(session, app_logger)
+        perm_service = CollectionPermissionService(
+            perm_repo=CollectionPermissionRepository(session, app_logger),
+            dept_repo=DepartmentRepository(session, app_logger),
+            policy=CollectionPermissionPolicy(),
+            logger=app_logger,
+        )
+        return DeleteDocumentUseCase(
+            document_metadata_repo=DocumentMetadataRepository(
+                session, app_logger
+            ),
+            qdrant_client=qdrant_client,
+            es_repo=es_repo,
+            es_index=settings.es_index,
+            permission_service=perm_service,
+            activity_log_service=ActivityLogService(log_repo, app_logger),
+            policy=DocumentDeletePolicy(),
+            logger=StructuredLogger("kb_document_delete.deleter"),
+        )
+
+    def delete_factory(session: AsyncSession = Depends(get_session)):
+        return DeleteKbDocumentUseCase(
+            guard=KbDocumentGuard(
+                kb_use_case=kb_use_case_factory(session),
+                document_metadata_repo=DocumentMetadataRepository(
+                    session, app_logger
+                ),
+                logger=StructuredLogger("kb_document_delete.guard"),
+            ),
+            deleter=_deleter(session),
+            job_repo=SectionSummaryJobRepository(session, app_logger),
+            policy=KnowledgeBasePolicy(),
+            job_policy=SectionSummaryJobPolicy(),
+            logger=StructuredLogger("kb_document_delete"),
+            stale_seconds=settings.section_summary_stale_seconds,
+        )
+
+    return delete_factory
+
+
 def create_kb_search_factories(kb_use_case_factory):
     """KB 단위 검색/히스토리 DI (kb-retrieval-test §3.3).
 
@@ -6030,6 +6123,10 @@ def create_app() -> FastAPI:
     )
     app.dependency_overrides[get_kb_document_chunks_use_case] = (
         _kb_chunks_factory
+    )
+    # KB 문서 삭제 DI (kb-document-management)
+    app.dependency_overrides[get_delete_kb_document_use_case] = (
+        create_kb_document_delete_factory(_kb_uc_factory)
     )
     # KB 검색/히스토리 DI (kb-retrieval-test)
     _kb_search_factory, _kb_search_history_factory = (

@@ -5,6 +5,12 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel, Field
 
+from src.application.doc_browse.delete_document_use_case import (
+    DeleteDocumentUseCase,
+)
+from src.application.knowledge_base.delete_document_use_case import (
+    DeleteKbDocumentUseCase,
+)
 from src.application.knowledge_base.get_kb_document_chunks_use_case import (
     GetKbDocumentChunksUseCase,
 )
@@ -40,6 +46,10 @@ from src.interfaces.dependencies.auth import get_current_user
 
 router = APIRouter(prefix="/api/v1/knowledge-bases", tags=["KnowledgeBases"])
 
+_STORE_DELETE_FAILED_MESSAGE = (
+    "저장소에서 문서를 삭제하지 못했습니다. 문서는 유지되었으니 다시 시도해 주세요."
+)
+
 
 # ── DI 플레이스홀더 (main.py에서 override) ──────────────────────────
 
@@ -56,6 +66,10 @@ def get_section_summary_query_use_case() -> SectionSummaryQueryUseCase:
 
 
 def get_list_kb_documents_use_case() -> "ListKbDocumentsUseCase":
+    raise NotImplementedError
+
+
+def get_delete_kb_document_use_case() -> "DeleteKbDocumentUseCase":
     raise NotImplementedError
 
 
@@ -180,6 +194,19 @@ class KbDocumentInfoResponse(BaseModel):
     chunk_count: int
     chunking_strategy: str
     created_at: datetime | None
+    # kb-document-management FR-08: 서버 계산값 (additive)
+    can_delete: bool = False
+
+
+class KbDocumentDeleteResponse(BaseModel):
+    """문서 단건 삭제 (kb-document-management §4.2)."""
+
+    kb_id: str
+    document_id: str
+    filename: str
+    deleted_qdrant_chunks: int
+    deleted_es_chunks: int
+    status: str
 
 
 class KbDocumentListResponse(BaseModel):
@@ -466,12 +493,54 @@ async def list_kb_documents(
                 chunk_count=d.chunk_count,
                 chunking_strategy=d.chunk_strategy,
                 created_at=d.created_at,
+                can_delete=d.can_delete,
             )
             for d in result.documents
         ],
         total=result.total,
         offset=result.offset,
         limit=result.limit,
+    )
+
+
+@router.delete(
+    "/{kb_id}/documents/{document_id}",
+    response_model=KbDocumentDeleteResponse,
+    description=(
+        "지식베이스 문서를 Qdrant·ES·메타데이터에서 삭제한다. KB 소유자, ADMIN, "
+        "문서 업로더만 허용한다. 요약 잡 진행 중이면 409, 저장소 삭제 실패 시 "
+        "메타데이터를 유지하고 503을 반환한다 (kb-document-management)."
+    ),
+)
+async def delete_kb_document(
+    kb_id: str,
+    document_id: str,
+    current_user: User = Depends(get_current_user),
+    use_case: DeleteKbDocumentUseCase = Depends(
+        get_delete_kb_document_use_case
+    ),
+):
+    request_id = str(uuid.uuid4())
+    try:
+        result = await use_case.execute(
+            kb_id, document_id, current_user, request_id
+        )
+    except DeleteKbDocumentUseCase.DocumentBusyError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except DeleteDocumentUseCase.StoreDeleteFailedError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=_STORE_DELETE_FAILED_MESSAGE,
+        )
+    except (PermissionError, ValueError) as e:
+        _raise_http(e)
+    return KbDocumentDeleteResponse(
+        kb_id=kb_id,
+        document_id=result.document_id,
+        filename=result.filename,
+        deleted_qdrant_chunks=result.deleted_qdrant_chunks,
+        deleted_es_chunks=result.deleted_es_chunks,
+        status=result.status,
     )
 
 

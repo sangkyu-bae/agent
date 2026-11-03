@@ -61,6 +61,53 @@ class TestValidateName:
             KnowledgeBasePolicy.validate_name("이름\x00")
 
 
+class TestCanDeleteDocument:
+    """kb-document-management Design §9.5 — 소유자·ADMIN·업로더만 삭제."""
+
+    def test_admin_allowed(self):
+        kb = _kb(owner_id=99)
+        assert KnowledgeBasePolicy.can_delete_document(
+            _user(1, UserRole.ADMIN), kb, "55"
+        )
+
+    def test_owner_allowed_for_others_document(self):
+        assert KnowledgeBasePolicy.can_delete_document(
+            _user(1), _kb(owner_id=1), "55"
+        )
+
+    def test_uploader_allowed_when_not_owner(self):
+        kb = _kb(
+            owner_id=99, scope=CollectionScope.DEPARTMENT, department_id="d-1"
+        )
+        assert KnowledgeBasePolicy.can_delete_document(_user(7), kb, "7")
+
+    def test_department_member_denied_for_others_document(self):
+        kb = _kb(
+            owner_id=99, scope=CollectionScope.DEPARTMENT, department_id="d-1"
+        )
+        assert not KnowledgeBasePolicy.can_delete_document(_user(7), kb, "8")
+
+    def test_public_reader_denied(self):
+        kb = _kb(owner_id=99, scope=CollectionScope.PUBLIC)
+        assert not KnowledgeBasePolicy.can_delete_document(_user(7), kb, "8")
+
+    def test_empty_uploader_denied(self):
+        assert not KnowledgeBasePolicy.can_delete_document(
+            _user(7), _kb(owner_id=99), ""
+        )
+
+    def test_user_without_id_denied(self):
+        user = User(
+            email="test@test.com",
+            password_hash="hash",
+            role=UserRole.USER,
+            status=UserStatus.APPROVED,
+        )
+        assert not KnowledgeBasePolicy.can_delete_document(
+            user, _kb(owner_id=99), "None"
+        )
+
+
 class TestCanRead:
     def test_admin_always_true(self):
         kb = _kb(owner_id=99)

@@ -76,6 +76,16 @@ class TestKbDocumentGuard:
         assert ctx.chunk_strategy == "parent_child"
 
     @pytest.mark.asyncio
+    async def test_context_carries_kb_and_uploader(self):
+        """삭제 권한 판정용 — kb 재조회 없이 전달 (kb-document-management §3)."""
+        kb = _kb()
+        guard, kb_use_case, _ = _make_guard(kb=kb, meta=_meta())
+        ctx = await guard.ensure("kb-1", "doc-1", _user(), "req-1")
+        assert ctx.kb is kb
+        assert ctx.uploader_id == "1"
+        kb_use_case.get.assert_awaited_once()
+
+    @pytest.mark.asyncio
     async def test_kb_not_found_propagates(self):
         guard, kb_use_case, repo = _make_guard()
         kb_use_case.get.side_effect = ValueError("Knowledge base 'kb-x' not found")
