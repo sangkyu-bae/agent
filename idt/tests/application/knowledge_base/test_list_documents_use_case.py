@@ -98,6 +98,40 @@ class TestListKbDocuments:
         assert call.args[0] == "kb-77"
 
     @pytest.mark.asyncio
+    async def test_can_delete_follows_policy_per_document(self):
+        """kb-document-management FR-08 — 업로더 본인 문서만 true."""
+        mine = KbDocumentSummary(
+            document_id="mine",
+            filename="a.pdf",
+            chunk_count=1,
+            chunk_strategy="parent_child",
+            created_at=None,
+            user_id="7",
+        )
+        others = KbDocumentSummary(
+            document_id="others",
+            filename="b.pdf",
+            chunk_count=1,
+            chunk_strategy="parent_child",
+            created_at=None,
+            user_id="8",
+        )
+        use_case, _, _ = _make_use_case(kb=_kb(), page=_page([mine, others]))
+
+        result = await use_case.execute("kb-1", _user(user_id=7), "req-1")
+
+        flags = {d.document_id: d.can_delete for d in result.documents}
+        assert flags == {"mine": True, "others": False}
+
+    @pytest.mark.asyncio
+    async def test_owner_can_delete_every_document(self):
+        use_case, _, _ = _make_use_case(kb=_kb(), page=_page([_summary(0)]))
+
+        result = await use_case.execute("kb-1", _user(user_id=1), "req-1")
+
+        assert result.documents[0].can_delete is True
+
+    @pytest.mark.asyncio
     async def test_permission_denied_propagates(self):
         """D3: get()의 PermissionError 그대로 전파 (라우터 403)."""
         use_case, kb_use_case, repo = _make_use_case()

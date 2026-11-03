@@ -44,3 +44,12 @@ class DocumentMetadataRepositoryInterface(ABC):
         request_id: str,
     ) -> Optional[DocumentMetadata]:
         ...
+
+    @abstractmethod
+    async def find_filenames(
+        self,
+        document_ids: list[str],
+        request_id: str,
+    ) -> dict[str, str]:
+        """document_id → filename 일괄 조회 (agent-run-source-citations §3.4)."""
+        ...

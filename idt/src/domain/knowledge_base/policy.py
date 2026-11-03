@@ -79,6 +79,22 @@ class KnowledgeBasePolicy:
         return kb.owner_id == user.id
 
     @staticmethod
+    def can_delete_document(
+        user: User, kb: KnowledgeBase, uploader_id: str
+    ) -> bool:
+        """문서 삭제 — 소유자/ADMIN/업로더 본인 (kb-document-management FR-02).
+
+        uploader_id는 document_metadata.user_id(문자열)다.
+        """
+        if KnowledgeBasePolicy.can_delete(user, kb):
+            return True
+        return (
+            bool(uploader_id)
+            and user.id is not None
+            and uploader_id == str(user.id)
+        )
+
+    @staticmethod
     def can_manage_settings(user: User, kb: KnowledgeBase) -> bool:
         """청킹 등 KB 구조 설정 변경 — 소유자/ADMIN만 (kb-custom-chunking D9)."""
         return KnowledgeBasePolicy.can_delete(user, kb)

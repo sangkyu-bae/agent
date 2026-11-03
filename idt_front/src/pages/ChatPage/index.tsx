@@ -25,7 +25,7 @@ import agentAttachmentService from '@/services/agentAttachmentService';
 import { ApiError } from '@/services/api/ApiError';
 import { useLlmModels } from '@/hooks/useLlmModels';
 import { queryKeys } from '@/lib/queryKeys';
-import type { Message } from '@/types/chat';
+import type { DocumentSource, Message } from '@/types/chat';
 import type { ChartPayload } from '@/types/chart';
 import {
   ATTACHMENT_ERROR_MESSAGES,
@@ -41,7 +41,7 @@ import {
   validateImageFiles,
 } from '@/utils/imageAttachmentValidators';
 import type { AgentChatOutletContext, AgentSummary } from '@/types/agent';
-import type { ChatSource, ChatToolEvent } from '@/hooks/useChatStream';
+import type { ChatToolEvent } from '@/hooks/useChatStream';
 
 interface EmptyAgentStateProps {
   agent: AgentSummary | null;
@@ -122,7 +122,8 @@ interface NormalizedView {
   error: { code: string; message: string } | null;
   isDone: boolean;
   toolEvents: ChatToolEvent[];
-  sources: ChatSource[];
+  // agent-run-source-citations: 에이전트 근거는 kind·url 이 있고 score 가 없다.
+  sources: DocumentSource[];
   // supervisor-chart-builder-node: 답변과 함께 렌더할 Chart.js 페이로드.
   charts: ChartPayload[];
   // agent-eval-gate: 저장된 assistant 메시지 id (평가 대상). 부재 시 null.
@@ -261,7 +262,8 @@ const ChatPage = () => {
         error: agentRun.error,
         isDone: agentRun.isDone,
         toolEvents: agentStepsToToolEvents(agentRun.steps),
-        sources: [],
+        // agent-run-source-citations FR-13: ANSWER_COMPLETED 의 근거를 그대로 쓴다.
+        sources: agentRun.sources,
         charts: agentRun.charts,
         // agent-run-feedback-wiring D-07: ANSWER_COMPLETED 의 assistant_message_id 로
         // 일반 채팅과 같은 feedbackMessageId 경로를 탄다 (없으면 평가 미노출).

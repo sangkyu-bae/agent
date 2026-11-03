@@ -14,3 +14,6 @@ export const AGENT_STEP_TYPE_LABEL = {
 } as const;
 
 export const MAX_AGENT_STEPS = 20;
+
+/** 일반 채팅 세션의 agent_id (백엔드 대화 이력 계약) */
+export const GENERAL_CHAT_AGENT_ID = 'super';

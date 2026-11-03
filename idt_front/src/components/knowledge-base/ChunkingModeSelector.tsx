@@ -5,6 +5,7 @@
  * use_custom_chunking의 동시 활성(V-07)을 UI에서 원천 차단한다.
  */
 import CustomChunkingFields from './CustomChunkingFields';
+import KbProfileSelect from './KbProfileSelect';
 import type { CustomChunkingFormState } from './customChunkingForm';
 
 export type ChunkingMode = 'default' | 'clause' | 'custom';
@@ -36,6 +37,10 @@ interface ChunkingModeSelectorProps {
   onModeChange: (mode: ChunkingMode) => void;
   customForm: CustomChunkingFormState;
   onCustomFormChange: (form: CustomChunkingFormState) => void;
+  profileId: string | null;
+  onProfileChange: (profileId: string | null) => void;
+  kbChunkSize?: number | null;
+  kbChunkOverlap?: number | null;
 }
 
 const ChunkingModeSelector = ({
@@ -43,6 +48,10 @@ const ChunkingModeSelector = ({
   onModeChange,
   customForm,
   onCustomFormChange,
+  profileId,
+  onProfileChange,
+  kbChunkSize,
+  kbChunkOverlap,
 }: ChunkingModeSelectorProps) => (
   <div className="space-y-2">
     {MODE_OPTIONS.map((option) => (
@@ -64,6 +73,14 @@ const ChunkingModeSelector = ({
         </span>
       </label>
     ))}
+    {mode === 'clause' && (
+      <KbProfileSelect
+        selectedId={profileId}
+        onChange={onProfileChange}
+        kbChunkSize={kbChunkSize}
+        kbChunkOverlap={kbChunkOverlap}
+      />
+    )}
     {mode === 'custom' && (
       <CustomChunkingFields
         value={customForm}

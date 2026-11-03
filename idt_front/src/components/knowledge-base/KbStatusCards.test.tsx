@@ -9,6 +9,7 @@ const doc = (id: string, chunkCount: number): KbDocumentInfo => ({
   chunk_count: chunkCount,
   chunking_strategy: 'parent_child',
   created_at: '2026-07-18T00:00:00Z',
+  can_delete: false,
 });
 
 describe('KbStatusCards — kb-retrieval-test FR-07', () => {

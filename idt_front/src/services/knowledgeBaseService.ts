@@ -5,6 +5,7 @@ import type {
   CreateKnowledgeBaseRequest,
   KbCreateResponse,
   KbDocumentChunksParams,
+  KbDocumentDeleteResponse,
   KbDocumentChunksResponse,
   KbDocumentListResponse,
   KbDocumentSummaryResponse,
@@ -75,6 +76,16 @@ const knowledgeBaseService = {
     const { data } = await authApiClient.get<KbDocumentListResponse>(
       API_ENDPOINTS.KNOWLEDGE_BASE_DOCUMENTS(kbId),
       { params },
+    );
+    return data;
+  },
+
+  deleteKbDocument: async (
+    kbId: string,
+    documentId: string,
+  ): Promise<KbDocumentDeleteResponse> => {
+    const { data } = await authApiClient.delete<KbDocumentDeleteResponse>(
+      API_ENDPOINTS.KNOWLEDGE_BASE_DOCUMENT_DETAIL(kbId, documentId),
     );
     return data;
   },

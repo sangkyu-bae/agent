@@ -11,6 +11,7 @@ const docs: KbDocumentInfo[] = [
     chunk_count: 42,
     chunking_strategy: 'parent_child',
     created_at: '2026-07-14T00:00:00Z',
+    can_delete: true,
   },
   {
     document_id: 'doc-2',
@@ -18,6 +19,7 @@ const docs: KbDocumentInfo[] = [
     chunk_count: 10,
     chunking_strategy: 'clause_aware',
     created_at: null,
+    can_delete: false,
   },
 ];
 
@@ -57,5 +59,69 @@ describe('KbDocumentTable — kb-content-browser 행 클릭', () => {
     expect(selectedRow).toHaveAttribute('aria-selected', 'true');
     const otherRow = screen.getByText('여신규정.pdf').closest('tr');
     expect(otherRow).toHaveAttribute('aria-selected', 'false');
+  });
+});
+
+describe('KbDocumentTable — kb-document-management 행 삭제', () => {
+  it('can_delete=true 행에만 삭제 버튼을 보여준다', () => {
+    render(
+      <KbDocumentTable
+        documents={docs}
+        isLoading={false}
+        isError={false}
+        onRetry={vi.fn()}
+        onDeleteDocument={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('columnheader', { name: '관리' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: '여신규정.pdf 삭제' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: '심사기준.pdf 삭제' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('삭제 클릭은 onDeleteDocument만 호출하고 행 드릴다운을 열지 않는다', async () => {
+    const onDeleteDocument = vi.fn();
+    const onRowClick = vi.fn();
+    render(
+      <KbDocumentTable
+        documents={docs}
+        isLoading={false}
+        isError={false}
+        onRetry={vi.fn()}
+        onRowClick={onRowClick}
+        onDeleteDocument={onDeleteDocument}
+      />,
+    );
+
+    await userEvent.click(
+      screen.getByRole('button', { name: '여신규정.pdf 삭제' }),
+    );
+
+    expect(onDeleteDocument).toHaveBeenCalledWith(
+      expect.objectContaining({ document_id: 'doc-1' }),
+    );
+    expect(onRowClick).not.toHaveBeenCalled();
+  });
+
+  it('onDeleteDocument가 없으면 관리 열을 그리지 않는다', () => {
+    render(
+      <KbDocumentTable
+        documents={docs}
+        isLoading={false}
+        isError={false}
+        onRetry={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.queryByRole('columnheader', { name: '관리' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /삭제$/ }),
+    ).not.toBeInTheDocument();
   });
 });

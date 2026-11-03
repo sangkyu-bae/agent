@@ -11,7 +11,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
-from typing import List, Optional
+from typing import Dict, List, Optional, Protocol
 
 from src.domain.agent_run.entities import (
     AgentRun,
@@ -20,7 +20,16 @@ from src.domain.agent_run.entities import (
     RetrievalSource,
     ToolCall,
 )
+from src.domain.agent_run.source_policy import RunSourceItem
 from src.domain.agent_run.value_objects import RunId
+
+
+class RunSourcesReaderPort(Protocol):
+    """실시간 경로용 근거 조회 (agent-run-source-citations §2.3). 실패 시 빈 목록."""
+
+    async def load_for_run(
+        self, run_id: RunId, request_id: str,
+    ) -> List[RunSourceItem]: ...
 
 
 @dataclass(frozen=True)
@@ -160,6 +169,25 @@ class AgentRunRepositoryInterface(ABC):
 
     @abstractmethod
     async def find_retrievals(self, run_id: RunId) -> List[RetrievalSource]: ...
+
+    # agent-run-source-citations §3.4 — 메시지 수와 무관하게 쿼리 횟수를 고정한다.
+    @abstractmethod
+    async def find_latest_runs_by_user_messages(
+        self, message_ids: List[int],
+    ) -> Dict[int, AgentRun]:
+        """user 메시지별 마지막 런 (재시도 시 복수 → started_at 최신)."""
+
+    @abstractmethod
+    async def find_retrievals_by_runs(
+        self, run_ids: List[RunId],
+    ) -> Dict[str, List[RetrievalSource]]:
+        """run_id 문자열 → 근거 행."""
+
+    @abstractmethod
+    async def find_tool_calls_by_runs(
+        self, run_ids: List[RunId],
+    ) -> Dict[str, List[ToolCall]]:
+        """run_id 문자열 → 도구 호출 행."""
 
     @abstractmethod
     async def attach_user_message(self, run_id: RunId, message_id: int) -> None:

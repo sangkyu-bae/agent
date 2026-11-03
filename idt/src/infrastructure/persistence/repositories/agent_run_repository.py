@@ -4,7 +4,7 @@ AGENT-OBS-001 §4: ai_run / ai_run_step / ai_tool_call / ai_retrieval_source 영
 DB-001 §10.3 — Repository는 commit/rollback 호출 금지 (Tracker가 세션 단위 관리).
 """
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from sqlalchemy import func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -291,6 +291,52 @@ class SqlAlchemyAgentRunRepository(AgentRunRepositoryInterface):
         )
         result = await self._session.execute(stmt)
         return [self._retrieval_to_domain(r) for r in result.scalars().all()]
+
+    # ── agent-run-source-citations §3.4: 런 묶음 일괄 조회 ─────────────
+    async def find_latest_runs_by_user_messages(
+        self, message_ids: List[int],
+    ) -> Dict[int, AgentRun]:
+        if not message_ids:
+            return {}
+        stmt = (
+            select(AgentRunModel)
+            .where(AgentRunModel.user_message_id.in_(message_ids))
+            .order_by(AgentRunModel.started_at)
+        )
+        result = await self._session.execute(stmt)
+        # started_at 오름차순이므로 뒤 행이 앞 행을 덮어 마지막 런이 남는다.
+        return {
+            row.user_message_id: self._run_to_domain(row)
+            for row in result.scalars().all()
+        }
+
+    async def find_retrievals_by_runs(
+        self, run_ids: List[RunId],
+    ) -> Dict[str, List[RetrievalSource]]:
+        if not run_ids:
+            return {}
+        stmt = select(RetrievalSourceModel).where(
+            RetrievalSourceModel.run_id.in_([r.value for r in run_ids]),
+        )
+        result = await self._session.execute(stmt)
+        grouped: Dict[str, List[RetrievalSource]] = {}
+        for row in result.scalars().all():
+            grouped.setdefault(row.run_id, []).append(self._retrieval_to_domain(row))
+        return grouped
+
+    async def find_tool_calls_by_runs(
+        self, run_ids: List[RunId],
+    ) -> Dict[str, List[ToolCall]]:
+        if not run_ids:
+            return {}
+        stmt = select(ToolCallModel).where(
+            ToolCallModel.run_id.in_([r.value for r in run_ids]),
+        )
+        result = await self._session.execute(stmt)
+        grouped: Dict[str, List[ToolCall]] = {}
+        for row in result.scalars().all():
+            grouped.setdefault(row.run_id, []).append(self._tool_to_domain(row))
+        return grouped
 
     # ── M5: admin run list + count ────────────────────────────────────
     async def list_runs(self, filters: RunListFilters) -> List[AgentRun]:

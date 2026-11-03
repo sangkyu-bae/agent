@@ -133,6 +133,10 @@ class Settings(BaseSettings):
         "제 권한 밖,제 범위 밖,권한/범위 밖"
     )
 
+    # agent-run-source-citations §10.3: 에이전트 답변당 근거 칩 상한.
+    # 소비 지점: src/api/main.py _make_run_sources_service → RunSourcesService.
+    agent_run_sources_max_items: int = 6
+
     # Draft Grounding Check (draft-grounding-check Design §5.4)
     # action 초안·final_answer 를 근거 판정 → 재작성 루프에 통과시킨다.
     # 소비 지점: src/api/main.py 가 GroundedGenerator·WorkflowCompiler 에 주입.

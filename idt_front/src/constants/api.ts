@@ -33,6 +33,9 @@ export const API_ENDPOINTS = {
     `/api/v1/conversations/agents/${agentId}/sessions`,
   CONVERSATION_AGENT_SESSION_MESSAGES: (agentId: string, sessionId: string) =>
     `/api/v1/conversations/agents/${agentId}/sessions/${sessionId}/messages`,
+  // agent-run-source-citations §4.1 — 인증 필수 (authClient)
+  CONVERSATION_AGENT_SESSION_SOURCES: (agentId: string, sessionId: string) =>
+    `/api/v1/conversations/agents/${agentId}/sessions/${sessionId}/sources`,
 
   // Agent
   AGENT_RUN: '/api/agent/run',
@@ -117,6 +120,9 @@ export const API_ENDPOINTS = {
   KNOWLEDGE_BASE_DETAIL: (kbId: string) => `/api/v1/knowledge-bases/${kbId}`,
   KNOWLEDGE_BASE_DOCUMENTS: (kbId: string) =>
     `/api/v1/knowledge-bases/${kbId}/documents`,
+  // kb-document-management: 문서 단건 삭제
+  KNOWLEDGE_BASE_DOCUMENT_DETAIL: (kbId: string, docId: string) =>
+    `/api/v1/knowledge-bases/${kbId}/documents/${docId}`,
   // kb-custom-chunking D7: 청킹 설정 전체 교체
   KNOWLEDGE_BASE_CHUNKING: (kbId: string) =>
     `/api/v1/knowledge-bases/${kbId}/chunking`,
@@ -161,6 +167,8 @@ export const API_ENDPOINTS = {
     `/api/v1/admin/chunking/profiles/${id}`,
   ADMIN_CHUNKING_PROFILE_DEFAULT: (id: string) =>
     `/api/v1/admin/chunking/profiles/${id}/default`,
+  // 일반 사용자 조회 (kb-profile-selector)
+  CHUNKING_PROFILES: '/api/v1/chunking/profiles',
 
   // Admin — User approval
   ADMIN_USERS_PENDING: '/api/v1/admin/users/pending',
@@ -346,4 +354,6 @@ export const API_ENDPOINTS = {
     `/api/v1/conversations/messages/${messageId}/feedback`,
   ADMIN_EVAL_AGENTS: '/api/v1/admin/eval/agents',
   ADMIN_EVAL_RECENT_NEGATIVE: '/api/v1/admin/eval/recent-negative',
+  ADMIN_EVAL_NEGATIVE_DRILLDOWN: (messageId: number) =>
+    `/api/v1/admin/eval/negative/${messageId}/drilldown`,
 } as const;

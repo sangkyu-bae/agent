@@ -120,6 +120,93 @@ describe('KnowledgeBasesPage — kb-management-ui', () => {
     ).toBeInTheDocument();
   });
 
+  // ── kb-profile-selector Check G1·G2 ─────────────────────────
+
+  const openCreateWithProfile = async () => {
+    await userEvent.click(
+      screen.getByRole('button', { name: '+ 새 지식베이스' }),
+    );
+    await userEvent.type(
+      screen.getByPlaceholderText('여신 규정집'),
+      '테스트 KB',
+    );
+    await userEvent.click(
+      screen.getByRole('combobox', { name: '대상 컬렉션' }),
+    );
+    await userEvent.click(
+      await screen.findByRole('option', { name: /documents/ }),
+    );
+    await userEvent.click(screen.getByRole('button', { name: /고급 옵션/ }));
+    await userEvent.click(
+      screen.getByRole('radio', { name: /조항 단위 청킹/ }),
+    );
+    await userEvent.click(
+      await screen.findByRole('combobox', { name: '청킹 프로파일' }),
+    );
+    await userEvent.click(screen.getByRole('option', { name: '계약서' }));
+  };
+
+  it('G1: 선택한 프로파일이 삭제돼 422면 프로파일 안내를 보이고 목록을 다시 조회한다', async () => {
+    let profileCalls = 0;
+    server.use(
+      http.get(`*${API_ENDPOINTS.CHUNKING_PROFILES}`, () => {
+        profileCalls += 1;
+        return HttpResponse.json({
+          profiles: [
+            {
+              profile_id: 'prof-contract', name: '계약서', description: null,
+              boundary_rules: [], parent_chunk_size: 2000, chunk_size: 500,
+              chunk_overlap: 50, is_default: false, summary_llm_model_id: null,
+              created_at: null, updated_at: null,
+            },
+          ],
+          total: 1,
+        });
+      }),
+      http.post(`*${API_ENDPOINTS.KNOWLEDGE_BASES}`, () =>
+        HttpResponse.json(
+          { detail: "Chunking profile 'prof-contract' not found" },
+          { status: 422 },
+        ),
+      ),
+    );
+    renderPage();
+    await screen.findByText('전사 규정');
+
+    await openCreateWithProfile();
+    await userEvent.click(screen.getByRole('button', { name: '생성' }));
+
+    expect(
+      await screen.findByText(/선택한 청킹 프로파일이 삭제되었습니다/),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('입력값을 확인해주세요 (부서/컬렉션)'),
+    ).not.toBeInTheDocument();
+    await waitFor(() => expect(profileCalls).toBe(2));
+  });
+
+  it('G2: 생성 성공 후 다시 열면 이전 입력과 청킹 선택이 초기화된다', async () => {
+    renderPage();
+    await screen.findByText('전사 규정');
+
+    await openCreateWithProfile();
+    await userEvent.click(screen.getByRole('button', { name: '생성' }));
+    await waitFor(() =>
+      expect(screen.queryByText('새 지식베이스')).not.toBeInTheDocument(),
+    );
+
+    await userEvent.click(
+      screen.getByRole('button', { name: '+ 새 지식베이스' }),
+    );
+
+    expect(screen.getByPlaceholderText('여신 규정집')).toHaveValue('');
+    expect(
+      screen.queryByRole('radio', { name: /조항 단위 청킹/ }),
+    ).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /고급 옵션/ }));
+    expect(screen.getByRole('radio', { name: /기본 청킹/ })).toBeChecked();
+  });
+
   it('소유자는 삭제 확인 후 삭제할 수 있다', async () => {
     renderPage();
     await screen.findByText('전사 규정');

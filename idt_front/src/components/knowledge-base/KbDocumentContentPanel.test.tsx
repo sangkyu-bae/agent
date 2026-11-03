@@ -32,6 +32,7 @@ const doc: KbDocumentInfo = {
   chunk_count: 42,
   chunking_strategy: 'parent_child',
   created_at: '2026-07-14T00:00:00Z',
+  can_delete: false,
 };
 
 const summaryResponse = (

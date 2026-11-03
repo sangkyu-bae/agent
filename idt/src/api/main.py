@@ -283,7 +283,9 @@ from src.api.routes.eval_router import (
     get_get_feedback_use_case,
     get_delete_feedback_use_case,
     get_agent_eval_stats_use_case,
+    get_negative_drilldown_use_case,
 )
+from src.application.eval.drilldown_use_case import GetNegativeDrilldownUseCase
 from src.application.eval.use_cases import (
     SubmitFeedbackUseCase,
     GetFeedbackUseCase,
@@ -334,6 +336,7 @@ from src.api.routes.knowledge_base_router import (
     router as knowledge_base_router,
     get_knowledge_base_use_case,
     get_kb_upload_use_case,
+    get_delete_kb_document_use_case,
     get_kb_document_chunks_use_case,
     get_kb_document_summary_use_case,
     get_kb_section_summaries_use_case,
@@ -397,8 +400,13 @@ from src.application.agent_builder.run_agent_use_case import RunAgentUseCase
 from src.application.agent_run.aggregator import UsageAggregator
 from src.application.agent_run.cost_calculator import CostCalculator
 from src.application.agent_run.model_name_resolver import ModelNameResolver
+from src.application.agent_run.run_sources import RunSourcesService
 from src.application.agent_run.schemas import RunObservabilityConfig
 from src.application.agent_run.tracker import RunTracker
+from src.infrastructure.agent_run.run_sources_reader import SessionScopedRunSourcesReader
+from src.infrastructure.doc_browse.document_metadata_repository import (
+    DocumentMetadataRepository,
+)
 from src.application.agent_builder.get_agent_use_case import GetAgentUseCase
 from src.application.agent_builder.list_agents_use_case import ListAgentsUseCase
 from src.application.agent_builder.delete_agent_use_case import DeleteAgentUseCase
@@ -554,6 +562,17 @@ from src.infrastructure.mcp_registry.identity_token import HmacIdentityTokenSign
 from src.infrastructure.security.secret_cipher import SecretCipher
 
 
+def _make_run_sources_service(session: AsyncSession, logger) -> RunSourcesService:
+    """답변 근거 서비스 조립 — 저장소 3종이 같은 세션을 쓴다 (DB-001)."""
+    return RunSourcesService(
+        SqlAlchemyAgentRunRepository(session),
+        DocumentMetadataRepository(session, logger),
+        ToolCatalogRepository(session, logger),
+        logger,
+        max_items=settings.agent_run_sources_max_items,
+    )
+
+
 def _mcp_cipher() -> SecretCipher | None:
     """settings.mcp_secret_key가 설정돼 있으면 SecretCipher를, 없으면 None을 반환한다.
 
@@ -656,6 +675,10 @@ from src.api.routes.agent_run_router import (
     get_usage_timeseries_use_case,
     get_my_usage_timeseries_use_case,
     get_message_retrievals_use_case,
+    get_session_sources_use_case,
+)
+from src.application.agent_run.use_cases.get_session_sources_use_case import (
+    GetSessionSourcesUseCase,
 )
 from src.application.llm_model.create_llm_model_use_case import CreateLlmModelUseCase
 from src.application.llm_model.update_llm_model_use_case import UpdateLlmModelUseCase
@@ -2329,6 +2352,23 @@ def create_agent_run_factories():
     )
 
 
+def create_session_sources_factory():
+    """agent-run-source-citations §4.2: 세션 답변 근거 — 저장소가 요청 세션 1개를 쓴다."""
+    app_logger = get_app_logger()
+
+    def session_sources_factory(
+        session: AsyncSession = Depends(get_session),
+    ) -> GetSessionSourcesUseCase:
+        return GetSessionSourcesUseCase(
+            message_repo=SQLAlchemyConversationMessageRepository(session),
+            agent_run_repo=SqlAlchemyAgentRunRepository(session),
+            sources=_make_run_sources_service(session, app_logger),
+            logger=app_logger,
+        )
+
+    return session_sources_factory
+
+
 def create_embedding_model_factories():
     """Return per-request DI factories for Embedding Model Registry."""
     app_logger = get_app_logger()
@@ -3298,6 +3338,12 @@ def create_agent_builder_factories():
             # agent-memory-injection D10: General Chat과 같은 조립기 싱글톤 공유 —
             # 에이전트 대화 런 supervisor 프롬프트에 개인∪부서 메모리 상주 주입.
             memory_assembler=get_memory_assembler(),
+            # agent-run-source-citations §2.1: 답변 근거는 별도 세션에서 읽는다.
+            run_sources=SessionScopedRunSourcesReader(
+                get_session_factory(),
+                lambda s: _make_run_sources_service(s, app_logger),
+                app_logger,
+            ),
         )
 
     def run_uc_factory(session: AsyncSession = Depends(get_session)):
@@ -4482,6 +4528,98 @@ def create_kb_browse_factories(kb_use_case_factory):
         )
 
     return summary_factory, sections_factory, chunks_factory
+
+
+def create_kb_document_delete_factory(kb_use_case_factory):
+    """KB 문서 삭제 DI (kb-document-management Design §11.2).
+
+    Qdrant/ES 클라이언트는 싱글턴. 가드·메타·잡 행·활동 로그는 같은 요청 세션을
+    공유해 메타와 잡 행이 함께 커밋된다.
+    """
+    from src.application.collection.activity_log_service import ActivityLogService
+    from src.application.collection.permission_service import (
+        CollectionPermissionService,
+    )
+    from src.application.knowledge_base.content_browse_guard import (
+        KbDocumentGuard,
+    )
+    from src.application.knowledge_base.delete_document_use_case import (
+        DeleteKbDocumentUseCase,
+    )
+    from src.domain.collection.permission_policy import CollectionPermissionPolicy
+    from src.domain.doc_browse.policies import DocumentDeletePolicy
+    from src.domain.knowledge_base.policy import KnowledgeBasePolicy
+    from src.domain.section_summary.policy import SectionSummaryJobPolicy
+    from src.infrastructure.collection.activity_log_repository import (
+        ActivityLogRepository,
+    )
+    from src.infrastructure.collection.permission_repository import (
+        CollectionPermissionRepository,
+    )
+    from src.infrastructure.department.department_repository import (
+        DepartmentRepository,
+    )
+    from src.infrastructure.doc_browse.document_metadata_repository import (
+        DocumentMetadataRepository,
+    )
+    from src.infrastructure.section_summary.job_repository import (
+        SectionSummaryJobRepository,
+    )
+
+    app_logger = get_app_logger()
+    qdrant_client = AsyncQdrantClient(
+        host=settings.qdrant_host,
+        port=settings.qdrant_port,
+    )
+    es_config = ElasticsearchConfig(
+        ES_HOST=settings.es_host,
+        ES_PORT=settings.es_port,
+        ES_SCHEME=settings.es_scheme,
+    )
+    es_client = ElasticsearchClient.from_config(es_config)
+    es_repo = ElasticsearchRepository(
+        client=es_client, logger=StructuredLogger("kb_document_delete.es")
+    )
+
+    def _deleter(session: AsyncSession) -> DeleteDocumentUseCase:
+        log_repo = ActivityLogRepository(session, app_logger)
+        perm_service = CollectionPermissionService(
+            perm_repo=CollectionPermissionRepository(session, app_logger),
+            dept_repo=DepartmentRepository(session, app_logger),
+            policy=CollectionPermissionPolicy(),
+            logger=app_logger,
+        )
+        return DeleteDocumentUseCase(
+            document_metadata_repo=DocumentMetadataRepository(
+                session, app_logger
+            ),
+            qdrant_client=qdrant_client,
+            es_repo=es_repo,
+            es_index=settings.es_index,
+            permission_service=perm_service,
+            activity_log_service=ActivityLogService(log_repo, app_logger),
+            policy=DocumentDeletePolicy(),
+            logger=StructuredLogger("kb_document_delete.deleter"),
+        )
+
+    def delete_factory(session: AsyncSession = Depends(get_session)):
+        return DeleteKbDocumentUseCase(
+            guard=KbDocumentGuard(
+                kb_use_case=kb_use_case_factory(session),
+                document_metadata_repo=DocumentMetadataRepository(
+                    session, app_logger
+                ),
+                logger=StructuredLogger("kb_document_delete.guard"),
+            ),
+            deleter=_deleter(session),
+            job_repo=SectionSummaryJobRepository(session, app_logger),
+            policy=KnowledgeBasePolicy(),
+            job_policy=SectionSummaryJobPolicy(),
+            logger=StructuredLogger("kb_document_delete"),
+            stale_seconds=settings.section_summary_stale_seconds,
+        )
+
+    return delete_factory
 
 
 def create_kb_search_factories(kb_use_case_factory):
@@ -5892,6 +6030,9 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_usage_timeseries_use_case] = _usage_timeseries_f
     app.dependency_overrides[get_my_usage_timeseries_use_case] = _my_usage_timeseries_f
     app.dependency_overrides[get_message_retrievals_use_case] = _message_retrievals_f
+    app.dependency_overrides[get_session_sources_use_case] = (
+        create_session_sources_factory()
+    )
 
     # Admin Dashboard DI (admin-dashboard Design D2)
     (
@@ -5959,10 +6100,26 @@ def create_app() -> FastAPI:
             recent_negative_limit=settings.eval_recent_negative_limit,
         )
 
+    def _eval_drilldown_f(session: AsyncSession = Depends(get_session)):
+        # Design Ref: negative-feedback-drilldown §4.6 — 저장소 전부 같은 요청 세션
+        logger = get_app_logger()
+        message_repo = SQLAlchemyConversationMessageRepository(session)
+        return GetNegativeDrilldownUseCase(
+            feedback_repo=MessageFeedbackRepository(session, logger),
+            message_repo=message_repo,
+            retrievals=GetMessageRetrievalsUseCase(
+                agent_run_repo=SqlAlchemyAgentRunRepository(session),
+                message_repo=message_repo,
+                logger=logger,
+            ),
+            logger=logger,
+        )
+
     app.dependency_overrides[get_submit_feedback_use_case] = _eval_submit_f
     app.dependency_overrides[get_get_feedback_use_case] = _eval_get_f
     app.dependency_overrides[get_delete_feedback_use_case] = _eval_delete_f
     app.dependency_overrides[get_agent_eval_stats_use_case] = _eval_stats_f
+    app.dependency_overrides[get_negative_drilldown_use_case] = _eval_drilldown_f
 
     # Skill Builder DI
     (
@@ -6030,6 +6187,10 @@ def create_app() -> FastAPI:
     )
     app.dependency_overrides[get_kb_document_chunks_use_case] = (
         _kb_chunks_factory
+    )
+    # KB 문서 삭제 DI (kb-document-management)
+    app.dependency_overrides[get_delete_kb_document_use_case] = (
+        create_kb_document_delete_factory(_kb_uc_factory)
     )
     # KB 검색/히스토리 DI (kb-retrieval-test)
     _kb_search_factory, _kb_search_history_factory = (

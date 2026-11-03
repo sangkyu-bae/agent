@@ -8,6 +8,7 @@
  */
 
 import type { ChartPayload } from './chart';
+import type { DocumentSource } from './chat';
 
 export interface WSEnvelope<T = unknown> {
   type: string;
@@ -72,6 +73,8 @@ export interface AgentAnswerCompletedData {
    * 저장하지 않은 실행(persist=False)·구 서버는 필드 부재 → 평가 버튼 미표시.
    */
   assistant_message_id?: number;
+  /** agent-run-source-citations: 답변 근거. 근거가 없으면 필드가 없다(하위호환). */
+  sources?: DocumentSource[];
 }
 
 export interface AgentRunCompletedData {
