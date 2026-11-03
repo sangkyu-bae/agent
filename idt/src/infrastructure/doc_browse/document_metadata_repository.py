@@ -203,6 +203,19 @@ class DocumentMetadataRepository(DocumentMetadataRepositoryInterface):
         model = await self._find_model_by_document_id(document_id)
         return self._to_domain(model) if model else None
 
+    async def find_filenames(
+        self,
+        document_ids: list[str],
+        request_id: str,
+    ) -> dict[str, str]:
+        if not document_ids:
+            return {}
+        stmt = select(
+            DocumentMetadataModel.document_id, DocumentMetadataModel.filename,
+        ).where(DocumentMetadataModel.document_id.in_(document_ids))
+        rows = (await self._session.execute(stmt)).all()
+        return {document_id: filename for document_id, filename in rows}
+
     async def _find_model_by_document_id(
         self, document_id: str
     ) -> Optional[DocumentMetadataModel]:
