@@ -50,6 +50,8 @@ export interface CreateKnowledgeBaseRequest {
   department_id?: string | null;
   collection_name: string;
   use_clause_chunking?: boolean;
+  // kb-profile-selector: null = 기본 프로파일 따름 (late-binding)
+  chunking_profile_id?: string | null;
   // kb-custom-chunking (D1): 독립 opt-in — 조항 청킹과 상호배타
   use_custom_chunking?: boolean;
   custom_chunking_config?: CustomChunkingConfig | null;

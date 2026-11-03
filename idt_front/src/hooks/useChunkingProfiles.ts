@@ -18,6 +18,16 @@ export const useChunkingProfiles = () => {
   });
 };
 
+export const useActiveChunkingProfiles = ({ enabled = true } = {}) => {
+  return useQuery({
+    queryKey: queryKeys.chunkingProfiles.active(),
+    queryFn: () => chunkingProfileService.getActiveChunkingProfiles(),
+    staleTime: 5 * 60 * 1000,
+    select: (data) => data.profiles,
+    enabled,
+  });
+};
+
 /** 404(타 관리자 선삭제 등) 실패 시 목록을 재동기화한다 (Design D9) */
 const invalidateOn404 = (qc: QueryClient, err: unknown) => {
   if (err instanceof ApiError && err.status === 404) {

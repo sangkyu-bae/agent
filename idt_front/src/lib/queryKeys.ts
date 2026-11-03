@@ -108,10 +108,11 @@ export const queryKeys = {
     options: () => [...queryKeys.blueprints.all, 'options'] as const,
   },
 
-  // ── Chunking Profiles (admin) ──────────────────────────
+  // ── Chunking Profiles ──────────────────────────────────
   chunkingProfiles: {
     all: ['chunkingProfiles'] as const,
     list: () => [...queryKeys.chunkingProfiles.all, 'list'] as const,
+    active: () => [...queryKeys.chunkingProfiles.all, 'active'] as const,
   },
 
   // ── RAG Tools ──────────────────────────────────────────

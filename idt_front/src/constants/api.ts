@@ -161,6 +161,8 @@ export const API_ENDPOINTS = {
     `/api/v1/admin/chunking/profiles/${id}`,
   ADMIN_CHUNKING_PROFILE_DEFAULT: (id: string) =>
     `/api/v1/admin/chunking/profiles/${id}/default`,
+  // 일반 사용자 조회 (kb-profile-selector)
+  CHUNKING_PROFILES: '/api/v1/chunking/profiles',
 
   // Admin — User approval
   ADMIN_USERS_PENDING: '/api/v1/admin/users/pending',

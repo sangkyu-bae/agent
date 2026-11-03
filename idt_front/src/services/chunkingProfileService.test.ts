@@ -51,6 +51,19 @@ describe('chunkingProfileService', () => {
     expect(result.profiles[0].profile_id).toBe('prof-1');
   });
 
+  it('S1-1: active list — 일반 사용자용 GET /chunking/profiles를 호출한다', async () => {
+    server.use(
+      http.get('*/api/v1/chunking/profiles', () =>
+        HttpResponse.json({ profiles: [profile], total: 1 }),
+      ),
+      http.get('*/api/v1/admin/chunking/profiles', () =>
+        HttpResponse.json({ detail: 'forbidden' }, { status: 403 }),
+      ),
+    );
+    const result = await chunkingProfileService.getActiveChunkingProfiles();
+    expect(result.profiles[0].profile_id).toBe('prof-1');
+  });
+
   it('S2: create — POST 바디에 전체 필드(summary_llm_model_id 포함)를 전송한다', async () => {
     let captured: Record<string, unknown> | null = null;
     server.use(

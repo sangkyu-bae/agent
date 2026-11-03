@@ -174,6 +174,46 @@ export const mockExcelPreview = (fileId: string): ExcelPreviewResponse => ({
 
 export const handlers = [
 
+  // ── kb-profile-selector (Design §8.5) ───────────────────────────────────────
+  http.get(`*${API_ENDPOINTS.CHUNKING_PROFILES}`, () =>
+    HttpResponse.json({
+      profiles: [
+        {
+          profile_id: 'prof-default',
+          name: '금융 조항 기본',
+          description: '조·항 경계로 분할합니다',
+          boundary_rules: [
+            { pattern: '^제\\s*\\d+\\s*조', priority: 1, level: 'parent' },
+            { pattern: '^제\\s*\\d+\\s*항', priority: 1, level: 'child' },
+          ],
+          parent_chunk_size: 2000,
+          chunk_size: 500,
+          chunk_overlap: 50,
+          is_default: true,
+          summary_llm_model_id: 'llm-1',
+          created_at: '2026-07-01T00:00:00',
+          updated_at: '2026-07-10T00:00:00',
+        },
+        {
+          profile_id: 'prof-contract',
+          name: '계약서',
+          description: null,
+          boundary_rules: [
+            { pattern: '^제\\s*\\d+\\s*관', priority: 1, level: 'parent' },
+          ],
+          parent_chunk_size: 3000,
+          chunk_size: 800,
+          chunk_overlap: 100,
+          is_default: false,
+          summary_llm_model_id: null,
+          created_at: '2026-07-02T00:00:00',
+          updated_at: '2026-07-02T00:00:00',
+        },
+      ],
+      total: 2,
+    }),
+  ),
+
   // ── excel-preview (Design §8.5) ─────────────────────────────────────────────
   http.get(`*${API_ENDPOINTS.DOCUMENT_EXTRACTOR_FILE_PREVIEW(':fileId')}`, ({ params }) =>
     HttpResponse.json(mockExcelPreview(String(params.fileId))),

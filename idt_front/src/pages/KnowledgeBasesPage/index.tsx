@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/queryKeys';
 import {
   useKnowledgeBases,
   useCreateKnowledgeBase,
@@ -17,8 +19,18 @@ const KB_ERROR_MAP: Record<number, string> = {
   422: '입력값을 확인해주세요 (부서/컬렉션)',
 };
 
+// 생성 API는 프로파일 누락도 422로 돌려준다 (knowledge_base_router create)
+const isChunkingProfileMissing = (error: unknown): boolean =>
+  error instanceof ApiError &&
+  error.status === 422 &&
+  /Chunking profile .* not found/.test(error.message);
+
+const CHUNKING_PROFILE_MISSING_MESSAGE =
+  '선택한 청킹 프로파일이 삭제되었습니다. 목록을 다시 불러왔으니 프로파일을 다시 선택해주세요';
+
 const getMutationError = (error: Error | null): string | null => {
   if (!error) return null;
+  if (isChunkingProfileMissing(error)) return CHUNKING_PROFILE_MISSING_MESSAGE;
   if (error instanceof ApiError && KB_ERROR_MAP[error.status]) {
     return KB_ERROR_MAP[error.status];
   }
@@ -29,6 +41,7 @@ const KnowledgeBasesPage = () => {
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
+  const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
   const kbList = useKnowledgeBases();
   const createMutation = useCreateKnowledgeBase();
@@ -74,6 +87,13 @@ const KnowledgeBasesPage = () => {
           onSubmit={(data) => {
             createMutation.mutate(data, {
               onSuccess: () => setCreateOpen(false),
+              onError: (err) => {
+                if (isChunkingProfileMissing(err)) {
+                  queryClient.invalidateQueries({
+                    queryKey: queryKeys.chunkingProfiles.all,
+                  });
+                }
+              },
             });
           }}
           isPending={createMutation.isPending}
