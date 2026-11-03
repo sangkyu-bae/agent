@@ -8,6 +8,7 @@
  */
 
 import type { ChartPayload } from './chart';
+import type { DocumentSource } from './chat';
 
 export interface WSEnvelope<T = unknown> {
   type: string;
@@ -67,6 +68,8 @@ export interface AgentAnswerCompletedData {
    * 필드 부재 시 차트 미표시(하위호환).
    */
   charts?: ChartPayload[];
+  /** agent-run-source-citations: 답변 근거. 근거가 없으면 필드가 없다(하위호환). */
+  sources?: DocumentSource[];
 }
 
 export interface AgentRunCompletedData {

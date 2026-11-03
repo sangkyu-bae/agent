@@ -399,8 +399,13 @@ from src.application.agent_builder.run_agent_use_case import RunAgentUseCase
 from src.application.agent_run.aggregator import UsageAggregator
 from src.application.agent_run.cost_calculator import CostCalculator
 from src.application.agent_run.model_name_resolver import ModelNameResolver
+from src.application.agent_run.run_sources import RunSourcesService
 from src.application.agent_run.schemas import RunObservabilityConfig
 from src.application.agent_run.tracker import RunTracker
+from src.infrastructure.agent_run.run_sources_reader import SessionScopedRunSourcesReader
+from src.infrastructure.doc_browse.document_metadata_repository import (
+    DocumentMetadataRepository,
+)
 from src.application.agent_builder.get_agent_use_case import GetAgentUseCase
 from src.application.agent_builder.list_agents_use_case import ListAgentsUseCase
 from src.application.agent_builder.delete_agent_use_case import DeleteAgentUseCase
@@ -556,6 +561,17 @@ from src.infrastructure.mcp_registry.identity_token import HmacIdentityTokenSign
 from src.infrastructure.security.secret_cipher import SecretCipher
 
 
+def _make_run_sources_service(session: AsyncSession, logger) -> RunSourcesService:
+    """답변 근거 서비스 조립 — 저장소 3종이 같은 세션을 쓴다 (DB-001)."""
+    return RunSourcesService(
+        SqlAlchemyAgentRunRepository(session),
+        DocumentMetadataRepository(session, logger),
+        ToolCatalogRepository(session, logger),
+        logger,
+        max_items=settings.agent_run_sources_max_items,
+    )
+
+
 def _mcp_cipher() -> SecretCipher | None:
     """settings.mcp_secret_key가 설정돼 있으면 SecretCipher를, 없으면 None을 반환한다.
 
@@ -658,6 +674,10 @@ from src.api.routes.agent_run_router import (
     get_usage_timeseries_use_case,
     get_my_usage_timeseries_use_case,
     get_message_retrievals_use_case,
+    get_session_sources_use_case,
+)
+from src.application.agent_run.use_cases.get_session_sources_use_case import (
+    GetSessionSourcesUseCase,
 )
 from src.application.llm_model.create_llm_model_use_case import CreateLlmModelUseCase
 from src.application.llm_model.update_llm_model_use_case import UpdateLlmModelUseCase
@@ -2331,6 +2351,23 @@ def create_agent_run_factories():
     )
 
 
+def create_session_sources_factory():
+    """agent-run-source-citations §4.2: 세션 답변 근거 — 저장소가 요청 세션 1개를 쓴다."""
+    app_logger = get_app_logger()
+
+    def session_sources_factory(
+        session: AsyncSession = Depends(get_session),
+    ) -> GetSessionSourcesUseCase:
+        return GetSessionSourcesUseCase(
+            message_repo=SQLAlchemyConversationMessageRepository(session),
+            agent_run_repo=SqlAlchemyAgentRunRepository(session),
+            sources=_make_run_sources_service(session, app_logger),
+            logger=app_logger,
+        )
+
+    return session_sources_factory
+
+
 def create_embedding_model_factories():
     """Return per-request DI factories for Embedding Model Registry."""
     app_logger = get_app_logger()
@@ -3300,6 +3337,12 @@ def create_agent_builder_factories():
             # agent-memory-injection D10: General Chat과 같은 조립기 싱글톤 공유 —
             # 에이전트 대화 런 supervisor 프롬프트에 개인∪부서 메모리 상주 주입.
             memory_assembler=get_memory_assembler(),
+            # agent-run-source-citations §2.1: 답변 근거는 별도 세션에서 읽는다.
+            run_sources=SessionScopedRunSourcesReader(
+                get_session_factory(),
+                lambda s: _make_run_sources_service(s, app_logger),
+                app_logger,
+            ),
         )
 
     def run_uc_factory(session: AsyncSession = Depends(get_session)):
@@ -5894,6 +5937,9 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_usage_timeseries_use_case] = _usage_timeseries_f
     app.dependency_overrides[get_my_usage_timeseries_use_case] = _my_usage_timeseries_f
     app.dependency_overrides[get_message_retrievals_use_case] = _message_retrievals_f
+    app.dependency_overrides[get_session_sources_use_case] = (
+        create_session_sources_factory()
+    )
 
     # Admin Dashboard DI (admin-dashboard Design D2)
     (

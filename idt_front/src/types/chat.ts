@@ -2,12 +2,33 @@ import type { ChartPayload } from './chart';
 
 export type MessageRole = 'user' | 'assistant' | 'tool';
 
-/** General Chat API 문서 출처 */
+/** agent-run-source-citations §3.2 — 에이전트 근거 종류 (백엔드 SourceKind wire 값) */
+export const SOURCE_KIND = {
+  DOCUMENT: 'document',
+  WIKI: 'wiki',
+  WEB: 'web',
+  MCP: 'mcp',
+} as const;
+export type SourceKind = (typeof SOURCE_KIND)[keyof typeof SOURCE_KIND];
+
+/**
+ * 답변 출처. 일반 채팅은 score 가 있고 kind 가 없다.
+ * 에이전트 근거는 kind 가 있고, 검색 방식마다 점수 스케일이 달라 score 가 없다.
+ */
 export interface DocumentSource {
   content: string;
   source: string;
   chunk_id: string;
-  score: number;
+  score?: number;
+  kind?: SourceKind;
+  /** kind=web 전용 원문 링크 */
+  url?: string;
+}
+
+/** GET /api/v1/conversations/agents/{agent_id}/sessions/{session_id}/sources 응답 */
+export interface SessionSourcesResponse {
+  session_id: string;
+  items: { message_id: number; sources: DocumentSource[] }[];
 }
 
 export interface Message {

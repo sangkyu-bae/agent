@@ -1046,6 +1046,11 @@ export const handlers = [
     });
   }),
 
+  // agent-run-source-citations: 세션 답변 근거 (기본은 근거 없음 — 기존 화면 테스트 무영향)
+  http.get('*/api/v1/conversations/agents/:agentId/sessions/:sessionId/sources', ({ params }) =>
+    HttpResponse.json({ session_id: params.sessionId, items: [] }),
+  ),
+
   // 에이전트별 세션 메시지 조회
   http.get('*/api/v1/conversations/agents/:agentId/sessions/:sessionId/messages', ({ params, request }) => {
     const url = new URL(request.url);

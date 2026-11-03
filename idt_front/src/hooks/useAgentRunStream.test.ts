@@ -168,6 +168,26 @@ describe('useAgentRunStream', () => {
     expect(result.current.charts).toEqual([chart]);
   });
 
+  it('captures sources on agent_answer_completed (agent-run-source-citations)', () => {
+    const { result } = renderHook(() =>
+      useAgentRunStream({ runId: 'r1', agentId: 'a', query: 'q' }),
+    );
+    const source = { kind: 'document', source: 'a.pdf', content: '발췌', chunk_id: 'd1' };
+    act(() =>
+      emit('agent_answer_completed', { answer: '답', tools_used: [], sources: [source] }),
+    );
+    expect(result.current.sources).toEqual([source]);
+  });
+
+  it('defaults sources to empty array when absent', () => {
+    const { result } = renderHook(() =>
+      useAgentRunStream({ runId: 'r1', agentId: 'a', query: 'q' }),
+    );
+    expect(result.current.sources).toEqual([]);
+    act(() => emit('agent_answer_completed', { answer: '답', tools_used: [] }));
+    expect(result.current.sources).toEqual([]);
+  });
+
   it('defaults charts to empty array when absent', () => {
     const { result } = renderHook(() =>
       useAgentRunStream({ runId: 'r1', agentId: 'a', query: 'q' }),

@@ -86,6 +86,7 @@ from src.domain.agent_builder.schemas import (
     SupervisorConfig,
     WorkflowDefinition,
 )
+from src.domain.agent_run.interfaces import RunSourcesReaderPort
 from src.domain.agent_run.value_objects import (
     AgentRunEvent,
     AgentRunEventType,
@@ -284,8 +285,11 @@ class RunAgentUseCase:
         image_block_builder: Optional[ImageBlockBuilderPort] = None,
         image_max_count: int = 5,
         image_detail: str = "high",
+        # agent-run-source-citations §2.3: 답변 근거 조회. None 이면 sources 없음.
+        run_sources: Optional[RunSourcesReaderPort] = None,
     ) -> None:
         self._repository = repository
+        self._run_sources = run_sources
         self._image_block_builder = image_block_builder
         self._image_max_count = image_max_count
         self._image_detail = image_detail
@@ -324,6 +328,7 @@ class RunAgentUseCase:
         *,
         auth_ctx: AuthContext | None = None,
         inject_memory: bool = False,
+        include_sources: bool = False,
     ) -> AsyncIterator[AgentRunEvent]:
         """transport-독립 SSE/WS용 이벤트 스트림 (Design §5.2.2).
 
@@ -331,6 +336,9 @@ class RunAgentUseCase:
         주입은 **대화 라우트(WS·REST·SSE)만 True 로 opt-in** 한다. 웹훅·백그라운드
         잡도 auth_ctx 를 넘기므로 auth_ctx 유무로는 대화 여부를 구분할 수 없다 —
         기본 False(fail-closed)로 소유자 메모리가 외부 발송 결과에 섞이지 않게 한다.
+
+        include_sources — agent-run-source-citations FR-12: 근거 칩을 그리는 WS
+        경로만 True. 웹훅·백그라운드·RAGAS 에 조회 쿼리를 더하지 않는다.
 
         이벤트 시퀀스:
             RUN_STARTED → (NODE_STARTED|NODE_COMPLETED|TOOL_*|TOKEN)*
@@ -442,6 +450,9 @@ class RunAgentUseCase:
                 answer_payload["limit_reached"] = True
             if state.charts:
                 answer_payload["charts"] = state.charts
+            await self._attach_sources(
+                answer_payload, run_id, request_id, include_sources,
+            )
             yield self._build_event(
                 seq, AgentRunEventType.ANSWER_COMPLETED, run_id, answer_payload,
             )
@@ -477,6 +488,7 @@ class RunAgentUseCase:
                 gre, seq=seq, run_id=run_id, state=state,
                 request=request, session_id=session_id,
                 agent_id=agent_id, request_id=request_id,
+                include_sources=include_sources,
             ):
                 yield ev
         except Exception as e:
@@ -635,6 +647,24 @@ class RunAgentUseCase:
             },
         )
 
+    async def _attach_sources(
+        self,
+        payload: dict,
+        run_id: Optional[RunId],
+        request_id: str,
+        include_sources: bool,
+    ) -> None:
+        """답변 payload 에 근거를 더한다. 있을 때만 키를 싣는다 (charts 선례).
+
+        Design Ref: agent-run-source-citations §4.2. 조회 실패는 리더가 빈 목록으로
+        흡수하므로 답변을 막지 않는다 (Plan FR-11).
+        """
+        if not include_sources or self._run_sources is None or run_id is None:
+            return
+        items = await self._run_sources.load_for_run(run_id, request_id)
+        if items:
+            payload["sources"] = [item.to_payload() for item in items]
+
     async def _degraded_completion_events(
         self,
         error: GraphRecursionError,
@@ -646,6 +676,7 @@ class RunAgentUseCase:
         session_id: str,
         agent_id: str,
         request_id: str,
+        include_sources: bool = False,
     ) -> AsyncIterator[AgentRunEvent]:
         """GraphRecursionError 안전망 (agent-recursion-limit D9).
 
@@ -676,9 +707,12 @@ class RunAgentUseCase:
             analysis_data=snapshot,
             persist=request.persist_conversation,
         )
+        answer_payload: dict = {
+            "answer": answer, "tools_used": tools_used, "limit_reached": True,
+        }
+        await self._attach_sources(answer_payload, run_id, request_id, include_sources)
         yield self._build_event(
-            seq, AgentRunEventType.ANSWER_COMPLETED, run_id,
-            {"answer": answer, "tools_used": tools_used, "limit_reached": True},
+            seq, AgentRunEventType.ANSWER_COMPLETED, run_id, answer_payload,
         )
         run_url: Optional[str] = None
         if self._tracker is not None and run_id is not None:

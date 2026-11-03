@@ -307,3 +307,27 @@ class TestFindByDocumentId:
         result = await repo.find_by_document_id("nonexistent", "req-10")
 
         assert result is None
+
+
+class TestFindFilenames:
+    """agent-run-source-citations §3.4: 문서 라벨 일괄 조회."""
+
+    async def test_maps_document_id_to_filename_with_one_query(
+        self, repo: DocumentMetadataRepository, mock_session: AsyncMock
+    ) -> None:
+        mock_session.execute = AsyncMock(
+            return_value=MagicMock(
+                all=MagicMock(return_value=[("doc-1", "a.pdf"), ("doc-2", "b.hwp")])
+            )
+        )
+
+        result = await repo.find_filenames(["doc-1", "doc-2", "doc-3"], "req-11")
+
+        assert result == {"doc-1": "a.pdf", "doc-2": "b.hwp"}
+        mock_session.execute.assert_awaited_once()
+
+    async def test_empty_ids_issue_no_query(
+        self, repo: DocumentMetadataRepository, mock_session: AsyncMock
+    ) -> None:
+        assert await repo.find_filenames([], "req-12") == {}
+        mock_session.execute.assert_not_awaited()

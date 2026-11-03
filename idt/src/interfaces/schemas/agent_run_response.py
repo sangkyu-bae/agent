@@ -172,6 +172,42 @@ class MessageRetrievalsResponse(BaseModel):
         )
 
 
+# ── Session Sources (agent-run-source-citations §4.2) ─────────────
+
+
+class SourceItemDto(BaseModel):
+    """프론트 `DocumentSource` 형태. 내부 metadata·도구 인자는 싣지 않는다 (§7)."""
+
+    kind: str
+    source: str
+    content: str
+    chunk_id: str
+    url: Optional[str] = None
+
+
+class MessageSourcesDto(BaseModel):
+    message_id: int
+    sources: List[SourceItemDto] = []
+
+
+class SessionSourcesResponse(BaseModel):
+    session_id: str
+    items: List[MessageSourcesDto] = []
+
+    @classmethod
+    def from_dto(cls, dto) -> "SessionSourcesResponse":
+        return cls(
+            session_id=dto.session_id,
+            items=[
+                MessageSourcesDto(
+                    message_id=item.message_id,
+                    sources=[SourceItemDto(**s.to_payload()) for s in item.sources],
+                )
+                for item in dto.items
+            ],
+        )
+
+
 # ── Usage Responses ───────────────────────────────────────────────
 
 

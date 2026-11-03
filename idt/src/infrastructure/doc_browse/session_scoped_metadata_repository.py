@@ -63,3 +63,12 @@ class SessionScopedDocumentMetadataRepository(DocumentMetadataRepositoryInterfac
         async with self._session_factory() as session:
             repo = DocumentMetadataRepository(session, self._logger)
             return await repo.find_by_document_id(document_id, request_id)
+
+    async def find_filenames(
+        self,
+        document_ids: list[str],
+        request_id: str,
+    ) -> dict[str, str]:
+        async with self._session_factory() as session:
+            repo = DocumentMetadataRepository(session, self._logger)
+            return await repo.find_filenames(document_ids, request_id)
