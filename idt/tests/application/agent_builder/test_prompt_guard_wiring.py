@@ -165,6 +165,8 @@ async def test_enforced_block_skips_graph_and_emits_notice():
     assert answer["answer"] == BLOCK_NOTICE_KO
     assert answer["tools_used"] == []
     assert answer["guard_blocked"] is True  # Design D2
+    # agent-run-feedback-wiring §8.2 #7: 차단 안내문도 평가 대상 (저장 id 42)
+    assert answer["assistant_message_id"] == 42
 
     saved = [c.args[0] for c in message_repo.save.await_args_list]
     roles = [m.role for m in saved]

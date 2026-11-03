@@ -35,6 +35,9 @@ export interface AgentRunStreamState {
   answer: string | null;
   // supervisor-chart-builder-node: 답변 완료 시 함께 내려오는 Chart.js 페이로드.
   charts: ChartPayload[];
+  // agent-run-feedback-wiring D-01: 저장된 assistant 메시지 id — 평가(👍/👎) 대상 키.
+  // agent_answer_completed 에 assistant_message_id 가 없으면(미저장·구 서버) null.
+  assistantMessageId: number | null;
   // agent-run-source-citations: 답변 근거 칩. 근거가 없으면 빈 배열.
   sources: DocumentSource[];
   error: { code: string; message: string } | null;
@@ -61,6 +64,7 @@ const INITIAL_STATE: Omit<AgentRunStreamState, 'streamId'> = {
   tokens: '',
   answer: null,
   charts: [],
+  assistantMessageId: null,
   sources: [],
   error: null,
   isDone: false,
@@ -145,6 +149,9 @@ export function useAgentRunStream(
           ...s,
           answer: msg.data.answer,
           charts: msg.data.charts ?? [],
+          // agent-run-feedback-wiring: 저장했을 때만 오는 additive 키
+          assistantMessageId:
+            typeof msg.data.assistant_message_id === 'number' ? msg.data.assistant_message_id : null,
           sources: msg.data.sources ?? [],
         }));
         break;

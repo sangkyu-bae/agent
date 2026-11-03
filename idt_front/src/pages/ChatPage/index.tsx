@@ -265,8 +265,9 @@ const ChatPage = () => {
         // agent-run-source-citations FR-13: ANSWER_COMPLETED 의 근거를 그대로 쓴다.
         sources: agentRun.sources,
         charts: agentRun.charts,
-        // agent 경로 평가 연동은 후속 — 현재 미노출.
-        assistantMessageId: null,
+        // agent-run-feedback-wiring D-07: ANSWER_COMPLETED 의 assistant_message_id 로
+        // 일반 채팅과 같은 feedbackMessageId 경로를 탄다 (없으면 평가 미노출).
+        assistantMessageId: agentRun.assistantMessageId,
       };
     }
     return null;
