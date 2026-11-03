@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from src.application.doc_browse.delete_document_use_case import (
@@ -6,6 +6,8 @@ from src.application.doc_browse.delete_document_use_case import (
 )
 from src.application.doc_browse.get_chunks_use_case import GetChunksUseCase
 from src.application.doc_browse.list_documents_use_case import ListDocumentsUseCase
+from src.domain.auth.entities import User
+from src.interfaces.dependencies.auth import get_current_user
 
 router = APIRouter(prefix="/api/v1/collections", tags=["Document Browse"])
 
@@ -140,16 +142,15 @@ class BatchDeleteResponse(BaseModel):
 async def delete_document(
     collection_name: str,
     document_id: str,
-    x_user_id: str = Header(..., alias="X-User-Id"),
-    x_user_role: str = Header("user", alias="X-User-Role"),
+    current_user: User = Depends(get_current_user),
     use_case: DeleteDocumentUseCase = Depends(get_delete_document_use_case),
 ):
     try:
         return await use_case.execute_single(
             collection_name=collection_name,
             document_id=document_id,
-            user_id=x_user_id,
-            user_role=x_user_role,
+            user_id=str(current_user.id),
+            user_role=current_user.role.value,
         )
     except use_case.DocumentNotFoundError:
         raise HTTPException(
@@ -170,16 +171,15 @@ async def delete_document(
 async def batch_delete_documents(
     collection_name: str,
     body: BatchDeleteRequest,
-    x_user_id: str = Header(..., alias="X-User-Id"),
-    x_user_role: str = Header("user", alias="X-User-Role"),
+    current_user: User = Depends(get_current_user),
     use_case: DeleteDocumentUseCase = Depends(get_delete_document_use_case),
 ):
     try:
         return await use_case.execute_batch(
             collection_name=collection_name,
             document_ids=body.document_ids,
-            user_id=x_user_id,
-            user_role=x_user_role,
+            user_id=str(current_user.id),
+            user_role=current_user.role.value,
         )
     except use_case.PermissionDeniedError:
         raise HTTPException(
