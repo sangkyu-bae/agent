@@ -155,3 +155,183 @@ describe('KbChunkingSettingsCard — 설정 변경', () => {
     });
   });
 });
+
+// ── kb-profile-selector Design §8.3 ───────────────────────────────
+
+describe('KbChunkingSettingsCard — 프로파일 선택', () => {
+  const clauseKb: KnowledgeBaseInfo = {
+    ...baseKb,
+    use_clause_chunking: true,
+    chunking_profile_id: 'prof-contract',
+    chunk_size: 700,
+    chunk_overlap: 0,
+  };
+
+  const countProfileCalls = () => {
+    const counter = { calls: 0 };
+    server.events.on('request:start', ({ request }) => {
+      if (new URL(request.url).pathname === API_ENDPOINTS.CHUNKING_PROFILES) {
+        counter.calls += 1;
+      }
+    });
+    return counter;
+  };
+
+  const capturePatch = () => {
+    const capture: { body: Record<string, unknown> | null } = { body: null };
+    server.use(
+      http.patch(
+        `*${API_ENDPOINTS.KNOWLEDGE_BASE_CHUNKING(KB_ID)}`,
+        async ({ request }) => {
+          capture.body = (await request.json()) as Record<string, unknown>;
+          return HttpResponse.json({ ...clauseKb });
+        },
+      ),
+    );
+    return capture;
+  };
+
+  const openModal = () =>
+    userEvent.click(screen.getByRole('button', { name: '설정 변경' }));
+
+  const profileCombobox = () =>
+    screen.findByRole('combobox', { name: '청킹 프로파일' });
+
+  afterEach(() => server.events.removeAllListeners());
+
+  it('K1: 기본 모드 KB는 프로파일 목록을 조회하지 않는다', async () => {
+    const counter = countProfileCalls();
+    renderCard();
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(counter.calls).toBe(0);
+  });
+
+  it('K2: 조항 모드 KB는 카드에 적용 프로파일 이름을 표시한다', async () => {
+    renderCard(clauseKb);
+
+    expect(
+      await screen.findByText('조항 단위 청킹 — 계약서'),
+    ).toBeInTheDocument();
+  });
+
+  it('K3: 프로파일을 바꿔 저장하면 새 ID를 보내고 오버라이드를 유지한다', async () => {
+    const capture = capturePatch();
+    renderCard(clauseKb);
+
+    await openModal();
+    await userEvent.click(await profileCombobox());
+    await userEvent.click(
+      screen.getByRole('option', { name: /금융 조항 기본.*기본\]/ }),
+    );
+    await userEvent.click(screen.getByRole('button', { name: '저장' }));
+
+    await waitFor(() => expect(capture.body).not.toBeNull());
+    expect(capture.body).toMatchObject({
+      use_clause_chunking: true,
+      chunking_profile_id: 'prof-default',
+      chunk_size: 700,
+      chunk_overlap: 0,
+    });
+  });
+
+  it('K4: 삭제된 프로파일을 참조한 KB는 null로 저장한다', async () => {
+    const capture = capturePatch();
+    renderCard({ ...clauseKb, chunking_profile_id: 'prof-deleted' });
+
+    await openModal();
+    await screen.findByText(/삭제되어 기본 프로파일로 처리됩니다/);
+    await userEvent.click(screen.getByRole('button', { name: '저장' }));
+
+    await waitFor(() => expect(capture.body).not.toBeNull());
+    expect(capture.body).toMatchObject({
+      use_clause_chunking: true,
+      chunking_profile_id: null,
+    });
+  });
+
+  it('K5: 목록 조회 실패 중 저장하면 기존 지정을 유지한다', async () => {
+    const capture = capturePatch();
+    server.use(
+      http.get(`*${API_ENDPOINTS.CHUNKING_PROFILES}`, () =>
+        HttpResponse.json({ detail: 'boom' }, { status: 500 }),
+      ),
+    );
+    renderCard(clauseKb);
+
+    await openModal();
+    await screen.findByText(/저장해도 현재 지정은 유지됩니다/);
+    expect(screen.getByText('조항 단위 청킹 (프로파일 기반)')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '저장' }));
+
+    await waitFor(() => expect(capture.body).not.toBeNull());
+    expect(capture.body).toMatchObject({
+      chunking_profile_id: 'prof-contract',
+    });
+  });
+
+  it('K6: 모드를 바꿨다 돌아와도 선택값을 유지한다', async () => {
+    renderCard({ ...clauseKb, chunking_profile_id: null });
+
+    await openModal();
+    await userEvent.click(await profileCombobox());
+    await userEvent.click(screen.getByRole('option', { name: '계약서' }));
+    await userEvent.click(screen.getByRole('radio', { name: /커스텀 청킹/ }));
+    await userEvent.click(
+      screen.getByRole('radio', { name: /조항 단위 청킹/ }),
+    );
+
+    expect(await profileCombobox()).toHaveTextContent('계약서');
+  });
+
+  it('K7: 취소 후 다시 열면 KB 저장값으로 초기화한다', async () => {
+    renderCard(clauseKb);
+
+    await openModal();
+    await userEvent.click(await profileCombobox());
+    await userEvent.click(
+      screen.getByRole('option', { name: /기본 프로파일 따름/ }),
+    );
+    await userEvent.click(screen.getByRole('button', { name: '취소' }));
+    await openModal();
+
+    expect(await profileCombobox()).toHaveTextContent('계약서');
+  });
+
+  it('K8: 조항에서 기본으로 바꾸면 프로파일과 오버라이드를 null로 보낸다', async () => {
+    const capture = capturePatch();
+    renderCard(clauseKb);
+
+    await openModal();
+    await userEvent.click(screen.getByRole('radio', { name: /기본 청킹/ }));
+    await userEvent.click(screen.getByRole('button', { name: '저장' }));
+
+    await waitFor(() => expect(capture.body).not.toBeNull());
+    expect(capture.body).toMatchObject({
+      use_clause_chunking: false,
+      chunking_profile_id: null,
+      chunk_size: null,
+      chunk_overlap: null,
+    });
+  });
+
+  it('K9: 저장이 404면 메시지를 표시하고 목록을 다시 조회한다', async () => {
+    server.use(
+      http.patch(`*${API_ENDPOINTS.KNOWLEDGE_BASE_CHUNKING(KB_ID)}`, () =>
+        HttpResponse.json(
+          { detail: "Chunking profile 'prof-contract' not found" },
+          { status: 404 },
+        ),
+      ),
+    );
+    const counter = countProfileCalls();
+    renderCard(clauseKb);
+
+    await openModal();
+    await screen.findByText(/경계 규칙 1개/);
+    await userEvent.click(screen.getByRole('button', { name: '저장' }));
+
+    expect(await screen.findByText(/not found/)).toBeInTheDocument();
+    await waitFor(() => expect(counter.calls).toBe(2));
+  });
+});

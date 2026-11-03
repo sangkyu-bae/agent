@@ -5,8 +5,13 @@
  * 변경은 신규 업로드부터 적용 — 안내 문구 고정 노출 (D10).
  */
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import Modal from '@/components/common/Modal';
+import { useActiveChunkingProfiles } from '@/hooks/useChunkingProfiles';
 import { useUpdateKbChunking } from '@/hooks/useKnowledgeBases';
+import { queryKeys } from '@/lib/queryKeys';
+import { ApiError } from '@/services/api/ApiError';
+import type { ChunkingProfile } from '@/types/chunkingProfile';
 import type { KnowledgeBaseInfo } from '@/types/ragToolConfig';
 import type { UpdateKbChunkingRequest } from '@/types/knowledgeBase';
 import ChunkingModeSelector, {
@@ -18,6 +23,10 @@ import {
   formFromConfig,
   validateCustomChunkingForm,
 } from './customChunkingForm';
+import {
+  clauseProfileSummary,
+  resolveProfileSelection,
+} from './kbProfileSelection';
 
 interface KbChunkingSettingsCardProps {
   kb: KnowledgeBaseInfo;
@@ -29,7 +38,10 @@ const modeOf = (kb: KnowledgeBaseInfo): ChunkingMode => {
   return 'default';
 };
 
-const summaryOf = (kb: KnowledgeBaseInfo): string => {
+const summaryOf = (
+  kb: KnowledgeBaseInfo,
+  profiles: ChunkingProfile[] | undefined,
+): string => {
   if (kb.use_custom_chunking && kb.custom_chunking_config) {
     const config = kb.custom_chunking_config;
     const label =
@@ -45,7 +57,11 @@ const summaryOf = (kb: KnowledgeBaseInfo): string => {
     }
     return parts.join(' · ');
   }
-  if (kb.use_clause_chunking) return '조항 단위 청킹 (프로파일 기반)';
+  if (kb.use_clause_chunking) {
+    return clauseProfileSummary(
+      resolveProfileSelection(kb.chunking_profile_id ?? null, profiles),
+    );
+  }
   return '기본 청킹 (Parent-Child 2000/500/50)';
 };
 
@@ -55,13 +71,23 @@ const KbChunkingSettingsCard = ({ kb }: KbChunkingSettingsCardProps) => {
   const [customForm, setCustomForm] = useState(() =>
     formFromConfig(kb.custom_chunking_config),
   );
+  const [profileId, setProfileId] = useState<string | null>(
+    kb.chunking_profile_id ?? null,
+  );
   const [formError, setFormError] = useState('');
 
+  const queryClient = useQueryClient();
   const mutation = useUpdateKbChunking(kb.kb_id);
+  const profilesQuery = useActiveChunkingProfiles({
+    enabled: modeOf(kb) === 'clause' || (editOpen && mode === 'clause'),
+  });
+  // 조회 성공 시에만 목록을 넘겨 실패를 삭제로 오판하지 않는다 (FR-09)
+  const profiles = profilesQuery.isSuccess ? profilesQuery.data : undefined;
 
   const openEdit = () => {
     setMode(modeOf(kb));
     setCustomForm(formFromConfig(kb.custom_chunking_config));
+    setProfileId(kb.chunking_profile_id ?? null);
     setFormError('');
     mutation.reset();
     setEditOpen(true);
@@ -78,16 +104,28 @@ const KbChunkingSettingsCard = ({ kb }: KbChunkingSettingsCardProps) => {
     setFormError('');
     const body: UpdateKbChunkingRequest = {
       use_clause_chunking: mode === 'clause',
-      // 조항 유지 시 기존 오버라이드 보존, 그 외 초기화 (§6.2)
       chunking_profile_id:
-        mode === 'clause' ? (kb.chunking_profile_id ?? null) : null,
+        mode === 'clause'
+          ? resolveProfileSelection(profileId, profiles).effectiveId
+          : null,
+      // 조항 유지 시 기존 오버라이드 보존, 그 외 초기화 (§6.2)
       chunk_size: mode === 'clause' ? (kb.chunk_size ?? null) : null,
       chunk_overlap: mode === 'clause' ? (kb.chunk_overlap ?? null) : null,
       use_custom_chunking: mode === 'custom',
       custom_chunking_config:
         mode === 'custom' ? buildCustomChunkingConfig(customForm) : null,
     };
-    mutation.mutate(body, { onSuccess: () => setEditOpen(false) });
+    mutation.mutate(body, {
+      onSuccess: () => setEditOpen(false),
+      // 모달을 연 사이 프로파일이 삭제된 경우 목록을 다시 맞춘다 (Design §6.1)
+      onError: (err) => {
+        if (err instanceof ApiError && err.status === 404) {
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.chunkingProfiles.all,
+          });
+        }
+      },
+    });
   };
 
   // authClient 인터셉터가 detail을 ApiError.message로 변환한다
@@ -101,7 +139,9 @@ const KbChunkingSettingsCard = ({ kb }: KbChunkingSettingsCardProps) => {
     <div className="mt-4 flex items-center justify-between rounded-xl border border-zinc-200 bg-white px-4 py-3">
       <div>
         <p className="text-[12px] font-medium text-zinc-500">청킹 설정</p>
-        <p className="mt-0.5 text-[13.5px] text-zinc-800">{summaryOf(kb)}</p>
+        <p className="mt-0.5 text-[13.5px] text-zinc-800">
+          {summaryOf(kb, profiles)}
+        </p>
       </div>
       <button
         onClick={openEdit}
@@ -123,6 +163,10 @@ const KbChunkingSettingsCard = ({ kb }: KbChunkingSettingsCardProps) => {
               onModeChange={setMode}
               customForm={customForm}
               onCustomFormChange={setCustomForm}
+              profileId={profileId}
+              onProfileChange={setProfileId}
+              kbChunkSize={kb.chunk_size}
+              kbChunkOverlap={kb.chunk_overlap}
             />
 
             <p className="rounded-lg bg-amber-50 px-3 py-2 text-[12.5px] text-amber-700">

@@ -6,6 +6,7 @@ import type { CollectionScope } from '@/types/ragToolConfig';
 import type { CreateKnowledgeBaseRequest } from '@/types/knowledgeBase';
 import { useCollectionList } from '@/hooks/useCollections';
 import { useDepartments } from '@/hooks/useDepartments';
+import { useActiveChunkingProfiles } from '@/hooks/useChunkingProfiles';
 import ChunkingModeSelector, {
   type ChunkingMode,
 } from './ChunkingModeSelector';
@@ -14,6 +15,7 @@ import {
   defaultCustomChunkingForm,
   validateCustomChunkingForm,
 } from './customChunkingForm';
+import { resolveProfileSelection } from './kbProfileSelection';
 
 interface CreateKnowledgeBaseModalProps {
   isOpen: boolean;
@@ -40,12 +42,36 @@ const CreateKnowledgeBaseModal = ({
   // kb-custom-chunking §6.1: radio 3택으로 조항/커스텀 상호배타 원천 차단
   const [chunkingMode, setChunkingMode] = useState<ChunkingMode>('default');
   const [customForm, setCustomForm] = useState(defaultCustomChunkingForm);
+  const [profileId, setProfileId] = useState<string | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [formError, setFormError] = useState('');
+  const [wasOpen, setWasOpen] = useState(isOpen);
+
+  const resetForm = () => {
+    setName('');
+    setDescription('');
+    setScope('PERSONAL');
+    setDepartmentId('');
+    setCollectionName('');
+    setChunkingMode('default');
+    setCustomForm(defaultCustomChunkingForm());
+    setProfileId(null);
+    setAdvancedOpen(false);
+    setFormError('');
+  };
+
+  // 부모가 생성 성공 후 isOpen만 내리는 경로도 다시 열 때 초기화한다 (Check G2)
+  if (wasOpen !== isOpen) {
+    setWasOpen(isOpen);
+    if (isOpen) resetForm();
+  }
 
   const { data: collectionData, isLoading: isCollectionsLoading } =
     useCollectionList();
   const { data: deptData, isLoading: isDeptLoading } = useDepartments();
+  const profilesQuery = useActiveChunkingProfiles({
+    enabled: isOpen && chunkingMode === 'clause',
+  });
 
   if (!isOpen) return null;
 
@@ -84,6 +110,14 @@ const CreateKnowledgeBaseModal = ({
       department_id: scope === 'DEPARTMENT' ? departmentId : undefined,
       collection_name: collectionName,
       use_clause_chunking: chunkingMode === 'clause',
+      // 비조항 모드에 프로파일을 보내면 백엔드가 422로 거부한다
+      chunking_profile_id:
+        chunkingMode === 'clause'
+          ? resolveProfileSelection(
+              profileId,
+              profilesQuery.isSuccess ? profilesQuery.data : undefined,
+            ).effectiveId
+          : undefined,
       use_custom_chunking: chunkingMode === 'custom',
       custom_chunking_config:
         chunkingMode === 'custom'
@@ -93,15 +127,7 @@ const CreateKnowledgeBaseModal = ({
   };
 
   const handleClose = () => {
-    setName('');
-    setDescription('');
-    setScope('PERSONAL');
-    setDepartmentId('');
-    setCollectionName('');
-    setChunkingMode('default');
-    setCustomForm(defaultCustomChunkingForm());
-    setAdvancedOpen(false);
-    setFormError('');
+    resetForm();
     onClose();
   };
 
@@ -110,6 +136,7 @@ const CreateKnowledgeBaseModal = ({
       onClose={handleClose}
       title="새 지식베이스"
       size="md"
+      scroll="content"
       showCloseButton={false}
     >
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -251,6 +278,8 @@ const CreateKnowledgeBaseModal = ({
                 onModeChange={setChunkingMode}
                 customForm={customForm}
                 onCustomFormChange={setCustomForm}
+                profileId={profileId}
+                onProfileChange={setProfileId}
               />
             </div>
           )}
