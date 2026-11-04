@@ -6,7 +6,7 @@
 > **Author**: 배상규
 > **Date**: 2026-11-04
 > **Status**: Draft
-> **Planning Doc**: [sidebar-agent-list.plan.md](../../01-plan/features/sidebar-agent-list.plan.md)
+> **Planning Doc**: [sidebar-agent-list.plan.md](sidebar-agent-list.plan.md)
 > **시안**: https://claude.ai/artifact/LRLpeMHw5dicsiKLnz8YRk
 
 ---

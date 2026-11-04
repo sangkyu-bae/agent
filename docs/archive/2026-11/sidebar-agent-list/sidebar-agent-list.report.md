@@ -66,9 +66,9 @@
 
 | Phase | Document | Status |
 |-------|----------|--------|
-| Plan | [sidebar-agent-list.plan.md](../01-plan/features/sidebar-agent-list.plan.md) | ✅ Finalized |
-| Design | [sidebar-agent-list.design.md](../02-design/features/sidebar-agent-list.design.md) | ✅ Finalized |
-| Check | [sidebar-agent-list.analysis.md](../03-analysis/sidebar-agent-list.analysis.md) | ✅ Complete (Act-1 포함) |
+| Plan | [sidebar-agent-list.plan.md](sidebar-agent-list.plan.md) | ✅ Finalized |
+| Design | [sidebar-agent-list.design.md](sidebar-agent-list.design.md) | ✅ Finalized |
+| Check | [sidebar-agent-list.analysis.md](sidebar-agent-list.analysis.md) | ✅ Complete (Act-1 포함) |
 | Report | Current document | ✅ |
 | 시안 | https://claude.ai/artifact/LRLpeMHw5dicsiKLnz8YRk | 참고용 |
 

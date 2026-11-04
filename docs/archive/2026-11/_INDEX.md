@@ -3,6 +3,7 @@
 | Feature | Phase | Match Rate | Archived At | Path |
 |---------|-------|:----------:|-------------|------|
 | tool-access-control | completed | 95.0% (Check 90.2% → Act-1) | 2026-11-04 | [tool-access-control/](tool-access-control/) |
+| sidebar-agent-list | completed | 99.8% (Check 99.0% → Act-1) | 2026-11-04 | [sidebar-agent-list/](sidebar-agent-list/) |
 
 > 백엔드·프론트 전용 사이클은 `idt/docs/archive/2026-11/`, `idt_front/docs/archive/2026-11/` 에 있다.
 
@@ -21,3 +22,6 @@
 | tool-access-control | 경로별 전용 테스트(웹훅·잡·스케줄·RAGAS), 시드 동치 테스트(R13), FK CASCADE 통합 테스트, 커버리지 측정 | 테스트 보강 | 다음 접근 통제 사이클에 묶어 처리 |
 | tool-access-control | `USE_WEB_SEARCH` 권한 코드 정의만 있고 확인 코드 없음 | 기존 결함 | 별도 정리 |
 | tool-access-control | CORS 허용 출처가 5173 하드코딩 — worktree 병행 브라우저 확인 시 스크래치 런처 필요 | 개발 환경 | 소형 사이클 후보 |
+| sidebar-agent-list | 사용자 정의 폴더(폴더 생성) — 백엔드 필요 | 기능 확장 | 요청 시 |
+| sidebar-agent-list | 에이전트 관리·필터·숨김 (참고 사이트의 관리 아이콘) | 기능 확장 | 요청 시 |
+| sidebar-agent-list | 하위 컴포넌트 props interface 위치(G5) | 스타일 | 해당 파일 수정 시 |

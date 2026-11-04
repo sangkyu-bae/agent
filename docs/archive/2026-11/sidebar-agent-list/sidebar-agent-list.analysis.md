@@ -2,8 +2,8 @@
 
 > **Feature**: sidebar-agent-list
 > **Date**: 2026-11-04
-> **Plan**: [sidebar-agent-list.plan.md](../01-plan/features/sidebar-agent-list.plan.md)
-> **Design**: [sidebar-agent-list.design.md](../02-design/features/sidebar-agent-list.design.md)
+> **Plan**: [sidebar-agent-list.plan.md](sidebar-agent-list.plan.md)
+> **Design**: [sidebar-agent-list.design.md](sidebar-agent-list.design.md)
 > **Worktree**: `wt/sidebar-agent-list` (branch `feature/sidebar-agent-list`, 미커밋)
 
 ---
