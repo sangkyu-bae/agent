@@ -5,6 +5,15 @@ export type AgentStatus = 'idle' | 'thinking' | 'tool_calling' | 'responding' | 
 export type AgentSourceType = 'owned' | 'subscribed' | 'forked';
 export type AgentVisibility = 'private' | 'public';
 
+// Design Ref: sidebar-agent-list §3.1 — 사이드바 에이전트 그룹 키. 선언 순서가 표시 순서다.
+export const SIDEBAR_AGENT_GROUP = {
+  PINNED: 'pinned',
+  OWNED: 'owned',
+  SUBSCRIBED: 'subscribed',
+  FORKED: 'forked',
+} as const;
+export type SidebarAgentGroupKey = (typeof SIDEBAR_AGENT_GROUP)[keyof typeof SIDEBAR_AGENT_GROUP];
+
 export interface MyAgent {
   agent_id: string;
   name: string;
