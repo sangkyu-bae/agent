@@ -12,8 +12,16 @@ from src.application.auto_agent_builder.schemas import (
 from src.application.middleware_agent.create_middleware_agent_use_case import (
     CreateMiddlewareAgentUseCase,
 )
+from src.interfaces.dependencies.auth import require_role
 
-router = APIRouter(prefix="/api/v3/agents/auto", tags=["auto-agent-builder"])
+# tool-access-control Check G-02: 인증 없이 LLM 호출·레거시 v2 에이전트 저장(tool_ids 권한
+# 판정 없음)이 가능했다. 만든 에이전트의 실행 경로(/api/v2/agents)와 같게 admin 전용으로 잠근다.
+# 프론트 소비처 없음 (실험 경로).
+router = APIRouter(
+    prefix="/api/v3/agents/auto",
+    tags=["auto-agent-builder"],
+    dependencies=[Depends(require_role("admin"))],
+)
 
 
 def get_auto_build_use_case() -> AutoBuildUseCase:

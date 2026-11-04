@@ -16,6 +16,7 @@ from src.domain.agent_run.value_objects import AgentRunEvent, AgentRunEventType
 
 def _uc() -> RunAgentUseCase:
     uc = RunAgentUseCase.__new__(RunAgentUseCase)
+    uc._tool_access_resolver = None  # tool-access-control: optional 의존성 (None=필터 없음)
     uc._logger = MagicMock()
     uc._session_factory = None
     uc._message_repo = MagicMock()

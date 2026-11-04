@@ -50,6 +50,7 @@ def _approval(*, schema_version=1, state_json=None, agent_updated=_NOW,
 
 def _uc(*, agent_found=True, agent_updated=_NOW, final_answer="완료했습니다"):
     uc = RunAgentUseCase.__new__(RunAgentUseCase)
+    uc._tool_access_resolver = None  # tool-access-control: optional 의존성 (None=필터 없음)
     uc._logger = MagicMock()
     # agent-run-turn-index-fix: __new__ 우회 픽스처 — legacy(요청 세션) 저장 경로.
     uc._session_factory = None

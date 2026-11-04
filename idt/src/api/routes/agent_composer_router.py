@@ -38,6 +38,7 @@ async def compose_agent(
     """
     request_id = str(uuid.uuid4())
     try:
-        return await use_case.execute(body, request_id)
+        # tool-access-control module-3: 초안 후보를 조회자 허용 도구로 한정
+        return await use_case.execute(body, request_id, viewer=current_user)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))

@@ -14,6 +14,10 @@ Design Ref: §2.1/§2.2 — async generator 하나가 단계 이벤트와 최종
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from dataclasses import dataclass, field, replace
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.application.tool_access.resolver import ToolAccessResolver
 
 from src.application.agent_builder.schemas import (
     CreateAgentRequest,
@@ -90,9 +94,13 @@ class AgentCreatePipelineUseCase:
         logger: LoggerInterface,
         spec: IntentSpec | None = None,
         limits: SlotLimits | None = None,
+        tool_access_resolver: "ToolAccessResolver | None" = None,
     ) -> None:
         self._intent = intent_use_case
         self._candidates = candidate_reader
+        # tool-access-control module-3: 셀렉터 후보를 요청 사용자 허용 도구로 한정.
+        # 추천과 저장(CreateAgentUseCase 검증) 기준을 맞춘다. 미주입 = 전체 후보.
+        self._tool_access_resolver = tool_access_resolver
         self._selector = tool_selector
         self._compose = compose_use_case
         self._create = create_agent_use_case
@@ -242,7 +250,9 @@ class AgentCreatePipelineUseCase:
             return StageRecord(
                 PipelineStage.TOOLS, StageStatus.OK, selection.reason
             )
-        candidates = await self._candidates.list_active()
+        candidates = await self._allowed_candidates(
+            await self._candidates.list_active(), ctx
+        )
         if candidates:
             selection = await self._selector.select(
                 PipelinePolicy.build_selector_query(ctx.user_request, ctx.intent),
@@ -286,6 +296,22 @@ class AgentCreatePipelineUseCase:
                 result.prompt.reason or "프롬프트 생성 실패 — 규칙기반 폴백",
             )
         return StageRecord(PipelineStage.PROMPT, StageStatus.OK)
+
+    async def _allowed_candidates(self, candidates, ctx: _Run):
+        """후보 리더 포트 계약(예외 금지 → 빈 후보 강하)과 같은 규칙으로 실패를 다룬다."""
+        if self._tool_access_resolver is None or not candidates:
+            return candidates
+        try:
+            access = await self._tool_access_resolver.for_user_id(
+                ctx.user_id, ctx.request_id
+            )
+        except Exception as e:
+            self._logger.warning(
+                "pipeline tool access lookup failed — empty candidates",
+                request_id=ctx.request_id, exception=e,
+            )
+            return ()
+        return tuple(c for c in candidates if access.allows_reference(c.tool_id))
 
     async def _run_create(self, ctx: _Run) -> StageRecord:
         assert ctx.selection is not None and ctx.compose is not None

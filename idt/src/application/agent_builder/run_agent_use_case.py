@@ -105,6 +105,8 @@ from src.domain.conversation.value_objects import (
 )
 from src.domain.llm_model.interfaces import LlmModelRepositoryInterface
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
+from src.domain.tool_access.value_objects import ToolAccessSet
+from src.application.tool_access.validation import excluded_info
 from src.domain.prompt_guard.interfaces import PromptGuardPort
 from src.domain.prompt_guard.policies import BLOCK_NOTICE_KO, BlockedTurnPolicy
 from src.domain.prompt_guard.schemas import GuardDecision, GuardTier, InputSource
@@ -157,6 +159,8 @@ class _StreamState:
     # approval-gate Design §3.1(v0.2): 재개용 최종 SupervisorState 스냅샷.
     # 최상위 chain_end 출력이 전체 상태다 — 워커 진입 후크가 없어 최종 상태를 쓴다.
     final_state: dict = field(default_factory=dict)
+    # tool-access-control FR-11: 권한으로 뺀 워커(서브에이전트 포함). 정상·강등 답변이 함께 쓴다.
+    excluded_workers: list = field(default_factory=list)
 
 
 def _redact_state_images(state: dict) -> dict:
@@ -296,8 +300,12 @@ class RunAgentUseCase:
         image_detail: str = "high",
         # agent-run-source-citations §2.3: 답변 근거 조회. None 이면 sources 없음.
         run_sources: Optional[RunSourcesReaderPort] = None,
+        # tool-access-control §2.1 (FR-09·10): 실행자 기준 도구 권한. None 이면 필터
+        # 없음(기존 동작). 프로덕션 주입은 배선 계약 테스트가 고정한다.
+        tool_access_resolver=None,
     ) -> None:
         self._repository = repository
+        self._tool_access_resolver = tool_access_resolver
         self._run_sources = run_sources
         self._image_block_builder = image_block_builder
         self._image_max_count = image_max_count
@@ -410,10 +418,12 @@ class RunAgentUseCase:
                     ):
                         yield ev
                     return
+            # tool-access-control FR-11: 권한으로 뺀 워커(서브에이전트 포함) 수집
             graph, initial_state, graph_config = await self._prepare_graph(
                 agent=agent, request=request, session_id=session_id,
                 callback=callback, run_id=run_id, request_id=request_id,
                 auth_ctx=auth_ctx, inject_memory=inject_memory,
+                excluded_sink=state.excluded_workers,
             )
             node_names = _collect_node_names(agent.to_workflow_definition())
 
@@ -456,6 +466,8 @@ class RunAgentUseCase:
                 answer, tools_used, message_id,
                 approval_pending=bool(approval_id), approval_id=approval_id,
                 limit_reached=state.limit_reached, charts=state.charts,
+                # tool-access-control FR-11 (additive): 비어 있으면 키 생략
+                excluded_tools=self._excluded_payload(state),
             )
             await self._attach_sources(
                 answer_payload, run_id, request_id, include_sources,
@@ -540,6 +552,7 @@ class RunAgentUseCase:
         failure_message: Optional[str] = None
         # agent-run-feedback-wiring G-M1: ANSWER 없이 끝나는 분기가 생겨도 미정의 금지
         assistant_message_id: int | None = None
+        excluded_tools: list = []
 
         async for ev in self.stream(
             agent_id, request, request_id,
@@ -554,6 +567,7 @@ class RunAgentUseCase:
                 tools_used = list(ev.payload["tools_used"])
                 # agent-run-feedback-wiring D-05: 저장했을 때만 키가 있다.
                 assistant_message_id = ev.payload.get("assistant_message_id")
+                excluded_tools = list(ev.payload.get("excluded_tools") or [])
             elif ev.event_type == AgentRunEventType.RUN_FAILED:
                 failure_message = ev.payload.get("message", "unknown failure")
 
@@ -569,6 +583,7 @@ class RunAgentUseCase:
             session_id=session_id,
             run_id=run_id_str,
             assistant_message_id=assistant_message_id,
+            excluded_tools=excluded_tools,
         )
 
     # ── prompt-guard (Design §4.5) ──────────────────────────────────────
@@ -723,6 +738,8 @@ class RunAgentUseCase:
         # Design Ref: agent-run-feedback-wiring §4.3 (D-04) — 강등 답변도 평가 대상.
         answer_payload = self._answer_payload(
             answer, tools_used, message_id, limit_reached=True,
+            # tool-access-control Check G-03: 강등 답변도 제외 도구를 알린다
+            excluded_tools=self._excluded_payload(state),
         )
         await self._attach_sources(answer_payload, run_id, request_id, include_sources)
         yield self._build_event(
@@ -903,6 +920,7 @@ class RunAgentUseCase:
         request_id: str,
         auth_ctx: AuthContext | None = None,
         inject_memory: bool = False,
+        excluded_sink: list | None = None,
     ) -> tuple[Any, dict, dict]:
         """llm_model 로드 + messages 빌드 + compile + initial_state + graph_config."""
         # agent-model-benchmark D1: 모델·temperature 오버라이드 해석 단일 지점.
@@ -954,12 +972,21 @@ class RunAgentUseCase:
             # 모두 RunAgentRequest.user_id 를 채운다 — 스케줄엔 auth_ctx 가 없다.
             subject_user_id=request.user_id,
             memory_block=memory_block,
+            # tool-access-control §0 F1: auth_ctx 있으면 그것으로, 없으면(스케줄·RAGAS)
+            # request.user_id 로 판정. 조회 실패는 도구 없이 실행(Fail-Closed).
+            tool_access=await self._resolve_tool_access(
+                auth_ctx, request.user_id, request_id
+            ),
+            excluded_sink=excluded_sink,
         )
 
+        excluded_ids = {w.worker_id for w in (excluded_sink or [])}
         initial_state = build_initial_state(
             messages=messages,
             config=sv_config,
-            available_workers=[w.worker_id for w in workflow.workers],
+            available_workers=[
+                w.worker_id for w in workflow.workers if w.worker_id not in excluded_ids
+            ],
             attachments=getattr(request, "attachments", None),
         )
 
@@ -968,6 +995,35 @@ class RunAgentUseCase:
             user_id=request.user_id, callback=callback,
         )
         return graph, initial_state, graph_config
+
+    async def _resolve_tool_access(
+        self,
+        auth_ctx: AuthContext | None,
+        user_id: str | None,
+        request_id: str,
+    ) -> ToolAccessSet | None:
+        """tool-access-control §2.2·§6.2 — 실행자 허용 도구 집합.
+
+        - Resolver 미주입: None(필터 없음 — 기존 동작, 단위 테스트 무회귀)
+        - auth_ctx 있음(채팅·웹훅·잡): for_auth_ctx — 쿼리 1회
+        - auth_ctx 없음(스케줄·승인 재개·RAGAS): for_user_id
+        - 조회 실패: deny_all — 권한 미확인 상태로 도구를 쓰지 않는다(Fail-Closed).
+          에이전트는 도구 없이 대화형으로 계속 실행된다.
+        """
+        if self._tool_access_resolver is None:
+            return None
+        try:
+            if auth_ctx is not None:
+                return await self._tool_access_resolver.for_auth_ctx(
+                    auth_ctx, request_id
+                )
+            return await self._tool_access_resolver.for_user_id(user_id, request_id)
+        except Exception as e:
+            self._logger.error(
+                "tool access resolve failed — running without tools",
+                exception=e, request_id=request_id,
+            )
+            return ToolAccessSet.deny_all()
 
     async def _build_memory_block(
         self,
@@ -1276,6 +1332,10 @@ class RunAgentUseCase:
             include_user_context=agent.include_user_context,
             agent_id=agent.id,
             subject_user_id=subject_user_id,
+            # tool-access-control §0 F1: 재개 런엔 auth_ctx 가 없다 — 원래 요청자 기준.
+            tool_access=await self._resolve_tool_access(
+                None, subject_user_id, request_id
+            ),
         )
         result = await graph.ainvoke(state)
         answer, _ = self._parse_result(result)
@@ -1768,6 +1828,11 @@ class RunAgentUseCase:
         # 경로. 요청 세션 스냅샷으로 계산하던 기존 결함(같은 turn 저장) 제거.
         saved = await self._persist_message(user_id, session_id, _build)
         return _saved_message_id(saved)
+
+    @staticmethod
+    def _excluded_payload(state: "_StreamState") -> list[dict]:
+        """tool-access-control FR-11 — ANSWER_COMPLETED 의 excluded_tools (빈 목록이면 키 생략)."""
+        return [e.model_dump() for e in excluded_info(state.excluded_workers)]
 
     @staticmethod
     def _answer_payload(

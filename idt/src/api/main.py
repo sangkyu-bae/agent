@@ -253,6 +253,13 @@ from src.api.routes.mcp_registry_router import (
     get_delete_use_case as get_mcp_delete_use_case,
     get_test_use_case as get_mcp_test_use_case,
 )
+# tool-access-control §4.1 (FR-04): 관리자 도구 권한 API
+from src.api.routes.admin_tool_access_router import (
+    router as admin_tool_access_router,
+    get_default_tool_access_use_case,
+    get_department_tool_access_use_case,
+    get_user_tool_access_use_case,
+)
 from src.api.routes.agent_composer_router import (
     router as agent_composer_router,
     get_compose_agent_use_case,
@@ -2786,6 +2793,9 @@ def create_general_chat_use_case_factory():
             agent_timezone=settings.agent_timezone,
             # prompt-guard Design §4.6: 킬스위치 off면 None → 가드 비활성
             prompt_guard=get_prompt_guard(),
+            # tool-access-control Check G-01: 일반 채팅(REST·WS) 도구도 실행자 권한으로 거른다
+            tool_access_resolver=make_tool_access_resolver(session, app_logger),
+            tool_id_resolver=_general_chat_tool_id_resolver(),
         )
 
     return _factory
@@ -3263,6 +3273,8 @@ def create_agent_builder_factories():
             prompt_version_reader=_make_prompt_version_reader(session),
             # agent-opener D4.4
             opener_repo=_make_agent_opener_repo(session),
+            # tool-access-control FR-06·07: 저장 시 도구 권한 판정
+            tool_access_resolver=make_tool_access_resolver(session, app_logger),
         )
 
     def update_uc_factory(session: AsyncSession = Depends(get_session)):
@@ -3296,6 +3308,8 @@ def create_agent_builder_factories():
             ),
             # agent-opener D4.4
             opener_repo=_make_agent_opener_repo(session),
+            # tool-access-control FR-06·07: 신규 도구만 권한 판정
+            tool_access_resolver=make_tool_access_resolver(session, app_logger),
         )
 
     # agent-schedule Design §6.2: RunAgentUseCase 조립 본문을 함수로 추출해
@@ -3344,6 +3358,9 @@ def create_agent_builder_factories():
                 lambda s: _make_run_sources_service(s, app_logger),
                 app_logger,
             ),
+            # tool-access-control §2.1 (FR-09·10): 실행 경로 8종(REST·SSE·WS·웹훅·잡·
+            # 스케줄·승인 재개·RAGAS)이 모두 이 빌더를 거친다 — 주입 지점 단일.
+            tool_access_resolver=make_tool_access_resolver(session, app_logger),
         )
 
     def run_uc_factory(session: AsyncSession = Depends(get_session)):
@@ -3365,6 +3382,8 @@ def create_agent_builder_factories():
             ),
             # agent-opener D4.4: edit 폼 프라임
             opener_repo=_make_agent_opener_repo(session),
+            # tool-access-control FR-13: 붙은 도구의 허용 여부 표시
+            tool_access_resolver=make_tool_access_resolver(session, app_logger),
         )
 
     def list_uc_factory(session: AsyncSession = Depends(get_session)):
@@ -3407,6 +3426,8 @@ def create_agent_builder_factories():
             logger=app_logger,
             # agent-opener FR-07: 포크 시 오프너 복사
             opener_repo=_make_agent_opener_repo(session),
+            # tool-access-control FR-08: 권한 없는 도구 제외 복제
+            tool_access_resolver=make_tool_access_resolver(session, app_logger),
         )
 
     def list_my_uc_factory(session: AsyncSession = Depends(get_session)):
@@ -3517,7 +3538,17 @@ def _build_approval_executor(app_logger):
         max_output_chars=config.APPROVAL_EXEC_OUTPUT_MAX_CHARS,
         logger=app_logger,
     )
-    return CompositeActionExecutor(executors=[mcp_executor], logger=app_logger)
+    # tool-access-control §0 F4: 집행기는 싱글턴이라 판정마다 세션을 여는 체커를 쓴다.
+    from src.application.tool_access.checker import SessionScopedToolAccessChecker
+
+    return CompositeActionExecutor(
+        executors=[mcp_executor], logger=app_logger,
+        access_checker=SessionScopedToolAccessChecker(
+            session_factory=get_session_factory(),
+            resolver_factory=lambda s: make_tool_access_resolver(s, app_logger),
+            logger=app_logger,
+        ),
+    )
 
 
 def create_approval_factories(build_run_agent_uc):
@@ -4902,13 +4933,79 @@ def create_collection_search_factories():
     return search_uc_factory, history_uc_factory
 
 
+def _general_chat_tool_id_resolver():
+    """tool-access-control Check G-01: 일반 채팅 도구 → 카탈로그 id (tool-recommender 와 같은 규칙)."""
+    from src.infrastructure.tool_selection.adapters.langchain_filter import (
+        DefaultToolIdResolver,
+    )
+
+    return DefaultToolIdResolver()
+
+
+def make_tool_access_resolver(session: AsyncSession, logger):
+    """tool-access-control §2.1 — 요청 세션 하나로 묶인 ToolAccessResolver (DB-001).
+
+    목록·저장·포크·상세·추천 후보 팩토리가 모두 이 함수로만 만든다 —
+    주입 여부는 tests/api/test_tool_access_di_wiring.py 가 고정한다.
+    """
+    from src.application.tool_access.resolver import ToolAccessResolver
+    from src.infrastructure.tool_access.repository import ToolAccessRepository
+
+    return ToolAccessResolver(
+        grant_repo=ToolAccessRepository(session=session, logger=logger),
+        user_repo=UserRepository(session=session, logger=logger),
+        department_repo=DepartmentRepository(session=session, logger=logger),
+        logger=logger,
+    )
+
+
+def create_tool_access_factories():
+    """tool-access-control §9.1: 관리자 도구 권한 UseCase per-request 팩토리."""
+    from src.application.tool_access.admin_use_cases import (
+        DefaultToolAccessUseCase,
+        DepartmentToolAccessUseCase,
+        UserToolAccessUseCase,
+    )
+    from src.infrastructure.tool_access.repository import ToolAccessRepository
+
+    app_logger = get_app_logger()
+
+    def _grants(session: AsyncSession) -> ToolAccessRepository:
+        return ToolAccessRepository(session=session, logger=app_logger)
+
+    def _catalog(session: AsyncSession) -> ToolCatalogRepository:
+        return ToolCatalogRepository(session=session, logger=app_logger)
+
+    def default_factory(session: AsyncSession = Depends(get_session)):
+        return DefaultToolAccessUseCase(_grants(session), _catalog(session), app_logger)
+
+    def department_factory(session: AsyncSession = Depends(get_session)):
+        return DepartmentToolAccessUseCase(
+            _grants(session), _catalog(session),
+            DepartmentRepository(session=session, logger=app_logger), app_logger,
+        )
+
+    def user_factory(session: AsyncSession = Depends(get_session)):
+        return UserToolAccessUseCase(
+            _grants(session), _catalog(session),
+            UserRepository(session=session, logger=app_logger),
+            DepartmentRepository(session=session, logger=app_logger), app_logger,
+        )
+
+    return default_factory, department_factory, user_factory
+
+
 def create_tool_catalog_factories():
     """Return per-request DI factories for Tool Catalog use cases."""
     app_logger = get_app_logger()
 
     def list_factory(session: AsyncSession = Depends(get_session)):
         repo = ToolCatalogRepository(session=session, logger=app_logger)
-        return ListToolCatalogUseCase(repository=repo, logger=app_logger)
+        # tool-access-control FR-05: 비관리자는 허용 도구만
+        return ListToolCatalogUseCase(
+            repository=repo, logger=app_logger,
+            access_resolver=make_tool_access_resolver(session, app_logger),
+        )
 
     def sync_factory(session: AsyncSession = Depends(get_session)):
         tool_catalog_repo = ToolCatalogRepository(session=session, logger=app_logger)
@@ -5021,6 +5118,8 @@ def create_agent_composer_factories():
                 session=session, logger=app_logger
             ),
             logger=app_logger,
+            # tool-access-control module-3: 초안 후보를 허용 도구로 한정
+            tool_access_resolver=make_tool_access_resolver(session, app_logger),
         )
 
     return compose_factory
@@ -5813,6 +5912,12 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_assign_user_department_use_case] = _dept_assign_f
     app.dependency_overrides[get_remove_user_department_use_case] = _dept_remove_f
 
+    # Tool Access DI (tool-access-control §4.1)
+    _ta_default_f, _ta_dept_f, _ta_user_f = create_tool_access_factories()
+    app.dependency_overrides[get_default_tool_access_use_case] = _ta_default_f
+    app.dependency_overrides[get_department_tool_access_use_case] = _ta_dept_f
+    app.dependency_overrides[get_user_tool_access_use_case] = _ta_user_f
+
     # Tool Catalog DI
     (
         _tc_list_f, _tc_sync_f, _tc_builtin_f, _tc_meta_f,
@@ -5966,6 +6071,8 @@ def create_app() -> FastAPI:
                 create_agent_use_case=create_uc,
                 logger=logger,
                 limits=_pipeline_limits,
+                # tool-access-control module-3: 셀렉터 후보를 허용 도구로 한정
+                tool_access_resolver=make_tool_access_resolver(session, logger),
             )
 
         app.dependency_overrides[get_agent_pipeline_use_case] = _pipeline_factory
@@ -6386,6 +6493,7 @@ def create_app() -> FastAPI:
     app.include_router(llm_model_router)
     app.include_router(embedding_model_router)
     app.include_router(mcp_registry_router)
+    app.include_router(admin_tool_access_router)
     app.include_router(wiki_router)
     app.include_router(memory_router)
     app.include_router(eval_router)
