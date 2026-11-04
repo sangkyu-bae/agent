@@ -86,7 +86,10 @@ from src.domain.agent_builder.schemas import (
     SupervisorConfig,
     WorkflowDefinition,
 )
-from src.domain.agent_run.interfaces import RunSourcesReaderPort
+from src.domain.agent_run.interfaces import (
+    RunSourcesReaderPort,
+    RunToolTraceReaderPort,
+)
 from src.domain.agent_run.value_objects import (
     AgentRunEvent,
     AgentRunEventType,
@@ -300,6 +303,8 @@ class RunAgentUseCase:
         image_detail: str = "high",
         # agent-run-source-citations §2.3: 답변 근거 조회. None 이면 sources 없음.
         run_sources: Optional[RunSourcesReaderPort] = None,
+        # agent-run-tool-trace §2.2: 답변별 도구 실행 내역 조회. None 이면 tool_trace 없음.
+        run_tool_trace: Optional[RunToolTraceReaderPort] = None,
         # tool-access-control §2.1 (FR-09·10): 실행자 기준 도구 권한. None 이면 필터
         # 없음(기존 동작). 프로덕션 주입은 배선 계약 테스트가 고정한다.
         tool_access_resolver=None,
@@ -307,6 +312,7 @@ class RunAgentUseCase:
         self._repository = repository
         self._tool_access_resolver = tool_access_resolver
         self._run_sources = run_sources
+        self._run_tool_trace = run_tool_trace
         self._image_block_builder = image_block_builder
         self._image_max_count = image_max_count
         self._image_detail = image_detail
@@ -346,6 +352,7 @@ class RunAgentUseCase:
         auth_ctx: AuthContext | None = None,
         inject_memory: bool = False,
         include_sources: bool = False,
+        include_tool_trace: bool = False,
     ) -> AsyncIterator[AgentRunEvent]:
         """transport-독립 SSE/WS용 이벤트 스트림 (Design §5.2.2).
 
@@ -356,6 +363,9 @@ class RunAgentUseCase:
 
         include_sources — agent-run-source-citations FR-12: 근거 칩을 그리는 WS
         경로만 True. 웹훅·백그라운드·RAGAS 에 조회 쿼리를 더하지 않는다.
+
+        include_tool_trace — agent-run-tool-trace §4.3: 답변별 도구 실행 내역을 그리는
+        WS 경로만 True. include_sources 와 같은 이유로 기본 False.
 
         이벤트 시퀀스:
             RUN_STARTED → (NODE_STARTED|NODE_COMPLETED|TOOL_*|TOKEN)*
@@ -472,6 +482,9 @@ class RunAgentUseCase:
             await self._attach_sources(
                 answer_payload, run_id, request_id, include_sources,
             )
+            await self._attach_tool_trace(
+                answer_payload, run_id, request_id, include_tool_trace,
+            )
             yield self._build_event(
                 seq, AgentRunEventType.ANSWER_COMPLETED, run_id, answer_payload,
             )
@@ -508,6 +521,7 @@ class RunAgentUseCase:
                 request=request, session_id=session_id,
                 agent_id=agent_id, request_id=request_id,
                 include_sources=include_sources,
+                include_tool_trace=include_tool_trace,
             ):
                 yield ev
         except Exception as e:
@@ -693,6 +707,25 @@ class RunAgentUseCase:
         if items:
             payload["sources"] = [item.to_payload() for item in items]
 
+    async def _attach_tool_trace(
+        self,
+        payload: dict,
+        run_id: Optional[RunId],
+        request_id: str,
+        include_tool_trace: bool,
+    ) -> None:
+        """답변 payload 에 도구 실행 내역을 더한다. 있을 때만 키를 싣는다.
+
+        Design Ref: agent-run-tool-trace §4.3 — 세션 API 와 같은 서비스를 지나 재진입
+        화면과 같은 내역이 된다 (Plan R4). 조회 실패는 리더가 None 으로 흡수한다.
+        플래그를 먼저 보므로 __new__ 로 만든 테스트 픽스처도 속성 없이 동작한다.
+        """
+        if not include_tool_trace or self._run_tool_trace is None or run_id is None:
+            return
+        trace = await self._run_tool_trace.load_for_run(run_id, request_id)
+        if trace is not None and trace.items:
+            payload["tool_trace"] = trace.to_payload()
+
     async def _degraded_completion_events(
         self,
         error: GraphRecursionError,
@@ -705,6 +738,7 @@ class RunAgentUseCase:
         agent_id: str,
         request_id: str,
         include_sources: bool = False,
+        include_tool_trace: bool = False,
     ) -> AsyncIterator[AgentRunEvent]:
         """GraphRecursionError 안전망 (agent-recursion-limit D9).
 
@@ -742,6 +776,9 @@ class RunAgentUseCase:
             excluded_tools=self._excluded_payload(state),
         )
         await self._attach_sources(answer_payload, run_id, request_id, include_sources)
+        await self._attach_tool_trace(
+            answer_payload, run_id, request_id, include_tool_trace,
+        )
         yield self._build_event(
             seq, AgentRunEventType.ANSWER_COMPLETED, run_id, answer_payload,
         )

@@ -408,9 +408,11 @@ from src.application.agent_run.aggregator import UsageAggregator
 from src.application.agent_run.cost_calculator import CostCalculator
 from src.application.agent_run.model_name_resolver import ModelNameResolver
 from src.application.agent_run.run_sources import RunSourcesService
+from src.application.agent_run.run_tool_trace import RunToolTraceService
 from src.application.agent_run.schemas import RunObservabilityConfig
 from src.application.agent_run.tracker import RunTracker
 from src.infrastructure.agent_run.run_sources_reader import SessionScopedRunSourcesReader
+from src.infrastructure.agent_run.run_tool_trace_reader import SessionScopedRunToolTraceReader
 from src.infrastructure.doc_browse.document_metadata_repository import (
     DocumentMetadataRepository,
 )
@@ -580,6 +582,16 @@ def _make_run_sources_service(session: AsyncSession, logger) -> RunSourcesServic
     )
 
 
+def _make_run_tool_trace_service(session: AsyncSession, logger) -> RunToolTraceService:
+    """도구 실행 내역 서비스 조립 (agent-run-tool-trace §2.1) — 저장소가 같은 세션을 쓴다."""
+    return RunToolTraceService(
+        SqlAlchemyAgentRunRepository(session),
+        ToolCatalogRepository(session, logger),
+        logger,
+        max_items=settings.agent_run_tool_trace_max_items,
+    )
+
+
 def _mcp_cipher() -> SecretCipher | None:
     """settings.mcp_secret_key가 설정돼 있으면 SecretCipher를, 없으면 None을 반환한다.
 
@@ -683,9 +695,13 @@ from src.api.routes.agent_run_router import (
     get_my_usage_timeseries_use_case,
     get_message_retrievals_use_case,
     get_session_sources_use_case,
+    get_session_tool_traces_use_case,
 )
 from src.application.agent_run.use_cases.get_session_sources_use_case import (
     GetSessionSourcesUseCase,
+)
+from src.application.agent_run.use_cases.get_session_tool_traces_use_case import (
+    GetSessionToolTracesUseCase,
 )
 from src.application.llm_model.create_llm_model_use_case import CreateLlmModelUseCase
 from src.application.llm_model.update_llm_model_use_case import UpdateLlmModelUseCase
@@ -2376,6 +2392,23 @@ def create_session_sources_factory():
     return session_sources_factory
 
 
+def create_session_tool_traces_factory():
+    """agent-run-tool-trace §4.2: 세션 답변별 도구 실행 내역 — 요청 세션 1개를 쓴다."""
+    app_logger = get_app_logger()
+
+    def session_tool_traces_factory(
+        session: AsyncSession = Depends(get_session),
+    ) -> GetSessionToolTracesUseCase:
+        return GetSessionToolTracesUseCase(
+            message_repo=SQLAlchemyConversationMessageRepository(session),
+            agent_run_repo=SqlAlchemyAgentRunRepository(session),
+            traces=_make_run_tool_trace_service(session, app_logger),
+            logger=app_logger,
+        )
+
+    return session_tool_traces_factory
+
+
 def create_embedding_model_factories():
     """Return per-request DI factories for Embedding Model Registry."""
     app_logger = get_app_logger()
@@ -3356,6 +3389,12 @@ def create_agent_builder_factories():
             run_sources=SessionScopedRunSourcesReader(
                 get_session_factory(),
                 lambda s: _make_run_sources_service(s, app_logger),
+                app_logger,
+            ),
+            # agent-run-tool-trace §2.2: 근거와 같이 별도 세션으로 런 1개를 조립한다.
+            run_tool_trace=SessionScopedRunToolTraceReader(
+                get_session_factory(),
+                lambda s: _make_run_tool_trace_service(s, app_logger),
                 app_logger,
             ),
             # tool-access-control §2.1 (FR-09·10): 실행 경로 8종(REST·SSE·WS·웹훅·잡·
@@ -6139,6 +6178,9 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_message_retrievals_use_case] = _message_retrievals_f
     app.dependency_overrides[get_session_sources_use_case] = (
         create_session_sources_factory()
+    )
+    app.dependency_overrides[get_session_tool_traces_use_case] = (
+        create_session_tool_traces_factory()
     )
 
     # Admin Dashboard DI (admin-dashboard Design D2)

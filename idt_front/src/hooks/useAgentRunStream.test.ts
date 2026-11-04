@@ -216,6 +216,29 @@ describe('useAgentRunStream', () => {
     expect(result.current.sources).toEqual([source]);
   });
 
+  it('captures tool_trace on agent_answer_completed (agent-run-tool-trace)', () => {
+    const { result } = renderHook(() =>
+      useAgentRunStream({ runId: 'r1', agentId: 'a', query: 'q' }),
+    );
+    const trace = {
+      omitted_count: 0,
+      items: [{ seq: 1, kind: 'tool', label: 'list_inquiries', status: 'success' }],
+    };
+    act(() =>
+      emit('agent_answer_completed', { answer: '답', tools_used: [], tool_trace: trace }),
+    );
+    expect(result.current.toolTrace).toEqual(trace);
+  });
+
+  it('defaults tool_trace to null when absent', () => {
+    const { result } = renderHook(() =>
+      useAgentRunStream({ runId: 'r1', agentId: 'a', query: 'q' }),
+    );
+    expect(result.current.toolTrace).toBeNull();
+    act(() => emit('agent_answer_completed', { answer: '답', tools_used: [] }));
+    expect(result.current.toolTrace).toBeNull();
+  });
+
   it('defaults sources to empty array when absent', () => {
     const { result } = renderHook(() =>
       useAgentRunStream({ runId: 'r1', agentId: 'a', query: 'q' }),

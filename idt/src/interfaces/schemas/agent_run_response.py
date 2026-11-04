@@ -208,6 +208,64 @@ class SessionSourcesResponse(BaseModel):
         )
 
 
+# ── Session Tool Traces (agent-run-tool-trace §4.2) ───────────────
+
+
+class ToolTraceItemResponse(BaseModel):
+    """도구 실행 내역 항목. 정책의 to_payload 가 None·False 를 이미 뺀다."""
+
+    seq: int
+    kind: str
+    label: str
+    worker: Optional[str] = None
+    text: Optional[str] = None
+    source: Optional[str] = None
+    status: Optional[str] = None
+    requires_approval: Optional[bool] = None
+    duration_ms: Optional[int] = None
+    input: Optional[dict] = None
+    input_truncated: Optional[bool] = None
+    output: Optional[str] = None
+    output_truncated: Optional[bool] = None
+    error: Optional[str] = None
+
+
+class ToolTraceResponse(BaseModel):
+    omitted_count: int = 0
+    items: List[ToolTraceItemResponse] = []
+
+    @classmethod
+    def from_trace(cls, trace) -> "ToolTraceResponse":
+        payload = trace.to_payload()
+        return cls(
+            omitted_count=payload["omitted_count"],
+            items=[ToolTraceItemResponse(**item) for item in payload["items"]],
+        )
+
+
+class MessageToolTraceResponse(BaseModel):
+    message_id: int
+    tool_trace: ToolTraceResponse
+
+
+class SessionToolTracesResponse(BaseModel):
+    session_id: str
+    items: List[MessageToolTraceResponse] = []
+
+    @classmethod
+    def from_dto(cls, dto) -> "SessionToolTracesResponse":
+        return cls(
+            session_id=dto.session_id,
+            items=[
+                MessageToolTraceResponse(
+                    message_id=item.message_id,
+                    tool_trace=ToolTraceResponse.from_trace(item.tool_trace),
+                )
+                for item in dto.items
+            ],
+        )
+
+
 # ── Usage Responses ───────────────────────────────────────────────
 
 

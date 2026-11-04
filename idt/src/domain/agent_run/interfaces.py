@@ -21,6 +21,7 @@ from src.domain.agent_run.entities import (
     ToolCall,
 )
 from src.domain.agent_run.source_policy import RunSourceItem
+from src.domain.agent_run.tool_trace_policy import ToolTrace
 from src.domain.agent_run.value_objects import RunId
 
 
@@ -30,6 +31,14 @@ class RunSourcesReaderPort(Protocol):
     async def load_for_run(
         self, run_id: RunId, request_id: str,
     ) -> List[RunSourceItem]: ...
+
+
+class RunToolTraceReaderPort(Protocol):
+    """실시간 경로용 도구 실행 내역 조회 (agent-run-tool-trace §2.2). 없거나 실패 시 None."""
+
+    async def load_for_run(
+        self, run_id: RunId, request_id: str,
+    ) -> Optional[ToolTrace]: ...
 
 
 @dataclass(frozen=True)
@@ -188,6 +197,13 @@ class AgentRunRepositoryInterface(ABC):
         self, run_ids: List[RunId],
     ) -> Dict[str, List[ToolCall]]:
         """run_id 문자열 → 도구 호출 행."""
+
+    # agent-run-tool-trace §9.4 — 추론·워커 라벨 조립용. 메시지 수와 무관하게 1회.
+    @abstractmethod
+    async def find_steps_by_runs(
+        self, run_ids: List[RunId],
+    ) -> Dict[str, List[AgentRunStep]]:
+        """run_id 문자열 → step 행 (step_index 오름차순)."""
 
     @abstractmethod
     async def attach_user_message(self, run_id: RunId, message_id: int) -> None:

@@ -16,6 +16,7 @@ import { useWebSocket, type WebSocketStatus } from '@/hooks/useWebSocket';
 import type { AgentAttachmentRef } from '@/types/agentAttachment';
 import type { ChartPayload } from '@/types/chart';
 import type { DocumentSource } from '@/types/chat';
+import type { ToolTrace } from '@/types/toolTrace';
 import type { ExcludedTool } from '@/types/toolAccess';
 import type { AgentRunMessage } from '@/types/websocket';
 import { wsUrl } from '@/utils/wsUrl';
@@ -41,6 +42,8 @@ export interface AgentRunStreamState {
   assistantMessageId: number | null;
   // agent-run-source-citations: 답변 근거 칩. 근거가 없으면 빈 배열.
   sources: DocumentSource[];
+  // agent-run-tool-trace §2.2: 답변별 도구 실행 내역. 도구 호출이 없으면 null.
+  toolTrace: ToolTrace | null;
   // tool-access-control FR-11: 실행자 권한이 없어 뺀 도구. 없으면 빈 배열.
   excludedTools: ExcludedTool[];
   error: { code: string; message: string } | null;
@@ -69,6 +72,7 @@ const INITIAL_STATE: Omit<AgentRunStreamState, 'streamId'> = {
   charts: [],
   assistantMessageId: null,
   sources: [],
+  toolTrace: null,
   excludedTools: [],
   error: null,
   isDone: false,
@@ -157,6 +161,7 @@ export function useAgentRunStream(
           assistantMessageId:
             typeof msg.data.assistant_message_id === 'number' ? msg.data.assistant_message_id : null,
           sources: msg.data.sources ?? [],
+          toolTrace: msg.data.tool_trace ?? null,
           excludedTools: msg.data.excluded_tools ?? [],
         }));
         break;
