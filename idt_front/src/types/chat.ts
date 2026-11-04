@@ -51,6 +51,8 @@ export interface Message {
   imagePreviews?: string[];
   /** agent-run-tool-trace — 답변별 도구 실행 내역. 도구 호출이 없으면 없다. */
   toolTrace?: ToolTrace;
+  /** tool-access-control FR-11 — 권한이 없어 뺀 도구 (실시간 답변에만 존재, 히스토리 재조회 시 없음) */
+  excludedTools?: import('./toolAccess').ExcludedTool[];
 }
 
 /** @deprecated Use DocumentSource instead */

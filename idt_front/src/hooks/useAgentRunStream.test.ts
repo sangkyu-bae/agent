@@ -248,6 +248,24 @@ describe('useAgentRunStream', () => {
     expect(result.current.sources).toEqual([]);
   });
 
+  it('captures excluded_tools on agent_answer_completed (tool-access-control FR-11)', () => {
+    const { result } = renderHook(() =>
+      useAgentRunStream({ runId: 'r1', agentId: 'a', query: 'q' }),
+    );
+    expect(result.current.excludedTools).toEqual([]);
+    const ex = { tool_id: 'internal:python_code_executor', name: 'Python 코드 실행', reason: 'no_permission' };
+    act(() => emit('agent_answer_completed', { answer: '답', tools_used: [], excluded_tools: [ex] }));
+    expect(result.current.excludedTools).toEqual([ex]);
+  });
+
+  it('defaults excluded_tools to empty array when absent', () => {
+    const { result } = renderHook(() =>
+      useAgentRunStream({ runId: 'r1', agentId: 'a', query: 'q' }),
+    );
+    act(() => emit('agent_answer_completed', { answer: '답', tools_used: [] }));
+    expect(result.current.excludedTools).toEqual([]);
+  });
+
   it('defaults charts to empty array when absent', () => {
     const { result } = renderHook(() =>
       useAgentRunStream({ runId: 'r1', agentId: 'a', query: 'q' }),

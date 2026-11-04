@@ -78,6 +78,8 @@ export interface AgentAnswerCompletedData {
   sources?: DocumentSource[];
   /** agent-run-tool-trace §4.3: 도구 실행 내역. 도구 호출이 없으면 필드가 없다(하위호환). */
   tool_trace?: ToolTrace;
+  /** tool-access-control FR-11: 실행자 권한이 없어 이번 실행에서 뺀 도구. 없으면 필드가 없다. */
+  excluded_tools?: import('./toolAccess').ExcludedTool[];
 }
 
 export interface AgentRunCompletedData {

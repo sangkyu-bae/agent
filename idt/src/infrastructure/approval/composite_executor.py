@@ -14,6 +14,7 @@ from src.domain.approval.execution_policy import (
 )
 from src.domain.approval.interfaces import ActionExecutorInterface, ExecutionResult
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
+from src.domain.tool_access.interfaces import ToolAccessCheckerPort
 
 
 class CompositeActionExecutor(ActionExecutorInterface):
@@ -24,9 +25,12 @@ class CompositeActionExecutor(ActionExecutorInterface):
         *,
         executors: Sequence[ActionExecutorInterface],
         logger: LoggerInterface,
+        access_checker: "ToolAccessCheckerPort | None" = None,
     ) -> None:
         self._executors = tuple(executors)
         self._logger = logger
+        # tool-access-control §0 F4: 집행 직전 요청자 권한 재확인 (미주입 시 기존 동작).
+        self._access_checker = access_checker
 
     def supports(self, tool_id: str) -> bool:
         return self._find(tool_id) is not None
@@ -46,6 +50,11 @@ class CompositeActionExecutor(ActionExecutorInterface):
                 "no action executor for tool", request_id=request_id, tool_id=tool_id
             )
             return self._failure("blocked", f"지원 집행기 없음: {tool_id}")
+        # 승인 대기 중 권한이 회수됐을 수 있다 — 대상 시스템에 닿기 전에 막는다.
+        if self._access_checker is not None and not await self._access_checker.is_allowed(
+            subject_user_id, tool_id, request_id
+        ):
+            return self._failure("blocked", "도구 사용 권한이 없어 집행하지 않았습니다")
         try:
             return await executor.execute(
                 tool_id=tool_id, tool_args=tool_args, request_id=request_id,

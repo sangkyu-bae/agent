@@ -92,6 +92,7 @@ class TestCompiler:
 
 def _bare_run_uc() -> RunAgentUseCase:
     uc = RunAgentUseCase.__new__(RunAgentUseCase)
+    uc._tool_access_resolver = None  # tool-access-control: optional 의존성 (None=필터 없음)
     uc._logger = MagicMock()
     uc._tracker = None
     uc._agent_skill_repo = None

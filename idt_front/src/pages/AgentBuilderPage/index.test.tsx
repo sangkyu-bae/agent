@@ -661,6 +661,36 @@ describe('AgentBuilderPage 위저드 핸드오프', () => {
     expect(calls.versions[0]).toMatchObject({ assembled: '사람이 고친 지침' });
   });
 
+  it('저장 403 TOOL_ACCESS_DENIED 면 권한 없는 도구 이름을 안내한다 (tool-access-control)', async () => {
+    useBuilderHandlers();
+    server.use(
+      http.post('*/api/v1/agents', () =>
+        HttpResponse.json(
+          {
+            detail: {
+              code: 'TOOL_ACCESS_DENIED',
+              message: '권한이 없는 도구가 포함되어 있습니다',
+              tool_ids: ['internal:tavily_search'],
+            },
+          },
+          { status: 403 },
+        ),
+      ),
+    );
+    seedWizardIntent();
+    renderPage();
+    const user = userEvent.setup();
+
+    await waitFor(() =>
+      expect(screen.getByPlaceholderText('새 에이전트')).toHaveValue('문서 Q&A 봇'),
+    );
+    await user.click(screen.getByRole('button', { name: /저장/ }));
+
+    expect(
+      await screen.findByText('권한이 없는 도구가 있어 저장할 수 없습니다: Tavily 웹 검색'),
+    ).toBeInTheDocument();
+  });
+
   it('바인딩이 409여도 저장은 성공으로 유지한다', async () => {
     // FR-F13 — 백필 실패가 생성 성공을 뒤집으면 안 된다.
     useBuilderHandlers();

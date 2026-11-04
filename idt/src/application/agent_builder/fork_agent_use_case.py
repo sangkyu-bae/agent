@@ -1,13 +1,22 @@
 """ForkAgentUseCase: 에이전트 포크 (전체 복사)."""
 import uuid
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 
 from src.application.agent_builder.schemas import ForkAgentResponse, WorkerInfo
+from src.application.agent_builder.update_agent_use_case import sync_tool_guidelines
+from src.application.tool_access.validation import (
+    excluded_info,
+    partition_tool_workers,
+)
 from src.domain.agent_builder.interfaces import AgentDefinitionRepositoryInterface
 from src.domain.agent_builder.policies import AccessCheckInput, ForkPolicy
 from src.domain.agent_builder.schemas import AgentDefinition
 from src.domain.agent_opener.interfaces import AgentOpenerRepositoryInterface
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
+
+if TYPE_CHECKING:
+    from src.application.tool_access.resolver import ToolAccessResolver
 
 
 class ForkAgentUseCase:
@@ -16,9 +25,13 @@ class ForkAgentUseCase:
         agent_repo: AgentDefinitionRepositoryInterface,
         logger: LoggerInterface,
         opener_repo: AgentOpenerRepositoryInterface | None = None,
+        tool_access_resolver: "ToolAccessResolver | None" = None,
     ) -> None:
         self._agent_repo = agent_repo
         self._logger = logger
+        # Design Ref: tool-access-control §2.2 (FR-08) — 포크하는 사용자에게 허용되지
+        # 않은 도구는 빼고 복제. 미주입 = 전체 복사(기존 동작).
+        self._tool_access_resolver = tool_access_resolver
         # agent-opener FR-07: 포크 시 원본 오프너 복사 (미주입 시 생략)
         self._opener_repo = opener_repo
 
@@ -56,6 +69,15 @@ class ForkAgentUseCase:
 
             ForkPolicy.validate_source_status(source.status)
 
+            # tool-access-control FR-08: 포크 허용 판정 **후**에 도구 권한을 본다.
+            workers = list(source.workers)
+            excluded = []
+            if self._tool_access_resolver is not None:
+                access = await self._tool_access_resolver.for_user_id(
+                    user_id, request_id
+                )
+                workers, excluded = partition_tool_workers(access, workers)
+
             now = datetime.now(timezone.utc)
             forked_name = custom_name or f"{source.name} (사본)"
             new_id = str(uuid.uuid4())
@@ -67,7 +89,7 @@ class ForkAgentUseCase:
                 description=source.description,
                 system_prompt=source.system_prompt,
                 flow_hint=source.flow_hint,
-                workers=source.workers,
+                workers=workers,
                 llm_model_id=source.llm_model_id,
                 status="active",
                 visibility="private",
@@ -79,6 +101,17 @@ class ForkAgentUseCase:
                 created_at=now,
                 updated_at=now,
             )
+            if excluded:
+                # 제외한 도구를 프롬프트의 `## Tool Guidelines` 가 계속 안내하지 않게
+                # 남은 도구 기준으로 다시 만든다 (헤딩이 없으면 무변경).
+                sync_tool_guidelines(
+                    forked, [w for w in workers if w.worker_type == "tool"]
+                )
+                self._logger.info(
+                    "fork excluded tools — no permission",
+                    request_id=request_id,
+                    tool_ids=[w.tool_id for w in excluded],
+                )
 
             await self._agent_repo.save(forked, request_id)
 
@@ -101,7 +134,7 @@ class ForkAgentUseCase:
                 name=forked_name,
                 forked_from=source_agent_id,
                 forked_at=now.isoformat(),
-                system_prompt=source.system_prompt,
+                system_prompt=forked.system_prompt,
                 workers=[
                     WorkerInfo(
                         tool_id=w.tool_id,
@@ -110,8 +143,9 @@ class ForkAgentUseCase:
                         sort_order=w.sort_order,
                         tool_config=w.tool_config,
                     )
-                    for w in source.workers
+                    for w in workers
                 ],
+                excluded_tools=excluded_info(excluded),
                 visibility="private",
                 temperature=source.temperature,
                 llm_model_id=source.llm_model_id,

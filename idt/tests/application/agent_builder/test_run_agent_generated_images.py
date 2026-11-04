@@ -59,6 +59,7 @@ class TestRenderSummary:
 class TestStreamCaptureAndAnswer:
     def _uc(self) -> RunAgentUseCase:
         uc = RunAgentUseCase.__new__(RunAgentUseCase)
+        uc._tool_access_resolver = None  # tool-access-control: optional 의존성 (None=필터 없음)
         uc._logger = MagicMock()
         return uc
 

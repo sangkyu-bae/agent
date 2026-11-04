@@ -197,6 +197,12 @@ export const API_ENDPOINTS = {
   ADMIN_USER_DEPT_REMOVE: (userId: number, deptId: string) =>
     `/api/v1/users/${userId}/departments/${deptId}`,
 
+  // Admin — Tool Access (tool-access-control §4.1, admin 전용 GET/PUT 전체 교체)
+  ADMIN_TOOL_ACCESS_DEFAULT: '/api/v1/admin/tool-access/default',
+  ADMIN_TOOL_ACCESS_DEPARTMENT: (deptId: string) =>
+    `/api/v1/admin/tool-access/departments/${deptId}`,
+  ADMIN_TOOL_ACCESS_USER: (userId: number) => `/api/v1/admin/tool-access/users/${userId}`,
+
   // Admin — MCP Server Registry
   MCP_SERVERS: '/api/v1/mcp-registry',
   MCP_SERVER_DETAIL: (id: string) => `/api/v1/mcp-registry/${id}`,

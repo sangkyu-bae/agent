@@ -57,6 +57,7 @@ def _uc(*, repo_factory_set=True):
     repo.create = _create
 
     uc = RunAgentUseCase.__new__(RunAgentUseCase)
+    uc._tool_access_resolver = None  # tool-access-control: optional 의존성 (None=필터 없음)
     uc._logger = MagicMock()
     uc._session_factory = _session_factory()
     uc._approval_repo_factory = (lambda session: repo) if repo_factory_set else None

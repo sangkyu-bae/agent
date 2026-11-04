@@ -27,7 +27,7 @@ describe('AdminSectionTabs', () => {
   it('TB1: 그룹 items가 순서대로 탭으로 렌더링된다', () => {
     renderTabs(orgGroup, '/admin/users');
     const tabs = screen.getAllByRole('tab');
-    expect(tabs.map((t) => t.textContent)).toEqual(['사용자 관리', '부서 관리']);
+    expect(tabs.map((t) => t.textContent)).toEqual(['사용자 관리', '부서 관리', '도구 권한']);
   });
 
   it('TB2: 현재 경로에 해당하는 탭이 aria-selected=true다', () => {

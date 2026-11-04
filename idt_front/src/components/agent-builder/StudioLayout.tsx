@@ -4,6 +4,7 @@ import type { RagToolConfig } from '@/types/ragToolConfig';
 import type { AgentBuilderFormData } from '@/types/agentBuilder';
 import type { ComposeAgentDraftResponse } from '@/types/agentComposer';
 import type { StagedSchedule } from '@/types/agentSchedule';
+import type { ToolAccessInfo } from '@/types/toolAccess';
 import StudioHeader from './StudioHeader';
 import LeftConfigPanel from './LeftConfigPanel';
 import AgentTestPanel from './AgentTestPanel';
@@ -42,6 +43,8 @@ interface StudioLayoutProps {
   isModelsLoading: boolean;
   isModelsError: boolean;
   onRetryModels: () => void;
+  /** tool-access-control FR-13: 에이전트 상세의 붙은 도구별 허용 여부 (edit 전용) */
+  toolAccess?: ToolAccessInfo[] | null;
 }
 
 /**
@@ -77,6 +80,7 @@ const StudioLayout = ({
   isModelsLoading,
   isModelsError,
   onRetryModels,
+  toolAccess,
 }: StudioLayoutProps) => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: '#fff' }}>
@@ -99,6 +103,7 @@ const StudioLayout = ({
             onSkillToggle={onSkillToggle}
             onRagConfigChange={onRagConfigChange}
             onDraftArgKeyChange={onDraftArgKeyChange}
+            toolAccess={toolAccess}
             onBuiltinToggle={onBuiltinToggle}
             onMiddlewareToggle={onMiddlewareToggle}
             isEditMode={mode === 'edit'}

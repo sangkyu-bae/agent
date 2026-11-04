@@ -68,6 +68,8 @@ export interface AgentDetail {
   can_delete: boolean;
   created_at: string;
   updated_at: string;
+  /** tool-access-control FR-13: 붙은 도구의 조회자 기준 허용 여부 (판정 미배선·실패 시 null) */
+  tool_access?: import('./toolAccess').ToolAccessInfo[] | null;
 }
 
 export interface SubscribeResponse {
@@ -96,6 +98,8 @@ export interface ForkAgentResponse {
   visibility: string;
   temperature: number;
   llm_model_id: string;
+  /** tool-access-control FR-08: 권한이 없어 복제본에서 뺀 도구 (없으면 빈 배열·생략) */
+  excluded_tools?: import('./toolAccess').ExcludedTool[];
 }
 
 export type MyAgentFilter = 'all' | 'owned' | 'subscribed' | 'forked';

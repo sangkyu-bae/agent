@@ -17,8 +17,17 @@ from datetime import datetime, timedelta
 
 
 def _make_app(build_uc=None, reply_uc=None, session_repo=None) -> FastAPI:
+    # tool-access-control Check G-02: 라우터가 admin 전용이 되어 인증을 대체한다.
+    # 401/403 자체는 tests/api/test_admin_only_routers_auth.py 가 검증한다.
+    from src.domain.auth.entities import User, UserRole, UserStatus
+    from src.interfaces.dependencies.auth import get_current_user
+
     app = FastAPI()
     app.include_router(router)
+    app.dependency_overrides[get_current_user] = lambda: User(
+        email="admin@test.com", password_hash="h",
+        role=UserRole.ADMIN, status=UserStatus.APPROVED, id=1,
+    )
     if build_uc:
         app.dependency_overrides[get_auto_build_use_case] = lambda: build_uc
     if reply_uc:

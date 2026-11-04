@@ -27,6 +27,12 @@ from src.domain.llm_model.interfaces import LlmModelRepositoryInterface
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.domain.mcp_registry.interfaces import MCPServerRegistryRepositoryInterface
 from src.domain.tool_catalog.interfaces import ToolCatalogRepositoryInterface
+from typing import TYPE_CHECKING
+
+from src.domain.auth.entities import User
+
+if TYPE_CHECKING:
+    from src.application.tool_access.resolver import ToolAccessResolver
 
 _FALLBACK_NOTE = "MCP 도구 카탈로그 동기화 전 — 서버 단위 정보로 제안되었습니다."
 
@@ -40,7 +46,10 @@ class ComposeAgentUseCase:
         llm_model_repository: LlmModelRepositoryInterface,
         logger: LoggerInterface,
         planner: PlannerInterface | None = None,
+        tool_access_resolver: "ToolAccessResolver | None" = None,
     ) -> None:
+        # tool-access-control module-3: 초안 후보를 조회자 허용 도구로 한정 (미주입 = 전체)
+        self._tool_access_resolver = tool_access_resolver
         # fix-agent-planner-hitl: planner 미주입 시 기존 단발 compose와 동일 동작
         self._composer = composer
         self._planner = planner
@@ -50,14 +59,17 @@ class ComposeAgentUseCase:
         self._logger = logger
 
     async def execute(
-        self, request: ComposeAgentRequest, request_id: str
+        self, request: ComposeAgentRequest, request_id: str,
+        viewer: User | None = None,
     ) -> ComposeAgentDraftResponse:
         self._logger.info("ComposeAgentUseCase start", request_id=request_id)
         try:
             llm_model_id = await self._resolve_llm_model_id(
                 request.llm_model_id, request_id
             )
-            candidates, fallback_note = await self._collect_candidates(request_id)
+            candidates, fallback_note = await self._collect_candidates(
+                request_id, viewer=viewer
+            )
             history = (
                 ComposePolicy.clamp_history(request.history)
                 if request.history
@@ -181,6 +193,18 @@ class ComposeAgentUseCase:
     # ── 후보 수집 (D6 + D2 폴백) ──────────────────────────────────
 
     async def _collect_candidates(
+        self, request_id: str, viewer: User | None = None
+    ) -> tuple[list[CandidateTool], str]:
+        candidates, note = await self._collect_all_candidates(request_id)
+        if self._tool_access_resolver is None:
+            return candidates, note
+        if viewer is None:
+            # Fail-Closed: 판정 배선이 있는데 조회자를 모르면 후보를 주지 않는다.
+            return [], note
+        access = await self._tool_access_resolver.for_user(viewer, request_id)
+        return [c for c in candidates if access.allows_reference(c.tool_id)], note
+
+    async def _collect_all_candidates(
         self, request_id: str
     ) -> tuple[list[CandidateTool], str]:
         candidates = [

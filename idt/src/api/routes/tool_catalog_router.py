@@ -45,7 +45,8 @@ async def list_tool_catalog(
     use_case=Depends(get_list_tool_catalog_use_case),
 ):
     request_id = str(uuid.uuid4())
-    return await use_case.execute(request_id)
+    # tool-access-control FR-05: 비관리자는 허용 도구만 받는다 (판정은 UseCase).
+    return await use_case.execute(request_id, viewer=current_user)
 
 
 @router.patch("/builtin", response_model=SetBuiltinResponse)

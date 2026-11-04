@@ -13,6 +13,7 @@ from fastapi.responses import StreamingResponse
 from src.domain.auth.entities import User
 from src.infrastructure.agent_run.sse_formatter import AgentRunEventSseFormatter
 from src.domain.agent_run.auth_context import AuthContext
+from src.domain.tool_access.exceptions import ToolAccessDeniedError
 from src.interfaces.dependencies.auth import (
     get_current_user,
     get_current_user_from_query_token,
@@ -178,6 +179,9 @@ async def create_agent(
         return await use_case.execute(
             body, request_id, viewer_role=current_user.role.value
         )
+    except ToolAccessDeniedError as e:
+        # PermissionError 하위형 — 반드시 그보다 먼저 잡는다 (Design §4.2)
+        raise tool_access_denied_http_exception(e)
     except PermissionError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     except ValueError as e:
@@ -252,6 +256,8 @@ async def update_agent(
             viewer_user_id=str(current_user.id),
             viewer_role=current_user.role.value,
         )
+    except ToolAccessDeniedError as e:
+        raise tool_access_denied_http_exception(e)
     except PermissionError as e:
         # kb-rag-filter Act-1: KB 읽기권한 거부 등 원인별 메시지를 그대로 노출
         raise HTTPException(
@@ -570,6 +576,18 @@ _VALIDATION_CODE_PREFIXES = (
     "IMAGE_CONFIG_INVALID",
     "MODEL_KIND_MISMATCH",
 )
+
+
+def tool_access_denied_http_exception(e: ToolAccessDeniedError) -> HTTPException:
+    """tool-access-control §4.2 — 저장 시 신규 도구 불허 → 403 + 대상 tool_ids."""
+    return HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail={
+            "code": "TOOL_ACCESS_DENIED",
+            "message": "권한이 없는 도구가 포함되어 있습니다",
+            "tool_ids": list(e.tool_ids),
+        },
+    )
 
 
 def save_error_http_exception(e: ValueError) -> HTTPException:

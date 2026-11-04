@@ -338,3 +338,41 @@ describe('LeftConfigPanel — 승인 필요 도구 본문 인자', () => {
     expect(screen.queryByLabelText(/본문 인자/)).not.toBeInTheDocument();
   });
 });
+
+describe('LeftConfigPanel — 권한 없는 붙은 도구 (tool-access-control FR-13)', () => {
+  const TOOL_ACCESS = [
+    { tool_id: 'internal:web_search', name: '웹 검색', permitted: true },
+    { tool_id: 'internal:python_code_executor', name: 'Python 코드 실행', permitted: false },
+  ];
+
+  it('카탈로그에 없는 붙은 도구를 tool_access 이름 + "권한 없음" 칩으로 보인다', () => {
+    renderPanel(
+      { tools: ['internal:web_search', 'python_code_executor'] },
+      vi.fn(),
+      { isEditMode: true, toolAccess: TOOL_ACCESS },
+    );
+    expect(screen.getByText('Python 코드 실행')).toBeInTheDocument();
+    expect(screen.getByText('권한 없음')).toBeInTheDocument();
+    expect(screen.queryByText('추가된 도구가 없습니다')).not.toBeInTheDocument();
+  });
+
+  it('제거 버튼은 폼의 원래 id 로 토글한다', async () => {
+    const onToolToggle = vi.fn();
+    renderPanel(
+      { tools: ['python_code_executor'] },
+      vi.fn(),
+      { isEditMode: true, toolAccess: TOOL_ACCESS, onToolToggle },
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Python 코드 실행 제거' }));
+    expect(onToolToggle).toHaveBeenCalledWith('python_code_executor');
+  });
+
+  it('카탈로그 로딩 중에는 그리지 않는다', () => {
+    renderPanel(
+      { tools: ['python_code_executor'] },
+      vi.fn(),
+      { isEditMode: true, toolAccess: TOOL_ACCESS, catalogTools: undefined, isToolsLoading: true },
+    );
+    expect(screen.queryByText('권한 없음')).not.toBeInTheDocument();
+  });
+});
