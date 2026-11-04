@@ -48,6 +48,8 @@ export interface Message {
   feedbackMessageId?: number;
   /** chat-image-attachment §5.3 FR-17 — 전송한 이미지 썸네일(object URL, 세션 메모리). 히스토리 재조회 시 없음 */
   imagePreviews?: string[];
+  /** tool-access-control FR-11 — 권한이 없어 뺀 도구 (실시간 답변에만 존재, 히스토리 재조회 시 없음) */
+  excludedTools?: import('./toolAccess').ExcludedTool[];
 }
 
 /** @deprecated Use DocumentSource instead */

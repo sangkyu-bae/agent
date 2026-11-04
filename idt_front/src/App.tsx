@@ -29,6 +29,7 @@ import AdminRagasPage from '@/pages/AdminRagasPage';
 import AdminAgentRunsPage from '@/pages/AdminAgentRunsPage';
 import AdminDashboardPage from '@/pages/AdminDashboardPage';
 import AdminToolsPage from '@/pages/AdminToolsPage';
+import AdminToolAccessPage from '@/pages/AdminToolAccessPage';
 import AdminMiddlewarePage from '@/pages/AdminMiddlewarePage';
 import WikiPage from '@/pages/WikiPage';
 import AgentKnowledgePage from '@/pages/AgentKnowledgePage';
@@ -93,6 +94,7 @@ const App = () => (
           <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
           <Route path="/admin/users" element={<AdminUsersPage />} />
           <Route path="/admin/departments" element={<AdminDepartmentsPage />} />
+          <Route path="/admin/tool-access" element={<AdminToolAccessPage />} />
           <Route path="/admin/mcp-servers" element={<AdminMcpServersPage />} />
           {/* builtin-tools D9: 도구 카탈로그 + 빌트인 토글 */}
           <Route path="/admin/tools" element={<AdminToolsPage />} />

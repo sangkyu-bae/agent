@@ -39,6 +39,8 @@ import {
   saveDraftToSession,
 } from '@/utils/documentTemplate';
 import { RAG_CATALOG_TOOL_ID } from '@/utils/agentDetailMapping';
+import { unlistedAttachedTools } from '@/utils/toolAccess';
+import type { ToolAccessInfo } from '@/types/toolAccess';
 
 const VisualCanvas = lazy(() => import('./visual/VisualCanvas'));
 
@@ -77,6 +79,11 @@ interface LeftConfigPanelProps {
   onRetryModels: () => void;
   /** approval-gate-run-termination §5.1: 승인 필요 도구의 본문 인자 입력 */
   onDraftArgKeyChange?: (toolId: string, value: string) => void;
+  /**
+   * tool-access-control FR-13: 에이전트 상세의 붙은 도구별 허용 여부.
+   * 비관리자 카탈로그는 허용 도구만 오므로, 카탈로그에 없는 붙은 도구는 이걸로 칩을 그린다.
+   */
+  toolAccess?: ToolAccessInfo[] | null;
 }
 
 /**
@@ -103,6 +110,7 @@ const LeftConfigPanel = ({
   isModelsError,
   onRetryModels,
   onDraftArgKeyChange,
+  toolAccess,
 }: LeftConfigPanelProps) => {
   const [leftTab, setLeftTab] = useState<LeftTabId>('form');
   const [isModelModalOpen, setModelModalOpen] = useState(false);
@@ -188,6 +196,11 @@ const LeftConfigPanel = ({
 
   const ragConfig = form.toolConfigs[RAG_TOOL_ID];
   const selectedTools = (catalogTools ?? []).filter((t) => form.tools.includes(t.tool_id));
+  // tool-access-control FR-13 (Design §0 F6): 카탈로그에 없는 붙은 도구 — 저장 payload 엔 그대로
+  // 남으므로(기존 도구 유지) 칩만 그린다. 카탈로그 로드 전에는 전부가 '없음'으로 보이므로 생략.
+  const unlistedTools = catalogTools
+    ? unlistedAttachedTools(form.tools, catalogTools.map((t) => t.tool_id), toolAccess)
+    : [];
   // builtin-tools D8: 빌트인 표시는 카탈로그 is_builtin − excluded 파생값 (create 전용).
   // edit 모드에선 저장된 워커가 form.tools로 매핑되어 일반 칩으로 표시된다.
   const builtinTools = isEditMode
@@ -470,11 +483,39 @@ const LeftConfigPanel = ({
                 );
               })}
             </ul>
-          ) : builtinTools.length === 0 ? (
+          ) : builtinTools.length === 0 && unlistedTools.length === 0 ? (
             <p className="rounded-xl border border-dashed border-zinc-200 bg-zinc-50 py-4 text-center text-[12.5px] text-zinc-400">
               추가된 도구가 없습니다
             </p>
           ) : null}
+          {unlistedTools.length > 0 && (
+            <ul className="mt-2 space-y-2" aria-label="사용 권한이 없는 도구">
+              {unlistedTools.map((tool) => (
+                <li
+                  key={tool.formId}
+                  className="rounded-xl border border-warning-border bg-warning-bg px-4 py-2.5"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-fg-secondary">{tool.name}</span>
+                    <span className="rounded-full border border-warning-border px-2 py-0.5 text-xs font-medium text-warning">
+                      권한 없음
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => onToolToggle(tool.formId)}
+                      aria-label={`${tool.name} 제거`}
+                      className="ml-auto rounded-md px-2 py-1 text-xs font-medium text-fg-muted transition-colors duration-150 hover:bg-danger-bg hover:text-danger"
+                    >
+                      제거
+                    </button>
+                  </div>
+                  <p className="mt-1 text-xs text-fg-muted">
+                    현재 사용 권한이 없어 실행 시 제외됩니다. 저장해도 이 도구는 에이전트에 남습니다.
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
         </CollapsibleSection>
 
         {/* 스킬 */}

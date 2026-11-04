@@ -26,6 +26,7 @@ import { ApiError } from '@/services/api/ApiError';
 import { useLlmModels } from '@/hooks/useLlmModels';
 import { queryKeys } from '@/lib/queryKeys';
 import type { DocumentSource, Message } from '@/types/chat';
+import type { ExcludedTool } from '@/types/toolAccess';
 import type { ChartPayload } from '@/types/chart';
 import {
   ATTACHMENT_ERROR_MESSAGES,
@@ -128,6 +129,8 @@ interface NormalizedView {
   charts: ChartPayload[];
   // agent-eval-gate: 저장된 assistant 메시지 id (평가 대상). 부재 시 null.
   assistantMessageId: number | null;
+  // tool-access-control FR-11: 실행자 권한이 없어 뺀 도구 (에이전트 실행만)
+  excludedTools: ExcludedTool[];
 }
 
 const ChatPage = () => {
@@ -252,6 +255,7 @@ const ChatPage = () => {
         sources: chatStream.sources,
         charts: [],
         assistantMessageId: chatStream.assistantMessageId,
+        excludedTools: [],
       };
     }
     if (activeStream?.kind === 'agent') {
@@ -268,6 +272,8 @@ const ChatPage = () => {
         // agent-run-feedback-wiring D-07: ANSWER_COMPLETED 의 assistant_message_id 로
         // 일반 채팅과 같은 feedbackMessageId 경로를 탄다 (없으면 평가 미노출).
         assistantMessageId: agentRun.assistantMessageId,
+        // tool-access-control FR-11: 구형 응답·mock 은 필드가 없을 수 있다
+        excludedTools: agentRun.excludedTools ?? [],
       };
     }
     return null;
@@ -337,6 +343,7 @@ const ChatPage = () => {
         isStreaming: false,
         // agent-eval-gate — 저장된 assistant 메시지 id를 부여해 평가 버튼 노출
         feedbackMessageId: view.assistantMessageId ?? undefined,
+        excludedTools: view.excludedTools,
       });
       const historyAgentId =
         activeStream.kind === 'agent' ? activeStream.agentId : agentId;
@@ -347,7 +354,7 @@ const ChatPage = () => {
       }
     }
     setActiveStream(null);
-  }, [view?.streamId, view?.isDone, view?.answer, view?.error, view?.sources, view?.charts, activeStream, agentId, userId, queryClient]);
+  }, [view?.streamId, view?.isDone, view?.answer, view?.error, view?.sources, view?.charts, view?.excludedTools, activeStream, agentId, userId, queryClient]);
 
   // ws-agent-excel-attachment: 엑셀 업로드 → file_id 발급 후 대기 첨부로 보관 (턴당 1건, 교체).
   const uploadExcel = async (file: File) => {

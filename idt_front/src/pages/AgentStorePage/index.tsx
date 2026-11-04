@@ -11,6 +11,7 @@ import {
   useForkAgent,
 } from '@/hooks/useAgentStore';
 import type { AgentScope, MyAgentFilter, StoreAgentSummary } from '@/types/agentStore';
+import { forkExcludedNotice } from '@/utils/toolAccess';
 
 type StoreTab = 'public' | 'department' | 'my';
 
@@ -69,6 +70,15 @@ const AgentStorePage = () => {
 
   const subscribeMutation = useSubscribeAgent();
   const forkMutation = useForkAgent();
+  // tool-access-control FR-08: 권한 없는 도구를 빼고 복제했을 때의 안내
+  const [forkNotice, setForkNotice] = useState<string | null>(null);
+  const handleFork = (agentId: string) => {
+    setForkNotice(null);
+    forkMutation.mutate(
+      { agentId },
+      { onSuccess: (res) => setForkNotice(forkExcludedNotice(res?.excluded_tools)) },
+    );
+  };
 
   const isMyTab = activeTab === 'my';
   const query = isMyTab ? myAgentsQuery : agentListQuery;
@@ -223,6 +233,15 @@ const AgentStorePage = () => {
             </div>
           )}
 
+          {forkNotice && (
+            <p
+              role="status"
+              className="mb-4 rounded-md border border-warning-border bg-warning-bg px-3 py-2 text-sm text-warning"
+            >
+              {forkNotice}
+            </p>
+          )}
+
           {/* Card grid */}
           {!query.isLoading && agents.length > 0 && (
             <>
@@ -233,7 +252,7 @@ const AgentStorePage = () => {
                     agent={agent}
                     onClick={(id) => setSelectedAgentId(id)}
                     onSubscribe={(id) => subscribeMutation.mutate(id)}
-                    onFork={(id) => forkMutation.mutate({ agentId: id })}
+                    onFork={handleFork}
                     isSubscribing={subscribeMutation.isPending}
                     isForking={forkMutation.isPending}
                   />

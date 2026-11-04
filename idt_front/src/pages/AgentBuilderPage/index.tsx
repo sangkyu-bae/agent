@@ -47,6 +47,7 @@ import type { LlmModel } from '@/types/llmModel';
 import { mapDetailToForm, RAG_CATALOG_TOOL_ID } from '@/utils/agentDetailMapping';
 import { buildToolConfigsForSave } from '@/utils/toolConfigPayload';
 import { buildOpenersForSave } from '@/utils/openerPayload';
+import { toolAccessDeniedMessage } from '@/utils/toolAccess';
 
 type ViewMode = 'list' | 'create' | 'edit';
 
@@ -339,7 +340,7 @@ const AgentBuilderPage = () => {
             });
           },
           onError: (error) => {
-            setSaveResult({ type: 'error', message: imageGenerationSaveErrorMessage(error.message) });
+            setSaveResult({ type: 'error', message: saveErrorMessage(error) });
           },
         },
       );
@@ -443,12 +444,22 @@ const AgentBuilderPage = () => {
             });
           },
           onError: (error) => {
-            setSaveResult({ type: 'error', message: imageGenerationSaveErrorMessage(error.message) });
+            setSaveResult({ type: 'error', message: saveErrorMessage(error) });
           },
         },
       );
     }
   };
+
+  // tool-access-control §4.2: 저장 403 TOOL_ACCESS_DENIED 면 어떤 도구 때문인지 이름으로 안내.
+  // 그 외는 기존 문구 매핑(이미지 생성 오류 코드 등) 그대로.
+  function saveErrorMessage(error: Error): string {
+    const nameOf = (catalogId: string) =>
+      catalogTools?.find((t) => t.tool_id === catalogId)?.name ??
+      editDetail?.tool_access?.find((t) => t.tool_id === catalogId)?.name ??
+      catalogId;
+    return toolAccessDeniedMessage(error, nameOf) ?? imageGenerationSaveErrorMessage(error.message);
+  }
 
   const handleToolToggle = (toolId: string) => {
     setForm((prev) => {
@@ -664,6 +675,8 @@ const AgentBuilderPage = () => {
           onSkillToggle={handleSkillToggle}
           onRagConfigChange={handleRagConfigChange}
           onDraftArgKeyChange={handleDraftArgKeyChange}
+          // tool-access-control FR-13: 권한 없는 붙은 도구 칩 (edit 에서만 상세가 있다)
+          toolAccess={view === 'edit' ? editDetail?.tool_access : undefined}
           onBuiltinToggle={handleBuiltinToggle}
           onMiddlewareToggle={handleMiddlewareToggle}
           onStagedScheduleAdd={handleStagedScheduleAdd}

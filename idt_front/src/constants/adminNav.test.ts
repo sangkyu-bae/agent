@@ -35,6 +35,8 @@ describe('adminNav 상수 — 그룹 구조', () => {
       '/admin/dashboard',
       '/admin/users',
       '/admin/departments',
+      // tool-access-control FR-14: 도구 권한 (org)
+      '/admin/tool-access',
       '/admin/ragas',
       '/admin/agent-runs',
       '/admin/llm-models',

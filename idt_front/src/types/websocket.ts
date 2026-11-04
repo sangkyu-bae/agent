@@ -75,6 +75,8 @@ export interface AgentAnswerCompletedData {
   assistant_message_id?: number;
   /** agent-run-source-citations: 답변 근거. 근거가 없으면 필드가 없다(하위호환). */
   sources?: DocumentSource[];
+  /** tool-access-control FR-11: 실행자 권한이 없어 이번 실행에서 뺀 도구. 없으면 필드가 없다. */
+  excluded_tools?: import('./toolAccess').ExcludedTool[];
 }
 
 export interface AgentRunCompletedData {

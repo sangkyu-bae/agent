@@ -314,6 +314,13 @@ export const queryKeys = {
     mcpServers: () => [...queryKeys.admin.all, 'mcpServers'] as const,
     /** 특정 MCP 서버 상세 */
     mcpServer: (id: string) => [...queryKeys.admin.mcpServers(), id] as const,
+    /** tool-access-control: 도구 권한 (기본 세트·부서·사용자) */
+    toolAccess: () => [...queryKeys.admin.all, 'toolAccess'] as const,
+    toolAccessDefault: () => [...queryKeys.admin.toolAccess(), 'default'] as const,
+    toolAccessDepartment: (deptId: string) =>
+      [...queryKeys.admin.toolAccess(), 'department', deptId] as const,
+    toolAccessUser: (userId: number) =>
+      [...queryKeys.admin.toolAccess(), 'user', userId] as const,
     /** Skill 목록 (scope 별) */
     skills: (params?: import('@/types/skill').ListSkillsRequest) =>
       [...queryKeys.admin.all, 'skills', params] as const,
