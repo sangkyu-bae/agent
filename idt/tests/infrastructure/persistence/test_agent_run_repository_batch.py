@@ -12,6 +12,7 @@ import pytest
 from src.domain.agent_run.value_objects import RunId
 from src.infrastructure.persistence.models.agent_run import (
     AgentRunModel,
+    AgentRunStepModel,
     RetrievalSourceModel,
     ToolCallModel,
 )
@@ -45,6 +46,14 @@ def _run(run_id: str, message_id: int, started: datetime) -> AgentRunModel:
 def _retrieval(id_: str, run_id: str) -> RetrievalSourceModel:
     return RetrievalSourceModel(
         id=id_, run_id=run_id, collection_name="kb", created_at=T0,
+    )
+
+
+def _step(id_: str, run_id: str, index: int) -> AgentRunStepModel:
+    return AgentRunStepModel(
+        id=id_, run_id=run_id, step_index=index, node_name="supervisor",
+        node_type="SUPERVISOR", status="SUCCESS", started_at=T0,
+        parent_step_id=None, depth=0,
     )
 
 
@@ -107,4 +116,24 @@ class TestFindToolCallsByRuns:
     async def test_empty_ids_issue_no_query(self) -> None:
         session = _session([])
         assert await SqlAlchemyAgentRunRepository(session).find_tool_calls_by_runs([]) == {}
+        session.execute.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+class TestFindStepsByRuns:
+    """agent-run-tool-trace Design §9.4 — 세션 내역은 런 묶음당 step 쿼리 1회."""
+
+    async def test_groups_by_run_with_one_query(self) -> None:
+        session = _session([_step("s1", RUN_A, 1), _step("s2", RUN_B, 1), _step("s3", RUN_A, 2)])
+        found = await SqlAlchemyAgentRunRepository(session).find_steps_by_runs(
+            [RunId(RUN_A), RunId(RUN_B)],
+        )
+        assert [s.id for s in found[RUN_A]] == ["s1", "s3"]
+        assert [s.id for s in found[RUN_B]] == ["s2"]
+        assert found[RUN_A][0].started_at.tzinfo is not None
+        assert session.execute.await_count == 1
+
+    async def test_empty_ids_issue_no_query(self) -> None:
+        session = _session([])
+        assert await SqlAlchemyAgentRunRepository(session).find_steps_by_runs([]) == {}
         session.execute.assert_not_awaited()

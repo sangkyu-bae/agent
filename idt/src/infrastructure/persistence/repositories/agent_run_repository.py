@@ -338,6 +338,22 @@ class SqlAlchemyAgentRunRepository(AgentRunRepositoryInterface):
             grouped.setdefault(row.run_id, []).append(self._tool_to_domain(row))
         return grouped
 
+    async def find_steps_by_runs(
+        self, run_ids: List[RunId],
+    ) -> Dict[str, List[AgentRunStep]]:
+        if not run_ids:
+            return {}
+        stmt = (
+            select(AgentRunStepModel)
+            .where(AgentRunStepModel.run_id.in_([r.value for r in run_ids]))
+            .order_by(AgentRunStepModel.run_id, AgentRunStepModel.step_index)
+        )
+        result = await self._session.execute(stmt)
+        grouped: Dict[str, List[AgentRunStep]] = {}
+        for row in result.scalars().all():
+            grouped.setdefault(row.run_id, []).append(self._step_to_domain(row))
+        return grouped
+
     # ── M5: admin run list + count ────────────────────────────────────
     async def list_runs(self, filters: RunListFilters) -> List[AgentRun]:
         stmt = select(AgentRunModel)

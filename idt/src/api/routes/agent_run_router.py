@@ -62,6 +62,9 @@ from src.application.agent_run.use_cases.list_runs_use_case import (
 from src.application.agent_run.use_cases.get_session_sources_use_case import (
     GetSessionSourcesUseCase,
 )
+from src.application.agent_run.use_cases.get_session_tool_traces_use_case import (
+    GetSessionToolTracesUseCase,
+)
 from src.domain.agent_run.interfaces import RunListFilters
 from src.domain.auth.entities import User, UserRole
 from src.interfaces.dependencies.auth import get_current_user, require_role
@@ -69,6 +72,7 @@ from src.interfaces.schemas.agent_run_response import (
     MessageRetrievalsResponse,
     RunDetailResponse,
     SessionSourcesResponse,
+    SessionToolTracesResponse,
     RunListResponse,
     UsageByLlmResponse,
     UsageByNodeResponse,
@@ -130,6 +134,10 @@ def get_message_retrievals_use_case() -> GetMessageRetrievalsUseCase:
 
 def get_session_sources_use_case() -> GetSessionSourcesUseCase:
     raise NotImplementedError("GetSessionSourcesUseCase not initialized")
+
+
+def get_session_tool_traces_use_case() -> GetSessionToolTracesUseCase:
+    raise NotImplementedError("GetSessionToolTracesUseCase not initialized")
 
 
 # -------- Helpers --------
@@ -240,6 +248,31 @@ async def get_session_sources(
         request_id=str(uuid.uuid4()),
     )
     return SessionSourcesResponse.from_dto(dto)
+
+
+@router.get(
+    "/conversations/agents/{agent_id}/sessions/{session_id}/tool-traces",
+    response_model=SessionToolTracesResponse,
+    # 항목마다 있는 필드가 다르다 (추론/도구) — WS payload 와 같은 모양 (Design §4.3).
+    response_model_exclude_none=True,
+)
+async def get_session_tool_traces(
+    agent_id: str,
+    session_id: str,
+    current_user: User = Depends(get_current_user),
+    use_case: GetSessionToolTracesUseCase = Depends(get_session_tool_traces_use_case),
+) -> SessionToolTracesResponse:
+    """세션의 assistant 메시지별 도구 실행 내역 (agent-run-tool-trace §4.2).
+
+    토큰의 사용자 세션만 조회한다. 없는 세션·타인 세션은 존재 여부를 숨기려 빈 200.
+    """
+    dto = await use_case.execute(
+        user_id=str(current_user.id),
+        agent_id=agent_id,
+        session_id=session_id,
+        request_id=str(uuid.uuid4()),
+    )
+    return SessionToolTracesResponse.from_dto(dto)
 
 
 @router.get("/admin/usage/users", response_model=UsageByUserResponse)
