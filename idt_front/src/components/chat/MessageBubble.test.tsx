@@ -28,6 +28,29 @@ describe('MessageBubble', () => {
     expect(screen.getByText('### 분석 결과')).toBeInTheDocument();
   });
 
+  it('어시스턴트 메시지에 도구 실행 내역이 있으면 접힌 헤더를 그린다 (agent-run-tool-trace)', () => {
+    const message: Message = {
+      ...baseMessage,
+      role: 'assistant',
+      content: '답변',
+      toolTrace: {
+        omitted_count: 0,
+        items: [{ seq: 1, kind: 'tool', label: 'list_inquiries', status: 'success' }],
+      },
+    };
+    render(<MessageBubble message={message} />);
+    expect(screen.getByRole('button', { name: /도구 실행 내역 \(1\)/ })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+  });
+
+  it('도구 실행 내역이 없으면 헤더를 그리지 않는다', () => {
+    const message: Message = { ...baseMessage, role: 'assistant', content: '답변' };
+    render(<MessageBubble message={message} />);
+    expect(screen.queryByRole('button', { name: /도구 실행 내역/ })).toBeNull();
+  });
+
   it('스트리밍 중이면 커서 요소를 렌더한다', () => {
     const message: Message = {
       ...baseMessage,

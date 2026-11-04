@@ -36,6 +36,9 @@ export const API_ENDPOINTS = {
   // agent-run-source-citations §4.1 — 인증 필수 (authClient)
   CONVERSATION_AGENT_SESSION_SOURCES: (agentId: string, sessionId: string) =>
     `/api/v1/conversations/agents/${agentId}/sessions/${sessionId}/sources`,
+  // agent-run-tool-trace §4.1 — 인증 필수 (authClient)
+  CONVERSATION_AGENT_SESSION_TOOL_TRACES: (agentId: string, sessionId: string) =>
+    `/api/v1/conversations/agents/${agentId}/sessions/${sessionId}/tool-traces`,
 
   // Agent
   AGENT_RUN: '/api/agent/run',

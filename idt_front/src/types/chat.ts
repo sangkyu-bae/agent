@@ -1,4 +1,5 @@
 import type { ChartPayload } from './chart';
+import type { ToolTrace } from './toolTrace';
 
 export type MessageRole = 'user' | 'assistant' | 'tool';
 
@@ -48,6 +49,8 @@ export interface Message {
   feedbackMessageId?: number;
   /** chat-image-attachment §5.3 FR-17 — 전송한 이미지 썸네일(object URL, 세션 메모리). 히스토리 재조회 시 없음 */
   imagePreviews?: string[];
+  /** agent-run-tool-trace — 답변별 도구 실행 내역. 도구 호출이 없으면 없다. */
+  toolTrace?: ToolTrace;
 }
 
 /** @deprecated Use DocumentSource instead */

@@ -1065,6 +1065,11 @@ export const handlers = [
     HttpResponse.json({ session_id: params.sessionId, items: [] }),
   ),
 
+  // agent-run-tool-trace: 세션 답변별 도구 실행 내역 (기본은 내역 없음 — 기존 화면 테스트 무영향)
+  http.get('*/api/v1/conversations/agents/:agentId/sessions/:sessionId/tool-traces', ({ params }) =>
+    HttpResponse.json({ session_id: params.sessionId, items: [] }),
+  ),
+
   // 에이전트별 세션 메시지 조회
   http.get('*/api/v1/conversations/agents/:agentId/sessions/:sessionId/messages', ({ params, request }) => {
     const url = new URL(request.url);
