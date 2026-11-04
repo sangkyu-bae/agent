@@ -9,6 +9,7 @@
 
 import type { ChartPayload } from './chart';
 import type { DocumentSource } from './chat';
+import type { ToolTrace } from './toolTrace';
 
 export interface WSEnvelope<T = unknown> {
   type: string;
@@ -75,6 +76,8 @@ export interface AgentAnswerCompletedData {
   assistant_message_id?: number;
   /** agent-run-source-citations: 답변 근거. 근거가 없으면 필드가 없다(하위호환). */
   sources?: DocumentSource[];
+  /** agent-run-tool-trace §4.3: 도구 실행 내역. 도구 호출이 없으면 필드가 없다(하위호환). */
+  tool_trace?: ToolTrace;
 }
 
 export interface AgentRunCompletedData {

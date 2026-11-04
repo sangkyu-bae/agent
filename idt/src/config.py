@@ -137,6 +137,11 @@ class Settings(BaseSettings):
     # 소비 지점: src/api/main.py _make_run_sources_service → RunSourcesService.
     agent_run_sources_max_items: int = 6
 
+    # agent-run-tool-trace §10.4: 답변당 도구 실행 내역 항목 상한(추론 포함).
+    # 초과분은 omitted_count 로만 알린다. 실데이터 런당 최대 도구 호출 15건(2026-11-03).
+    # 소비 지점: src/api/main.py _make_run_tool_trace_service → RunToolTraceService.
+    agent_run_tool_trace_max_items: int = 50
+
     # Draft Grounding Check (draft-grounding-check Design §5.4)
     # action 초안·final_answer 를 근거 판정 → 재작성 루프에 통과시킨다.
     # 소비 지점: src/api/main.py 가 GroundedGenerator·WorkflowCompiler 에 주입.

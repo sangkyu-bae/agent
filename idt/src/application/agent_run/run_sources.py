@@ -5,6 +5,10 @@ Design Ref: §6.1 — 근거는 부가 정보이므로 실패는 여기서 흡�
 """
 from typing import Iterable
 
+from src.application.agent_run.tool_catalog_lookup import (
+    MCP_RUNTIME_PREFIX,
+    ToolCatalogLookup,
+)
 from src.domain.agent_run.entities import RetrievalSource, ToolCall
 from src.domain.agent_run.interfaces import AgentRunRepositoryInterface
 from src.domain.agent_run.source_policy import (
@@ -14,14 +18,11 @@ from src.domain.agent_run.source_policy import (
     RunSourceItem,
     RunSourcePolicy,
 )
+from src.domain.agent_run.tool_trace_policy import ToolTraceSource
 from src.domain.agent_run.value_objects import RunId
 from src.domain.doc_browse.interfaces import DocumentMetadataRepositoryInterface
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
-from src.domain.mcp.policy import MCPConnectionPolicy
 from src.domain.tool_catalog.interfaces import ToolCatalogRepositoryInterface
-from src.domain.tool_catalog.mcp_tool_id import parse_mcp_tool_id
-
-_MCP_RUNTIME_PREFIX = "mcp_"
 
 
 class RunSourcesService:
@@ -36,7 +37,8 @@ class RunSourcesService:
     ) -> None:
         self._agent_run_repo = agent_run_repo
         self._document_repo = document_repo
-        self._tool_catalog_repo = tool_catalog_repo
+        # agent-run-tool-trace §3.2 — 이름 계산은 도구 실행 내역과 공유한다.
+        self._catalog = ToolCatalogLookup(tool_catalog_repo, logger)
         self._logger = logger
         self._max_items = max_items
 
@@ -93,33 +95,21 @@ class RunSourcesService:
     async def _mcp_tools(
         self, tool_calls: list[ToolCall], request_id: str,
     ) -> dict[str, McpToolInfo]:
-        if not any(c.tool_name.startswith(_MCP_RUNTIME_PREFIX) for c in tool_calls):
+        if not any(c.tool_name.startswith(MCP_RUNTIME_PREFIX) for c in tool_calls):
             return {}
-        try:
-            entries = await self._tool_catalog_repo.list_active(request_id)
-        except Exception as e:
-            # 카탈로그 없이는 부작용 여부를 알 수 없어 MCP 칩만 제외한다 (fail-closed).
-            self._logger.warning(
-                "run sources tool catalog read failed",
-                exception=e, request_id=request_id,
+        # 카탈로그 없이는 부작용 여부를 알 수 없어 MCP 칩만 제외된다 (fail-closed).
+        # 조회 실패는 lookup 이 warning 을 남기고 빈 결과로 흡수한다.
+        tools = await self._catalog.resolve(tool_calls, request_id)
+        return {
+            runtime_name: McpToolInfo(
+                display_name=info.display_name,
+                requires_approval=info.requires_approval,
+                category=info.category,
+                tool_id=info.tool_id,
             )
-            return {}
-        tools: dict[str, McpToolInfo] = {}
-        for entry in entries:
-            ref = parse_mcp_tool_id(entry.tool_id)
-            if ref is None or ref.is_server_level:
-                continue
-            # 런타임 이름은 해시 접미사가 붙을 수 있어 역파싱 대신 정방향 계산한다.
-            runtime_name = MCPConnectionPolicy.build_tool_name(
-                f"{_MCP_RUNTIME_PREFIX}{ref.server_id}_{ref.tool_name}"
-            )
-            tools[runtime_name] = McpToolInfo(
-                display_name=entry.name,
-                requires_approval=entry.requires_approval,
-                category=entry.category,
-                tool_id=entry.tool_id,
-            )
-        return tools
+            for runtime_name, info in tools.items()
+            if info.source == ToolTraceSource.MCP
+        }
 
 
 def _flatten(groups: Iterable[list]) -> list:
