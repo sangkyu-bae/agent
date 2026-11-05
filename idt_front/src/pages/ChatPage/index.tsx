@@ -28,6 +28,7 @@ import { queryKeys } from '@/lib/queryKeys';
 import type { DocumentSource, Message } from '@/types/chat';
 import type { ToolTrace } from '@/types/toolTrace';
 import type { ExcludedTool } from '@/types/toolAccess';
+import type { LimitReason } from '@/types/websocket';
 import type { ChartPayload } from '@/types/chart';
 import {
   ATTACHMENT_ERROR_MESSAGES,
@@ -134,6 +135,8 @@ interface NormalizedView {
   toolTrace: ToolTrace | null;
   // tool-access-control FR-11: 실행자 권한이 없어 뺀 도구 (에이전트 실행만)
   excludedTools: ExcludedTool[];
+  // agent-token-limit D11: 한도 도달 사유 (에이전트 실행만). 없으면 null.
+  limitReason: LimitReason | null;
 }
 
 const ChatPage = () => {
@@ -260,6 +263,7 @@ const ChatPage = () => {
         assistantMessageId: chatStream.assistantMessageId,
         toolTrace: null,
         excludedTools: [],
+        limitReason: null,
       };
     }
     if (activeStream?.kind === 'agent') {
@@ -280,6 +284,9 @@ const ChatPage = () => {
         toolTrace: agentRun.toolTrace ?? null,
         // tool-access-control FR-11: 구형 응답·mock 은 필드가 없을 수 있다
         excludedTools: agentRun.excludedTools ?? [],
+        // agent-token-limit D11: 구 훅 mock 은 필드가 없을 수 있다. 사유 없는 도달
+        // (구 서버 limit_reached-only)은 답변 본문의 안내 문장으로만 전달된다.
+        limitReason: agentRun.limitReason ?? null,
       };
     }
     return null;
@@ -352,6 +359,8 @@ const ChatPage = () => {
         // agent-run-tool-trace §2.2 — 답변별 도구 실행 내역 (없으면 필드 미설정)
         toolTrace: view.toolTrace ?? undefined,
         excludedTools: view.excludedTools,
+        // agent-token-limit D11 — 한도 도달 배지 (없으면 필드 미설정)
+        limitReason: view.limitReason ?? undefined,
       });
       const historyAgentId =
         activeStream.kind === 'agent' ? activeStream.agentId : agentId;
@@ -362,7 +371,7 @@ const ChatPage = () => {
       }
     }
     setActiveStream(null);
-  }, [view?.streamId, view?.isDone, view?.answer, view?.error, view?.sources, view?.charts, view?.toolTrace, view?.excludedTools, activeStream, agentId, userId, queryClient]);
+  }, [view?.streamId, view?.isDone, view?.answer, view?.error, view?.sources, view?.charts, view?.toolTrace, view?.excludedTools, view?.limitReason, activeStream, agentId, userId, queryClient]);
 
   // ws-agent-excel-attachment: 엑셀 업로드 → file_id 발급 후 대기 첨부로 보관 (턴당 1건, 교체).
   const uploadExcel = async (file: File) => {

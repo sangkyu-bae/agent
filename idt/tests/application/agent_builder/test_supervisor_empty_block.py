@@ -183,11 +183,11 @@ class TestFinishChallengeLifecycle:
 
     @pytest.mark.asyncio
     async def test_token_limit_guard_consumes_pending(self):
-        """회귀: token_limit 가드는 limit_reached를 세우지 않는다(D5).
+        """회귀: token_limit 가드는 pending을 소진하고 limit_reached를 세운다.
 
-        pending이 남으면 route가 supervisor로 되돌리고 같은 가드가 다시 걸려
-        무한 루프가 된다. iteration_count도 이 경로에선 증가하지 않아
-        max_iterations 가드가 막아주지 못한다.
+        agent-token-limit D8로 구 D5(limit_reached 미설정)는 폐기됐다. 무한 루프
+        방지는 _challenge_reset(pending=False)이 담당하며, limit_reached는
+        route_to_worker_or_final의 되물음 분기(not limit_reached)도 함께 막는다.
         """
         out = await _node(_llm_returning("FINISH"))(
             _make_state(
@@ -199,6 +199,7 @@ class TestFinishChallengeLifecycle:
         )
         assert out["next_worker"] == "__end__"
         assert out["finish_challenge_pending"] is False
+        assert out["limit_reached"] is True
 
     @pytest.mark.asyncio
     async def test_max_iterations_guard_consumes_pending(self):

@@ -132,6 +132,7 @@ from src.domain.agent_builder.policies import (
     NestingDepthPolicy,
     QualityGatePolicy,
     SearchPipelinePolicy,
+    TokenLimitPolicy,
     ToolCallBudgetPolicy,
     ToolErrorPolicy,
 )
@@ -500,6 +501,29 @@ DEEP_SEARCH_MODE = "deep"
 # AD-3: 1단계 적용 대상은 웹검색뿐. 내부 문서검색은 플래그와 무관하게 legacy.
 DEEP_SEARCH_TOOL_ID = "tavily_search"
 _SEARCH_MODES = frozenset({LEGACY_SEARCH_MODE, DEEP_SEARCH_MODE})
+
+
+# agent-token-limit D9: 한도 도달 사유별 final_answer 안내 블록.
+_LIMIT_NOTICE_TITLES = {
+    "iteration": "반복 한도 도달 안내",
+    "token": "토큰 한도 도달 안내",
+}
+_LIMIT_NOTICE_CAUSES = {
+    "iteration": "실행 반복 한도에 도달하여",
+    "token": "토큰 예산 한도에 도달하여",
+}
+
+
+def _render_limit_notice(reason: str) -> str:
+    """limit_reason → 안내 지시 블록. 미지 사유(빈 값·구 스냅샷)는 일반 문구."""
+    title = _LIMIT_NOTICE_TITLES.get(reason, "실행 한도 도달 안내")
+    cause = _LIMIT_NOTICE_CAUSES.get(reason, "실행 한도에 도달하여")
+    return (
+        f"\n\n[{title}]\n"
+        f"{cause} 지금까지 수집된 정보만으로 답변합니다. "
+        "이 사실을 답변에서 자연스럽게 언급하고, 수집 정보가 부족한 부분은 "
+        "추측하지 말고 부족하다고 명시하세요."
+    )
 
 
 class WorkflowCompiler:
@@ -1464,6 +1488,8 @@ class WorkflowCompiler:
             # chat-image-attachment D-03: 서브 모델 비전 여부로 이미지 전달/마커 결정
             supports_vision=bool(getattr(sub_llm_model, "supports_vision", False)),
             provider=str(getattr(sub_llm_model, "provider", "")),
+            # agent-token-limit D7: 서브 정의의 토큰 예산 (독립 구조)
+            token_limit=sub_agent.token_limit,
         )
 
     @staticmethod
@@ -1771,16 +1797,11 @@ class WorkflowCompiler:
                 logger.warning("final_answer_node: no worker outputs found")
                 blocks.append("(수집된 결과 없음)")
 
-            # agent-recursion-limit D7-①: 한도 도달 시 안내 지시 블록 추가.
+            # agent-recursion-limit D7-① / agent-token-limit D9: 한도 도달 시 사유별
+            # 안내 지시 블록. limit_reason 키가 없는 재개 스냅샷은 일반 문구로 폴백.
             limit_notice = ""
             if state.get("limit_reached"):
-                limit_notice = (
-                    "\n\n[반복 한도 도달 안내]\n"
-                    "실행 반복 한도에 도달하여 지금까지 수집된 정보만으로 "
-                    "답변합니다. 이 사실을 답변에서 자연스럽게 언급하고, "
-                    "수집 정보가 부족한 부분은 추측하지 말고 부족하다고 "
-                    "명시하세요."
-                )
+                limit_notice = _render_limit_notice(state.get("limit_reason", ""))
 
             # worker-capability-denial-guard §6.2 Q1 (module-6 실런 a217f45e 확정):
             # supervisor 안내 블록은 이 노드에 닿지 않아 워커의 '어떤 도구로도
@@ -2912,6 +2933,7 @@ class WorkflowCompiler:
         *,
         supports_vision: bool = False,
         provider: str = "",
+        token_limit: int = TokenLimitPolicy.DEFAULT,
     ):
         # D-07: 인자로 받는다 — __init__을 거치지 않은 인스턴스(테스트)도 동작.
         strategy = strategy or TaskWithOriginStrategy()
@@ -2930,11 +2952,14 @@ class WorkflowCompiler:
             sub_limit = IterationLimitPolicy.sub_agent_limit(
                 state.get("max_iterations", IterationLimitPolicy.DEFAULT)
             )
+            # agent-token-limit D7 (Plan SC: SC-4): 토큰 예산은 서브 에이전트 자기
+            # 정의의 값 — 부모 절반 상속(state["token_limit"] // 2)은 폐기했다.
+            # 부모의 token_usage 합산(아래 out)은 유지한다.
             sub_initial = build_initial_state(
                 messages=sub_messages_in,
                 config=SupervisorConfig(
                     max_iterations=sub_limit,
-                    token_limit=state["token_limit"] // 2,
+                    token_limit=token_limit,
                 ),
                 available_workers=[],
                 # image-generation-tool D-09: 서브 그래프 이미지 상한 = 부모의 절반

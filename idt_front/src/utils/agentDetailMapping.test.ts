@@ -244,6 +244,25 @@ describe('mapDetailToForm — 서브에이전트/스킬 회귀 고정', () => {
     expect(form.maxIterations).toBe(500);
   });
 
+  // agent-token-limit D12
+  it('token_limit를 tokenLimit로 프라임한다', () => {
+    const form = mapDetailToForm(
+      makeDetail({ token_limit: 60000 }),
+      [makeModel()],
+      [],
+    );
+    expect(form.tokenLimit).toBe(60000);
+  });
+
+  it('token_limit 결측 시 기본값 50000으로 폴백한다 (구 서버 응답)', () => {
+    const form = mapDetailToForm(
+      makeDetail({ token_limit: undefined }),
+      [makeModel()],
+      [],
+    );
+    expect(form.tokenLimit).toBe(50000);
+  });
+
   it('max_iterations 결측 시 기본값 25로 폴백한다', () => {
     const form = mapDetailToForm(
       makeDetail({ max_iterations: undefined }),

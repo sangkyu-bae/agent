@@ -7,7 +7,8 @@ class TestSupervisorConfig:
         # agent-recursion-limit D1: 기본 한도 10 → 25 (IterationLimitPolicy.DEFAULT)
         config = SupervisorConfig()
         assert config.max_iterations == 25
-        assert config.token_limit == 8000
+        # agent-token-limit D3: 하드코딩 8000 → TokenLimitPolicy.DEFAULT (50000)
+        assert config.token_limit == 50000
         assert config.quality_gate_enabled is False
         assert config.max_retries_per_worker == 2
 

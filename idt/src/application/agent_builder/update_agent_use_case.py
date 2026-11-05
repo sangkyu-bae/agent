@@ -238,6 +238,7 @@ class UpdateAgentUseCase:
                 max_iterations=request.max_iterations,
                 llm_model_id=request.llm_model_id,
                 middleware_types=middleware_types,
+                token_limit=request.token_limit,
             )
 
             # 도구 구성 교체 (agent-update-tool-editing D §2.2):

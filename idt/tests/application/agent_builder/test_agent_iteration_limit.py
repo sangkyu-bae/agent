@@ -179,8 +179,11 @@ class TestSupervisorGuardLimitReached:
         mock_llm.with_structured_output.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_token_guard_does_not_set_limit_reached(self):
-        """token_limit 가드는 현행 유지 — limit_reached 미설정 (D5)."""
+    async def test_token_guard_sets_limit_reached(self):
+        """agent-token-limit D8: 토큰 가드도 limit_reached를 세운다 (구 D5 결정 폐기).
+
+        되물음 무한 루프 방지는 _challenge_reset이 담당하므로 플래그를 세워도
+        route는 final_answer로 간다 (not limit_reached 분기)."""
         from src.application.agent_builder.supervisor_hooks import DefaultHooks
         from src.application.agent_builder.supervisor_nodes import (
             create_supervisor_node,
@@ -193,7 +196,8 @@ class TestSupervisorGuardLimitReached:
         )
         result = await fn(_node_state(token_usage=9000, token_limit=8000))
         assert result["next_worker"] == "__end__"
-        assert "limit_reached" not in result
+        assert result["limit_reached"] is True
+        assert result["limit_reason"] == "token"
 
     def test_initial_state_has_limit_reached_false(self):
         from src.application.agent_builder.supervisor_nodes import (
@@ -283,6 +287,8 @@ class TestFinalAnswerLimitNotice:
             ],
             "token_usage": 0,
             "limit_reached": True,
+            # agent-token-limit D9: 반복 가드는 사유를 함께 세운다 (없으면 일반 문구)
+            "limit_reason": "iteration",
         }
         await node(state)
         assert "반복 한도" in self._system_content(mock_llm)
@@ -541,3 +547,29 @@ class TestRequestSchemas:
         with pytest.raises(Exception):
             UpdateAgentRequest(max_iterations=5)
         assert UpdateAgentRequest(max_iterations=1000).max_iterations == 1000
+
+
+class TestTokenLimitRequestSchemas:
+    """agent-token-limit D4 — 요청/응답 스키마 (Plan SC: SC-5)."""
+
+    def test_create_default_50000(self):
+        req = CreateAgentRequest(user_request="테스트", name="봇", system_prompt="지침")
+        assert req.token_limit == 50000
+
+    def test_create_range_validated(self):
+        with pytest.raises(Exception):
+            CreateAgentRequest(
+                user_request="테스트", name="봇", system_prompt="지침", token_limit=7999,
+            )
+        with pytest.raises(Exception):
+            CreateAgentRequest(
+                user_request="테스트", name="봇", system_prompt="지침", token_limit=500001,
+            )
+
+    def test_update_none_means_no_change(self):
+        assert UpdateAgentRequest().token_limit is None
+
+    def test_update_range_validated(self):
+        with pytest.raises(Exception):
+            UpdateAgentRequest(token_limit=100)
+        assert UpdateAgentRequest(token_limit=500000).token_limit == 500000

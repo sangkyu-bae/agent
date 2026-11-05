@@ -147,6 +147,7 @@ class GetAgentUseCase:
                 department_name=department_name,
                 temperature=agent.temperature,
                 max_iterations=agent.max_iterations,
+                token_limit=agent.token_limit,
                 middleware_types=middleware_types,
                 openers=openers,
                 document_generation_type=generation_type_info,

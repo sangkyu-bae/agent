@@ -34,6 +34,11 @@ class SupervisorState(TypedDict):
     # final_answer는 안내 지시를, run_agent_use_case는 payload 플래그를 부착한다.
     limit_reached: bool
 
+    # agent-token-limit D8: 한도 도달 사유 ("iteration" | "token" | ""). limit_reached와
+    # 함께 세워진다. final_answer 안내 문구·payload 사유 분기에만 쓰이고 라우팅은 읽지
+    # 않는다 — 라우팅은 limit_reached 하나로 충분하다.
+    limit_reason: str
+
     # wiki-guided-routing D4: 직전 워커의 도구 오류 요약(ToolErrorPolicy). 워커 노드가
     # 매번 덮어쓰고(성공 시 ""), supervisor는 비어 있지 않을 때만 "[직전 수집 실패]"
     # 블록을 렌더한 뒤 ""로 리셋한다 — 블록은 실패 직후 결정 1회에만 나타난다.

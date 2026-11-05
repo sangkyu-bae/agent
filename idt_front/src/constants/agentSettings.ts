@@ -6,3 +6,12 @@ export const MAX_ITERATIONS = {
   MIN: 10,
   MAX: 1000,
 } as const;
+
+// agent-token-limit D12: 토큰 예산 상수 — 백엔드 TokenLimitPolicy
+// (idt/src/domain/agent_builder/policies.py)의 프론트 미러.
+// 백엔드에서 DEFAULT/MIN/MAX를 변경하면 반드시 이 파일도 함께 수정한다.
+export const TOKEN_LIMIT = {
+  DEFAULT: 50000,
+  MIN: 8000,
+  MAX: 500000,
+} as const;

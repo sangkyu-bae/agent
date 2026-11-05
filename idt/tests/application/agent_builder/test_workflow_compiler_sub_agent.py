@@ -346,6 +346,8 @@ class TestSubAgentContextWiring:
         # chat-image-attachment D-03: 서브 모델 비전 여부·provider 가 래퍼로 함께 간다.
         wrap.assert_called_once_with(
             worker.worker_id, "G", fake, supports_vision=False, provider="openai",
+            # agent-token-limit D7: 서브 정의의 token_limit(픽스처 기본 50000) 전달
+            token_limit=50000,
         )
 
     @pytest.mark.asyncio

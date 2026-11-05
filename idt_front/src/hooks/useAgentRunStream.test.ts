@@ -205,6 +205,28 @@ describe('useAgentRunStream', () => {
     expect(result.current.charts).toEqual([chart]);
   });
 
+  it('captures limit_reached/limit_reason on agent_answer_completed (agent-token-limit D11)', () => {
+    const { result } = renderHook(() =>
+      useAgentRunStream({ runId: 'r1', agentId: 'a', query: 'q' }),
+    );
+    act(() =>
+      emit('agent_answer_completed', {
+        answer: '답', tools_used: [], limit_reached: true, limit_reason: 'token',
+      }),
+    );
+    expect(result.current.limitReached).toBe(true);
+    expect(result.current.limitReason).toBe('token');
+  });
+
+  it('limit fields default to false/null when absent (구 서버 호환)', () => {
+    const { result } = renderHook(() =>
+      useAgentRunStream({ runId: 'r1', agentId: 'a', query: 'q' }),
+    );
+    act(() => emit('agent_answer_completed', { answer: '답', tools_used: [] }));
+    expect(result.current.limitReached).toBe(false);
+    expect(result.current.limitReason).toBeNull();
+  });
+
   it('captures sources on agent_answer_completed (agent-run-source-citations)', () => {
     const { result } = renderHook(() =>
       useAgentRunStream({ runId: 'r1', agentId: 'a', query: 'q' }),
