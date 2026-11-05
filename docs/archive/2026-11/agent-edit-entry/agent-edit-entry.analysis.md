@@ -2,8 +2,8 @@
 
 > **Feature**: agent-edit-entry (idt_front)
 > **Date**: 2026-11-05
-> **Design**: [agent-edit-entry.design.md](../02-design/features/agent-edit-entry.design.md)
-> **Worktree**: `wt/agent-edit-entry` (branch `feature/agent-edit-entry`, 미커밋)
+> **Design**: [agent-edit-entry.design.md](agent-edit-entry.design.md)
+> **Branch**: `feature/agent-edit-entry` (PR #93 머지)
 
 ---
 
