@@ -7,7 +7,7 @@
 > **Author**: 배상규
 > **Date**: 2026-11-05
 > **Status**: Draft
-> **Planning Doc**: [agent-kb-quick-setup.plan.md](../../01-plan/features/agent-kb-quick-setup.plan.md)
+> **Planning Doc**: [agent-kb-quick-setup.plan.md](agent-kb-quick-setup.plan.md)
 
 ---
 
