@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Literal
 
-from src.domain.agent_builder.policies import IterationLimitPolicy
+from src.domain.agent_builder.policies import IterationLimitPolicy, TokenLimitPolicy
 from src.domain.llm_model.entity import LlmModel
 
 # action-category-compose-node D-01: 허용값은 ToolCategoryPolicy.ALLOWED 와 같다.
@@ -16,7 +16,8 @@ class SupervisorConfig:
     """Supervisor 루프 실행 설정. WorkflowCompiler에 전달."""
 
     max_iterations: int = IterationLimitPolicy.DEFAULT
-    token_limit: int = 8000
+    # agent-token-limit D3: 하드코딩 8000 → 정책 상수 (에이전트별 값은 실행 시 주입)
+    token_limit: int = TokenLimitPolicy.DEFAULT
     quality_gate_enabled: bool = False
     max_retries_per_worker: int = 2
 
@@ -108,6 +109,9 @@ class AgentDefinition:
     # agent-recursion-limit: supervisor 반복 한도 (기본 25, 10~1000).
     # 실행 시 SupervisorConfig·LangGraph recursion_limit의 단일 소스.
     max_iterations: int = IterationLimitPolicy.DEFAULT
+    # agent-token-limit D3: supervisor 토큰 예산 (기본 50000, 8000~500000).
+    # 실행 시 SupervisorConfig.token_limit의 단일 소스. 단위는 산출 글자 수 ÷ 4 추정치.
+    token_limit: int = TokenLimitPolicy.DEFAULT
     # agent-user-context: 사용자 컨텍스트 prepend opt-out flag (default True).
     # WorkflowCompiler.compile()에서 prepend 여부 결정에 사용.
     include_user_context: bool = True
@@ -123,6 +127,7 @@ class AgentDefinition:
         if not (0.0 <= self.temperature <= 2.0):
             raise ValueError(f"temperature must be 0.0~2.0, got {self.temperature}")
         IterationLimitPolicy.validate(self.max_iterations)
+        TokenLimitPolicy.validate(self.token_limit)
         if self.visibility == "department" and self.department_id is None:
             raise ValueError("department visibility requires department_id")
 
@@ -144,6 +149,7 @@ class AgentDefinition:
         max_iterations: int | None = None,
         llm_model_id: str | None = None,
         middleware_types: list[str] | None = None,
+        token_limit: int | None = None,
     ) -> None:
         """업데이트 적용."""
         if middleware_types is not None:
@@ -161,6 +167,8 @@ class AgentDefinition:
             self.temperature = temperature
         if max_iterations is not None:
             self.max_iterations = max_iterations
+        if token_limit is not None:
+            self.token_limit = token_limit
         if llm_model_id is not None:
             self.llm_model_id = llm_model_id
         self.__post_init__()

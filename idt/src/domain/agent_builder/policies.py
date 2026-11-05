@@ -188,6 +188,27 @@ class IterationLimitPolicy:
         )
 
 
+class TokenLimitPolicy:
+    """supervisor 토큰 예산 도메인 규칙 (agent-token-limit D2).
+
+    단위는 SupervisorState.token_usage — 워커 산출 글자 수 ÷ 4의 누적 추정치이며
+    실제 LLM 토큰이 아니다. IterationLimitPolicy와 단위가 달라 공통 추상을 두지
+    않는다. 서브 에이전트는 자기 정의의 값을 쓰므로 상속 계수가 없다 (D7).
+    """
+
+    DEFAULT = 50000
+    MIN = 8000
+    MAX = 500000
+
+    @classmethod
+    def validate(cls, value: int) -> None:
+        if not (cls.MIN <= value <= cls.MAX):
+            raise ValueError(
+                f"token_limit는 {cls.MIN}~{cls.MAX} 범위여야 합니다. "
+                f"(입력값: {value})"
+            )
+
+
 class QualityGatePolicy:
     """워커 응답 품질 검증 도메인 규칙."""
 
