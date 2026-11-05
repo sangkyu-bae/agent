@@ -78,9 +78,9 @@
 
 | Phase | Document | Status |
 |-------|----------|--------|
-| Plan | [agent-kb-quick-setup.plan.md](../01-plan/features/agent-kb-quick-setup.plan.md) | ✅ Finalized |
-| Design | [agent-kb-quick-setup.design.md](../02-design/features/agent-kb-quick-setup.design.md) | ✅ Finalized (Act-1 갱신 반영) |
-| Check | [agent-kb-quick-setup.analysis.md](../03-analysis/agent-kb-quick-setup.analysis.md) | ✅ Complete (Match 98.9%) |
+| Plan | [agent-kb-quick-setup.plan.md](agent-kb-quick-setup.plan.md) | ✅ Finalized |
+| Design | [agent-kb-quick-setup.design.md](agent-kb-quick-setup.design.md) | ✅ Finalized (Act-1 갱신 반영) |
+| Check | [agent-kb-quick-setup.analysis.md](agent-kb-quick-setup.analysis.md) | ✅ Complete (Match 98.9%) |
 | Act | Current document | ✅ |
 
 ---

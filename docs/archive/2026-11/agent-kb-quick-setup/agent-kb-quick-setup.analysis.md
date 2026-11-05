@@ -1,8 +1,8 @@
 # agent-kb-quick-setup Gap Analysis (Check)
 
 > **Date**: 2026-11-05
-> **Plan**: [agent-kb-quick-setup.plan.md](../01-plan/features/agent-kb-quick-setup.plan.md)
-> **Design**: [agent-kb-quick-setup.design.md](../02-design/features/agent-kb-quick-setup.design.md)
+> **Plan**: [agent-kb-quick-setup.plan.md](agent-kb-quick-setup.plan.md)
+> **Design**: [agent-kb-quick-setup.design.md](agent-kb-quick-setup.design.md)
 > **코드**: worktree `../wt/kb-quick-setup` (브랜치 `feature/agent-kb-quick-setup`, 미커밋)
 > **방법**: gap-detector 정적 분석(3축) + 런타임 검증(L1 API, L2 UI, L3 E2E — 워크트리 백엔드 :8010 + 프론트 :5176, 실 DB·Qdrant·LLM)
 
