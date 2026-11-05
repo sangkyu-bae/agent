@@ -4,6 +4,7 @@
 |---------|-------|:----------:|-------------|------|
 | tool-access-control | completed | 95.0% (Check 90.2% → Act-1) | 2026-11-04 | [tool-access-control/](tool-access-control/) |
 | sidebar-agent-list | completed | 99.8% (Check 99.0% → Act-1) | 2026-11-04 | [sidebar-agent-list/](sidebar-agent-list/) |
+| agent-edit-entry | completed | 100% (Check 90% → Act-1) | 2026-11-05 | [agent-edit-entry/](agent-edit-entry/) |
 
 > 백엔드·프론트 전용 사이클은 `idt/docs/archive/2026-11/`, `idt_front/docs/archive/2026-11/` 에 있다.
 
@@ -25,3 +26,8 @@
 | sidebar-agent-list | 사용자 정의 폴더(폴더 생성) — 백엔드 필요 | 기능 확장 | 요청 시 |
 | sidebar-agent-list | 에이전트 관리·필터·숨김 (참고 사이트의 관리 아이콘) | 기능 확장 | 요청 시 |
 | sidebar-agent-list | 하위 컴포넌트 props interface 위치(G5) | 스타일 | 해당 파일 수정 시 |
+| agent-edit-entry | `cn`이 클래스를 병합하지 않아 컴포넌트 기본 display 클래스가 className의 `hidden`을 이김 — 다른 사용처 점검 | 기존 결함 | 소형 사이클 후보 |
+| agent-edit-entry | 내 에이전트 목록 응답에 `can_edit` 추가 — 지금 채팅 헤더는 `source_type`으로 추정 | API 보강 | 편집 권한 정책 변경 시 |
+| agent-edit-entry | 구독 에이전트에서 수정 아이콘 미노출 화면 확인 (단위 테스트로만 확인) | 확인 | 구독 데이터가 있을 때 |
+| agent-edit-entry | 저장 후 브라우저 뒤로가기 시 편집 화면 재진입 (`navigate` push) — `replace` 검토 | UX 소형 | 요청 시 |
+| agent-edit-entry | 사이드바 항목 hover 수정 아이콘 | 기능 확장 | 요청 시 |

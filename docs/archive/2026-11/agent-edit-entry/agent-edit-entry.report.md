@@ -3,7 +3,7 @@
 > **Feature**: agent-edit-entry (idt_front)
 > **Author**: 배상규
 > **Date**: 2026-11-05
-> **Status**: Completed (미커밋, worktree `wt/agent-edit-entry` / 브랜치 `feature/agent-edit-entry`)
+> **Status**: Completed (PR #93 머지)
 
 ---
 
@@ -67,9 +67,9 @@
 
 | 문서 | 경로 |
 |------|------|
-| Plan | `docs/01-plan/features/agent-edit-entry.plan.md` |
-| Design | `docs/02-design/features/agent-edit-entry.design.md` |
-| Analysis | `docs/03-analysis/agent-edit-entry.analysis.md` |
+| Plan | `agent-edit-entry.plan.md` |
+| Design | `agent-edit-entry.design.md` |
+| Analysis | `agent-edit-entry.analysis.md` |
 
 ---
 

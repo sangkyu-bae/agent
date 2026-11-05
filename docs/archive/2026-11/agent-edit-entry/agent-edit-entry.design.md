@@ -6,7 +6,7 @@
 > **Author**: 배상규
 > **Date**: 2026-11-05
 > **Status**: Draft
-> **Planning Doc**: [agent-edit-entry.plan.md](../../01-plan/features/agent-edit-entry.plan.md)
+> **Planning Doc**: [agent-edit-entry.plan.md](agent-edit-entry.plan.md)
 
 ---
 
