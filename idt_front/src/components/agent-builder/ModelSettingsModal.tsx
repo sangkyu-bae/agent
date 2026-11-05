@@ -97,6 +97,7 @@ const ModelSettingsModal = ({
             <>
               <Dropdown
                 variant="model"
+                ariaLabel="모델"
                 value={model}
                 onChange={setModel}
                 placeholder="모델 선택"

@@ -139,3 +139,26 @@ describe('applyToolsToForm — compose 경로와 공유되는 계약', () => {
     expect(slice.tools).toEqual([RAG_CATALOG_TOOL_ID, 'internal:a']);
   });
 });
+
+describe('wizardResultToForm — kbId (agent-kb-quick-setup FR-13)', () => {
+  const base: WizardResult = {
+    systemPrompt: 'p',
+    promptEdited: false,
+    toolIds: ['internal:a'],
+    suggestedName: '봇',
+    sessionId: null,
+    versionId: null,
+  };
+
+  it('kbId 가 있으면 RAG 도구와 kb_id 가 프리필된다', () => {
+    const form = wizardResultToForm({ ...base, kbId: 'kb-1' }, FORM, { catalogTools: CATALOG });
+    expect(form.tools).toContain(RAG_CATALOG_TOOL_ID);
+    expect(form.toolConfigs[RAG_CATALOG_TOOL_ID]?.kb_id).toBe('kb-1');
+  });
+
+  it('kbId 가 없으면 기존 결과와 동일하다', () => {
+    const form = wizardResultToForm(base, FORM, { catalogTools: CATALOG });
+    expect(form.tools).toEqual(['internal:a']);
+    expect(form.toolConfigs[RAG_CATALOG_TOOL_ID]).toBeUndefined();
+  });
+});

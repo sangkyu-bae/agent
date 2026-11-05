@@ -14,6 +14,7 @@ import DocumentGeneratorConfigModal from './DocumentGeneratorConfigModal';
 import PresentationGeneratorConfigModal from './PresentationGeneratorConfigModal';
 import ImageGenerationConfigModal from './ImageGenerationConfigModal';
 import SubAgentManagerModal from './SubAgentManagerModal';
+import KnowledgeDocsBlock from './KnowledgeDocsBlock';
 import { useSkills } from '@/hooks/useSkills';
 import { useMiddlewareCatalog } from '@/hooks/useMiddlewareCatalog';
 import type { MiddlewareCatalogItem } from '@/types/middleware';
@@ -84,6 +85,9 @@ interface LeftConfigPanelProps {
    * 비관리자 카탈로그는 허용 도구만 오므로, 카탈로그에 없는 붙은 도구는 이걸로 칩을 그린다.
    */
   toolAccess?: ToolAccessInfo[] | null;
+  /** agent-kb-quick-setup FR-06/07: 지식 문서 블록이 KB 를 연결/해제할 때 (create 전용) */
+  onKbAttached?: (kbId: string) => void;
+  onKbDetached?: () => void;
 }
 
 /**
@@ -111,6 +115,8 @@ const LeftConfigPanel = ({
   onRetryModels,
   onDraftArgKeyChange,
   toolAccess,
+  onKbAttached,
+  onKbDetached,
 }: LeftConfigPanelProps) => {
   const [leftTab, setLeftTab] = useState<LeftTabId>('form');
   const [isModelModalOpen, setModelModalOpen] = useState(false);
@@ -379,10 +385,28 @@ const LeftConfigPanel = ({
           }
         >
           {/* agent-builder-edit-mapping FR-6 유예 방어: 도구 워커 교체는 후속 feature */}
-          {isEditMode && (
-            <p className="mb-2 rounded-lg bg-amber-50 px-3 py-2 text-[11.5px] text-amber-700">
-              도구 구성 변경은 아직 저장되지 않습니다 (모델·지침·서브에이전트·스킬은 저장됨)
-            </p>
+          {isEditMode ? (
+            <>
+              <p className="mb-2 rounded-lg bg-amber-50 px-3 py-2 text-[11.5px] text-amber-700">
+                도구 구성 변경은 아직 저장되지 않습니다 (모델·지침·서브에이전트·스킬은 저장됨)
+              </p>
+              {/* agent-kb-quick-setup §5.1: 도구 구성 미저장 유예와 정합 — edit 은 안내만 */}
+              <p className="mb-2 text-[11.5px] text-zinc-400">
+                지식 문서 연결은 새 에이전트 생성 시 가능합니다
+              </p>
+            </>
+          ) : (
+            onKbAttached && onKbDetached && (
+              // 생성 폼에는 공개 범위 필드가 없어(서버 기본 private) KB 범위는 개인으로 만든다.
+              <KnowledgeDocsBlock
+                mode="studio"
+                agentName={form.name}
+                visibility="private"
+                attachedKbId={ragConfig?.kb_id}
+                onAttached={(kbId) => onKbAttached(kbId)}
+                onDetach={onKbDetached}
+              />
+            )
           )}
           {builtinTools.length > 0 && (
             <ul className="mb-2 space-y-2">

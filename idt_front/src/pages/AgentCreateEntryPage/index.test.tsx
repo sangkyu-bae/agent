@@ -496,6 +496,8 @@ describe('③ 도구 확인', () => {
       .querySelector('input')!;
     await user.click(excel);
     await user.click(screen.getByRole('button', { name: '이 도구로 진행' }));
+    // agent-kb-quick-setup FR-11: 문서 단계(로컬)를 건너뛰어야 PROMPT 요청이 나간다
+    await user.click(await screen.findByRole('button', { name: '건너뛰기' }));
 
     await waitFor(() => expect(stub.requests).toHaveLength(2));
     expect(stub.requests[1].tool_ids).toEqual(['internal:a']);
@@ -506,6 +508,8 @@ describe('③ 도구 확인', () => {
   it('확정된 의도를 에코백한다', async () => {
     const { user, stub } = await goToTools();
     await user.click(screen.getByRole('button', { name: '이 도구로 진행' }));
+    // agent-kb-quick-setup FR-11: 문서 단계(로컬)를 건너뛰어야 PROMPT 요청이 나간다
+    await user.click(await screen.findByRole('button', { name: '건너뛰기' }));
 
     await waitFor(() => expect(stub.requests).toHaveLength(2));
     expect(stub.requests[1].intent).toEqual({
@@ -586,6 +590,8 @@ describe('④ 프롬프트 검토', () => {
     const user = await submitDescription();
     await screen.findByText('이 도구들을 사용할까요?');
     await user.click(screen.getByRole('button', { name: '이 도구로 진행' }));
+    // agent-kb-quick-setup FR-11: 문서 단계(로컬)를 건너뛰어야 PROMPT 요청이 나간다
+    await user.click(await screen.findByRole('button', { name: '건너뛰기' }));
     await screen.findByText('시스템 프롬프트를 확인해주세요');
     return { user, stub };
   };
@@ -682,6 +688,8 @@ describe('스튜디오 핸드오프', () => {
     const user = await submitDescription();
     await screen.findByText('이 도구들을 사용할까요?');
     await user.click(screen.getByRole('button', { name: '이 도구로 진행' }));
+    // agent-kb-quick-setup FR-11: 문서 단계(로컬)를 건너뛰어야 PROMPT 요청이 나간다
+    await user.click(await screen.findByRole('button', { name: '건너뛰기' }));
     await screen.findByText('시스템 프롬프트를 확인해주세요');
     return user;
   };

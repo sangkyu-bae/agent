@@ -1206,7 +1206,8 @@ describe('AgentBuilderPage 이미지 생성 도구 (image-generation-tool)', () 
     await enterCreateView(user);
 
     await user.click(screen.getByRole('button', { name: '모델 설정' }));
-    await user.click(await screen.findByRole('combobox'));
+    // agent-kb-quick-setup: 도구함 지식 문서 블록에도 combobox 가 있어 이름으로 고른다
+    await user.click(await screen.findByRole('combobox', { name: '모델' }));
     expect(await screen.findByRole('option', { name: /GPT-4o/ })).toBeInTheDocument();
     expect(screen.queryByRole('option', { name: /GPT Image 1/ })).not.toBeInTheDocument();
   });
