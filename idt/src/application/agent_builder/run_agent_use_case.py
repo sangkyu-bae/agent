@@ -151,6 +151,8 @@ class _StreamState:
     final_messages: list = field(default_factory=list)
     # agent-recursion-limit D7: supervisor 가드의 limit_reached 캡처 → payload 플래그.
     limit_reached: bool = False
+    # agent-token-limit D10: 도달 사유 latch (최초값 유지). 빈 값이면 payload 키 생략.
+    limit_reason: str = ""
     # supervisor-chart-builder-node: chart_builder 노드가 생성한 Chart.js config.
     charts: list = field(default_factory=list)
     # analysis-source-preservation: analysis_node가 방출한 원천 데이터 채널.
@@ -476,6 +478,8 @@ class RunAgentUseCase:
                 answer, tools_used, message_id,
                 approval_pending=bool(approval_id), approval_id=approval_id,
                 limit_reached=state.limit_reached, charts=state.charts,
+                # agent-token-limit D10: 빈 문자열이면 _answer_payload가 키를 생략
+                limit_reason=state.limit_reason,
                 # tool-access-control FR-11 (additive): 비어 있으면 키 생략
                 excluded_tools=self._excluded_payload(state),
             )
@@ -772,6 +776,8 @@ class RunAgentUseCase:
         # Design Ref: agent-run-feedback-wiring §4.3 (D-04) — 강등 답변도 평가 대상.
         answer_payload = self._answer_payload(
             answer, tools_used, message_id, limit_reached=True,
+            # agent-token-limit D10: GraphRecursionError 강등은 반복 한도 계열
+            limit_reason="iteration",
             # tool-access-control Check G-03: 강등 답변도 제외 도구를 알린다
             excluded_tools=self._excluded_payload(state),
         )
@@ -982,7 +988,11 @@ class RunAgentUseCase:
         workflow = agent.to_workflow_definition()
         workflow = await self._inject_attached_skills(workflow, agent, request_id)
         # agent-recursion-limit D1: 에이전트별 반복 한도를 단일 소스로 주입.
-        sv_config = SupervisorConfig(max_iterations=agent.max_iterations)
+        # agent-token-limit D6: 토큰 예산도 같은 단일 소스에서 주입.
+        sv_config = SupervisorConfig(
+            max_iterations=agent.max_iterations,
+            token_limit=agent.token_limit,
+        )
         # agent-memory-injection §6.2 D8: 대화 실행 경로에서만, compile 직전 1회.
         # Act-1 (Analysis G1): 대화 여부는 호출자의 inject_memory opt-in 으로만
         # 판정한다 — 웹훅·백그라운드 잡도 auth_ctx 를 넘기므로 auth_ctx 유무는
@@ -1360,8 +1370,10 @@ class RunAgentUseCase:
             llm_model=llm_model,
             temperature=agent.temperature,
             request_id=request_id,
+            # agent-token-limit D6 (Plan FR-04): 승인 재개도 같은 값.
             supervisor_config=SupervisorConfig(
-                max_iterations=agent.max_iterations
+                max_iterations=agent.max_iterations,
+                token_limit=agent.token_limit,
             ),
             depth=0,
             visited={agent.id},
@@ -1496,6 +1508,9 @@ class RunAgentUseCase:
         # agent-recursion-limit D7: supervisor 가드의 limit_reached 캡처 (latch).
         if isinstance(output, dict) and output.get("limit_reached"):
             state.limit_reached = True
+            # agent-token-limit D10: 사유도 latch — 최초값 유지
+            if not state.limit_reason:
+                state.limit_reason = str(output.get("limit_reason") or "")
         # supervisor-chart-builder-node: chart_builder 노드 output의 charts 캡처.
         # truthy일 때만 갱신 → 빈 배열이 유효 charts를 덮어쓰지 않음.
         if isinstance(output, dict) and output.get("charts"):

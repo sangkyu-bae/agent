@@ -347,6 +347,8 @@ def build_initial_state(
         "forced_worker": "",
         "skipped_workers": [],
         "limit_reached": False,
+        # agent-token-limit D8
+        "limit_reason": "",
         "last_worker_error": "",
         # supervisor-early-finish-fix D-02 / D-05
         "last_worker_empty": "",
@@ -445,18 +447,24 @@ def create_supervisor_node(
             return {
                 "next_worker": "__end__",
                 "limit_reached": True,
+                # agent-token-limit D8: 도달 사유 — final_answer 문구·payload 분기용
+                "limit_reason": "iteration",
                 **_challenge_reset(),
             }
 
         if state["token_usage"] >= state["token_limit"]:
             logger.warning("token_limit reached",
-                           token_usage=state["token_usage"])
-            # supervisor-early-finish-fix D-05 (Gap-06): 이 가드는 D5 결정에 따라
-            # limit_reached를 세우지 않는다(테스트로 고정). 따라서 pending이 남으면
-            # route가 supervisor로 되돌리고 같은 가드가 다시 걸려 무한 루프가 된다.
-            # iteration_count도 이 경로에선 증가하지 않아 한도 가드가 막지 못한다.
+                           token_usage=state["token_usage"],
+                           token_limit=state["token_limit"])
+            # agent-token-limit D8 (Plan FR-06): 반복 가드와 같은 종료 경로를 탄다.
+            # limit_reached가 서면 route_to_worker_or_final이 워커 미실행이어도
+            # final_answer로 우회하고 되물음 분기(not limit_reached)도 막힌다.
+            # 구 D5(limit_reached 미설정)는 폐기 — 되물음 무한 루프 방지는
+            # _challenge_reset(pending=False)이 담당하므로 플래그와 무관하다.
             return {
                 "next_worker": "__end__",
+                "limit_reached": True,
+                "limit_reason": "token",
                 **_challenge_reset(),
             }
 
