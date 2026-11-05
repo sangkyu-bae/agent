@@ -1218,7 +1218,13 @@ class RunAgentUseCase:
         if ev_type == "on_chain_start":
             return self._map_chain_start(name, node_names, seq, run_id, state)
         if ev_type == "on_chain_end":
-            return self._map_chain_end(name, data, node_names, seq, run_id, state)
+            # agent-token-limit Act-1 (Analysis G-2): 서브 에이전트 그래프의 노드
+            # 이벤트도 부모 스트림에 올라온다 (실측: 최상위 노드 parent_ids 1,
+            # 최상위 그래프 0, 중첩 노드 3). 한도 신호는 최상위에서만 latch한다.
+            nested = len(raw.get("parent_ids") or []) > 1
+            return self._map_chain_end(
+                name, data, node_names, seq, run_id, state, nested=nested,
+            )
         if ev_type == "on_tool_start":
             return self._map_tool_start(name, raw, data, seq, run_id, state)
         if ev_type == "on_tool_end":
@@ -1500,13 +1506,16 @@ class RunAgentUseCase:
     def _map_chain_end(
         self, name: str, data: dict, node_names: set[str],
         seq: _SeqCounter, run_id: Optional[RunId], state: _StreamState,
+        *, nested: bool = False,
     ) -> Optional[AgentRunEvent]:
         # 어떤 chain_end이든 messages가 있으면 final_messages 갱신 (top-level이 마지막)
         output = data.get("output")
         if isinstance(output, dict) and "messages" in output:
             state.final_messages = list(output["messages"])
         # agent-recursion-limit D7: supervisor 가드의 limit_reached 캡처 (latch).
-        if isinstance(output, dict) and output.get("limit_reached"):
+        # agent-token-limit Act-1 (G-2): 중첩(서브 에이전트) 이벤트는 제외 — 서브
+        # 한도 도달이 부모 payload에 새면 부모 답변(안내 없음)과 배지가 어긋난다.
+        if not nested and isinstance(output, dict) and output.get("limit_reached"):
             state.limit_reached = True
             # agent-token-limit D10: 사유도 latch — 최초값 유지
             if not state.limit_reason:

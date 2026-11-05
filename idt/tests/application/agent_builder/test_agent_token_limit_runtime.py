@@ -337,3 +337,57 @@ class TestSubAgentTokenLimit:
             tool_access=None, excluded_sink=None,
         )
         assert compiler._wrap_sub_agent.call_args.kwargs["token_limit"] == 33333
+
+
+# ── Act-1 (Analysis G-2): 중첩 그래프 이벤트는 latch하지 않는다 ─────────────
+
+
+class TestNestedLimitLatch:
+    @staticmethod
+    def _answer(events):
+        return next(
+            e for e in events
+            if e.event_type == AgentRunEventType.ANSWER_COMPLETED
+        )
+
+    @pytest.mark.asyncio
+    async def test_nested_sub_agent_guard_does_not_latch_parent(self):
+        """서브 에이전트 supervisor(parent_ids 3)의 한도 신호는 부모 payload에 안 올라간다."""
+        agent = _make_agent()
+        events_in = [{
+            "event": "on_chain_end", "name": "supervisor",
+            "parent_ids": ["root", "sub_w", "sub_graph"],
+            "data": {"output": {
+                "next_worker": "__end__",
+                "limit_reached": True, "limit_reason": "token",
+            }},
+            "metadata": {}, "run_id": "sub-sv",
+        }]
+        use_case, _, _ = _make_stream_use_case(agent, astream_event_list=events_in)
+        events = await _collect(use_case.stream(
+            agent.id, RunAgentRequest(query="x", user_id="user-1"), "req-1",
+        ))
+        payload = self._answer(events).payload
+        assert "limit_reached" not in payload
+        assert "limit_reason" not in payload
+
+    @pytest.mark.asyncio
+    async def test_top_level_guard_still_latches(self):
+        """최상위 supervisor(parent_ids 1)와 parent_ids 부재(구 픽스처)는 기존대로 latch."""
+        agent = _make_agent()
+        events_in = [{
+            "event": "on_chain_end", "name": "supervisor",
+            "parent_ids": ["root"],
+            "data": {"output": {
+                "next_worker": "__end__",
+                "limit_reached": True, "limit_reason": "iteration",
+            }},
+            "metadata": {}, "run_id": "sv",
+        }]
+        use_case, _, _ = _make_stream_use_case(agent, astream_event_list=events_in)
+        events = await _collect(use_case.stream(
+            agent.id, RunAgentRequest(query="x", user_id="user-1"), "req-1",
+        ))
+        payload = self._answer(events).payload
+        assert payload["limit_reached"] is True
+        assert payload["limit_reason"] == "iteration"

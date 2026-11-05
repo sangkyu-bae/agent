@@ -206,9 +206,11 @@ Repository: `agent_definition_repository.py:40`(save), `:117`(update), `:432`(ro
 # src/application/agent_builder/schemas.py
 class CreateAgentRequest:      token_limit: int = Field(50000, ge=8000, le=500000)
 class UpdateAgentRequest:      token_limit: int | None = Field(None, ge=8000, le=500000)   # None = 변경 안 함
-class AgentResponse:           token_limit: int = 50000
-class AgentDetailResponse:     token_limit: int = 50000   # edit 폼 프라임용
+class CreateAgentResponse:     token_limit: int = 50000
+class GetAgentResponse:        token_limit: int = 50000   # edit 폼 프라임용
 ```
+
+> Check 정정(G-4): `UpdateAgentResponse`는 `max_iterations`도 싣지 않는 기존 구조라 `token_limit`도 싣지 않는다. 프론트는 수정 후 상세를 재조회하므로 영향 없음. §4.1의 PUT 행은 "요청만"으로 읽는다(실제 메서드는 PATCH).
 
 범위 밖 → FastAPI 422 (`ge/le`). 도메인 `ValueError`는 2차 방어(유스케이스 테스트에서 직접 검증).
 
@@ -223,7 +225,7 @@ class AgentDetailResponse:     token_limit: int = 50000   # edit 폼 프라임�
 }
 ```
 
-`_answer_payload`는 truthy 플래그만 싣는다 — `limit_reason=""`이면 키가 생략되므로 기존 계약 테스트(`test_answer_payload_contract`)와 호환.
+`_answer_payload`는 truthy 플래그만 싣는다 — `limit_reason=""`이면 키가 생략된다. 검증: `test_agent_token_limit_runtime.py::TestAnswerCompletedLimitReason::test_reason_absent_when_not_reached` (Check 정정 G-6: 이전에 적은 `test_answer_payload_contract`는 존재하지 않는 이름).
 
 ---
 
@@ -264,7 +266,7 @@ class AgentDetailResponse:     token_limit: int = 50000   # edit 폼 프라임�
 |---|---|
 | `"token"` | 토큰 예산 한도에 도달해 지금까지 수집한 정보로 답변했습니다. 설정 탭에서 토큰 예산을 올릴 수 있습니다. |
 | `"iteration"` | 반복 실행 한도에 도달해 지금까지 수집한 정보로 답변했습니다. |
-| 기타(`limit_reached`만 True) | 실행 한도에 도달해 지금까지 수집한 정보로 답변했습니다. |
+| 기타(`limit_reached`만 True) | 실행 한도에 도달해 지금까지 수집한 정보로 답변했습니다. — Check 정정(G-1): 유틸 `limitReachedNotice`의 폴백으로만 존재한다. `Message`는 `limitReason`만 가지므로 배지 경로에서는 도달하지 않으며, 현 서버는 `limit_reached`와 사유를 항상 함께 보낸다. |
 
 ### 5.3 Component List
 
@@ -273,6 +275,7 @@ class AgentDetailResponse:     token_limit: int = 50000   # edit 폼 프라임�
 | `LimitNumberField` (신규) | `src/components/agent-builder/settings/LimitNumberField.tsx` | 숫자 입력 + blur/Enter clamp + 복원 버튼. 반복 한도·토큰 한도가 공유. props: `id, label, value, min, max, defaultValue, onChange, rangeHint` |
 | `SettingsPanel` (수정) | `settings/SettingsPanel.tsx` | Recursion Limit 섹션을 `LimitNumberField`로 교체, Token Limit 섹션 추가. props `tokenLimit`, `onTokenLimitChange` |
 | `AgentTestPanel` (수정) | `agent-builder/AgentTestPanel.tsx` | `tokenLimit`·`onTokenLimitChange` 패스스루 |
+| `StudioLayout` (수정, Check 추가) | `agent-builder/StudioLayout.tsx` | 페이지→`AgentTestPanel` 사이의 `onTokenLimitChange` 패스스루 (Do에서 발견) |
 | `AgentBuilderPage` (수정) | `pages/AgentBuilderPage/index.tsx` | form 초기값 `tokenLimit: TOKEN_LIMIT.DEFAULT`, create/update 전송 `token_limit`, 핸들러 |
 | `agentDetailMapping` (수정) | `utils/agentDetailMapping.ts` | `tokenLimit: detail.token_limit ?? TOKEN_LIMIT.DEFAULT` |
 | `limitReachedNotice` (신규) | `src/utils/limitNotice.ts` | `(reason, reached) → string | null` |
@@ -435,7 +438,7 @@ class AgentDetailResponse:     token_limit: int = 50000   # edit 폼 프라임�
 | D7 | `_compile_sub_agent`가 `sub_agent.token_limit`을 `_wrap_sub_agent(token_limit=…)`로 전달. 기본 인자 `TokenLimitPolicy.DEFAULT`. `state["token_limit"] // 2` 제거. 부모의 `token_usage += sub_token_usage` 합산은 유지 | 사용자 결정(독립), 테스트 하위호환 |
 | D8 | 토큰 가드 반환에 `limit_reached: True, limit_reason: "token"` 추가. 반복 가드에 `limit_reason: "iteration"` 추가. `SupervisorState.limit_reason: str`, 초기값 `""`. `route_to_worker_or_final`·`_challenge_reset` 무변경 | 라우팅은 이미 `limit_reached`로 final_answer 우회. 되물음 분기는 `not limit_reached`로 자동 차단 |
 | D9 | final_answer 안내 블록을 사유별 3종 문구로 분기(`token` / `iteration` / 기타). 블록 구조·위치 동일 | 기존 D7-① 확장 |
-| D10 | `_StreamState.limit_reason`, chain_end latch에서 `limit_reached`가 True일 때 `limit_reason` 캡처(최초값 유지). `_answer_payload(limit_reason=…)`. GraphRecursionError 강등 경로는 `"iteration"` | truthy-only 계약 유지 |
+| D10 | `_StreamState.limit_reason`, chain_end latch에서 `limit_reached`가 True일 때 `limit_reason` 캡처(최초값 유지). `_answer_payload(limit_reason=…)`. GraphRecursionError 강등 경로는 `"iteration"`. **Act-1 (Check G-2)**: latch는 최상위 이벤트(`parent_ids` 길이 ≤ 1)에서만 — 서브 에이전트 그래프의 가드 신호가 부모 payload에 새지 않게 한다 | truthy-only 계약 유지. 중첩 이벤트 전파는 LangGraph 소형 실험으로 확인(최상위 노드 1·최상위 그래프 0·중첩 3) |
 | D11 | 프론트 타입 `limit_reached?: boolean; limit_reason?: 'iteration' \| 'token'`(websocket.ts), `Message.limitReason?`, 훅·페이지 매핑, `utils/limitNotice.ts`, `MessageBubble` warning p. 실시간 전용(히스토리 없음) | `excluded_tools` 선례 |
 | D12 | `LimitNumberField` 추출(반복·토큰 공용), `SettingsPanel` 토큰 섹션, `TOKEN_LIMIT` 상수, form `tokenLimit`, create/update 전송, detail 프라임 | 중복 clamp 로직 방지 |
 
@@ -476,3 +479,4 @@ class AgentDetailResponse:     token_limit: int = 50000   # edit 폼 프라임�
 | Version | Date | Changes | Author |
 |---------|------|---------|--------|
 | 0.1 | 2026-11-05 | Initial draft — Option C 선택, 배지 UI 포함 | 배상규 |
+| 0.2 | 2026-11-05 | Check 정정: G-1/G-4/G-6 문구, §5.3 StudioLayout, D10 Act-1 latch 깊이 필터 | 배상규 |
