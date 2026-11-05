@@ -62,3 +62,34 @@ describe('MessageBubble', () => {
     expect(container.querySelector('.animate-pulse')).not.toBeNull();
   });
 });
+
+// agent-token-limit Design D11 §5.2 — 한도 도달 배지
+describe('MessageBubble — 한도 도달 배지', () => {
+  it('limitReason=token 이면 토큰 예산 안내를 그린다', () => {
+    const message: Message = {
+      ...baseMessage, role: 'assistant', content: '답변', limitReason: 'token',
+    };
+    render(<MessageBubble message={message} />);
+    expect(screen.getByText(/토큰 예산 한도에 도달/)).toBeInTheDocument();
+  });
+
+  it('limitReason=iteration 이면 반복 실행 안내를 그린다', () => {
+    const message: Message = {
+      ...baseMessage, role: 'assistant', content: '답변', limitReason: 'iteration',
+    };
+    render(<MessageBubble message={message} />);
+    expect(screen.getByText(/반복 실행 한도에 도달/)).toBeInTheDocument();
+  });
+
+  it('스트리밍 중이거나 사유가 없으면 배지를 그리지 않는다', () => {
+    const streaming: Message = {
+      ...baseMessage, role: 'assistant', content: '답', isStreaming: true, limitReason: 'token',
+    };
+    const { unmount } = render(<MessageBubble message={streaming} />);
+    expect(screen.queryByText(/한도에 도달/)).toBeNull();
+    unmount();
+    const plain: Message = { ...baseMessage, role: 'assistant', content: '답' };
+    render(<MessageBubble message={plain} />);
+    expect(screen.queryByText(/한도에 도달/)).toBeNull();
+  });
+});

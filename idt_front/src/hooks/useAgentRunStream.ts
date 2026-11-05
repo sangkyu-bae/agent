@@ -18,6 +18,7 @@ import type { ChartPayload } from '@/types/chart';
 import type { DocumentSource } from '@/types/chat';
 import type { ToolTrace } from '@/types/toolTrace';
 import type { ExcludedTool } from '@/types/toolAccess';
+import type { LimitReason } from '@/types/websocket';
 import type { AgentRunMessage } from '@/types/websocket';
 import { wsUrl } from '@/utils/wsUrl';
 
@@ -46,6 +47,9 @@ export interface AgentRunStreamState {
   toolTrace: ToolTrace | null;
   // tool-access-control FR-11: 실행자 권한이 없어 뺀 도구. 없으면 빈 배열.
   excludedTools: ExcludedTool[];
+  // agent-token-limit D11: 한도 도달 플래그·사유. 없으면 false/null (구 서버 호환).
+  limitReached: boolean;
+  limitReason: LimitReason | null;
   error: { code: string; message: string } | null;
   isDone: boolean;
   // chatpage-rerequest-stale-state-fix Design §3.3
@@ -74,6 +78,8 @@ const INITIAL_STATE: Omit<AgentRunStreamState, 'streamId'> = {
   sources: [],
   toolTrace: null,
   excludedTools: [],
+  limitReached: false,
+  limitReason: null,
   error: null,
   isDone: false,
 };
@@ -163,6 +169,9 @@ export function useAgentRunStream(
           sources: msg.data.sources ?? [],
           toolTrace: msg.data.tool_trace ?? null,
           excludedTools: msg.data.excluded_tools ?? [],
+          // agent-token-limit D11: additive 키 — 부재면 기본값
+          limitReached: msg.data.limit_reached ?? false,
+          limitReason: msg.data.limit_reason ?? null,
         }));
         break;
       case 'agent_run_completed':

@@ -15,16 +15,23 @@ vi.mock('./WebhookSection', () => ({
   ),
 }));
 
-const renderPanel = (maxIterations = 25, agentId: string | null = null) => {
+const renderPanel = (
+  maxIterations = 25,
+  agentId: string | null = null,
+  tokenLimit = 50000,
+) => {
   const onMaxIterationsChange = vi.fn();
+  const onTokenLimitChange = vi.fn();
   render(
     <SettingsPanel
       agentId={agentId}
       maxIterations={maxIterations}
       onMaxIterationsChange={onMaxIterationsChange}
+      tokenLimit={tokenLimit}
+      onTokenLimitChange={onTokenLimitChange}
     />,
   );
-  return { onMaxIterationsChange };
+  return { onMaxIterationsChange, onTokenLimitChange };
 };
 
 const getInput = () =>
@@ -34,6 +41,8 @@ describe('SettingsPanel — 렌더', () => {
   it('4개 섹션 제목을 노출하고 자체 저장 버튼은 없다', () => {
     renderPanel();
     expect(screen.getByText('Recursion Limit')).toBeInTheDocument();
+    // agent-token-limit D12: 토큰 예산 섹션
+    expect(screen.getByText('Token Limit')).toBeInTheDocument();
     expect(screen.getByText('MCP 서버')).toBeInTheDocument();
     expect(screen.getByText('Webhook')).toBeInTheDocument();
     expect(screen.getByText('Telegram 연동')).toBeInTheDocument();
@@ -87,7 +96,8 @@ describe('SettingsPanel — Recursion Limit 입력 (D2·D3 clamp)', () => {
   it('복원 버튼 클릭 시 기본값 25로 되돌린다', async () => {
     const user = userEvent.setup();
     const { onMaxIterationsChange } = renderPanel(500);
-    await user.click(screen.getByRole('button', { name: '기본값으로 복원' }));
+    // agent-token-limit D12: 복원 버튼이 2개(반복·토큰) — 첫 번째가 반복 한도
+    await user.click(screen.getAllByRole('button', { name: '기본값으로 복원' })[0]);
     expect(onMaxIterationsChange).toHaveBeenCalledWith(25);
   });
 });
@@ -126,5 +136,34 @@ describe('SettingsPanel — Webhook 섹션 배선 (agent-webhook)', () => {
       'data-agent-id',
       '',
     );
+  });
+});
+
+// agent-token-limit Design D12 / §5.4 — Token Limit 섹션 (Plan SC: SC-6)
+describe('SettingsPanel — Token Limit 입력', () => {
+  const getTokenInput = () => screen.getByRole('spinbutton', { name: '토큰 예산' });
+
+  it('현재 값·범위·기본값을 표시한다', () => {
+    renderPanel(25, null, 60000);
+    expect(getTokenInput()).toHaveValue(60000);
+    expect(screen.getByText(/8000 - 500000/)).toBeInTheDocument();
+    expect(screen.getByText(/기본값: 50000/)).toBeInTheDocument();
+  });
+
+  it('blur 시 clamp된 값으로 onTokenLimitChange를 호출한다', () => {
+    const { onTokenLimitChange, onMaxIterationsChange } = renderPanel();
+    fireEvent.change(getTokenInput(), { target: { value: '999' } });
+    fireEvent.blur(getTokenInput());
+    expect(onTokenLimitChange).toHaveBeenCalledWith(8000);
+    expect(onMaxIterationsChange).not.toHaveBeenCalled();
+  });
+
+  it('복원 버튼은 토큰 예산을 50000으로 되돌린다', async () => {
+    const user = userEvent.setup();
+    const { onTokenLimitChange } = renderPanel(25, null, 90000);
+    const buttons = screen.getAllByRole('button', { name: '기본값으로 복원' });
+    expect(buttons).toHaveLength(2);
+    await user.click(buttons[1]);
+    expect(onTokenLimitChange).toHaveBeenCalledWith(50000);
   });
 });

@@ -240,6 +240,8 @@ const EDIT_DETAIL = {
   skill_ids: [],
   middleware_types: [],
   max_iterations: 500,
+  // agent-token-limit: edit 프라임 검증용
+  token_limit: 60000,
   workers: [],
   flow_hint: '',
   llm_model_id: 'model-1',
@@ -480,6 +482,8 @@ describe('AgentBuilderPage 설정 탭 (agent-settings-tab)', () => {
     await user.click(screen.getByRole('button', { name: '저장' }));
     await waitFor(() => expect(captured).not.toBeNull());
     expect(captured!.max_iterations).toBe(25);
+    // agent-token-limit D12: 토큰 예산 기본값도 함께 전송
+    expect(captured!.token_limit).toBe(50000);
   });
 
   it('edit 프라임(500) → 300으로 수정 저장 → update에 max_iterations가 실린다', async () => {
@@ -517,9 +521,16 @@ describe('AgentBuilderPage 설정 탭 (agent-settings-tab)', () => {
     fireEvent.change(input, { target: { value: '300' } });
     fireEvent.blur(input);
 
+    // agent-token-limit D12: detail의 token_limit(60000) 프라임 → 70000으로 수정
+    const tokenInput = screen.getByRole('spinbutton', { name: '토큰 예산' });
+    expect(tokenInput).toHaveValue(60000);
+    fireEvent.change(tokenInput, { target: { value: '70000' } });
+    fireEvent.blur(tokenInput);
+
     await user.click(screen.getByRole('button', { name: '저장' }));
     await waitFor(() => expect(captured).not.toBeNull());
     expect(captured!.max_iterations).toBe(300);
+    expect(captured!.token_limit).toBe(70000);
   });
 });
 

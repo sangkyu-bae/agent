@@ -78,6 +78,8 @@ export interface CreateBuilderAgentRequest {
   image_generation?: ImageGenerationConfigRequest;
   // agent-settings-tab D5: supervisor 반복 한도 (백엔드 기본 25, 범위 10~1000)
   max_iterations?: number;
+  // agent-token-limit D4: supervisor 토큰 예산 (백엔드 기본 50000, 범위 8000~500000)
+  token_limit?: number;
   // agent-opener D4: 대화 시작 예시 질문 (최대 12개·200자). 미전달 = 없음
   openers?: string[];
   // prompt-fallback-visibility FR-01: 위저드가 생성한 프롬프트 버전 id.
@@ -143,6 +145,8 @@ export interface UpdateBuilderAgentRequest {
   middleware_types?: string[];
   // agent-settings-tab D5: undefined = 변경 안 함 (폼은 프라임 값 기반으로 항상 전송)
   max_iterations?: number;
+  // agent-token-limit D4: undefined = 변경 안 함
+  token_limit?: number;
   // agent-opener D4: undefined = 변경 안 함, [] = 전부 삭제, [...] = 전체 교체
   openers?: string[];
 }
@@ -203,6 +207,8 @@ export interface AgentBuilderFormData {
   middlewares: string[];
   // agent-settings-tab: supervisor 반복 한도 (설정 탭 — 저장 시 max_iterations로 전송)
   maxIterations: number;
+  // agent-token-limit D12: supervisor 토큰 예산 (설정 탭 — 저장 시 token_limit로 전송)
+  tokenLimit: number;
   // agent-opener: 오프너 탭 staged 목록 (빈 행 포함 가능, 저장 시 빈 행 제거 후 openers로 전송)
   openers: string[];
 }

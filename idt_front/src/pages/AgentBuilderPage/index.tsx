@@ -19,7 +19,7 @@ import type { StoreAgentSummary } from '@/types/agentStore';
 import type { AgentBuilderFormData } from '@/types/agentBuilder';
 import type { ComposeAgentDraftResponse } from '@/types/agentComposer';
 import { MAX_ATTACHED_SKILLS } from '@/constants/agentSkill';
-import { MAX_ITERATIONS } from '@/constants/agentSettings';
+import { MAX_ITERATIONS, TOKEN_LIMIT } from '@/constants/agentSettings';
 import { DOCUMENT_EXTRACTOR_TOOL_ID } from '@/types/documentExtractor';
 import { DOCUMENT_GENERATOR_TOOL_ID } from '@/types/documentGenerator';
 import { PRESENTATION_GENERATOR_TOOL_ID } from '@/types/presentationGenerator';
@@ -120,6 +120,8 @@ const DEFAULT_FORM: AgentBuilderFormData = {
   excludedBuiltinMiddlewares: [],
   middlewares: [],
   maxIterations: MAX_ITERATIONS.DEFAULT,
+  // agent-token-limit D12
+  tokenLimit: TOKEN_LIMIT.DEFAULT,
   openers: [],
 };
 
@@ -307,6 +309,8 @@ const AgentBuilderPage = () => {
             middleware_types: form.middlewares,
             // agent-settings-tab D5: 프라임 값 기반 항상 전송
             max_iterations: form.maxIterations,
+            // agent-token-limit D12: 프라임 값 기반 항상 전송
+            token_limit: form.tokenLimit,
             // agent-opener FR-09: 프라임 기준 전체 교체 (빈 행 제거, 빈 배열=전부 삭제)
             openers: buildOpenersForSave(form.openers),
             // undefined = 템플릿 변경 안 함, 값 = 교체 (기존 soft-delete)
@@ -397,6 +401,8 @@ const AgentBuilderPage = () => {
           image_generation: buildImageGenerationRequest(form.imageGenerationDraft),
           // agent-settings-tab D5: 설정 탭 반복 한도 (기본 25)
           max_iterations: form.maxIterations,
+          // agent-token-limit D12: 설정 탭 토큰 예산 (기본 50000)
+          token_limit: form.tokenLimit,
           // agent-opener FR-09: 빈 행 제거 후 전송 (없으면 생략)
           openers: (() => {
             const cleaned = buildOpenersForSave(form.openers);
@@ -555,6 +561,11 @@ const AgentBuilderPage = () => {
     setForm((prev) => ({ ...prev, maxIterations: value }));
   };
 
+  // agent-token-limit D12: 동일 규칙 — clamp 완료 확정값만 올라온다
+  const handleTokenLimitChange = (value: number) => {
+    setForm((prev) => ({ ...prev, tokenLimit: value }));
+  };
+
   // agent-opener §5.1: 오프너 탭은 staged 배열만 올린다 (검증은 서버 — 422는 기존 실패 경로)
   const handleOpenersChange = (next: string[]) => {
     setForm((prev) => ({ ...prev, openers: next }));
@@ -682,6 +693,7 @@ const AgentBuilderPage = () => {
           onStagedScheduleAdd={handleStagedScheduleAdd}
           onStagedScheduleRemove={handleStagedScheduleRemove}
           onMaxIterationsChange={handleMaxIterationsChange}
+          onTokenLimitChange={handleTokenLimitChange}
           onOpenersChange={handleOpenersChange}
           onApplyDraft={handleApplyDraft}
           onSave={handleSave}

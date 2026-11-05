@@ -53,6 +53,8 @@ export interface Message {
   toolTrace?: ToolTrace;
   /** tool-access-control FR-11 — 권한이 없어 뺀 도구 (실시간 답변에만 존재, 히스토리 재조회 시 없음) */
   excludedTools?: import('./toolAccess').ExcludedTool[];
+  /** agent-token-limit D11 — 한도 도달 사유 (실시간 답변에만 존재, 히스토리 재조회 시 없음) */
+  limitReason?: import('./websocket').LimitReason;
 }
 
 /** @deprecated Use DocumentSource instead */

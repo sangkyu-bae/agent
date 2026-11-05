@@ -51,6 +51,8 @@ export interface AgentDetail {
   middleware_types?: string[];
   // agent-settings-tab: supervisor 반복 한도 (edit 폼 프라임용 — 서버는 항상 반환)
   max_iterations?: number;
+  // agent-token-limit D4: supervisor 토큰 예산 (edit 폼 프라임용 — 구 서버는 부재)
+  token_limit?: number;
   // agent-opener D4: 오프너 목록 (edit 폼 프라임용, sort_order ASC)
   openers?: string[];
   // doc-generator FR-12: 활성 문서 유형 (edit 폼 프리필용 — 없으면 null/생략)

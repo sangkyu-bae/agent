@@ -80,7 +80,14 @@ export interface AgentAnswerCompletedData {
   tool_trace?: ToolTrace;
   /** tool-access-control FR-11: 실행자 권한이 없어 이번 실행에서 뺀 도구. 없으면 필드가 없다. */
   excluded_tools?: import('./toolAccess').ExcludedTool[];
+  /** agent-recursion-limit D7 / agent-token-limit D10: 한도 도달로 조기 답변. 없으면 필드가 없다. */
+  limit_reached?: boolean;
+  /** agent-token-limit D10: 도달 사유. limit_reached 가 없으면 함께 없다. */
+  limit_reason?: LimitReason;
 }
+
+/** agent-token-limit D10: ANSWER_COMPLETED 의 한도 도달 사유 */
+export type LimitReason = 'iteration' | 'token';
 
 export interface AgentRunCompletedData {
   run_id: string | null;
