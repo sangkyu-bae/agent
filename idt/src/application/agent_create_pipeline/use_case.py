@@ -22,6 +22,7 @@ if TYPE_CHECKING:
 from src.application.agent_builder.schemas import (
     CreateAgentRequest,
     CreateAgentResponse,
+    RagToolConfigRequest,
 )
 from src.application.agent_create_pipeline.events import (
     PipelineOutcome,
@@ -73,6 +74,8 @@ class _Run:
     stop: PipelineStop | None = None
     tools_confirmed: bool = False
     intent_echo: IntentResult | None = None
+    # agent-kb-quick-setup FR-12 — 위저드가 만든 KB. CREATE 에서 RAG 도구 주입.
+    kb_id: str | None = None
     records: list[StageRecord] = field(default_factory=list)
     intent: IntentResult | None = None
     selection: SelectionResult | None = None
@@ -124,6 +127,7 @@ class AgentCreatePipelineUseCase:
         stop_after: PipelineStop | None = None,
         tools_confirmed: bool = False,
         intent_echo: IntentResult | None = None,
+        kb_id: str | None = None,
     ) -> AsyncIterator[StageEvent | PipelineOutcome]:
         """파이프라인 실행 — StageEvent* 를 yield 하고 PipelineOutcome 으로 끝난다.
 
@@ -145,6 +149,7 @@ class AgentCreatePipelineUseCase:
             stop=stop_after,
             tools_confirmed=tools_confirmed,
             intent_echo=intent_echo,
+            kb_id=kb_id,
         )
         self._logger.info(
             "pipeline start",
@@ -318,6 +323,11 @@ class AgentCreatePipelineUseCase:
         prompt, clamp_reason = PipelinePolicy.clamp_prompt(
             ctx.compose.prompt.assembled
         )
+        # agent-kb-quick-setup FR-12: kb_id 가 있으면 RAG 도구 + tool_configs 주입.
+        # KB 존재·읽기권한은 CreateAgentUseCase 의 기존 검증을 그대로 거친다.
+        tool_ids, kb_cfgs = PipelinePolicy.with_knowledge_tool(
+            PipelinePolicy.resolve_tool_ids(ctx.selection), ctx.kb_id
+        )
         request = CreateAgentRequest(
             user_request=ctx.user_request[:1000],
             name=PipelinePolicy.resolve_agent_name(
@@ -325,7 +335,12 @@ class AgentCreatePipelineUseCase:
             ),
             user_id=ctx.user_id,
             llm_model_id=ctx.llm_model_id,
-            tool_ids=list(PipelinePolicy.resolve_tool_ids(ctx.selection)),
+            tool_ids=list(tool_ids),
+            tool_configs=(
+                {k: RagToolConfigRequest(**v) for k, v in kb_cfgs.items()}
+                if kb_cfgs
+                else None
+            ),
             system_prompt=prompt,
             visibility="private",  # 공개 범위 승격은 기존 PATCH 경로로 (§7)
         )
@@ -361,6 +376,7 @@ class AgentCreatePipelineUseCase:
             questions=tuple(ctx.intent.questions),
             round=ctx.round + 1,
             intent=ctx.intent,
+            kb_id=ctx.kb_id,
         )
 
     def _stopped_outcome(self, ctx: _Run) -> PipelineOutcome:
@@ -399,6 +415,7 @@ class AgentCreatePipelineUseCase:
             suggested_name=PipelinePolicy.resolve_agent_name(
                 ctx.name, ctx.intent, ctx.user_request
             ),
+            kb_id=ctx.kb_id,
         )
 
     def _created_outcome(self, ctx: _Run) -> PipelineOutcome:
@@ -428,4 +445,5 @@ class AgentCreatePipelineUseCase:
             agent_name=ctx.agent.name,
             assembled_prompt=ctx.agent.system_prompt,
             bind_ok=ctx.bind_ok,
+            kb_id=ctx.kb_id,
         )

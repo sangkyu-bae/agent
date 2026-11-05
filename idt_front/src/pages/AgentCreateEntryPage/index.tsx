@@ -27,10 +27,13 @@ import WizardProgress from './components/WizardProgress';
 import IntentStep from './components/IntentStep';
 import ToolsStep from './components/ToolsStep';
 import PromptStep from './components/PromptStep';
+import DocumentsStep from './components/DocumentsStep';
+import { RAG_CATALOG_TOOL_ID } from '@/utils/agentDetailMapping';
 import WizardFailureCard from './components/WizardFailureCard';
 import PipelineUnavailableCard from './components/PipelineUnavailableCard';
 
-type WizardStep = 'description' | 'intent' | 'tools' | 'prompt';
+// agent-kb-quick-setup FR-11: 'documents' 는 서버 호출이 없는 클라이언트 로컬 단계다.
+type WizardStep = 'description' | 'intent' | 'tools' | 'documents' | 'prompt';
 
 /**
  * 질문 라운드 이력 (wizard-chat-layout FR-07).
@@ -58,6 +61,8 @@ interface WizardState {
   sessionId: string | null;
   versionId: string | null;
   suggestedName: string;
+  /** agent-kb-quick-setup FR-11: 문서 단계에서 연결한 KB */
+  kbId: string | null;
 }
 
 const EMPTY: WizardState = {
@@ -76,6 +81,7 @@ const EMPTY: WizardState = {
   sessionId: null,
   versionId: null,
   suggestedName: '',
+  kbId: null,
 };
 
 /**
@@ -270,7 +276,14 @@ const AgentCreateEntryPage = () => {
     }));
   };
 
+  // agent-kb-quick-setup FR-11: 도구 확정은 서버 호출 없이 문서 단계로 넘어간다.
   const handleConfirmTools = () => {
+    if (pipeline.isPending) return;
+    setStep('documents');
+  };
+
+  /** 문서 단계 [건너뛰기]/[계속] — 기존 PROMPT 요청에 kb_id 만 더 싣는다. */
+  const requestPrompt = (sessionId: string | null = null) => {
     if (pipeline.isPending) return;
     dispatch(
       {
@@ -282,29 +295,37 @@ const AgentCreateEntryPage = () => {
         tools_confirmed: true,
         // D2 — 의도를 재사용해 단계 간 근거가 갈리지 않게 한다.
         intent: state.intentEcho,
+        ...(sessionId ? { session_id: sessionId } : {}),
+        ...(state.kbId ? { kb_id: state.kbId } : {}),
         stop_after: PIPELINE_STOP.PROMPT,
       },
       state,
     );
   };
 
-  const handleRegeneratePrompt = () => {
-    if (pipeline.isPending) return;
-    dispatch(
-      {
-        user_request: state.userRequest,
-        answers: state.answers,
-        round: state.round,
-        tool_ids: state.selectedIds,
-        tools_confirmed: true,
-        intent: state.intentEcho,
-        // 같은 세션에 새 버전으로 쌓는다 — 세션이 늘어나지 않게.
-        session_id: state.sessionId,
-        stop_after: PIPELINE_STOP.PROMPT,
-      },
-      state,
-    );
+  const handleSkipDocuments = () => requestPrompt();
+  const handleContinueFromDocuments = () => requestPrompt();
+
+  /** 업로드/기존 KB 선택 — 문서 검색 도구를 확정 목록에 더한다 (FR-07 과 대칭). */
+  const handleKbAttached = (kbId: string) => {
+    setState((prev) => ({
+      ...prev,
+      kbId,
+      selectedIds: prev.selectedIds.includes(RAG_CATALOG_TOOL_ID)
+        ? prev.selectedIds
+        : [...prev.selectedIds, RAG_CATALOG_TOOL_ID],
+    }));
   };
+  const handleKbDetached = () => {
+    setState((prev) => ({
+      ...prev,
+      kbId: null,
+      selectedIds: prev.selectedIds.filter((id) => id !== RAG_CATALOG_TOOL_ID),
+    }));
+  };
+
+  // 같은 세션에 새 버전으로 쌓는다 — 세션이 늘어나지 않게.
+  const handleRegeneratePrompt = () => requestPrompt(state.sessionId);
 
   const handleSendToStudio = () => {
     goStudio({
@@ -316,6 +337,8 @@ const AgentCreateEntryPage = () => {
         suggestedName: state.suggestedName,
         sessionId: state.sessionId,
         versionId: state.versionId,
+        // agent-kb-quick-setup FR-13: 스튜디오가 RAG 도구 + kb_id 로 프리필한다
+        kbId: state.kbId,
       },
     });
   };
@@ -323,6 +346,7 @@ const AgentCreateEntryPage = () => {
   const handleRetry = () => {
     pipeline.clearError();
     if (step === 'tools') handleConfirmTools();
+    else if (step === 'documents') requestPrompt();
     else if (step === 'prompt') handleRegeneratePrompt();
     else if (step === 'intent') handleSkipQuestions();
     else handleResendDescription();
@@ -444,16 +468,30 @@ const AgentCreateEntryPage = () => {
       })}
 
       {/* 도구 카드 — 프롬프트 단계에선 잠긴 이력으로 남는다 (FR-09) */}
-      {(step === 'tools' || step === 'prompt') && (
+      {(step === 'tools' || step === 'documents' || step === 'prompt') && (
         <ToolsStep
           recommendedIds={state.recommendedIds}
           selectedIds={state.selectedIds}
           unknownIds={state.unknownIds}
           isPending={pipeline.isPending}
-          locked={step === 'prompt'}
+          locked={step !== 'tools'}
           onToggle={handleToggleTool}
           onConfirm={handleConfirmTools}
           onRestart={handleRestartWithConfirm}
+        />
+      )}
+
+      {/* 문서 단계 (agent-kb-quick-setup FR-11) — 프롬프트 단계에선 잠긴 이력으로 남는다 */}
+      {(step === 'documents' || step === 'prompt') && (
+        <DocumentsStep
+          agentName={state.suggestedName}
+          attachedKbId={state.kbId}
+          isPending={pipeline.isPending}
+          locked={step === 'prompt'}
+          onAttached={handleKbAttached}
+          onDetach={handleKbDetached}
+          onSkip={handleSkipDocuments}
+          onContinue={handleContinueFromDocuments}
         />
       )}
 
@@ -467,6 +505,7 @@ const AgentCreateEntryPage = () => {
           onChange={(next) => setState((prev) => ({ ...prev, prompt: next }))}
           onRegenerate={handleRegeneratePrompt}
           onSubmit={handleSendToStudio}
+          // [이전]은 도구 단계로 — 도구 카드 잠금이 풀리고(FR-09) 문서 단계는 재확정 후 다시 보인다 (kbId 유지)
           onBack={() => setStep('tools')}
         />
       )}

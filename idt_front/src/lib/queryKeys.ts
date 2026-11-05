@@ -145,6 +145,13 @@ export const queryKeys = {
       [...queryKeys.knowledgeBases.all, 'searchHistory', kbId, params] as const,
   },
 
+  // ── KB 기본값 (agent-kb-quick-setup) ───────────────────
+  kbDefaults: {
+    all: ['kbDefaults'] as const,
+    user: () => [...queryKeys.kbDefaults.all, 'user'] as const,
+    admin: () => [...queryKeys.kbDefaults.all, 'admin'] as const,
+  },
+
   // ── Embedding Models ────────────────────────────────────
   embeddingModels: {
     all: ['embeddingModels'] as const,

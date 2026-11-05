@@ -58,6 +58,8 @@ describe('RagConfigModal', () => {
       />,
     );
 
+    // agent-kb-quick-setup FR-10: 기본값은 고급 설정이 접혀 있다
+    await userEvent.click(screen.getByRole('button', { name: /고급 설정/ }));
     await userEvent.click(screen.getByRole('radio', { name: /벡터/ }));
     await userEvent.click(screen.getByRole('button', { name: '취소' }));
 
@@ -77,6 +79,8 @@ describe('RagConfigModal', () => {
       />,
     );
 
+    // agent-kb-quick-setup FR-10: 기본값은 고급 설정이 접혀 있다
+    await userEvent.click(screen.getByRole('button', { name: /고급 설정/ }));
     await userEvent.click(screen.getByRole('radio', { name: /벡터/ }));
     await userEvent.click(screen.getByRole('button', { name: '저장' }));
 

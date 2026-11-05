@@ -3,6 +3,8 @@ import { useKnowledgeBases } from '@/hooks/useKnowledgeBases';
 import type { RagToolConfig, CollectionScope } from '@/types/ragToolConfig';
 import { SEARCH_MODES } from '@/types/ragToolConfig';
 import Dropdown from '@/components/common/Dropdown';
+import CollapsibleSection from './CollapsibleSection';
+import { hasAdvancedRagConfig } from '@/utils/ragConfigAdvanced';
 
 const SCOPE_LABELS: Record<CollectionScope, { label: string; color: string }> = {
   PERSONAL: { label: '개인', color: 'text-violet-600 bg-violet-50' },
@@ -102,6 +104,27 @@ const RagConfigPanel = ({ config, onChange }: RagConfigPanelProps) => {
         )}
       </div>
 
+      {/* Section 0.5: 도구 설명 — 간단 모드 기본 노출 (agent-kb-quick-setup FR-10) */}
+      <div>
+        <label className="mb-1.5 block text-[13px] font-semibold text-zinc-700">도구 설명</label>
+        <div className="overflow-hidden rounded-2xl border border-zinc-300 bg-white transition-all focus-within:border-violet-400 focus-within:ring-2 focus-within:ring-violet-100">
+          <textarea
+            value={config.tool_description}
+            onChange={(e) => onChange({ ...config, tool_description: e.target.value })}
+            maxLength={MAX_TOOL_DESCRIPTION}
+            placeholder="에이전트가 이 도구를 언제 사용해야 하는지 설명하세요"
+            rows={3}
+            className="block w-full resize-none bg-transparent px-4 py-3 text-[14px] leading-relaxed text-zinc-900 placeholder-zinc-400 outline-none"
+          />
+        </div>
+        <p className="mt-1 text-right text-[12px] text-zinc-400">
+          {config.tool_description.length}/{MAX_TOOL_DESCRIPTION}
+        </p>
+      </div>
+
+      {/* 고급 설정 — 저장값이 기본값과 다르면 펼쳐서 기존 사용자 설정이 숨지 않게 (FR-10) */}
+      <CollapsibleSection title="고급 설정" defaultOpen={hasAdvancedRagConfig(config)}>
+      <div className="space-y-6">
       {/* Section 1: 컬렉션 선택 */}
       <div>
         <label className="mb-1.5 block text-[13px] font-semibold text-zinc-700">
@@ -314,7 +337,7 @@ const RagConfigPanel = ({ config, onChange }: RagConfigPanelProps) => {
         </div>
       </div>
 
-      {/* Section 4: 도구 이름/설명 */}
+      {/* Section 4: 도구 이름 (설명은 간단 모드로 이동) */}
       <div className="space-y-4">
         <div>
           <label className="mb-1.5 block text-[13px] font-semibold text-zinc-700">도구 이름</label>
@@ -328,23 +351,9 @@ const RagConfigPanel = ({ config, onChange }: RagConfigPanelProps) => {
           />
         </div>
 
-        <div>
-          <label className="mb-1.5 block text-[13px] font-semibold text-zinc-700">도구 설명</label>
-          <div className="overflow-hidden rounded-2xl border border-zinc-300 bg-white transition-all focus-within:border-violet-400 focus-within:ring-2 focus-within:ring-violet-100">
-            <textarea
-              value={config.tool_description}
-              onChange={(e) => onChange({ ...config, tool_description: e.target.value })}
-              maxLength={MAX_TOOL_DESCRIPTION}
-              placeholder="에이전트가 이 도구를 언제 사용해야 하는지 설명하세요"
-              rows={3}
-              className="block w-full resize-none bg-transparent px-4 py-3 text-[14px] leading-relaxed text-zinc-900 placeholder-zinc-400 outline-none"
-            />
-          </div>
-          <p className="mt-1 text-right text-[12px] text-zinc-400">
-            {config.tool_description.length}/{MAX_TOOL_DESCRIPTION}
-          </p>
-        </div>
       </div>
+      </div>
+      </CollapsibleSection>
     </div>
   );
 };

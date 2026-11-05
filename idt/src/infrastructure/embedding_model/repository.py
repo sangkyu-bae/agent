@@ -40,6 +40,12 @@ class EmbeddingModelRepository(EmbeddingModelRepositoryInterface):
         row = result.scalar_one_or_none()
         return self._to_entity(row) if row else None
 
+    async def find_by_id(
+        self, model_id: int, request_id: str
+    ) -> EmbeddingModel | None:
+        row = await self._session.get(EmbeddingModelTable, model_id)
+        return self._to_entity(row) if row else None
+
     async def list_active(
         self, request_id: str
     ) -> list[EmbeddingModel]:

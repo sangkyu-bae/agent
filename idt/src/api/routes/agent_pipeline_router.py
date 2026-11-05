@@ -208,6 +208,8 @@ def _run_kwargs(
         ),
         "tools_confirmed": request.tools_confirmed,
         "intent_echo": _to_intent_echo(request.intent),
+        # agent-kb-quick-setup FR-12 — 미지정이면 None 이라 기존 호출 동작 불변
+        "kb_id": request.kb_id,
     }
 
 
@@ -265,6 +267,7 @@ def _to_response(outcome: PipelineOutcome) -> AgentPipelineResponse:
         final_tool_ids=list(outcome.final_tool_ids),
         unknown_tool_ids=list(outcome.unknown_tool_ids),
         session_id=outcome.session_id,
+        kb_id=outcome.kb_id,
         version_id=outcome.version_id,
         agent_id=outcome.agent_id,
         agent_name=outcome.agent_name,

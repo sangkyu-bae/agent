@@ -34,6 +34,7 @@ import {
 } from '@/utils/imageGeneration';
 import { filterActiveImageModels, filterChatModels } from '@/utils/llmModelKind';
 import { buildToolIdsForSave } from '@/utils/agentToolPayload';
+import { attachKbToForm, detachKbFromForm } from '@/utils/kbQuickSetup';
 import { buildDocumentTemplateRequest } from '@/utils/documentTemplate';
 import { buildDocumentGenerationTypeRequest } from '@/utils/documentGenerator';
 import { composeDraftToForm } from '@/utils/composeDraftToForm';
@@ -656,6 +657,14 @@ const AgentBuilderPage = () => {
     }));
   };
 
+  // agent-kb-quick-setup FR-07: 지식 문서 블록 → RAG 도구 추가 + kb_id
+  const handleKbAttached = (kbId: string) => {
+    setForm((prev) => attachKbToForm(prev, kbId));
+  };
+  const handleKbDetached = () => {
+    setForm((prev) => detachKbFromForm(prev));
+  };
+
   const handleRagConfigChange = (config: RagToolConfig) => {
     setForm((prev) => ({
       ...prev,
@@ -790,6 +799,8 @@ const AgentBuilderPage = () => {
           onToolToggle={handleToolToggle}
           onSkillToggle={handleSkillToggle}
           onRagConfigChange={handleRagConfigChange}
+          onKbAttached={handleKbAttached}
+          onKbDetached={handleKbDetached}
           onDraftArgKeyChange={handleDraftArgKeyChange}
           // tool-access-control FR-13: 권한 없는 붙은 도구 칩 (edit 에서만 상세가 있다)
           toolAccess={view === 'edit' ? editDetail?.tool_access : undefined}

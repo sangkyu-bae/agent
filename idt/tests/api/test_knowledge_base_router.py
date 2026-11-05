@@ -566,3 +566,30 @@ class TestSectionSummaryEndpoints:
             "section-summary/retry"
         )
         assert resp.status_code == 403
+
+
+class TestCreateKnowledgeBaseAutoCollection:
+    """agent-kb-quick-setup FR-02/FR-03.
+
+    collection_name 생략 허용 + 미설정 422 code.
+    """
+
+    def test_omitted_collection_name_passes_none(
+        self, client: TestClient, mock_use_case: AsyncMock
+    ):
+        mock_use_case.create.return_value = _kb()
+        resp = client.post("/api/v1/knowledge-bases", json={"name": "여신 규정집"})
+        assert resp.status_code == 201
+        assert mock_use_case.create.await_args.kwargs["collection_name"] is None
+
+    def test_not_configured_returns_422_with_code(
+        self, client: TestClient, mock_use_case: AsyncMock
+    ):
+        from src.domain.kb_default_setting.errors import KbDefaultsNotConfiguredError
+
+        mock_use_case.create.side_effect = KbDefaultsNotConfiguredError()
+        resp = client.post("/api/v1/knowledge-bases", json={"name": "여신 규정집"})
+        assert resp.status_code == 422
+        detail = resp.json()["detail"]
+        assert detail["code"] == "KB_DEFAULTS_NOT_CONFIGURED"
+        assert "기본 임베딩 모델" in detail["message"]

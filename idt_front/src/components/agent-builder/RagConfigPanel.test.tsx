@@ -12,6 +12,11 @@ beforeAll(() => server.listen());
 afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
+/** agent-kb-quick-setup FR-10: 기본값 config 는 고급 설정이 접혀 있다 — 펼친 뒤 조회 */
+const openAdvanced = async () => {
+  await userEvent.click(await screen.findByRole('button', { name: /고급 설정/ }));
+};
+
 const renderWithQuery = (ui: ReactNode) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -32,6 +37,7 @@ describe('RagConfigPanel — 위키 우선 검색 토글', () => {
       />,
     );
 
+    await openAdvanced();
     const toggle = await screen.findByRole('checkbox', { name: /위키 우선 검색/ });
     await user.click(toggle);
     expect(onChange).toHaveBeenCalledWith(
@@ -48,6 +54,7 @@ describe('RagConfigPanel — 라우팅 검색 토글 (rag-routed-integration)', 
       <RagConfigPanel config={{ ...DEFAULT_RAG_CONFIG }} onChange={onChange} />,
     );
 
+    await openAdvanced();
     const toggle = await screen.findByRole('checkbox', {
       name: /라우팅 검색 \(3계층 요약\)/,
     });
@@ -99,6 +106,7 @@ describe('RagConfigPanel — scope 뱃지', () => {
       <RagConfigPanel config={{ ...DEFAULT_RAG_CONFIG }} onChange={onChange} />,
     );
 
+    await openAdvanced();
     await user.click(
       await screen.findByRole('combobox', { name: '검색 대상 컬렉션' }),
     );
@@ -154,6 +162,7 @@ describe('RagConfigPanel — scope 뱃지', () => {
       <RagConfigPanel config={{ ...DEFAULT_RAG_CONFIG }} onChange={onChange} />,
     );
 
+    await openAdvanced();
     await screen.findByRole('combobox', { name: '검색 대상 컬렉션' });
     expect(screen.queryByText(/에이전트 공개 범위가 자동 제한/)).not.toBeInTheDocument();
   });
@@ -212,6 +221,7 @@ describe('RagConfigPanel — 지식베이스 선택 (kb-rag-filter)', () => {
       />,
     );
 
+    await openAdvanced();
     const collDropdown = await screen.findByRole('combobox', {
       name: '검색 대상 컬렉션',
     });
@@ -265,5 +275,44 @@ describe('RagConfigPanel — 지식베이스 선택 (kb-rag-filter)', () => {
     expect(onChange).toHaveBeenCalledWith(
       expect.objectContaining({ kb_id: undefined, metadata_filter: {} }),
     );
+  });
+});
+
+describe('RagConfigPanel — 고급 설정 접기 (agent-kb-quick-setup FR-10)', () => {
+  it('기본값 config 는 KB 선택·도구 설명만 보이고 고급 항목은 접혀 있다', async () => {
+    renderWithQuery(
+      <RagConfigPanel config={{ ...DEFAULT_RAG_CONFIG }} onChange={vi.fn()} />,
+    );
+    expect(await screen.findByRole('combobox', { name: '검색 대상 지식베이스' })).toBeInTheDocument();
+    expect(screen.getByText('도구 설명')).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: '검색 대상 컬렉션' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('radio', { name: /벡터/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/결과 수/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /고급 설정/ })).toBeInTheDocument();
+  });
+
+  it('고급 값이 기본값과 다르면(search_mode) 처음부터 펼쳐진다', async () => {
+    renderWithQuery(
+      <RagConfigPanel
+        config={{ ...DEFAULT_RAG_CONFIG, search_mode: 'vector_only' }}
+        onChange={vi.fn()}
+      />,
+    );
+    expect(await screen.findByRole('radio', { name: /벡터/ })).toBeChecked();
+  });
+
+  it('고급 설정을 펼치면 기존 항목이 전부 보이고 값이 유지된다', async () => {
+    renderWithQuery(
+      <RagConfigPanel
+        config={{ ...DEFAULT_RAG_CONFIG, kb_id: 'kb-public-1' }}
+        onChange={vi.fn()}
+      />,
+    );
+    await openAdvanced();
+    expect(await screen.findByRole('combobox', { name: '검색 대상 컬렉션' })).toBeDisabled();
+    expect(screen.getByRole('radio', { name: /하이브리드/ })).toBeChecked();
+    expect(screen.getByText('5')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: /위키 우선 검색/ })).not.toBeChecked();
+    expect(screen.getByDisplayValue('내부 문서 검색')).toBeInTheDocument();
   });
 });

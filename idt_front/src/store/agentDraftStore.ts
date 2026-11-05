@@ -21,6 +21,8 @@ export interface WizardResult {
   suggestedName: string;
   sessionId: string | null;
   versionId: string | null;
+  /** agent-kb-quick-setup FR-13: 문서 단계에서 연결한 KB (없으면 undefined/null) */
+  kbId?: string | null;
 }
 
 /** 진입 화면이 스튜디오에 넘기는 1회성 의도. */

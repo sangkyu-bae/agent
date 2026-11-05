@@ -357,6 +357,10 @@ const runWizardToPrompt = async () => {
   );
   await user.click(screen.getByRole('button', { name: '이 도구로 진행' }));
 
+  // ③-b 문서 단계 (agent-kb-quick-setup FR-11) — 서버 호출 없이 건너뛴다
+  await screen.findByText('참고할 문서가 있나요?');
+  await user.click(screen.getByRole('button', { name: '건너뛰기' }));
+
   // ④ 프롬프트
   await screen.findByText('시스템 프롬프트를 확인해주세요');
   return { requests, user, unmount };
@@ -595,5 +599,62 @@ describe('L3 #7 — 기존 핸드오프 경로 회귀', () => {
       await screen.findByRole('button', { name: '새 에이전트' }),
     ).toBeInTheDocument();
     expect(navigateMock).not.toHaveBeenCalled();
+  });
+});
+
+// ── 시나리오 8: 문서 단계 업로드 → kb_id 전달 → 스튜디오 프리필 (agent-kb-quick-setup) ──
+
+describe('L3 #8 — 위저드 문서 단계', () => {
+  it('문서를 올리면 PROMPT 요청에 kb_id 와 문서 검색 도구가 실리고 스튜디오에 연결된다', async () => {
+    stubCatalog();
+    const requests = stubPipeline([
+      sseBody(NEED_INPUT, ['intent']),
+      sseBody(TOOLS_PROPOSED, ['intent', 'tools']),
+      sseBody(PROMPT_READY, ['intent', 'tools', 'prompt']),
+    ]);
+    const { unmount } = renderWizard();
+    const user = userEvent.setup();
+
+    await user.type(screen.getByLabelText('에이전트 설명'), '규정 문서 Q&A');
+    await user.click(screen.getByRole('button', { name: '에이전트 설명 전송' }));
+    await screen.findByText('이 에이전트의 핵심 용도는 무엇인가요?');
+    await user.click(screen.getByText('문서 Q&A'));
+    await user.click(screen.getByRole('button', { name: '제출' }));
+    await screen.findByText('이 도구들을 사용할까요?');
+    await user.click(screen.getByRole('button', { name: '이 도구로 진행' }));
+
+    // 문서 단계: 기본 MSW /quick 핸들러가 kb-quick-1 을 돌려준다
+    await screen.findByText('참고할 문서가 있나요?');
+    const input = await screen.findByLabelText('지식 문서 파일 선택');
+    await waitFor(() => expect(input).not.toBeDisabled());
+    await user.upload(input, new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' }));
+    await screen.findByText(/연결됨: kb-quick-1/);
+    expect(requests).toHaveLength(2); // 아직 서버 호출 없음
+    await user.click(screen.getByRole('button', { name: '계속' }));
+
+    await screen.findByText('시스템 프롬프트를 확인해주세요');
+    expect(requests).toHaveLength(3);
+    expect(requests[2]).toMatchObject({
+      stop_after: 'prompt',
+      tools_confirmed: true,
+      kb_id: 'kb-quick-1',
+    });
+    expect(requests[2].tool_ids).toContain('internal:internal_document_search');
+
+    await user.click(screen.getByRole('button', { name: '스튜디오로 보내기' }));
+    expect(useAgentDraftStore.getState().pendingIntent).toMatchObject({
+      kind: 'wizard',
+      result: { kbId: 'kb-quick-1' },
+    });
+
+    unmount();
+    renderStudio();
+    await waitFor(() => expect(nameInput()).toHaveValue('문서 Q&A 봇'));
+    expect(await screen.findByText(/연결됨: kb-quick-1/)).toBeInTheDocument();
+  });
+
+  it('건너뛰면 PROMPT 요청에 kb_id 가 없다', async () => {
+    const { requests } = await runWizardToPrompt();
+    expect(requests[2]).not.toHaveProperty('kb_id');
   });
 });

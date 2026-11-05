@@ -22,6 +22,10 @@ from src.domain.tool_selection.schemas import SelectionResult
 
 _FALLBACK_NAME = "새 에이전트"
 
+# agent-kb-quick-setup FR-12 — 빌더 카탈로그 표기의 내부 문서 검색 도구 id.
+# 프론트 RAG_CATALOG_TOOL_ID 와 동일 문자열 (agentDetailMapping.ts).
+KNOWLEDGE_TOOL_ID = "internal:internal_document_search"
+
 # agent-create-wizard §3.2 — 정지 지점 → 응답 status 매핑 (wire 계약).
 _STOP_STATUS: dict[PipelineStop, str] = {
     PipelineStop.TOOLS: "tools_proposed",
@@ -203,6 +207,23 @@ class PipelinePolicy:
     def resolve_tool_ids(selection: SelectionResult) -> tuple[str, ...]:
         """final_ids 를 그대로 신뢰한다 — required ⊆ final 은 포트 계약이다."""
         return selection.final_ids
+
+    @staticmethod
+    def with_knowledge_tool(
+        tool_ids: Sequence[str], kb_id: str | None
+    ) -> tuple[tuple[str, ...], dict[str, dict[str, str]]]:
+        """agent-kb-quick-setup FR-12 — kb_id 가 있으면 RAG 도구를 (없을 때) 덧붙이고
+        그 도구의 tool_config 초안(`{kb_id}`)을 돌려준다. 없으면 입력 그대로.
+
+        KB 존재·읽기권한 검증은 CreateAgentUseCase 가 수행한다(우회 경로 없음).
+        """
+        clean = (kb_id or "").strip()
+        if not clean:
+            return tuple(tool_ids), {}
+        ids = tuple(tool_ids)
+        if KNOWLEDGE_TOOL_ID not in ids:
+            ids = (*ids, KNOWLEDGE_TOOL_ID)
+        return ids, {KNOWLEDGE_TOOL_ID: {"kb_id": clean}}
 
     @staticmethod
     def empty_candidate_selection(

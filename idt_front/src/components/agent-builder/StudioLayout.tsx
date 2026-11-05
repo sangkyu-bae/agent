@@ -47,6 +47,9 @@ interface StudioLayoutProps {
   onRetryModels: () => void;
   /** tool-access-control FR-13: 에이전트 상세의 붙은 도구별 허용 여부 (edit 전용) */
   toolAccess?: ToolAccessInfo[] | null;
+  /** agent-kb-quick-setup: 지식 문서 블록 → 폼 부착/해제 */
+  onKbAttached?: (kbId: string) => void;
+  onKbDetached?: () => void;
 }
 
 /**
@@ -84,6 +87,8 @@ const StudioLayout = ({
   isModelsError,
   onRetryModels,
   toolAccess,
+  onKbAttached,
+  onKbDetached,
 }: StudioLayoutProps) => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: '#fff' }}>
@@ -107,6 +112,8 @@ const StudioLayout = ({
             onRagConfigChange={onRagConfigChange}
             onDraftArgKeyChange={onDraftArgKeyChange}
             toolAccess={toolAccess}
+            onKbAttached={onKbAttached}
+            onKbDetached={onKbDetached}
             onBuiltinToggle={onBuiltinToggle}
             onMiddlewareToggle={onMiddlewareToggle}
             isEditMode={mode === 'edit'}

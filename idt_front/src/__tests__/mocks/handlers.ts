@@ -771,6 +771,67 @@ export const handlers = [
       })
   ),
 
+  // agent-kb-quick-setup: 기본 임베딩 모델 설정 + 원스톱 생성
+  http.get(`*${API_ENDPOINTS.KB_DEFAULTS}`, () =>
+    HttpResponse.json({
+      configured: true, default_embedding_model_id: 1,
+      model_display_name: 'OpenAI Embedding 3 Small',
+    })
+  ),
+  http.get(`*${API_ENDPOINTS.ADMIN_KB_DEFAULTS}`, () =>
+    HttpResponse.json({
+      configured: true, default_embedding_model_id: 1,
+      model: {
+        id: 1, provider: 'openai', model_name: 'text-embedding-3-small',
+        display_name: 'OpenAI Embedding 3 Small', vector_dimension: 1536, is_active: true,
+      },
+      warnings: [], updated_at: '2026-11-05T00:00:00',
+    })
+  ),
+  http.put(`*${API_ENDPOINTS.ADMIN_KB_DEFAULTS}`, async ({ request }) => {
+    const body = (await request.json()) as { default_embedding_model_id: number };
+    if (body.default_embedding_model_id === 99) {
+      return HttpResponse.json(
+        { detail: { code: 'EMBEDDING_MODEL_NOT_FOUND', message: '임베딩 모델을 찾을 수 없습니다' } },
+        { status: 404 }
+      );
+    }
+    return HttpResponse.json({
+      configured: true, default_embedding_model_id: body.default_embedding_model_id,
+      model: {
+        id: body.default_embedding_model_id, provider: 'openai',
+        model_name: 'text-embedding-3-large', display_name: 'OpenAI Embedding 3 Large',
+        vector_dimension: 3072, is_active: true,
+      },
+      warnings: [], updated_at: '2026-11-05T01:00:00',
+    });
+  }),
+  // jsdom 의 multipart 본문은 undici formData() 파서가 실패한다 — 파싱하지 않고 고정 응답
+  http.post(`*${API_ENDPOINTS.KNOWLEDGE_BASE_QUICK}`, () =>
+    HttpResponse.json(
+      {
+        kb_id: 'kb-quick-1', kb_name: '여신 상담봇 지식', collection_name: 'kb-quick001',
+        scope: 'PERSONAL',
+        documents: [
+          { filename: 'a.pdf', status: 'uploaded', document_id: 'doc-a', chunk_count: 12, error: null },
+        ],
+        uploaded_count: 1, failed_count: 0,
+      },
+      { status: 201 }
+    )
+  ),
+
+  // KB 문서 업로드 (agent-kb-quick-setup G1 재시도 경로) — multipart 미파싱, 고정 응답
+  http.post(`*${API_ENDPOINTS.KNOWLEDGE_BASE_DOCUMENTS(':kbId')}`, ({ params }) =>
+    HttpResponse.json({
+      kb_id: params.kbId, kb_name: 'KB', collection_name: 'kb-quick001',
+      document_id: 'doc-retry-1', filename: 'retry.pdf', total_pages: 1, chunk_count: 4,
+      chunking_strategy: 'parent_child',
+      qdrant: { status: 'success', error: null }, es: { status: 'success', error: null },
+      status: 'completed', section_summary: null,
+    })
+  ),
+
   // KB (kb-management-ui): 생성
   http.post(`*${API_ENDPOINTS.KNOWLEDGE_BASES}`, () =>
     HttpResponse.json(

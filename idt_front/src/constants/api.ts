@@ -120,6 +120,10 @@ export const API_ENDPOINTS = {
 
   // Knowledge Bases (kb-rag-filter / kb-management-ui)
   KNOWLEDGE_BASES: '/api/v1/knowledge-bases',
+  // agent-kb-quick-setup: 원스톱 생성 + 기본 임베딩 모델 설정
+  KNOWLEDGE_BASE_QUICK: '/api/v1/knowledge-bases/quick',
+  KB_DEFAULTS: '/api/v1/kb-defaults',
+  ADMIN_KB_DEFAULTS: '/api/v1/admin/kb-defaults',
   KNOWLEDGE_BASE_DETAIL: (kbId: string) => `/api/v1/knowledge-bases/${kbId}`,
   KNOWLEDGE_BASE_DOCUMENTS: (kbId: string) =>
     `/api/v1/knowledge-bases/${kbId}/documents`,
