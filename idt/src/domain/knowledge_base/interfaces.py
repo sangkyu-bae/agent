@@ -2,6 +2,7 @@
 from abc import ABC, abstractmethod
 
 from src.domain.auth.entities import User
+from src.domain.collection.permission_schemas import CollectionScope
 from src.domain.knowledge_base.entities import KnowledgeBase
 
 
@@ -64,6 +65,21 @@ class CollectionAssignerInterface(ABC):
 
     @abstractmethod
     async def assign(
-        self, user: User, requested_collection: str | None, request_id: str
+        self,
+        user: User,
+        requested_collection: str | None,
+        request_id: str,
+        *,
+        kb_id: str | None = None,
+        scope: "CollectionScope | None" = None,
+        department_id: str | None = None,
     ) -> str:
-        ...
+        """agent-kb-quick-setup: kb_id/scope/department_id 는
+        자동 배정 구현만 쓴다(additive)."""
+
+    async def rollback(self, collection_name: str, user: User, request_id: str) -> None:
+        """KB 저장 실패 시 배정 취소(best-effort).
+
+        기본은 no-op — 사용자 선택 컬렉션은 건드리지 않는다.
+        """
+        return None

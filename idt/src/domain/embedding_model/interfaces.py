@@ -10,6 +10,11 @@ class EmbeddingModelRepositoryInterface(ABC):
     ) -> EmbeddingModel | None: ...
 
     @abstractmethod
+    async def find_by_id(
+        self, model_id: int, request_id: str
+    ) -> EmbeddingModel | None: ...
+
+    @abstractmethod
     async def list_active(
         self, request_id: str
     ) -> list[EmbeddingModel]: ...

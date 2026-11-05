@@ -343,6 +343,7 @@ from src.api.routes.knowledge_base_router import (
     router as knowledge_base_router,
     get_knowledge_base_use_case,
     get_kb_upload_use_case,
+    get_kb_quick_create_use_case,
     get_delete_kb_document_use_case,
     get_kb_document_chunks_use_case,
     get_kb_document_summary_use_case,
@@ -4435,10 +4436,14 @@ def create_unified_upload_factories():
     return use_case_factory
 
 
-def create_knowledge_base_factories(unified_upload_factory, summary_launcher=None):
+def create_knowledge_base_factories(
+    unified_upload_factory, summary_launcher=None, collection_use_case_factory=None
+):
     """Return per-request DI factories for Knowledge Base (knowledge-base-scoping Design §8).
 
     summary_launcher: 섹션 요약 잡 킥오프 싱글턴 (card-section-summary D14, 선택).
+    collection_use_case_factory: agent-kb-quick-setup §9.4 — 주어지면 컬렉션 미지정
+        KB 생성 시 기본 임베딩 모델로 전용 컬렉션을 자동 생성한다(같은 요청 세션).
     """
     from src.infrastructure.collection.qdrant_collection_repository import QdrantCollectionRepository
     from src.infrastructure.collection.permission_repository import CollectionPermissionRepository
@@ -4447,7 +4452,11 @@ def create_knowledge_base_factories(unified_upload_factory, summary_launcher=Non
     from src.infrastructure.department.department_repository import DepartmentRepository
     from src.infrastructure.knowledge_base.repository import KnowledgeBaseRepository
     from src.domain.knowledge_base.policy import KnowledgeBasePolicy
-    from src.application.knowledge_base.collection_assigner import UserSelectedCollectionAssigner
+    from src.application.knowledge_base.collection_assigner import (
+        AutoProvisionCollectionAssigner,
+        UserSelectedCollectionAssigner,
+    )
+    from src.api.kb_defaults_di import build_kb_default_setting_use_case
     from src.application.knowledge_base.use_case import KnowledgeBaseUseCase
     from src.application.knowledge_base.upload_use_case import KnowledgeBaseUploadUseCase
     from src.application.knowledge_base.chunking_resolver import ChunkingSettingsResolver
@@ -4469,9 +4478,17 @@ def create_knowledge_base_factories(unified_upload_factory, summary_launcher=Non
             policy=CollectionPermissionPolicy(),
             logger=app_logger,
         )
-        return UserSelectedCollectionAssigner(
+        user_selected = UserSelectedCollectionAssigner(
             collection_repo=collection_repo,
             perm_service=perm_service,
+        )
+        if collection_use_case_factory is None:
+            return user_selected
+        return AutoProvisionCollectionAssigner(
+            fallback=user_selected,
+            defaults=build_kb_default_setting_use_case(session, app_logger),
+            collection_use_case=collection_use_case_factory(session),
+            logger=app_logger,
         )
 
     def kb_use_case_factory(session: AsyncSession = Depends(get_session)):
@@ -4521,7 +4538,24 @@ def create_knowledge_base_factories(unified_upload_factory, summary_launcher=Non
             logger=app_logger,
         )
 
-    return kb_use_case_factory, kb_upload_factory, kb_documents_factory
+    def kb_quick_create_factory(session: AsyncSession = Depends(get_session)):
+        # agent-kb-quick-setup §9.4: 같은 요청 세션으로 KB UseCase + 업로드 UseCase 조합
+        from src.application.knowledge_base.quick_create_use_case import (
+            QuickCreateKnowledgeBaseUseCase,
+        )
+
+        return QuickCreateKnowledgeBaseUseCase(
+            kb_use_case=kb_use_case_factory(session),
+            upload_use_case=kb_upload_factory(session),
+            logger=app_logger,
+        )
+
+    return (
+        kb_use_case_factory,
+        kb_upload_factory,
+        kb_documents_factory,
+        kb_quick_create_factory,
+    )
 
 
 def create_kb_browse_factories(kb_use_case_factory):
@@ -6311,13 +6345,16 @@ def create_app() -> FastAPI:
     _section_summary_launcher, _section_summary_query_factory = (
         create_section_summary_components()
     )
-    _kb_uc_factory, _kb_upload_factory, _kb_documents_factory = (
+    _kb_uc_factory, _kb_upload_factory, _kb_documents_factory, _kb_quick_factory = (
         create_knowledge_base_factories(
-            _unified_upload_uc_factory, _section_summary_launcher
+            _unified_upload_uc_factory,
+            _section_summary_launcher,
+            collection_use_case_factory=_collection_uc_factory,
         )
     )
     app.dependency_overrides[get_knowledge_base_use_case] = _kb_uc_factory
     app.dependency_overrides[get_kb_upload_use_case] = _kb_upload_factory
+    app.dependency_overrides[get_kb_quick_create_use_case] = _kb_quick_factory
     app.dependency_overrides[get_list_kb_documents_use_case] = (
         _kb_documents_factory
     )
@@ -6553,6 +6590,10 @@ def create_app() -> FastAPI:
     app.include_router(collection_search_router)
     app.include_router(ragas_router)
     app.include_router(preview_router)
+    # agent-kb-quick-setup: DI + /api/v1/admin/kb-defaults, /api/v1/kb-defaults 라우터
+    from src.api.kb_defaults_di import wire_kb_defaults
+
+    wire_kb_defaults(app, get_session=get_session, logger=get_app_logger())
     # multimodal-extractor: DI + /api/v1/admin/multimodal 라우터 (preview 라우터 선등록 후)
     from src.api.multimodal_di import wire_multimodal
 

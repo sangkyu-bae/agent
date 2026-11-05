@@ -71,3 +71,18 @@ class TestAssign:
         )
         with pytest.raises(PermissionError):
             await assigner.assign(_user(), "secret-col", "req-1")
+
+
+class TestAssignKwargsAdditive:
+    """agent-kb-quick-setup: 인터페이스에 추가된
+    kb_id/scope/department_id 는 무시된다."""
+
+    async def test_ignores_kb_id_and_scope(self, assigner):
+        result = await assigner.assign(
+            _user(), "shared-col", "req-1", kb_id="x", scope=None, department_id=None
+        )
+        assert result == "shared-col"
+
+    async def test_rollback_is_noop(self, assigner, mock_collection_repo):
+        await assigner.rollback("shared-col", _user(), "req-1")
+        mock_collection_repo.delete_collection.assert_not_awaited()

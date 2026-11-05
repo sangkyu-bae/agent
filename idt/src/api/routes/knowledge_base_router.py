@@ -2,7 +2,16 @@
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
 from pydantic import BaseModel, Field
 
 from src.application.doc_browse.delete_document_use_case import (
@@ -23,6 +32,10 @@ from src.application.knowledge_base.list_documents_use_case import (
 from src.application.knowledge_base.list_kb_section_summaries_use_case import (
     ListKbSectionSummariesUseCase,
 )
+from src.application.knowledge_base.quick_create_use_case import (
+    QuickCreateKnowledgeBaseUseCase,
+    QuickFile,
+)
 from src.application.knowledge_base.search_history_use_case import (
     KbSearchHistoryUseCase,
 )
@@ -40,6 +53,7 @@ from src.application.section_summary.schemas import (
 )
 from src.domain.auth.entities import User
 from src.domain.collection.permission_schemas import CollectionScope
+from src.domain.kb_default_setting.errors import KbDefaultsNotConfiguredError
 from src.domain.knowledge_base.entities import KnowledgeBase
 from src.domain.knowledge_base.search_schemas import KbSearchRequest
 from src.interfaces.dependencies.auth import get_current_user
@@ -58,6 +72,10 @@ def get_knowledge_base_use_case() -> KnowledgeBaseUseCase:
 
 
 def get_kb_upload_use_case() -> KnowledgeBaseUploadUseCase:
+    raise NotImplementedError
+
+
+def get_kb_quick_create_use_case() -> QuickCreateKnowledgeBaseUseCase:
     raise NotImplementedError
 
 
@@ -100,7 +118,8 @@ class CreateKnowledgeBaseBody(BaseModel):
     description: str | None = None
     scope: str = "PERSONAL"
     department_id: str | None = None
-    collection_name: str
+    # agent-kb-quick-setup FR-02: 생략 시 KB 전용 컬렉션을 기본 임베딩 모델로 자동 생성
+    collection_name: str | None = None
     # clause-aware-chunking (Design §8.3): opt-in + late-binding 오버라이드
     use_clause_chunking: bool = False
     chunking_profile_id: str | None = None
@@ -155,6 +174,26 @@ class KbCreateResponse(BaseModel):
 class KbMessageResponse(BaseModel):
     kb_id: str
     message: str
+
+
+class QuickKbDocumentResult(BaseModel):
+    """agent-kb-quick-setup Design §4.2 — 파일 단위 결과 (uploaded | failed)."""
+
+    filename: str
+    status: str
+    document_id: str | None
+    chunk_count: int
+    error: str | None
+
+
+class QuickKbResponse(BaseModel):
+    kb_id: str
+    kb_name: str
+    collection_name: str
+    scope: str
+    documents: list[QuickKbDocumentResult]
+    uploaded_count: int
+    failed_count: int
 
 
 class KbStoreResultResponse(BaseModel):
@@ -330,6 +369,80 @@ def _raise_http(e: Exception) -> None:
 # ── Endpoints ─────────────────────────────────────────────────────
 
 
+@router.post(
+    "/quick",
+    status_code=201,
+    response_model=QuickKbResponse,
+    description=(
+        "지식베이스 생성 + 전용 컬렉션 자동 생성(관리자 기본 임베딩 모델) + 파일 순차 "
+        "업로드를 한 요청으로 처리한다 (agent-kb-quick-setup Design §4.2). "
+        "KB 생성 실패는 4xx/5xx, 파일 단위 실패는 documents[].status=failed 로 "
+        "응답에 남는다."
+    ),
+)
+async def quick_create_knowledge_base(
+    name: str = Form(...),
+    scope: str = Form("PERSONAL"),
+    department_id: str | None = Form(None),
+    files: list[UploadFile] = File(...),
+    current_user: User = Depends(get_current_user),
+    use_case: QuickCreateKnowledgeBaseUseCase = Depends(get_kb_quick_create_use_case),
+):
+    request_id = str(uuid.uuid4())
+    try:
+        kb_scope = CollectionScope(scope)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid scope: '{scope}'",
+        )
+    quick_files = [
+        QuickFile(filename=f.filename or "unknown.pdf", content=await f.read())
+        for f in files
+    ]
+    try:
+        result = await use_case.execute(
+            user=current_user,
+            name=name,
+            scope=kb_scope,
+            department_id=department_id,
+            files=quick_files,
+            request_id=request_id,
+        )
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except KbDefaultsNotConfiguredError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": e.code, "message": str(e)},
+        )
+    except ValueError as e:
+        msg = str(e)
+        if "already exists" in msg:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=msg)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=msg
+        )
+    return QuickKbResponse(
+        kb_id=result.kb.id,
+        kb_name=result.kb.name,
+        collection_name=result.kb.collection_name,
+        scope=result.kb.scope.value,
+        documents=[
+            QuickKbDocumentResult(
+                filename=d.filename,
+                status=d.status,
+                document_id=d.document_id,
+                chunk_count=d.chunk_count,
+                error=d.error,
+            )
+            for d in result.documents
+        ],
+        uploaded_count=result.uploaded_count,
+        failed_count=result.failed_count,
+    )
+
+
 @router.post("", status_code=201, response_model=KbCreateResponse)
 async def create_knowledge_base(
     body: CreateKnowledgeBaseBody,
@@ -362,6 +475,12 @@ async def create_knowledge_base(
         )
     except PermissionError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except KbDefaultsNotConfiguredError as e:
+        # agent-kb-quick-setup FR-03: 프론트가 code 로 분기해 안내 문구를 그대로 띄운다
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": e.code, "message": str(e)},
+        )
     except ValueError as e:
         # create는 404 없음 — 대상 컬렉션 미존재도 요청 본문 문제(422)로 취급 (Design §7.1)
         msg = str(e)
