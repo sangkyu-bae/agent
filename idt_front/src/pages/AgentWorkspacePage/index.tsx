@@ -10,6 +10,7 @@ import { useAgentSkills } from '@/hooks/useAgentSkills';
 import { useToolCatalog } from '@/hooks/useToolCatalog';
 import { useWikiTree } from '@/hooks/useWiki';
 import { mapDraftToolIdsToCatalog } from '@/utils/draftToolMapping';
+import { buildAgentEditPath } from '@/utils/agentEditLink';
 import type { AgentDetail, WorkerInfo } from '@/types/agentStore';
 
 type SectionKey = 'prompt' | 'tools' | 'subAgents' | 'skills' | 'knowledge' | 'info';
@@ -204,7 +205,8 @@ const AgentWorkspacePage = () => {
           </div>
           {agent.can_edit && (
             <Link
-              to="/agent-builder"
+              // agent-edit-entry FR-06: 해당 에이전트 편집으로 바로 열고, 끝나면 워크스페이스로 복귀
+              to={buildAgentEditPath(agent.agent_id, `/agents/${agent.agent_id}/workspace`)}
               className="rounded-xl border border-zinc-200 px-3 py-1.5 text-[12px] text-zinc-600 hover:bg-zinc-50"
             >
               수정하기

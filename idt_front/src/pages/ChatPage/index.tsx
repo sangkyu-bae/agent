@@ -522,6 +522,8 @@ const ChatPage = () => {
         title={selectedAgent?.name ?? 'SUPER AI Agent'}
         messageCount={messages.length}
         agentId={selectedAgent && selectedAgent.id !== 'super' ? selectedAgent.id : undefined}
+        // agent-edit-entry FR-07: SUPER 요약에는 canEdit 이 없어 미노출
+        canEdit={selectedAgent?.canEdit ?? false}
       />
 
       <div className="flex-1 overflow-y-auto">

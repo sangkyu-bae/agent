@@ -21,6 +21,8 @@ export const toAgentSummary = (agent: MyAgent): AgentSummary => ({
   openers: agent.openers ?? [],
   // chat-image-attachment D-09
   llmModelId: agent.llm_model_id,
+  // agent-edit-entry FR-08: 구독(subscribed)은 남의 에이전트라 수정 대상이 아니다
+  canEdit: agent.source_type === 'owned' || agent.source_type === 'forked',
 });
 
 export const agentSubscriptionService = {

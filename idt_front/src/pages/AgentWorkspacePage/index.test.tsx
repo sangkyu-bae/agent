@@ -168,4 +168,15 @@ describe('AgentWorkspacePage', () => {
 
     expect(screen.getByRole('link', { name: /수정하기/ })).toBeInTheDocument();
   });
+
+  it('C3: 수정하기는 해당 에이전트 편집으로 열고 워크스페이스로 돌아오게 한다 (agent-edit-entry FR-06)', async () => {
+    useRichAgentDetail({ can_edit: true });
+    renderPage();
+    await screen.findByText('문서 분석가');
+
+    expect(screen.getByRole('link', { name: /수정하기/ })).toHaveAttribute(
+      'href',
+      '/agent-builder?edit=agent-1&returnTo=%2Fagents%2Fagent-1%2Fworkspace',
+    );
+  });
 });
