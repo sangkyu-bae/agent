@@ -7,7 +7,7 @@
 > **Author**: 배상규
 > **Date**: 2026-11-03
 > **Status**: Draft
-> **Planning Doc**: [agent-run-tool-trace.plan.md](../../01-plan/features/agent-run-tool-trace.plan.md)
+> **Planning Doc**: [agent-run-tool-trace.plan.md](agent-run-tool-trace.plan.md)
 
 ---
 

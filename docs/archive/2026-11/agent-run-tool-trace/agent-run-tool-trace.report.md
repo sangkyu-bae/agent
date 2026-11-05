@@ -5,7 +5,7 @@
 > **Project**: sangplusbot (Agent Builder)
 > **Author**: 배상규
 > **Period**: 2026-11-03 ~ 2026-11-04
-> **Branch**: `feature/agent-run-tool-trace` (worktree `wt/agent-run-tool-trace`, 미커밋)
+> **Branch**: `feature/agent-run-tool-trace` — PR #89 머지(2026-11-04), 2026-11-05 아카이브
 > **Status**: Completed (Match Rate 97.5%)
 
 ---
