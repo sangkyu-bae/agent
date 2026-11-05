@@ -148,3 +148,15 @@ class TestGetAgentUseCase:
         )
         result = await use_case.execute(agent.id, "req-1")
         assert result.department_name == "개발팀"
+
+
+class TestGetAgentTokenLimit:
+    """agent-token-limit D4 — 상세 응답에 token_limit 포함 (edit 폼 프라임용)."""
+
+    @pytest.mark.asyncio
+    async def test_detail_includes_token_limit(self):
+        use_case, repository = _make_use_case()
+        agent = repository.find_by_id.return_value
+        agent.token_limit = 88000
+        result = await use_case.execute(agent.id, "req-1")
+        assert result.token_limit == 88000

@@ -96,6 +96,8 @@ class ForkAgentUseCase:
                 department_id=None,
                 temperature=source.temperature,
                 max_iterations=source.max_iterations,
+                # agent-token-limit FR-08: 원본 값 복사
+                token_limit=source.token_limit,
                 forked_from=source_agent_id,
                 forked_at=now,
                 created_at=now,

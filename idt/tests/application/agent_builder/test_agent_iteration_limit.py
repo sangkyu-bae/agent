@@ -541,3 +541,29 @@ class TestRequestSchemas:
         with pytest.raises(Exception):
             UpdateAgentRequest(max_iterations=5)
         assert UpdateAgentRequest(max_iterations=1000).max_iterations == 1000
+
+
+class TestTokenLimitRequestSchemas:
+    """agent-token-limit D4 — 요청/응답 스키마 (Plan SC: SC-5)."""
+
+    def test_create_default_50000(self):
+        req = CreateAgentRequest(user_request="테스트", name="봇", system_prompt="지침")
+        assert req.token_limit == 50000
+
+    def test_create_range_validated(self):
+        with pytest.raises(Exception):
+            CreateAgentRequest(
+                user_request="테스트", name="봇", system_prompt="지침", token_limit=7999,
+            )
+        with pytest.raises(Exception):
+            CreateAgentRequest(
+                user_request="테스트", name="봇", system_prompt="지침", token_limit=500001,
+            )
+
+    def test_update_none_means_no_change(self):
+        assert UpdateAgentRequest().token_limit is None
+
+    def test_update_range_validated(self):
+        with pytest.raises(Exception):
+            UpdateAgentRequest(token_limit=100)
+        assert UpdateAgentRequest(token_limit=500000).token_limit == 500000
