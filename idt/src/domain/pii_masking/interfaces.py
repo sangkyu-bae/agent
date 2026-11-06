@@ -1,14 +1,13 @@
 """PII 마스킹 포트 인터페이스 (도메인 경계).
 
 - PiiDetectorPort: 텍스트에서 PII 위치를 탐지 (infrastructure에서 구현)
-- PiiMaskingPort: 마스킹/복원 진입점 (application에서 구현, 부착 코드가 의존)
-- TokenVaultStorePort: vault 영속화 교체 지점 (후속 plan용)
+- PiiInspectPort: 값을 바꾸지 않고 PII 건수만 센다 (MCP 경계 검사가 의존)
 """
 from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
-from src.domain.pii_masking.schemas import PiiMatch, TokenVault
+from src.domain.pii_masking.schemas import PiiMatch, PiiType
 
 
 @runtime_checkable
@@ -20,24 +19,12 @@ class PiiDetectorPort(Protocol):
 
 
 @runtime_checkable
-class PiiMaskingPort(Protocol):
-    """외부 LLM 경계에서의 마스킹/복원 진입점."""
+class PiiInspectPort(Protocol):
+    """Design Ref: §4.6 — MCP 호출·수신 시 타입별 건수만 얻는다. 값은 불변."""
 
-    def mask(self, text: str, session_id: str) -> str:
-        """입력/검색결과의 PII를 placeholder로 치환."""
+    def inspect(self, value: object) -> dict[PiiType, int]:
         ...
 
-    def unmask(self, text: str, session_id: str) -> str:
-        """응답의 placeholder를 원복하고 미매핑 PII는 redact."""
-        ...
-
-
-@runtime_checkable
-class TokenVaultStorePort(Protocol):
-    """TokenVault 영속화 교체 지점 (인메모리 → Redis 등). 후속 plan."""
-
-    def get(self, session_id: str) -> TokenVault:
-        ...
-
-    def clear(self, session_id: str) -> None:
+    def find_orphan_argument(self, value: object) -> str | None:
+        """도구로 보내면 안 되는 지어낸 placeholder. shadow 모드는 항상 None."""
         ...

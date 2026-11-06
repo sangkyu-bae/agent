@@ -1,6 +1,9 @@
 """LangChain 기반 대화 히스토리 요약기 구현."""
-from langchain_openai import ChatOpenAI
+from collections.abc import Callable
+from typing import Any
+
 from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_openai import ChatOpenAI
 
 from src.application.conversation.interfaces import ConversationSummarizerInterface
 from src.domain.conversation.entities import ConversationMessage
@@ -24,8 +27,12 @@ class LangChainSummarizer(ConversationSummarizerInterface):
         model_name: str,
         api_key: str,
         logger: LoggerInterface,
+        llm_guard: Callable[[Any], Any] | None = None,
     ) -> None:
-        self._llm = ChatOpenAI(model=model_name, api_key=api_key, temperature=0)
+        # pii-masking-integration §11.1: 대화 원문이 들어가는 외부 LLM 호출이다.
+        # llm_guard(PII 프록시)가 주입되면 감싼다. None 이면 기존과 동일.
+        llm = ChatOpenAI(model=model_name, api_key=api_key, temperature=0)
+        self._llm = llm_guard(llm) if llm_guard is not None else llm
         self._logger = logger
 
     async def summarize(

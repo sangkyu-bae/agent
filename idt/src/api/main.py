@@ -471,6 +471,7 @@ from src.infrastructure.config.analysis_config import AnalysisConfig
 from src.infrastructure.excel.pandas_excel_parser import PandasExcelParser
 from src.infrastructure.llm.claude_client import ClaudeClient
 from src.infrastructure.llm.llm_factory import LLMFactory
+from src.application.pii_masking.guarded_llm_factory import PiiGuardedLLMFactory
 from src.infrastructure.tool_selection.adapters.langchain_filter import (
     LangChainToolFilter,
 )
@@ -848,6 +849,11 @@ _auto_build_session_repository: Optional[AutoBuildSessionRepository] = None
 # Global LLM factory and default model (initialized on startup)
 _llm_factory: LLMFactory = LLMFactory()
 _default_llm_model: Optional[LlmModel] = None
+# pii-masking-integration §11.1: 앱 싱글턴 보조 LLM 소비자용.
+# 만드는 모델을 GuardedLlm 으로 감싼다. masker 는 호출 시점에 조회한다.
+# WorkflowCompiler 에는 넘기지 않는다 — 컴파일러는 raw 모델이 필요하고
+# 스스로 런 scope 로 감싼다.
+_pii_llm_factory = PiiGuardedLLMFactory(_llm_factory, lambda: _pii_guard_masker())
 
 # admin-default-llm-routing: 보조 LLM 공급자 (앱 수명 싱글톤, lazy).
 # 관리자가 지정한 기본/보조 모델을 요청 시점마다 해석해 어댑터에 공급한다.
@@ -870,7 +876,8 @@ def get_utility_llm_provider() -> UtilityLLMProvider:
         )
         _utility_llm_provider = UtilityLLMProvider(
             cache=cache,
-            llm_factory=_llm_factory,
+            # pii-masking-integration §11.1: 보조 LLM 전부가 이 공급자를 거친다.
+            llm_factory=_pii_llm_factory,
             session_factory=get_session_factory(),
             repo_builder=lambda session: LlmModelRepository(
                 session=session, logger=app_logger
@@ -904,7 +911,8 @@ def get_grounding_judge_llm_provider() -> UtilityLLMProvider:
                 default_ttl_seconds=settings.llm_model_cache_ttl_seconds,
                 max_entries=8,
             ),
-            llm_factory=_llm_factory,
+            # pii-masking-integration §8.6: module-3 실런에서 원문 누출이 확인된 경로.
+            llm_factory=_pii_llm_factory,
             session_factory=get_session_factory(),
             repo_builder=lambda session: LlmModelRepository(
                 session=session, logger=app_logger
@@ -918,7 +926,9 @@ def get_grounding_judge_llm_provider() -> UtilityLLMProvider:
 
 
 if TYPE_CHECKING:  # prompt-guard: 타입 전용 — 런타임 import 는 _build_prompt_guard 안에서
+    from src.application.pii_masking.message_masker import PiiMessageMasker
     from src.application.prompt_guard.service import PromptGuardService
+    from src.domain.pii_masking.interfaces import PiiInspectPort
 
 # prompt-guard Design §4.4: 채팅 입력 인젹션 가드 (앱 수명 싱글톤, lazy).
 # 킬스위치 off 또는 조립 실패 시 None — 두 채팅 유스케이스는 가드 없는 기존 동작
@@ -942,6 +952,70 @@ def get_prompt_guard() -> Optional["PromptGuardService"]:
             "prompt_guard assembly failed — guard disabled", exception=e
         )
     return _prompt_guard
+
+
+# pii-masking-integration Design §2.1, §6.2: 외부 LLM 경계 PII 마스킹 (앱 수명 싱글톤).
+# 소비 지점: WorkflowCompiler(pii_masker=), RunAgentUseCase(pii_masker=), lifespan.
+# prompt guard 와 달리 on 모드 조립 실패는 올린다 — 보호를 켰다고 믿는 상태에서
+# 경계가 조용히 빠지는 쪽이 더 위험하다(D-02, prompt guard G-10 교훈).
+_pii_masker: Optional["PiiMessageMasker"] = None
+_pii_masker_built = False
+
+
+def get_pii_masker() -> Optional["PiiMessageMasker"]:
+    """None 이면 해제 (D-03). on 모드 조립 실패는 예외, shadow 는 경고 후 None."""
+    global _pii_masker, _pii_masker_built
+    if _pii_masker_built:
+        return _pii_masker
+    if not settings.pii_masking_enabled:
+        _pii_masker_built = True
+        return None
+    try:
+        _pii_masker = _build_pii_masker()
+    except Exception as e:  # noqa: BLE001 — 모드별 처리가 목적
+        if settings.pii_masking_mode == "on":
+            raise
+        get_app_logger().warning(
+            "pii_masking assembly failed in shadow mode — masking disabled",
+            exception=e,
+        )
+    _pii_masker_built = True
+    return _pii_masker
+
+
+def _build_pii_masker() -> "PiiMessageMasker":
+    from src.application.pii_masking.message_masker import PiiMessageMasker
+    from src.application.pii_masking.pii_masking_service import PiiMaskingService
+    from src.application.pii_masking.schemas import PiiMaskingConfig
+    from src.infrastructure.pii_masking.regex_detectors import RegexPiiDetector
+
+    config = PiiMaskingConfig.from_settings(
+        mode=settings.pii_masking_mode, types_csv=settings.pii_masking_types,
+    )
+    service = PiiMaskingService(
+        detector=RegexPiiDetector(), logger=get_app_logger(), config=config,
+    )
+    return PiiMessageMasker(service)
+
+
+def get_pii_inspector() -> Optional["PiiInspectPort"]:
+    """FR-10 — MCP 경계 검사기. 마스킹 해제면 None(검사·고아 차단 모두 꺼짐)."""
+    masker = get_pii_masker()
+    return masker.inspector if masker is not None else None
+
+
+def _pii_guard_masker() -> Optional["PiiMessageMasker"]:
+    """PiiGuardedLLMFactory 용 지연 조회 — 호출 시점의 masker 를 쓴다."""
+    return get_pii_masker()
+
+
+def _pii_tracing_conflict() -> bool:
+    """D-06 — LangSmith 체인 추적은 상태 원본을 기록해 모델 경계로 막을 수 없다."""
+    return (
+        bool(settings.langsmith_tracing)
+        and settings.pii_masking_enabled
+        and settings.pii_masking_mode == "on"
+    )
 
 
 def _build_prompt_guard() -> "PromptGuardService":
@@ -1128,7 +1202,9 @@ def create_document_extractor_factories():
 
     def extract_factory(session: AsyncSession = Depends(get_session)):
         adapter = DocumentConversionAdapter(
-            mcp_tool_loader=MCPToolLoader(logger=app_logger),
+            mcp_tool_loader=MCPToolLoader(
+                logger=app_logger, pii_inspector=get_pii_inspector(),
+            ),
             mcp_repository=MCPServerRepository(
                 session=session, logger=app_logger, cipher=_mcp_cipher()
             ),
@@ -1278,7 +1354,7 @@ def create_analyze_excel_use_case() -> AnalyzeExcelUseCase:
     # _default_llm_model 미로드(None) 시 빌더 비활성 → chart_router→END 하위호환.
     excel_chart_builder = None
     if _default_llm_model is not None:
-        excel_viz_llm = _llm_factory.create(_default_llm_model, temperature=0)
+        excel_viz_llm = _pii_llm_factory.create(_default_llm_model, temperature=0)
         excel_chart_builder = LangChainChartBuilder(
             llm=excel_viz_llm,
             logger=app_logger,
@@ -1363,11 +1439,14 @@ def create_conversation_use_case_factory():
             model_name=settings.openai_llm_model,
             api_key=settings.openai_api_key,
             logger=app_logger,
+            # pii-masking-integration §11.1: 대화 원문 요약 — 외부 LLM 경계
+            llm_guard=_pii_llm_factory.guard,
         )
         llm = LangChainConversationLLM(
             model_name=settings.openai_llm_model,
             api_key=settings.openai_api_key,
             logger=app_logger,
+            llm_guard=_pii_llm_factory.guard,
         )
         policy = SummarizationPolicy()
         return ConversationUseCase(
@@ -2741,6 +2820,8 @@ def create_general_chat_use_case_factory():
             model_name=settings.openai_llm_model,
             api_key=settings.openai_api_key,
             logger=app_logger,
+            # pii-masking-integration §11.1: 대화 원문 요약 — 외부 LLM 경계
+            llm_guard=_pii_llm_factory.guard,
         )
         policy = SummarizationPolicy()
 
@@ -2764,7 +2845,7 @@ def create_general_chat_use_case_factory():
         mcp_repo = MCPServerRepository(
             session=session, logger=app_logger, cipher=_mcp_cipher()
         )
-        mcp_loader = MCPToolLoader(logger=app_logger)
+        mcp_loader = MCPToolLoader(logger=app_logger, pii_inspector=get_pii_inspector())
         load_mcp_uc = LoadMCPToolsUseCase(
             repository=mcp_repo,
             mcp_tool_loader=mcp_loader,
@@ -2783,7 +2864,7 @@ def create_general_chat_use_case_factory():
         )
 
         # chart-builder DI (Design §6): 추출용 LLM 1개를 분류기/빌더가 공유.
-        viz_llm = _llm_factory.create(_default_llm_model, temperature=0)
+        viz_llm = _pii_llm_factory.create(_default_llm_model, temperature=0)
         chart_builder = LangChainChartBuilder(
             llm=viz_llm,
             logger=app_logger,
@@ -2827,6 +2908,8 @@ def create_general_chat_use_case_factory():
             agent_timezone=settings.agent_timezone,
             # prompt-guard Design §4.6: 킬스위치 off면 None → 가드 비활성
             prompt_guard=get_prompt_guard(),
+            # pii-masking-integration §2.1: None 이면 해제(D-03)
+            pii_masker=get_pii_masker(),
             # tool-access-control Check G-01: 일반 채팅(REST·WS) 도구도 실행자 권한으로 거른다
             tool_access_resolver=make_tool_access_resolver(session, app_logger),
             tool_id_resolver=_general_chat_tool_id_resolver(),
@@ -2886,7 +2969,7 @@ def _build_tool_filter():
         return None
     try:
         selector = LLMToolSelector(
-            llm_factory=_llm_factory,
+            llm_factory=_pii_llm_factory,
             llm_model=llm_model,
             logger=logger,
             top_k=settings.tool_selector_top_k,
@@ -2919,7 +3002,7 @@ def _build_pipeline_tool_selector(cfg):
         return NullToolSelector()
     try:
         return LLMToolSelector(
-            llm_factory=_llm_factory,
+            llm_factory=_pii_llm_factory,
             llm_model=llm_model,
             logger=logger,
             top_k=cfg.AGENT_PIPELINE_SELECTOR_TOP_K,
@@ -3025,7 +3108,9 @@ def create_agent_builder_factories():
     # ToolFactory/DocumentConversionAdapter는 앱 싱글톤이라 per-request 세션을
     # 들 수 없다 — 매 호출마다 세션을 여는 세션 스코프 저장소를 공유한다.
     _mcp_tool_loader = MCPToolLoader(
-        logger=app_logger, identity_headers=_identity_headers(app_logger)
+        logger=app_logger, identity_headers=_identity_headers(app_logger),
+        # pii-masking-integration §4.6 (FR-10): 에이전트 런의 MCP 호출·수신 검사.
+        pii_inspector=get_pii_inspector(),
     )
     _mcp_runtime_repo = SessionScopedMcpServerRepository(
         session_factory=get_session_factory(),
@@ -3212,6 +3297,8 @@ def create_agent_builder_factories():
         ),
         draft_grounding_max_retries=settings.draft_grounding_max_retries,
         answer_grounding_max_retries=settings.answer_grounding_max_retries,
+        # pii-masking-integration §2.1: None 이면 해제(D-03)
+        pii_masker=get_pii_masker(),
     )
 
     # DB-001 §10.2: session 은 Depends(get_session) 으로 주입.
@@ -3348,24 +3435,25 @@ def create_agent_builder_factories():
 
     # agent-schedule Design §6.2: RunAgentUseCase 조립 본문을 함수로 추출해
     # 기존 run 엔드포인트와 스케줄 트리거(TriggerDueSchedulesUseCase)가 공유.
-    def _build_run_agent_uc(session: AsyncSession):
-        message_repo = SQLAlchemyConversationMessageRepository(session)
-        summary_repo = SQLAlchemyConversationSummaryRepository(session)
-        summarizer = LangChainSummarizer(
+    def _make_run_summarizer() -> LangChainSummarizer:
+        return LangChainSummarizer(
             model_name=settings.openai_llm_model,
             api_key=settings.openai_api_key,
             logger=app_logger,
+            # pii-masking-integration §11.1: 대화 원문 요약 — 외부 LLM 경계
+            llm_guard=_pii_llm_factory.guard,
         )
-        policy = SummarizationPolicy()
+
+    def _build_run_agent_uc(session: AsyncSession):
         return RunAgentUseCase(
             repository=_make_repo(session),
             llm_model_repository=_make_llm_model_repo(session),
             compiler=workflow_compiler,
             logger=app_logger,
-            message_repo=message_repo,
-            summary_repo=summary_repo,
-            summarizer=summarizer,
-            policy=policy,
+            message_repo=SQLAlchemyConversationMessageRepository(session),
+            summary_repo=SQLAlchemyConversationSummaryRepository(session),
+            summarizer=_make_run_summarizer(),
+            policy=SummarizationPolicy(),
             tracker=run_tracker,
             # AGENT-OBS-001 fix: user_message를 별도 세션 commit해 ai_run FK 락 회피
             session_factory=get_session_factory(),
@@ -3386,6 +3474,8 @@ def create_agent_builder_factories():
             # agent-memory-injection D10: General Chat과 같은 조립기 싱글톤 공유 —
             # 에이전트 대화 런 supervisor 프롬프트에 개인∪부서 메모리 상주 주입.
             memory_assembler=get_memory_assembler(),
+            # pii-masking-integration §4.5: 런 scope·토큰 원복. None 이면 해제
+            pii_masker=get_pii_masker(),
             # agent-run-source-citations §2.1: 답변 근거는 별도 세션에서 읽는다.
             run_sources=SessionScopedRunSourcesReader(
                 get_session_factory(),
@@ -3577,6 +3667,8 @@ def _build_approval_executor(app_logger):
         ),
         max_output_chars=config.APPROVAL_EXEC_OUTPUT_MAX_CHARS,
         logger=app_logger,
+        # pii-masking-integration §4.6 (FR-11): 승인 후 집행 경로도 같은 검사.
+        pii_inspector=get_pii_inspector(),
     )
     # tool-access-control §0 F4: 집행기는 싱글턴이라 판정마다 세션을 여는 체커를 쓴다.
     from src.application.tool_access.checker import SessionScopedToolAccessChecker
@@ -5083,7 +5175,7 @@ def create_tool_catalog_factories():
     def sync_factory(session: AsyncSession = Depends(get_session)):
         tool_catalog_repo = ToolCatalogRepository(session=session, logger=app_logger)
         mcp_repo = MCPServerRepository(session=session, logger=app_logger, cipher=_mcp_cipher())
-        mcp_loader = MCPToolLoader(logger=app_logger)
+        mcp_loader = MCPToolLoader(logger=app_logger, pii_inspector=get_pii_inspector())
         return SyncMcpToolsUseCase(
             tool_catalog_repo=tool_catalog_repo,
             mcp_server_repo=mcp_repo,
@@ -5293,7 +5385,9 @@ def create_mcp_registry_factories():
         return SyncMcpToolsUseCase(
             tool_catalog_repo=ToolCatalogRepository(session=session, logger=app_logger),
             mcp_server_repo=_make_repo(session),
-            mcp_tool_loader=MCPToolLoader(logger=app_logger),
+            mcp_tool_loader=MCPToolLoader(
+                logger=app_logger, pii_inspector=get_pii_inspector(),
+            ),
             logger=app_logger,
         )
 
@@ -5579,7 +5673,8 @@ def create_middleware_agent_factories():
         # 에이전트 빌더와 동일하게 세션 스코프 저장소를 주입한다.
         # 이 경로는 실행 주체를 모른다 — 신원 서버 도구는 no_subject 안내로 끝난다.
         mcp_tool_loader=MCPToolLoader(
-            logger=app_logger, identity_headers=_identity_headers(app_logger)
+            logger=app_logger, identity_headers=_identity_headers(app_logger),
+            pii_inspector=get_pii_inspector(),
         ),
         mcp_repository=SessionScopedMcpServerRepository(
             session_factory=get_session_factory(),
@@ -5632,7 +5727,7 @@ def create_load_mcp_tools_factory():
 
     def _factory(session: AsyncSession = Depends(get_session)):
         mcp_repo = MCPServerRepository(session=session, logger=app_logger, cipher=_mcp_cipher())
-        mcp_loader = MCPToolLoader(logger=app_logger)
+        mcp_loader = MCPToolLoader(logger=app_logger, pii_inspector=get_pii_inspector())
         return LoadMCPToolsUseCase(
             repository=mcp_repo,
             mcp_tool_loader=mcp_loader,
@@ -5761,6 +5856,19 @@ async def lifespan(app: FastAPI):
         create_auto_build_components()
     )
     _advanced_ingest_use_case = create_advanced_ingest_use_case()
+
+    # pii-masking-integration D-02: on 모드 설정 오류는 첫 요청이 아니라
+    # 기동 시점에 드러나야 한다.
+    _startup_masker = get_pii_masker()
+    get_app_logger().info(
+        "pii_masking assembled",
+        enabled=_startup_masker is not None,
+        mode=settings.pii_masking_mode,
+    )
+    if _pii_tracing_conflict():
+        get_app_logger().warning(
+            "pii_masking on with LangSmith tracing — chain traces keep original PII"
+        )
 
     # ES 인덱스 보장 (없으면 자동 생성, 실패 시 warning만)
     await _ensure_es_index()

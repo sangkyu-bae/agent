@@ -100,6 +100,18 @@ class MiddlewareBuilder:
         return ApprovalGateMiddleware(tool_id=tool_id, worker_id=worker_id)
 
     @staticmethod
+    def build_pii_masking(*, masker, scope):
+        """pii-masking-integration Design §4.3, D-01 — PII 마스킹 미들웨어.
+
+        카탈로그를 거치지 않는다. 카탈로그로 끄면 미들웨어만 꺼지고 직접 호출
+        프록시는 살아 있어 경계가 절반만 해제되기 때문이다. 호출자(컴파일러·
+        일반 채팅)가 체인 맨 앞에 붙인다. 워커마다 새 인스턴스(D6), scope는 공유.
+        """
+        from src.application.pii_masking.middleware import PiiMaskingMiddleware
+
+        return PiiMaskingMiddleware(masker=masker, scope=scope)
+
+    @staticmethod
     def _build_one(a: AppliedMiddleware, fallback_models: list):
         cfg = a.config
         match a.middleware_type:

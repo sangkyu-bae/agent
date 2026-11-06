@@ -88,6 +88,9 @@ from src.application.agent_builder.worker_run_cap_hooks import WorkerRunCapHooks
 from src.application.approval.gate_interface import ApprovalGateInterface
 from src.application.approval.gate_middleware import StatelessGate
 from src.application.middleware.middleware_builder import MiddlewareBuilder
+from src.application.pii_masking.guarded_llm import GuardedLlm
+from src.application.pii_masking.message_masker import PiiMessageMasker
+from src.domain.pii_masking.schemas import PiiRunScope
 from src.application.agent_run.auth_context import get_current_auth_context
 from src.application.agent_run.prompt_rendering import (
     WIKI_FOLDER_HEADER_TAG,
@@ -532,6 +535,8 @@ class WorkflowCompiler:
     # approval-gate Check G9: 게이트 구현 교체 지점 (기본 StatelessGate).
     # 인스턴스별로 바꾸려면 compiler.approval_gate = InterruptGate() 로 덮는다.
     approval_gate: "ApprovalGateInterface" = StatelessGate()
+    # pii-masking-integration §2.1: 클래스 기본값 — __new__ 픽스처가 깨지지 않도록.
+    _pii_masker: PiiMessageMasker | None = None
 
 
     def __init__(
@@ -580,7 +585,11 @@ class WorkflowCompiler:
         # image-generation-tool Design §4.3: 이미지 생성 전용 노드 의존. None 이면 안내 노옵.
         image_generation_use_case=None,
         image_generation_max_per_turn: int = 4,
+        # pii-masking-integration §2.1 / D-03: 외부 LLM 경계의 PII 마스킹.
+        # None 이면 해제 — 미들웨어·프록시 모두 붙지 않는다(무회귀).
+        pii_masker: PiiMessageMasker | None = None,
     ) -> None:
+        self._pii_masker = pii_masker
         self._tool_factory = tool_factory
         self._llm_factory = llm_factory
         self._logger = logger
@@ -656,9 +665,12 @@ class WorkflowCompiler:
         agent_id: str | None = None,
         subject_user_id: str | None = None,
         memory_block: str = "",
+        pii_scope: PiiRunScope | None = None,
         tool_access: "ToolAccessSet | None" = None,
         excluded_sink: list | None = None,
     ):
+        # pii_scope — pii-masking-integration §3.1 (FR-08): 런 1개의 vault. 호출자
+        # (RunAgentUseCase)가 만들어 넘기고 서브에이전트 재귀에도 그대로 전달한다.
         # subject_user_id — mcp-identity-header §1.1: MCP 신원 헤더의 실행 주체.
         # 인증 컨텍스트가 없는 스케줄·승인 재개 런도 채우므로 auth_ctx 와 별개다.
         # memory_block — agent-memory-injection §6.1 D1: 호출자(RunAgentUseCase)가
@@ -699,8 +711,15 @@ class WorkflowCompiler:
             model_name=llm_model.model_name,
             depth=depth,
         )
+        # Design §6.1: scope 없이 불려도 경계는 유지한다.
+        # 호출자가 scope를 빠뜨려도 우회가 되지 않게 한다.
+        if self._pii_masker is not None and pii_scope is None:
+            pii_scope = self._pii_masker.new_scope()
         try:
-            llm = self._llm_factory.create(llm_model, temperature)
+            # Design Ref: pii-masking-integration §2.1 (FR-05) — raw 는 create_agent
+            # 워커 전용(미들웨어가 경계). 그 외 노드는 guarded 를 받는다.
+            raw_llm = self._llm_factory.create(llm_model, temperature)
+            llm = self._guard_llm(raw_llm, pii_scope)
             policy = QualityGatePolicy()
 
             # Design Ref: agent-memory-injection §6.1 D2 — prepend 블록 조립 헬퍼.
@@ -795,6 +814,7 @@ class WorkflowCompiler:
                         auth_ctx=auth_ctx,
                         include_user_context=include_user_context,
                         subject_user_id=subject_user_id,
+                        pii_scope=pii_scope,
                         # tool-access-control §2.1 ③: 하위 그래프도 같은 실행자 기준
                         tool_access=tool_access,
                         excluded_sink=excluded_sink,
@@ -1050,7 +1070,8 @@ class WorkflowCompiler:
                                     request_id=request_id, exception=e,
                                 )
                         worker_agent = create_agent(
-                            model=llm, tools=wiki_tools,
+                            # pii-masking-integration §2.1: 워커는 raw 모델 + 미들웨어.
+                            model=raw_llm, tools=wiki_tools,
                             # name → 모델 산출 AIMessage.name (OpenAI 64자 상한)
                             name=clamp_llm_name(worker_def.worker_id),
                             # §D5 + worker-context-injection §4.1:
@@ -1063,7 +1084,8 @@ class WorkflowCompiler:
                             # 호출 상한 예외 — 폴더 모드가 지도→wiki_list→
                             # wiki_read로 최소 2회를 쓰는 기존 워크플로우를 지킨다.
                             middleware=(
-                                _instantiate(middleware_plan)
+                                self._pii_middleware(pii_scope)
+                                + _instantiate(middleware_plan)
                                 + self._approval_gate_middleware(
                                     worker_def=worker_def,
                                     gate_settings=gate_settings,
@@ -1093,11 +1115,14 @@ class WorkflowCompiler:
                                 budget[0].run_limit
                             )
                         worker_agent = create_agent(
-                            model=llm, tools=worker_tools,
+                            model=raw_llm, tools=worker_tools,
                             # name → 모델 산출 AIMessage.name (OpenAI 64자 상한)
                             name=clamp_llm_name(worker_def.worker_id),
+                            # FR-03: PII 미들웨어는 맨 앞 — 재시도·폴백이 안쪽에서
+                            # 돌고 승인 게이트는 원복된 인자를 본다.
                             middleware=(
-                                _instantiate(middleware_plan)
+                                self._pii_middleware(pii_scope)
+                                + _instantiate(middleware_plan)
                                 + budget
                                 + self._approval_gate_middleware(
                                     worker_def=worker_def,
@@ -1438,6 +1463,7 @@ class WorkflowCompiler:
         auth_ctx: AuthContext | None = None,
         include_user_context: bool = True,
         subject_user_id: str | None = None,
+        pii_scope: PiiRunScope | None = None,
         tool_access: "ToolAccessSet | None" = None,
         excluded_sink: list | None = None,
     ):
@@ -1477,6 +1503,8 @@ class WorkflowCompiler:
             auth_ctx=auth_ctx,
             include_user_context=sub_include,
             subject_user_id=subject_user_id,
+            # FR-08: 부모와 같은 vault — 자식 결과의 placeholder도 부모 런에서 원복된다.
+            pii_scope=pii_scope,
             tool_access=tool_access,
             excluded_sink=excluded_sink,
         )
@@ -1979,6 +2007,28 @@ class WorkflowCompiler:
             worker_context_block=worker_context_block,
         )
 
+    def _guard_llm(self, llm, pii_scope: PiiRunScope | None):
+        """pii-masking-integration §4.4 — 직접 호출 노드용 프록시. 해제면 원본."""
+        if self._pii_masker is None:
+            return llm
+        return GuardedLlm(llm, self._pii_masker, pii_scope)
+
+    def _guard_like(self, llm, run_llm):
+        """캐시된 pipeline LLM은 런을 모른다 — run_llm 의 scope로 감싼다."""
+        if isinstance(run_llm, GuardedLlm):
+            return GuardedLlm(llm, self._pii_masker, run_llm.scope)
+        return llm
+
+    def _pii_middleware(self, pii_scope: PiiRunScope | None) -> list:
+        """FR-03 — create_agent 체인 맨 앞에 붙일 PII 미들웨어(해제면 빈 목록)."""
+        if self._pii_masker is None or pii_scope is None:
+            return []
+        return [
+            MiddlewareBuilder.build_pii_masking(
+                masker=self._pii_masker, scope=pii_scope,
+            )
+        ]
+
     def _resolve_pipeline_llm(self, run_llm):
         """search 파이프라인용 경량 LLM 해석 (search-node-query-pipeline D3).
 
@@ -1989,12 +2039,12 @@ class WorkflowCompiler:
         if self._pipeline_llm_model is None:
             return run_llm
         if self._pipeline_llm_cache is not None:
-            return self._pipeline_llm_cache
+            return self._guard_like(self._pipeline_llm_cache, run_llm)
         try:
             self._pipeline_llm_cache = self._llm_factory.create(
                 self._pipeline_llm_model, 0.0,
             )
-            return self._pipeline_llm_cache
+            return self._guard_like(self._pipeline_llm_cache, run_llm)
         except Exception as e:
             self._logger.warning(
                 "search pipeline llm creation failed, falling back to run llm",

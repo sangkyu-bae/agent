@@ -108,6 +108,9 @@ from src.domain.conversation.value_objects import (
 )
 from src.domain.llm_model.interfaces import LlmModelRepositoryInterface
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
+from src.application.pii_masking.message_masker import PiiMessageMasker
+from src.domain.pii_masking.policies import PiiRunSummaryPolicy
+from src.domain.pii_masking.schemas import PiiRunScope
 from src.domain.tool_access.value_objects import ToolAccessSet
 from src.application.tool_access.validation import excluded_info
 from src.domain.prompt_guard.interfaces import PromptGuardPort
@@ -164,6 +167,11 @@ class _StreamState:
     # approval-gate Design §3.1(v0.2): 재개용 최종 SupervisorState 스냅샷.
     # 최상위 chain_end 출력이 전체 상태다 — 워커 진입 후크가 없어 최종 상태를 쓴다.
     final_state: dict = field(default_factory=dict)
+    # pii-masking-integration §4.5 (FR-09): 토큰 원복기와 LLM 호출별 노드명.
+    pii_restorer: Any = None
+    pii_token_nodes: dict = field(default_factory=dict)
+    # FR-13 (Check G-2): 실패·한도 초과 경로에서도 요약을 남기려고 상태에 둔다.
+    pii_scope: Any = None
     # tool-access-control FR-11: 권한으로 뺀 워커(서브에이전트 포함). 정상·강등 답변이 함께 쓴다.
     excluded_workers: list = field(default_factory=list)
 
@@ -271,6 +279,9 @@ def _replace_worker_draft(messages: list, worker_id: str, draft: str) -> list:
 
 
 class RunAgentUseCase:
+    # pii-masking-integration: 클래스 기본값 — __new__ 픽스처가 깨지지 않도록.
+    _pii_masker: Optional[PiiMessageMasker] = None
+
     def __init__(
         self,
         repository: AgentDefinitionRepositoryInterface,
@@ -303,6 +314,9 @@ class RunAgentUseCase:
         image_block_builder: Optional[ImageBlockBuilderPort] = None,
         image_max_count: int = 5,
         image_detail: str = "high",
+        # pii-masking-integration §2.1 / D-03: 외부 LLM 경계 PII 마스킹. None 이면
+        # 해제 — compile 에 scope 를 넘기지 않고 토큰도 그대로 흘린다(무회귀).
+        pii_masker: Optional[PiiMessageMasker] = None,
         # agent-run-source-citations §2.3: 답변 근거 조회. None 이면 sources 없음.
         run_sources: Optional[RunSourcesReaderPort] = None,
         # agent-run-tool-trace §2.2: 답변별 도구 실행 내역 조회. None 이면 tool_trace 없음.
@@ -311,6 +325,7 @@ class RunAgentUseCase:
         # 없음(기존 동작). 프로덕션 주입은 배선 계약 테스트가 고정한다.
         tool_access_resolver=None,
     ) -> None:
+        self._pii_masker = pii_masker
         self._repository = repository
         self._tool_access_resolver = tool_access_resolver
         self._run_sources = run_sources
@@ -430,11 +445,15 @@ class RunAgentUseCase:
                     ):
                         yield ev
                     return
+            # pii-masking-integration §3.1 (FR-08): 런 1개의 vault.
+            # 서브에이전트까지 같은 vault를 공유한다.
+            pii_scope = self._start_pii_scope(state)
             # tool-access-control FR-11: 권한으로 뺀 워커(서브에이전트 포함) 수집
             graph, initial_state, graph_config = await self._prepare_graph(
                 agent=agent, request=request, session_id=session_id,
                 callback=callback, run_id=run_id, request_id=request_id,
                 auth_ctx=auth_ctx, inject_memory=inject_memory,
+                pii_scope=pii_scope,
                 excluded_sink=state.excluded_workers,
             )
             node_names = _collect_node_names(agent.to_workflow_definition())
@@ -450,6 +469,7 @@ class RunAgentUseCase:
                 if extra is not None:
                     yield extra
 
+            await self._record_pii_step(pii_scope, run_id, callback, request_id)
             answer, tools_used = self._resolve_answer(state)
             # analysis-data-continuity D3: 턴의 분석 원천 데이터 스냅샷 수집.
             # analysis-source-preservation: 엑셀 원천(state.analysis_source) 병합.
@@ -540,6 +560,7 @@ class RunAgentUseCase:
                 {"code": _RUN_FAILED_CODE_GRAPH, "message": str(e)[:512]},
             )
         finally:
+            self._log_pii_summary(state.pii_scope, request_id)
             if ctx_token is not None:
                 reset_run_context(ctx_token)
             if auth_token is not None:
@@ -603,6 +624,43 @@ class RunAgentUseCase:
             assistant_message_id=assistant_message_id,
             excluded_tools=excluded_tools,
         )
+
+    # ── pii-masking-integration (Design §3.1, §4.5, FR-13) ───────────────
+
+    def _start_pii_scope(self, state: _StreamState) -> Optional[PiiRunScope]:
+        """런 scope 와 토큰 원복기를 만든다. 해제면 None."""
+        if self._pii_masker is None:
+            return None
+        scope = self._pii_masker.new_scope()
+        state.pii_restorer = self._pii_masker.new_stream_restorer(scope)
+        state.pii_scope = scope
+        return scope
+
+    def _log_pii_summary(
+        self, scope: Optional[PiiRunScope], request_id: str
+    ) -> None:
+        """FR-13 (Check G-2) — 런이 어떻게 끝나든 남기는 요약. shadow 집계의 원천."""
+        if scope is None:
+            return
+        self._logger.info(
+            "PII masking summary", request_id=request_id,
+            summary=PiiRunSummaryPolicy.render(scope),
+        )
+
+    async def _record_pii_step(
+        self, scope: Optional[PiiRunScope], run_id: Optional[RunId],
+        callback: Optional[UsageCallback], request_id: str,
+    ) -> None:
+        """FR-13 — 정상 종료 런의 ai_run 스텝. 모드와 타입별 고유 건수만 남긴다."""
+        if scope is None or self._tracker is None or run_id is None or callback is None:
+            return
+        summary = PiiRunSummaryPolicy.render(scope)
+        async with track_step(
+            tracker=self._tracker, callback=callback, run_id=run_id,
+            node_name="pii_masking", node_type=NodeType.OTHER,
+            logger=self._logger,
+        ) as step:
+            step.output_summary = summary
 
     # ── prompt-guard (Design §4.5) ──────────────────────────────────────
 
@@ -963,6 +1021,7 @@ class RunAgentUseCase:
         request_id: str,
         auth_ctx: AuthContext | None = None,
         inject_memory: bool = False,
+        pii_scope: Optional[PiiRunScope] = None,
         excluded_sink: list | None = None,
     ) -> tuple[Any, dict, dict]:
         """llm_model 로드 + messages 빌드 + compile + initial_state + graph_config."""
@@ -1019,6 +1078,8 @@ class RunAgentUseCase:
             # 모두 RunAgentRequest.user_id 를 채운다 — 스케줄엔 auth_ctx 가 없다.
             subject_user_id=request.user_id,
             memory_block=memory_block,
+            # 해제 시에는 인자 자체를 넘기지 않는다 — 기존 compile 호출 형태 보존.
+            **({"pii_scope": pii_scope} if pii_scope is not None else {}),
             # tool-access-control §0 F1: auth_ctx 있으면 그것으로, 없으면(스케줄·RAGAS)
             # request.user_id 로 판정. 조회 실패는 도구 없이 실행(Fail-Closed).
             tool_access=await self._resolve_tool_access(
@@ -1231,6 +1292,8 @@ class RunAgentUseCase:
             return self._map_tool_end(name, raw, data, seq, run_id, state)
         if ev_type == "on_chat_model_stream":
             return self._map_chat_stream(raw, data, seq, run_id, state)
+        if ev_type == "on_chat_model_end":
+            return self._flush_pii_tokens(raw, seq, run_id, state)
         return None
 
     def _map_chain_start(
@@ -1371,6 +1434,8 @@ class RunAgentUseCase:
             raise ValueError(f"LLM 모델 없음: {agent.llm_model_id}")
         workflow = agent.to_workflow_definition()
         workflow = await self._inject_attached_skills(workflow, agent, request_id)
+        # FR-08: 재개는 새 런 scope. 스냅샷이 원본이라 재마스킹으로 충분하다.
+        pii_scope = self._pii_masker.new_scope() if self._pii_masker else None
         graph = await self._compiler.compile(
             workflow=workflow,
             llm_model=llm_model,
@@ -1387,12 +1452,16 @@ class RunAgentUseCase:
             include_user_context=agent.include_user_context,
             agent_id=agent.id,
             subject_user_id=subject_user_id,
+            **({"pii_scope": pii_scope} if pii_scope is not None else {}),
             # tool-access-control §0 F1: 재개 런엔 auth_ctx 가 없다 — 원래 요청자 기준.
             tool_access=await self._resolve_tool_access(
                 None, subject_user_id, request_id
             ),
         )
-        result = await graph.ainvoke(state)
+        try:
+            result = await graph.ainvoke(state)
+        finally:
+            self._log_pii_summary(pii_scope, request_id)
         answer, _ = self._parse_result(result)
         # image-generation-tool D-03: 재개 답변에도 생성 이미지 링크 보존
         return append_generated_images(answer, result.get("generated_images"))
@@ -1628,11 +1697,39 @@ class RunAgentUseCase:
             return None
         metadata = raw.get("metadata", {}) or {}
         node_name = metadata.get("langgraph_node", "") or "unknown"
+        if state.pii_restorer is not None:
+            # pii-masking-integration §4.5: placeholder 접두는 보류했다가 원복한다.
+            # 병렬 워커 토큰이 섞이므로 LLM 호출(run_id) 단위로 나눈다.
+            key = str(raw.get("run_id", ""))
+            state.pii_token_nodes[key] = node_name
+            chunk_text = state.pii_restorer.feed(key, chunk_text)
+            if not chunk_text:
+                return None
+        return self._token_event(chunk_text, node_name, seq, run_id, state)
+
+    def _token_event(
+        self, chunk_text: str, node_name: str,
+        seq: _SeqCounter, run_id: Optional[RunId], state: _StreamState,
+    ) -> AgentRunEvent:
         state.token_acc.setdefault(node_name, []).append(chunk_text)
         return self._build_event(
             seq, AgentRunEventType.TOKEN, run_id,
             {"chunk": chunk_text, "node_name": node_name},
         )
+
+    def _flush_pii_tokens(
+        self, raw: dict, seq: _SeqCounter,
+        run_id: Optional[RunId], state: _StreamState,
+    ) -> Optional[AgentRunEvent]:
+        """LLM 호출이 끝나면 보류 중인 꼬리를 TOKEN 1건으로 내보낸다 (FR-09)."""
+        if state.pii_restorer is None:
+            return None
+        key = str(raw.get("run_id", ""))
+        tail = state.pii_restorer.flush(key)
+        node_name = state.pii_token_nodes.pop(key, "unknown")
+        if not tail:
+            return None
+        return self._token_event(tail, node_name, seq, run_id, state)
 
     # ── analysis-data-continuity (스냅샷 수집·재주입) ────────────────────
 

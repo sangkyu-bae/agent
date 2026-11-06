@@ -31,6 +31,7 @@ from src.domain.mcp_registry.identity import (
     IdentityUnavailableError,
 )
 from src.domain.mcp_registry.schemas import MCPServerRegistration
+from src.domain.pii_masking.interfaces import PiiInspectPort
 from src.domain.tool_catalog.mcp_tool_id import McpToolRef, parse_mcp_tool_id
 from src.infrastructure.mcp.call_client import MCPCallClient
 from src.infrastructure.mcp.client_factory import HeaderProvider, HeaderProviderError
@@ -39,6 +40,10 @@ from src.infrastructure.mcp_registry.mcp_tool_loader import MCPToolLoader
 # (registration, subject_user_id, request_id) — mcp-identity-header §2.1:
 # 신원 헤더 서버면 요청자로 만든 공급자를 call_tool 세션에 붙인다.
 ClientFactory = Callable[[MCPServerRegistration, str | None, str], MCPCallClient]
+
+_PII_ORPHAN_REASON = (
+    "인자에 확인되지 않은 개인정보 자리표시자가 있음 — 실제 값으로 수정 후 승인"
+)
 
 
 def build_execution_client(
@@ -88,7 +93,11 @@ class McpActionExecutor(ActionExecutorInterface):
         client_factory: ClientFactory,
         max_output_chars: int,
         logger: LoggerInterface,
+        pii_inspector: PiiInspectPort | None = None,
     ) -> None:
+        # pii-masking-integration §4.6 (FR-11): 승인 후 집행은 MCPToolAdapter 를
+        # 거치지 않으므로 같은 검사를 여기에도 둔다. None 이면 기존과 동일.
+        self._pii_inspector = pii_inspector
         # server_repo: find_by_id(server_id, request_id) 만 쓴다. 스케줄러
         # tick 에는 요청 세션이 없으므로 SessionScopedMcpServerRepository 를
         # 주입한다 (tool-and-mcp §3).
@@ -112,6 +121,8 @@ class McpActionExecutor(ActionExecutorInterface):
         ref = parse_mcp_tool_id(tool_id)
         if ref is None:
             return self._fail("blocked", "MCP 도구 id 형식이 아님", tool_id, request_id)
+        if self._has_pii_orphan(tool_args):
+            return self._fail("blocked", _PII_ORPHAN_REASON, tool_id, request_id)
         if ref.tool_name is None:
             # D-09: 서버만 가리키는 구형 id. 어떤 도구인지 추측하지 않는다.
             return self._fail(
@@ -202,6 +213,7 @@ class McpActionExecutor(ActionExecutorInterface):
             tool_id=tool_id, server_id=ref.server_id, arg_keys=sorted(arguments),
         )
         started = time.perf_counter()
+        self._log_pii("request", arguments, tool_id, request_id)
         try:
             result = await client.call_tool(
                 name=ref.tool_name, arguments=arguments, request_id=request_id
@@ -224,6 +236,7 @@ class McpActionExecutor(ActionExecutorInterface):
                 "unknown", f"호출 중 오류 ({_exception_name(e)})",
                 tool_id, request_id, exception=e,
             )
+        self._log_pii("response", result.content, tool_id, request_id)
         content = McpArgumentPolicy.truncate(result.content, self._max_output_chars)
         if result.is_error:
             return self._fail("tool_error", content, tool_id, request_id)
@@ -234,6 +247,27 @@ class McpActionExecutor(ActionExecutorInterface):
             elapsed_ms=round((time.perf_counter() - started) * 1000, 2),
         )
         return ExecutionResult(ok=True, output=content)
+
+    def _has_pii_orphan(self, tool_args: dict) -> bool:
+        """D-08: 승인 초안에 남은 고아 placeholder 는 지어낸 값이다. 접속 전에 막는다.
+        판정은 검사기가 모드를 보고 한다 — shadow 는 막지 않는다 (Check G-3)."""
+        if self._pii_inspector is None:
+            return False
+        return self._pii_inspector.find_orphan_argument(tool_args) is not None
+
+    def _log_pii(
+        self, direction: str, value: object, tool_id: str, request_id: str
+    ) -> None:
+        """타입별 건수만 기록한다(값 미기록). 검사기 없거나 0건이면 아무것도 안 한다."""
+        if self._pii_inspector is None:
+            return
+        counts = self._pii_inspector.inspect(value)
+        if counts:
+            self._logger.info(
+                "MCP PII inspected", direction=direction, tool_id=tool_id,
+                request_id=request_id,
+                counts={pii_type.value: n for pii_type, n in counts.items()},
+            )
 
     def _fail(
         self,

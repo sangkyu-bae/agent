@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -303,13 +305,13 @@ class Settings(BaseSettings):
     eval_qa_gen_model: str = "gpt-4o-mini"
     eval_qa_gen_max_file_mb: int = 15
 
-    # PII Masking (pii-masking)
-    # 외부 LLM 경계의 가역 PII 마스킹 전역 on/off. false면 mask/unmask는 no-op.
+    # PII Masking (pii-masking-integration Design §10.2)
+    # 외부 LLM 경계의 가역 PII 마스킹 킬스위치. false면 서비스를 조립하지 않는다.
     pii_masking_enabled: bool = True
-    # 활성 PII 타입(쉼표 구분): rrn,phone,email,card,account
+    # shadow: 탐지·기록만(LLM 요청 불변), on: 마스킹. 오타는 기동 실패(D-02).
+    pii_masking_mode: Literal["shadow", "on"] = "shadow"
+    # 활성 PII 타입(쉼표 구분): rrn,phone,email,card,account. 오타는 조립 실패.
     pii_masking_types: str = "rrn,phone,email,card,account"
-    # 응답에서 vault에 없는 신규 PII를 [REDACTED_<TYPE>]로 처리할지 여부.
-    pii_masking_output_redact: bool = True
 
     # Agent Memory (agent-memory Design §3-4)
     # 사용자당 활성 메모리 개수 상한 / 주입 블록 문자 예산(한글 1자≈1토큰 보수 근사)

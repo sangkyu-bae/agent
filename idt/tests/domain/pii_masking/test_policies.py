@@ -51,6 +51,36 @@ class TestIsValid:
         assert PiiMaskingPolicy.is_valid(PiiType.EMAIL, "a@b.12") is False
 
 
+class TestBusinessNumber:
+    def test_business_number_valid_checksum_returns_true(self):
+        assert PiiMaskingPolicy.business_number_valid("123-45-67891") is True
+
+    def test_business_number_wrong_checksum_returns_false(self):
+        assert PiiMaskingPolicy.business_number_valid("123-45-67890") is False
+
+    def test_business_number_other_format_returns_false(self):
+        # 3-2-5 형식이 아니면 체크섬이 맞아도 사업자번호로 보지 않는다.
+        assert PiiMaskingPolicy.business_number_valid("1234567891") is False
+
+
+class TestAccount:
+    def test_account_ten_to_fourteen_digits_is_valid(self):
+        assert PiiMaskingPolicy.account_valid("110-123-456789") is True
+        assert PiiMaskingPolicy.account_valid("123456-01-123456") is True
+
+    def test_account_hyphen_date_is_rejected(self):
+        assert PiiMaskingPolicy.account_valid("2026-11-02") is False
+
+    def test_account_over_fourteen_digits_is_rejected(self):
+        assert PiiMaskingPolicy.account_valid("20261102-0001-0007") is False
+
+    def test_account_business_number_is_rejected(self):
+        assert PiiMaskingPolicy.account_valid("123-45-67891") is False
+
+    def test_is_valid_account_uses_account_rule(self):
+        assert PiiMaskingPolicy.is_valid(PiiType.ACCOUNT, "2026-11-02") is False
+
+
 class TestEmailValid:
     def test_two_char_tld_passes(self):
         assert PiiMaskingPolicy.email_valid("user@example.co") is True
