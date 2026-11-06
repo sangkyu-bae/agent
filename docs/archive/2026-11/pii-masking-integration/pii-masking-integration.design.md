@@ -7,7 +7,7 @@
 > **Author**: 배상규
 > **Date**: 2026-11-02 (v0.6: 2026-11-05)
 > **Status**: Draft
-> **Planning Doc**: [pii-masking-integration.plan.md](../../01-plan/features/pii-masking-integration.plan.md)
+> **Planning Doc**: [pii-masking-integration.plan.md](pii-masking-integration.plan.md)
 
 ### Pipeline References
 

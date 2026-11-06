@@ -7,6 +7,7 @@
 | agent-kb-quick-setup | completed | 98.9% (Check 95.5% → Act-1) | 2026-11-05 | [agent-kb-quick-setup/](agent-kb-quick-setup/) |
 | agent-edit-entry | completed | 100% (Check 90% → Act-1) | 2026-11-05 | [agent-edit-entry/](agent-edit-entry/) |
 | agent-run-tool-trace | completed | 97.5% (Check, Minor 4건 수정) | 2026-11-05 | [agent-run-tool-trace/](agent-run-tool-trace/) |
+| pii-masking-integration | completed | 95.8% (Check 89.4% → Act-1) | 2026-11-06 | [pii-masking-integration/](pii-masking-integration/) |
 
 > 백엔드·프론트 전용 사이클은 `idt/docs/archive/2026-11/`, `idt_front/docs/archive/2026-11/` 에 있다.
 
@@ -42,3 +43,9 @@
 | agent-run-tool-trace | 하단 "추론 진행" 패널의 UUID 런타임 도구 이름 — `ToolCatalogLookup` 재사용 | 기존 동작 | 소형 사이클 후보 |
 | agent-run-tool-trace | 스트리밍 중 supervisor 라우팅 JSON 토큰 노출, 종료 판단 2줄 연속 기록 | 기존 동작 | 소형 사이클 후보 |
 | agent-run-tool-trace | 프론트 커버리지 미측정 (`@vitest/coverage-v8` 미설치), 헤더 N은 상한 안 도구만 셈(G-02) | 측정·소형 | 요청 시 |
+| **pii-masking-integration** | **배포는 shadow(기본)로 — `PII masking summary`·`MCP PII inspected` 로그로 오탐 확인 후 `PII_MASKING_MODE=on`. on 전환 시 `LANGSMITH_TRACING` 끄기(상태 원본 기록)** | 운영 절차 | **on 전환 전 필수** |
+| pii-masking-integration | 실제 PII를 반환하는 MCP로 on 실런 1회 (고객 문의 MCP는 서버에서 사전 마스킹) | 검증 | on 전환 전 |
+| pii-masking-integration | 외부 도구 인자 마스킹(Tavily·Perplexity·외부 MCP), 임베딩 API 쿼리, 이미지, 이름·주소(NER) | 잔여 위험 | shadow 집계 후 별도 Plan |
+| pii-masking-integration | action 초안 생성기가 사용자가 준 본문 대신 다른 문장을 만듦 (shadow에서도 재현, 마스킹 무관) | 기존 결함 | 소형 사이클 후보 |
+| pii-masking-integration | Minor G-5·G-7·G-8, `test_no_pii_in_logs`·호출 단위 성능 벤치 미작성 | 테스트·정리 | 해당 파일 수정 시 |
+| pii-masking-integration | 부분 테스트 묶음 실행 시 `test_pii_masking_di`가 `main` import로 LangSmith 키를 다시 올려 일반 채팅 테스트가 순서 오염으로 깨짐 (전체 스위트에선 미재현) | 테스트 격리 | 소형 사이클 후보 |
