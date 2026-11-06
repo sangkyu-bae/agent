@@ -9,6 +9,7 @@ from langchain_core.tools import BaseTool
 
 from src.domain.mcp.policy import MCPConnectionPolicy
 from src.domain.mcp.value_objects import MCPServerConfig
+from src.domain.pii_masking.interfaces import PiiInspectPort
 from src.infrastructure.logging import get_logger
 from src.infrastructure.mcp.client_factory import HeaderProvider, MCPClientFactory
 from src.infrastructure.mcp.tool_adapter import MCPToolAdapter
@@ -39,6 +40,7 @@ class MCPToolRegistry:
         self,
         configs: list[MCPServerConfig],
         header_providers: dict[str, HeaderProvider | None] | None = None,
+        pii_inspector: PiiInspectPort | None = None,
     ) -> None:
         """초기화.
 
@@ -57,6 +59,8 @@ class MCPToolRegistry:
             )
         self._configs = configs
         self._header_providers = header_providers or {}
+        # pii-masking-integration §4.6: 모든 어댑터에 같은 검사기를 싣는다.
+        self._pii_inspector = pii_inspector
 
     async def get_tools(self, request_id: str | None = None) -> list[BaseTool]:
         """모든 등록된 MCP 서버의 Tool 목록을 LangChain Tool로 반환한다.
@@ -121,6 +125,7 @@ class MCPToolRegistry:
                     request_id=request_id or "",
                     tool_id=config.name,
                     header_provider=self._header_providers.get(config.name),
+                    pii_inspector=self._pii_inspector,
                 )
                 tools.append(adapter)
 

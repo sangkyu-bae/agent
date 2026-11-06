@@ -3,6 +3,7 @@ from langchain_core.tools import BaseTool
 
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.domain.mcp_registry.schemas import MCPServerRegistration, MCPTransportType
+from src.domain.pii_masking.interfaces import PiiInspectPort
 from src.domain.mcp.value_objects import (
     MCPServerConfig,
     MCPTransport,
@@ -37,14 +38,21 @@ class MCPToolLoader:
     MCPToolRegistry(MCP-001)로 LangChain BaseTool 목록 반환.
     """
 
-    def __init__(self, logger: LoggerInterface, identity_headers=None):
+    def __init__(
+        self,
+        logger: LoggerInterface,
+        identity_headers=None,
+        pii_inspector: PiiInspectPort | None = None,
+    ):
         """identity_headers: IdentityHeaderProviderFactory | None.
 
         도구를 실제로 실행하는 런타임 로더에만 주입한다. 목록 조회 전용
         경로(도구 동기화·연결 테스트)는 없어도 된다 — 도구를 부르지 않는다.
+        pii_inspector 도 같은 규칙이다(pii-masking-integration §4.6).
         """
         self._logger = logger
         self._identity_headers = identity_headers
+        self._pii_inspector = pii_inspector
 
     @staticmethod
     def _build_config(registration: MCPServerRegistration) -> MCPServerConfig:
@@ -101,7 +109,8 @@ class MCPToolLoader:
         config = self._build_config(registration)
         provider = self._header_provider(registration, subject_user_id, request_id)
         registry = MCPToolRegistry(
-            configs=[config], header_providers={config.name: provider}
+            configs=[config], header_providers={config.name: provider},
+            pii_inspector=self._pii_inspector,
         )
         tools = await registry.get_tools(request_id=request_id)
 

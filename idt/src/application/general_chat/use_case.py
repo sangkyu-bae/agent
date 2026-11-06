@@ -54,6 +54,9 @@ from src.domain.llm.interfaces import LLMFactoryInterface
 from src.domain.llm.message_content import coerce_message_text
 from src.domain.llm_model.entity import LlmModel
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
+from src.application.middleware.middleware_builder import MiddlewareBuilder
+from src.application.pii_masking.message_masker import PiiMessageMasker
+from src.domain.pii_masking.policies import PiiRunSummaryPolicy
 from src.domain.prompt_guard.interfaces import PromptGuardPort
 from src.domain.prompt_guard.policies import BLOCK_NOTICE_KO, BlockedTurnPolicy
 from src.domain.prompt_guard.schemas import GuardDecision, GuardTier, InputSource
@@ -119,6 +122,10 @@ class _SeqCounter:
 class _ChatStreamState:
     tool_start_ts: dict[str, datetime] = field(default_factory=dict)
     final_messages: list = field(default_factory=list)
+    # pii-masking-integration §4.5 (FR-09): 토큰·추론 텍스트 원복기. None 이면 해제.
+    pii_restorer: Any = None
+    # FR-13 (Check G-2): 런 요약 로그용 scope. ai_run 스텝 대신 로그로 남긴다.
+    pii_scope: Any = None
 
 
 class GeneralChatUseCase:
@@ -130,6 +137,9 @@ class GeneralChatUseCase:
     - ConversationSummarizerInterface: 오래된 턴 요약
     - SummarizationPolicy: 요약 정책 판단
     """
+
+    # pii-masking-integration: 클래스 기본값 — __new__ 픽스처가 깨지지 않도록.
+    _pii_masker: PiiMessageMasker | None = None
 
     def __init__(
         self,
@@ -160,7 +170,10 @@ class GeneralChatUseCase:
         agent_timezone: str | None = None,
         # prompt-guard Design §4.6: 채팅 입력 인젹션 가드. None 이면 비활성 (FR-10).
         prompt_guard: PromptGuardPort | None = None,
+        # pii-masking-integration §2.1: 외부 LLM 경계 PII 마스킹. None 이면 해제(D-03).
+        pii_masker: PiiMessageMasker | None = None,
     ) -> None:
+        self._pii_masker = pii_masker
         self._tool_builder = chat_tool_builder
         self._prompt_guard = prompt_guard
         # runtime-datetime-context D3/D8: [현재 날짜] 블록 기준 타임존
@@ -363,6 +376,8 @@ class GeneralChatUseCase:
         run_id = None
         callback = None
         ctx_token = None
+        # finally 의 PII 요약이 참조하므로 try 밖에서 만든다 (Check G-2).
+        state = _ChatStreamState()
 
         try:
             history = await self._msg_repo.find_by_session(user_id, session_id)
@@ -478,12 +493,13 @@ class GeneralChatUseCase:
                         "Middleware prepare failed — continuing without",
                         request_id=request_id, exception=e,
                     )
+            # FR-03: PII 미들웨어는 체인 맨 앞 — 재시도·폴백이 안쪽에서 돈다.
+            middlewares = self._pii_middlewares(state) + middlewares
             agent = self._create_agent(
                 tools, auth_ctx=auth_ctx, memory_block=memory_block,
                 middlewares=middlewares,
             )
 
-            state = _ChatStreamState()
             # D4: callback 부착 시 general_chat LLM 호출도 ai_llm_call에 기록.
             stream_kwargs: dict = {"version": "v2"}
             # pipeline-langsmith-tracing §4-2(편차) — 전역 os.environ 대신
@@ -500,6 +516,10 @@ class GeneralChatUseCase:
             async for raw in agent.astream_events(
                 {"messages": context}, **stream_kwargs,
             ):
+                # FR-09: 호출이 끝나면 보류 꼬리를 추론 이벤트보다 먼저 내보낸다.
+                flushed = self._flush_pii_token(raw, seq, session_id_str, state)
+                if flushed is not None:
+                    yield flushed
                 mapped = self._map_event(raw, seq, session_id_str, state)
                 if mapped is not None:
                     yield mapped
@@ -568,6 +588,7 @@ class GeneralChatUseCase:
                 {"code": _CHAT_FAILED_CODE, "message": str(e)[:512]},
             )
         finally:
+            self._log_pii_summary(state.pii_scope, request_id)
             if ctx_token is not None:
                 reset_run_context(ctx_token)
             if auth_token is not None:
@@ -791,10 +812,10 @@ class GeneralChatUseCase:
                 state.final_messages = list(output["messages"])
             return None  # chain_end는 UI 표시 안 함
         if ev_type == "on_chat_model_stream":
-            return self._map_token(data, seq, session_id)
+            return self._map_token(data, seq, session_id, raw=raw, state=state)
         if ev_type == "on_chat_model_end":
             # agent-chat-reasoning-display §4.1
-            return self._map_model_reasoning(data, seq, session_id)
+            return self._map_model_reasoning(data, seq, session_id, state=state)
         if ev_type == "on_tool_start":
             return self._map_tool_start(raw, data, seq, session_id, state)
         if ev_type == "on_tool_end":
@@ -803,6 +824,7 @@ class GeneralChatUseCase:
 
     def _map_model_reasoning(
         self, data: dict, seq: _SeqCounter, session_id: str,
+        state: _ChatStreamState | None = None,
     ) -> Optional[ChatEvent]:
         """on_chat_model_end + tool_calls + content → STEP_REASONING.
 
@@ -817,6 +839,10 @@ class GeneralChatUseCase:
         content = getattr(output, "content", None)
         if not isinstance(content, str) or not content.strip():
             return None
+        # pii-masking-integration §4.5: on_chat_model_end 는 내부 모델 원문이라
+        # placeholder 가 그대로 있다 — 화면에 보내기 전에 원복한다.
+        if state is not None and state.pii_restorer is not None:
+            content = state.pii_restorer.restore(content)
         return self._build_event(
             seq, ChatEventType.STEP_REASONING, session_id,
             {
@@ -830,6 +856,7 @@ class GeneralChatUseCase:
 
     def _map_token(
         self, data: dict, seq: _SeqCounter, session_id: str,
+        raw: dict | None = None, state: _ChatStreamState | None = None,
     ) -> Optional[ChatEvent]:
         chunk_obj = data.get("chunk")
         # content가 content block 리스트로 내려올 수 있어 평탄화 문자열로 정규화.
@@ -837,9 +864,48 @@ class GeneralChatUseCase:
         chunk_text = coerce_message_text(getattr(chunk_obj, "content", None))
         if not chunk_text:
             return None
+        if state is not None and state.pii_restorer is not None:
+            # §4.5: placeholder 접두는 보류했다가 원복한다(LLM 호출 단위 버퍼).
+            key = str((raw or {}).get("run_id", ""))
+            chunk_text = state.pii_restorer.feed(key, chunk_text)
+            if not chunk_text:
+                return None
         return self._build_event(
             seq, ChatEventType.TOKEN, session_id, {"chunk": chunk_text},
         )
+
+    def _flush_pii_token(
+        self, raw: dict, seq: _SeqCounter, session_id: str, state: _ChatStreamState,
+    ) -> Optional[ChatEvent]:
+        """LLM 호출 종료(on_chat_model_end) 시 보류 꼬리를 TOKEN 1건으로 내보낸다."""
+        if raw.get("event") != "on_chat_model_end" or state.pii_restorer is None:
+            return None
+        tail = state.pii_restorer.flush(str(raw.get("run_id", "")))
+        if not tail:
+            return None
+        return self._build_event(
+            seq, ChatEventType.TOKEN, session_id, {"chunk": tail},
+        )
+
+    def _log_pii_summary(self, scope: Any, request_id: str) -> None:
+        """FR-13 (Check G-2) — 모드와 타입별 고유 건수만. 원문·매핑은 남기지 않는다."""
+        if scope is None:
+            return
+        self._logger.info(
+            "PII masking summary", request_id=request_id,
+            summary=PiiRunSummaryPolicy.render(scope),
+        )
+
+    def _pii_middlewares(self, state: _ChatStreamState) -> list:
+        """런 scope·원복기를 만들고 체인 맨 앞에 붙일 미들웨어를 돌려준다."""
+        if self._pii_masker is None:
+            return []
+        scope = self._pii_masker.new_scope()
+        state.pii_restorer = self._pii_masker.new_stream_restorer(scope)
+        state.pii_scope = scope
+        return [
+            MiddlewareBuilder.build_pii_masking(masker=self._pii_masker, scope=scope)
+        ]
 
     def _map_tool_start(
         self, raw: dict, data: dict,

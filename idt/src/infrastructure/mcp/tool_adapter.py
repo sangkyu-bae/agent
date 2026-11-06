@@ -15,6 +15,8 @@ from src.domain.mcp_registry.identity import (
     IdentityClaimPolicy,
     IdentityUnavailableError,
 )
+from src.domain.pii_masking.interfaces import PiiInspectPort
+from src.domain.pii_masking.policies import PII_ORPHAN_TOOL_ARG_NOTICE
 from src.infrastructure.logging import get_logger
 from src.infrastructure.mcp.client_factory import HeaderProvider, MCPClientFactory
 
@@ -60,6 +62,10 @@ class MCPToolAdapter(BaseTool):
     # 실행 주체로 만든 공급자를 넣는다. None 이면 기존과 동일 (FR-08).
     header_provider: HeaderProvider | None = None
 
+    # pii-masking-integration §4.6 (FR-10, FR-11): 인자·결과의 PII 타입별 건수 기록과
+    # 고아 placeholder 인자 차단. None 이면 해제 — 기존과 동일(D-03).
+    pii_inspector: PiiInspectPort | None = None
+
     model_config = {"arbitrary_types_allowed": True}
 
     def _run(self, arguments: dict[str, Any] | None = None) -> str:
@@ -70,16 +76,9 @@ class MCPToolAdapter(BaseTool):
         return loop.run_until_complete(self._arun(arguments=arguments or {}))
 
     async def _arun(self, arguments: dict[str, Any] | None = None) -> str:
-        """MCP Tool 비동기 실행.
+        """MCP Tool 비동기 실행. 결과 텍스트(content 항목 줄바꿈 연결)를 반환한다.
 
-        Args:
-            arguments: Tool 실행 인수
-
-        Returns:
-            실행 결과 텍스트 (content 항목들을 줄바꿈으로 연결)
-
-        Raises:
-            연결 실패 또는 Tool 실행 오류 시 예외 전파
+        연결 실패 또는 Tool 실행 오류는 예외로 전파한다.
         """
         args = arguments or {}
         # Design Ref: §2.2 — "MCP tool execution started"의 유무가
@@ -104,8 +103,37 @@ class MCPToolAdapter(BaseTool):
             )
             return ToolArgumentPolicy.build_blocked_message(blocked)
 
+        if self._pii_orphan_blocked(args, log_extra):
+            return PII_ORPHAN_TOOL_ARG_NOTICE
+        self._log_pii("request", args, log_extra)
+
         logger.info("MCP tool execution started", **log_extra)
-        return await self._call(args, log_extra)
+        content = await self._call(args, log_extra)
+        self._log_pii("response", content, log_extra)
+        return content
+
+    def _pii_orphan_blocked(self, args: dict[str, Any], log_extra: dict) -> bool:
+        """D-08: 원복 뒤에도 남은 placeholder 는 LLM이 지어낸 값이다. 판정은 검사기가
+        모드를 보고 한다(shadow는 막지 않음). 값은 로그에 남기지 않는다(LOG-001)."""
+        if self.pii_inspector is None:
+            return False
+        if self.pii_inspector.find_orphan_argument(args) is None:
+            return False
+        logger.warning("MCP tool call blocked (orphan PII placeholder)", **log_extra)
+        return True
+
+    def _log_pii(self, direction: str, value: object, log_extra: dict) -> None:
+        """타입별 건수만 기록한다. 0건이면 남기지 않는다. 값은 바꾸지 않는다."""
+        if self.pii_inspector is None:
+            return
+        counts = self.pii_inspector.inspect(value)
+        if not counts:
+            return
+        logger.info(
+            "MCP PII inspected", direction=direction,
+            counts={pii_type.value: n for pii_type, n in counts.items()},
+            **log_extra,
+        )
 
     async def _call(self, args: dict[str, Any], log_extra: dict) -> str:
         """세션 생성 → call_tool. 신원 불가는 예외가 아닌 안내문으로 돌려준다."""
