@@ -1,6 +1,17 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { chatService } from '@/services/chatService';
 import { queryKeys } from '@/lib/queryKeys';
+import { GENERAL_CHAT_AGENT_ID } from '@/constants/agent';
+import {
+  attachSessionSources,
+  toSessionSourceMap,
+  type SessionSourceMap,
+} from '@/utils/sessionSources';
+import {
+  attachSessionToolTraces,
+  toSessionToolTraceMap,
+  type SessionToolTraceMap,
+} from '@/utils/sessionToolTraces';
 import type {
   SendMessageRequest,
   ConversationChatRequest,
@@ -115,8 +126,42 @@ export const useAgentSessionMessages = (
     queryKey: queryKeys.chat.agentSessionMessages(
       agentId ?? '', sessionId ?? '', userId ?? '',
     ),
-    queryFn: () =>
-      chatService.getAgentSessionMessages(agentId!, sessionId!, userId!),
+    queryFn: async () => {
+      // agent-run-source-citations §6.1 — 근거는 부가 정보라 실패해도 메시지는 표시한다.
+      // agent-run-tool-trace §6 — 도구 실행 내역도 부가 정보라 실패해도 메시지를 표시한다.
+      const [messages, sources, traces] = await Promise.all([
+        chatService.getAgentSessionMessages(agentId!, sessionId!, userId!),
+        loadSessionSources(agentId!, sessionId!),
+        loadSessionToolTraces(agentId!, sessionId!),
+      ]);
+      return attachSessionToolTraces(attachSessionSources(messages, sources), traces);
+    },
     enabled: !!agentId && !!sessionId && !!userId && (options?.enabled ?? true),
     staleTime: 60_000,
   });
+
+const loadSessionSources = async (
+  agentId: string,
+  sessionId: string,
+): Promise<SessionSourceMap> => {
+  // 일반 채팅은 에이전트 근거 계약의 범위 밖이다 (Plan §2.2).
+  if (agentId === GENERAL_CHAT_AGENT_ID) return {};
+  try {
+    return toSessionSourceMap(await chatService.getAgentSessionSources(agentId, sessionId));
+  } catch {
+    return {};
+  }
+};
+
+const loadSessionToolTraces = async (
+  agentId: string,
+  sessionId: string,
+): Promise<SessionToolTraceMap> => {
+  // 일반 채팅은 에이전트 내역 계약의 범위 밖이다 (Plan §2.2).
+  if (agentId === GENERAL_CHAT_AGENT_ID) return {};
+  try {
+    return toSessionToolTraceMap(await chatService.getAgentSessionToolTraces(agentId, sessionId));
+  } catch {
+    return {};
+  }
+};

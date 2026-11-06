@@ -127,6 +127,43 @@ describe('useAgentRunStream', () => {
     expect(result.current.tokens).toBe('안녕');
   });
 
+  // agent-run-feedback-wiring Design §8.3 #1~#3
+  describe('assistantMessageId (agent-run-feedback-wiring)', () => {
+    it('stores assistant_message_id from agent_answer_completed', () => {
+      const { result } = renderHook(() =>
+        useAgentRunStream({ runId: 'r1', agentId: 'a', query: 'q' }),
+      );
+      expect(result.current.assistantMessageId).toBeNull();
+      act(() =>
+        emit('agent_answer_completed', { answer: '답', tools_used: [], assistant_message_id: 4821 }),
+      );
+      expect(result.current.answer).toBe('답');
+      expect(result.current.assistantMessageId).toBe(4821);
+    });
+
+    it('stays null when the event has no assistant_message_id (old server / persist=false)', () => {
+      const { result } = renderHook(() =>
+        useAgentRunStream({ runId: 'r1', agentId: 'a', query: 'q' }),
+      );
+      act(() => emit('agent_answer_completed', { answer: '답', tools_used: [] }));
+      expect(result.current.assistantMessageId).toBeNull();
+    });
+
+    it('resets to null when a new streamId starts', () => {
+      const { result, rerender } = renderHook(
+        (props: { streamId: string }) =>
+          useAgentRunStream({ runId: 'r1', agentId: 'a', query: 'q', streamId: props.streamId }),
+        { initialProps: { streamId: 's1' } },
+      );
+      act(() =>
+        emit('agent_answer_completed', { answer: '답', tools_used: [], assistant_message_id: 1 }),
+      );
+      expect(result.current.assistantMessageId).toBe(1);
+      rerender({ streamId: 's2' });
+      expect(result.current.assistantMessageId).toBeNull();
+    });
+  });
+
   // fix-chat-reasoning-object-render — chunk가 비정상(객체/배열)이어도 [object Object]가 새지 않음
   it('non-string chunk does not leak [object Object] into tokens', () => {
     const { result } = renderHook(() =>
@@ -166,6 +203,89 @@ describe('useAgentRunStream', () => {
       }),
     );
     expect(result.current.charts).toEqual([chart]);
+  });
+
+  it('captures limit_reached/limit_reason on agent_answer_completed (agent-token-limit D11)', () => {
+    const { result } = renderHook(() =>
+      useAgentRunStream({ runId: 'r1', agentId: 'a', query: 'q' }),
+    );
+    act(() =>
+      emit('agent_answer_completed', {
+        answer: '답', tools_used: [], limit_reached: true, limit_reason: 'token',
+      }),
+    );
+    expect(result.current.limitReached).toBe(true);
+    expect(result.current.limitReason).toBe('token');
+  });
+
+  it('limit fields default to false/null when absent (구 서버 호환)', () => {
+    const { result } = renderHook(() =>
+      useAgentRunStream({ runId: 'r1', agentId: 'a', query: 'q' }),
+    );
+    act(() => emit('agent_answer_completed', { answer: '답', tools_used: [] }));
+    expect(result.current.limitReached).toBe(false);
+    expect(result.current.limitReason).toBeNull();
+  });
+
+  it('captures sources on agent_answer_completed (agent-run-source-citations)', () => {
+    const { result } = renderHook(() =>
+      useAgentRunStream({ runId: 'r1', agentId: 'a', query: 'q' }),
+    );
+    const source = { kind: 'document', source: 'a.pdf', content: '발췌', chunk_id: 'd1' };
+    act(() =>
+      emit('agent_answer_completed', { answer: '답', tools_used: [], sources: [source] }),
+    );
+    expect(result.current.sources).toEqual([source]);
+  });
+
+  it('captures tool_trace on agent_answer_completed (agent-run-tool-trace)', () => {
+    const { result } = renderHook(() =>
+      useAgentRunStream({ runId: 'r1', agentId: 'a', query: 'q' }),
+    );
+    const trace = {
+      omitted_count: 0,
+      items: [{ seq: 1, kind: 'tool', label: 'list_inquiries', status: 'success' }],
+    };
+    act(() =>
+      emit('agent_answer_completed', { answer: '답', tools_used: [], tool_trace: trace }),
+    );
+    expect(result.current.toolTrace).toEqual(trace);
+  });
+
+  it('defaults tool_trace to null when absent', () => {
+    const { result } = renderHook(() =>
+      useAgentRunStream({ runId: 'r1', agentId: 'a', query: 'q' }),
+    );
+    expect(result.current.toolTrace).toBeNull();
+    act(() => emit('agent_answer_completed', { answer: '답', tools_used: [] }));
+    expect(result.current.toolTrace).toBeNull();
+  });
+
+  it('defaults sources to empty array when absent', () => {
+    const { result } = renderHook(() =>
+      useAgentRunStream({ runId: 'r1', agentId: 'a', query: 'q' }),
+    );
+    expect(result.current.sources).toEqual([]);
+    act(() => emit('agent_answer_completed', { answer: '답', tools_used: [] }));
+    expect(result.current.sources).toEqual([]);
+  });
+
+  it('captures excluded_tools on agent_answer_completed (tool-access-control FR-11)', () => {
+    const { result } = renderHook(() =>
+      useAgentRunStream({ runId: 'r1', agentId: 'a', query: 'q' }),
+    );
+    expect(result.current.excludedTools).toEqual([]);
+    const ex = { tool_id: 'internal:python_code_executor', name: 'Python 코드 실행', reason: 'no_permission' };
+    act(() => emit('agent_answer_completed', { answer: '답', tools_used: [], excluded_tools: [ex] }));
+    expect(result.current.excludedTools).toEqual([ex]);
+  });
+
+  it('defaults excluded_tools to empty array when absent', () => {
+    const { result } = renderHook(() =>
+      useAgentRunStream({ runId: 'r1', agentId: 'a', query: 'q' }),
+    );
+    act(() => emit('agent_answer_completed', { answer: '답', tools_used: [] }));
+    expect(result.current.excludedTools).toEqual([]);
   });
 
   it('defaults charts to empty array when absent', () => {

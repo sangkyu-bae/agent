@@ -5,6 +5,15 @@ export type AgentStatus = 'idle' | 'thinking' | 'tool_calling' | 'responding' | 
 export type AgentSourceType = 'owned' | 'subscribed' | 'forked';
 export type AgentVisibility = 'private' | 'public';
 
+// Design Ref: sidebar-agent-list §3.1 — 사이드바 에이전트 그룹 키. 선언 순서가 표시 순서다.
+export const SIDEBAR_AGENT_GROUP = {
+  PINNED: 'pinned',
+  OWNED: 'owned',
+  SUBSCRIBED: 'subscribed',
+  FORKED: 'forked',
+} as const;
+export type SidebarAgentGroupKey = (typeof SIDEBAR_AGENT_GROUP)[keyof typeof SIDEBAR_AGENT_GROUP];
+
 export interface MyAgent {
   agent_id: string;
   name: string;
@@ -108,6 +117,8 @@ export interface AgentSummary {
   openers?: string[];
   // chat-image-attachment D-09: 비전 여부 안내용 (LLM 모델 목록과 대조). 권위는 서버 precheck.
   llmModelId?: string;
+  // agent-edit-entry FR-08: 채팅 헤더 수정 아이콘 노출 조건 (owned·forked). 최종 판정은 빌더의 상세 can_edit
+  canEdit?: boolean;
 }
 
 export interface AgentChatOutletContext {

@@ -24,6 +24,8 @@ interface AgentTestPanelProps {
   onStagedScheduleRemove: (localId: string) => void;
   /** agent-settings-tab D6: 반복 한도 확정값 반영 (clamp는 SettingsPanel 책임) */
   onMaxIterationsChange: (value: number) => void;
+  /** agent-token-limit D12: 토큰 예산 확정값 반영 (clamp는 SettingsPanel 책임) */
+  onTokenLimitChange: (value: number) => void;
   /** agent-opener §5.1: 오프너 탭 staged 목록 반영 */
   onOpenersChange: (next: string[]) => void;
 }
@@ -56,6 +58,7 @@ const AgentTestPanel = ({
   onStagedScheduleAdd,
   onStagedScheduleRemove,
   onMaxIterationsChange,
+  onTokenLimitChange,
   onOpenersChange,
 }: AgentTestPanelProps) => {
   const [tab, setTab] = useState<RightTabId>('test');
@@ -122,6 +125,8 @@ const AgentTestPanel = ({
             agentId={agentId}
             maxIterations={form.maxIterations}
             onMaxIterationsChange={onMaxIterationsChange}
+            tokenLimit={form.tokenLimit}
+            onTokenLimitChange={onTokenLimitChange}
           />
         ) : (
           <TestChatView mode={mode} agentId={agentId} agentName={agentName} />

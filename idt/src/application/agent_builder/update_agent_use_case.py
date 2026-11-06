@@ -1,5 +1,15 @@
 """UpdateAgentUseCase: 시스템 프롬프트 / 이름 / 도구 / 서브에이전트 / 문서 수정."""
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+from src.application.tool_access.validation import (
+    ensure_new_tools_allowed,
+    partition_tool_workers,
+)
+from src.domain.tool_access.tool_ids import to_catalog_tool_id
+
+if TYPE_CHECKING:
+    from src.application.tool_access.resolver import ToolAccessResolver
 
 from src.application.agent_builder.document_generation_type_binding import (
     DOCUMENT_GENERATOR_TOOL_ID,
@@ -74,10 +84,12 @@ _NO_CLAMP = _ClampResult()
 
 
 def _catalog_tool_id(stored_tool_id: str) -> str:
-    """agent_tool 저장 표기 → 카탈로그 표기 (`internal:{id}` / `mcp:...` 그대로)."""
-    if stored_tool_id.startswith("mcp"):
-        return stored_tool_id
-    return f"internal:{stored_tool_id}"
+    """agent_tool 저장 표기 → 카탈로그 표기 (`internal:{id}` / `mcp:...` 그대로).
+
+    tool-access-control Check G-04: 규칙은 도메인 정규화 한 곳(`to_catalog_tool_id`)이 가진다.
+    해석 불가(레거시 서버 단위 `mcp_{srv}` 등)는 기존처럼 원문 유지.
+    """
+    return to_catalog_tool_id(stored_tool_id) or stored_tool_id
 
 
 def _tool_guides_from_workers(workers: list[WorkerDefinition]) -> tuple[ToolGuide, ...]:
@@ -99,7 +111,7 @@ def _tool_guides_from_workers(workers: list[WorkerDefinition]) -> tuple[ToolGuid
     return tuple(guides)
 
 
-def _sync_tool_guidelines(agent, tool_workers: list[WorkerDefinition]) -> None:
+def sync_tool_guidelines(agent, tool_workers: list[WorkerDefinition]) -> None:
     """저장 프롬프트의 `## Tool Guidelines` 블록만 현재 워커로 재생성한다.
 
     Design Ref: wiki-guided-routing D5 — 이 시점의 system_prompt는 apply_update가
@@ -130,8 +142,12 @@ class UpdateAgentUseCase:
         tool_catalog_repo=None,
         mcp_server_repo=None,
         opener_repo: AgentOpenerRepositoryInterface | None = None,
+        tool_access_resolver: "ToolAccessResolver | None" = None,
     ) -> None:
         self._repository = repository
+        # Design Ref: tool-access-control §2.2 (FR-06·07) — 신규 도구만 검증.
+        # 미주입 = 판정 없음(기존 동작). 프로덕션 주입은 배선 계약 테스트가 고정한다.
+        self._tool_access_resolver = tool_access_resolver
         # agent-opener D4.3: None = 변경 안 함 / [] = 전부 삭제 / [...] = 전체 교체
         self._opener_repo = opener_repo
         # approval-gate Check G10: 단독 워커 제약 검증용 (미주입 시 생략 — 무회귀)
@@ -222,6 +238,7 @@ class UpdateAgentUseCase:
                 max_iterations=request.max_iterations,
                 llm_model_id=request.llm_model_id,
                 middleware_types=middleware_types,
+                token_limit=request.token_limit,
             )
 
             # 도구 구성 교체 (agent-update-tool-editing D §2.2):
@@ -329,6 +346,18 @@ class UpdateAgentUseCase:
         skeleton = await self._skeleton_builder.build_from_tool_ids(
             request.tool_ids, request.tool_configs, request_id
         )
+        # tool-access-control FR-06: 기존 정의에 없던 도구만 검증한다 — 다른 부서원이
+        # 쓰던 도구가 소유자의 저장 한 번으로 사라지지 않게 한다. 판정 주체 = 수정자.
+        tool_access = None
+        if self._tool_access_resolver is not None:
+            tool_access = await self._tool_access_resolver.for_user_id(
+                user_id, request_id
+            )
+            ensure_new_tools_allowed(
+                tool_access,
+                [w.tool_id for w in skeleton.workers],
+                previous_tool_ids=previous.keys(),
+            )
         self._inherit_tool_configs(skeleton.workers, previous)
 
         # 정책은 사용자 선택분 기준 (빌트인은 상한에서 제외 — builtin-tools D6)
@@ -341,6 +370,17 @@ class UpdateAgentUseCase:
         builtin_workers = await self._skeleton_builder.build_builtin_workers(
             skeleton.workers, None, request_id
         )
+        # tool-access-control FR-07: 원래 있던 빌트인은 유지, 새로 들어오며 불허면 제외.
+        if tool_access is not None:
+            builtin_workers, skipped = partition_tool_workers(
+                tool_access, builtin_workers, keep_tool_ids=previous.keys()
+            )
+            if skipped:
+                self._logger.info(
+                    "builtin tools skipped — no permission",
+                    request_id=request_id,
+                    tool_ids=[w.tool_id for w in skipped],
+                )
         tool_workers = skeleton.workers + builtin_workers
         # approval-gate Check G10: 생성 경로와 같은 단독 워커 제약. 없으면 생성
         # 후 수정으로 게이트 도구를 다른 도구와 묶어 FR-05 를 우회할 수 있었다.
@@ -356,7 +396,7 @@ class UpdateAgentUseCase:
 
         agent.replace_tool_workers(tool_workers)
         agent.flow_hint = skeleton.flow_hint
-        _sync_tool_guidelines(agent, tool_workers)
+        sync_tool_guidelines(agent, tool_workers)
 
         removed = set(previous) - {w.tool_id for w in tool_workers}
         await self._cleanup_removed_tool_deps(agent, removed, request_id)

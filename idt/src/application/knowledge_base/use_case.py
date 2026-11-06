@@ -67,11 +67,19 @@ class KnowledgeBaseUseCase:
             raise ValueError(
                 f"Knowledge base '{clean_name}' already exists"
             )
+        # agent-kb-quick-setup Design §9.4: kb_id 를 먼저 뽑아 자동 컬렉션
+        # 이름(kb-{id8})의 재료로 넘긴다.
+        kb_id = str(uuid.uuid4())
         assigned = await self._assigner.assign(
-            user, collection_name, request_id
+            user,
+            collection_name,
+            request_id,
+            kb_id=kb_id,
+            scope=scope,
+            department_id=department_id,
         )
         kb = KnowledgeBase(
-            id=str(uuid.uuid4()),
+            id=kb_id,
             name=clean_name,
             description=description,
             owner_id=user.id,
@@ -87,7 +95,18 @@ class KnowledgeBaseUseCase:
             use_custom_chunking=use_custom_chunking,
             custom_chunking_config=custom_chunking_config,
         )
-        saved = await self._kb_repo.save(kb, request_id)
+        try:
+            saved = await self._kb_repo.save(kb, request_id)
+        except Exception as e:
+            # 자동 생성 컬렉션만 best-effort 정리(구현체가 판단). 원인 예외는 전파.
+            self._logger.warning(
+                "KnowledgeBase save failed — rolling back assigned collection",
+                request_id=request_id,
+                collection_name=assigned,
+                exception=e,
+            )
+            await self._assigner.rollback(assigned, user, request_id)
+            raise
         self._logger.info(
             "KnowledgeBase created",
             request_id=request_id,

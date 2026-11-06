@@ -378,3 +378,42 @@ class TestUpdateChunking:
                 "kb-1", _user(user_id=1), request_id="req-1",
                 **{**_CHUNKING_OFF, "chunk_size": 800},
             )
+
+
+class TestCreateAutoProvision:
+    """agent-kb-quick-setup Design §9.4 — kb_id 선생성·assign 전달·save 실패 롤백."""
+
+    async def test_assign_receives_pre_generated_kb_id_and_scope(
+        self, use_case, mock_assigner
+    ):
+        kb = await use_case.create(
+            user=_user(),
+            name="여신 상담봇 지식",
+            collection_name=None,
+            scope=CollectionScope.PERSONAL,
+            department_id=None,
+            description=None,
+            request_id="req-1",
+        )
+        kwargs = mock_assigner.assign.await_args.kwargs
+        assert kwargs["kb_id"] == kb.id
+        assert kwargs["scope"] == CollectionScope.PERSONAL
+        assert kwargs["department_id"] is None
+
+    async def test_save_failure_rolls_back_assigned_collection(
+        self, use_case, mock_kb_repo, mock_assigner
+    ):
+        mock_assigner.assign.return_value = "kb-abcdef12"
+        mock_kb_repo.save.side_effect = RuntimeError("db down")
+        with pytest.raises(RuntimeError):
+            await use_case.create(
+                user=_user(),
+                name="여신 상담봇 지식",
+                collection_name=None,
+                scope=CollectionScope.PERSONAL,
+                department_id=None,
+                description=None,
+                request_id="req-1",
+            )
+        mock_assigner.rollback.assert_awaited_once()
+        assert mock_assigner.rollback.await_args.args[0] == "kb-abcdef12"

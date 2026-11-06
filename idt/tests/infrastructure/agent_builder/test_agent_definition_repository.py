@@ -67,6 +67,17 @@ class TestAgentDefinitionRepositorySave:
         assert tool_ids == {"tavily_search", "excel_export"}
 
 
+    @pytest.mark.asyncio
+    async def test_save_persists_token_limit(self):
+        """agent-token-limit D5: save가 token_limit를 모델에 싣는다 (Plan SC: SC-2)."""
+        repo, session = _make_repo()
+        agent = _make_agent()
+        agent.token_limit = 90000
+        await repo.save(agent, "req-1")
+        added_model = session.add.call_args[0][0]
+        assert added_model.token_limit == 90000
+
+
 class TestAgentDefinitionRepositoryFindById:
     @pytest.mark.asyncio
     async def test_find_by_id_returns_none_when_not_found(self):
@@ -106,6 +117,8 @@ class TestAgentDefinitionRepositoryFindById:
         mock_model.department_id = None
         mock_model.temperature = 0.70
         mock_model.max_iterations = 25
+        # agent-token-limit D5: row→entity 매핑
+        mock_model.token_limit = 60000
         mock_model.created_at = now
         mock_model.updated_at = now
         mock_model.tools = [mock_tool]
@@ -118,6 +131,7 @@ class TestAgentDefinitionRepositoryFindById:
         assert isinstance(result, AgentDefinition)
         assert result.id == "agent-1"
         assert result.max_iterations == 25
+        assert result.token_limit == 60000
         assert len(result.workers) == 1
         assert result.workers[0].tool_id == "tavily_search"
 
@@ -161,6 +175,23 @@ class TestAgentDefinitionRepositoryUpdate:
         await repo.update(agent, "req-1")
 
         assert mock_model.flow_hint == "excel_export → wiki_read"
+
+    @pytest.mark.asyncio
+    async def test_update_persists_token_limit(self):
+        """agent-token-limit D5: update가 token_limit를 반영한다 (Plan SC: SC-2)."""
+        repo, session = _make_repo()
+
+        mock_model = MagicMock()
+        mock_model.tools = []
+        mock_result = MagicMock()
+        mock_result.scalar_one.return_value = mock_model
+        session.execute.return_value = mock_result
+
+        agent = _make_agent()
+        agent.token_limit = 65000
+        await repo.update(agent, "req-1")
+
+        assert mock_model.token_limit == 65000
 
     @pytest.mark.asyncio
     async def test_update_syncs_worker_rows(self):

@@ -25,7 +25,10 @@ import agentAttachmentService from '@/services/agentAttachmentService';
 import { ApiError } from '@/services/api/ApiError';
 import { useLlmModels } from '@/hooks/useLlmModels';
 import { queryKeys } from '@/lib/queryKeys';
-import type { Message } from '@/types/chat';
+import type { DocumentSource, Message } from '@/types/chat';
+import type { ToolTrace } from '@/types/toolTrace';
+import type { ExcludedTool } from '@/types/toolAccess';
+import type { LimitReason } from '@/types/websocket';
 import type { ChartPayload } from '@/types/chart';
 import {
   ATTACHMENT_ERROR_MESSAGES,
@@ -41,7 +44,7 @@ import {
   validateImageFiles,
 } from '@/utils/imageAttachmentValidators';
 import type { AgentChatOutletContext, AgentSummary } from '@/types/agent';
-import type { ChatSource, ChatToolEvent } from '@/hooks/useChatStream';
+import type { ChatToolEvent } from '@/hooks/useChatStream';
 
 interface EmptyAgentStateProps {
   agent: AgentSummary | null;
@@ -122,11 +125,18 @@ interface NormalizedView {
   error: { code: string; message: string } | null;
   isDone: boolean;
   toolEvents: ChatToolEvent[];
-  sources: ChatSource[];
+  // agent-run-source-citations: 에이전트 근거는 kind·url 이 있고 score 가 없다.
+  sources: DocumentSource[];
   // supervisor-chart-builder-node: 답변과 함께 렌더할 Chart.js 페이로드.
   charts: ChartPayload[];
   // agent-eval-gate: 저장된 assistant 메시지 id (평가 대상). 부재 시 null.
   assistantMessageId: number | null;
+  // agent-run-tool-trace §2.2: 답변별 도구 실행 내역 (에이전트 경로만). 없으면 null.
+  toolTrace: ToolTrace | null;
+  // tool-access-control FR-11: 실행자 권한이 없어 뺀 도구 (에이전트 실행만)
+  excludedTools: ExcludedTool[];
+  // agent-token-limit D11: 한도 도달 사유 (에이전트 실행만). 없으면 null.
+  limitReason: LimitReason | null;
 }
 
 const ChatPage = () => {
@@ -251,6 +261,9 @@ const ChatPage = () => {
         sources: chatStream.sources,
         charts: [],
         assistantMessageId: chatStream.assistantMessageId,
+        toolTrace: null,
+        excludedTools: [],
+        limitReason: null,
       };
     }
     if (activeStream?.kind === 'agent') {
@@ -261,10 +274,19 @@ const ChatPage = () => {
         error: agentRun.error,
         isDone: agentRun.isDone,
         toolEvents: agentStepsToToolEvents(agentRun.steps),
-        sources: [],
+        // agent-run-source-citations FR-13: ANSWER_COMPLETED 의 근거를 그대로 쓴다.
+        sources: agentRun.sources,
         charts: agentRun.charts,
-        // agent 경로 평가 연동은 후속 — 현재 미노출.
-        assistantMessageId: null,
+        // agent-run-feedback-wiring D-07: ANSWER_COMPLETED 의 assistant_message_id 로
+        // 일반 채팅과 같은 feedbackMessageId 경로를 탄다 (없으면 평가 미노출).
+        assistantMessageId: agentRun.assistantMessageId,
+        // agent-run-tool-trace §2.2: ANSWER_COMPLETED 의 내역. 구 훅 mock 은 필드가 없어 ?? 로 막는다.
+        toolTrace: agentRun.toolTrace ?? null,
+        // tool-access-control FR-11: 구형 응답·mock 은 필드가 없을 수 있다
+        excludedTools: agentRun.excludedTools ?? [],
+        // agent-token-limit D11: 구 훅 mock 은 필드가 없을 수 있다. 사유 없는 도달
+        // (구 서버 limit_reached-only)은 답변 본문의 안내 문장으로만 전달된다.
+        limitReason: agentRun.limitReason ?? null,
       };
     }
     return null;
@@ -334,6 +356,11 @@ const ChatPage = () => {
         isStreaming: false,
         // agent-eval-gate — 저장된 assistant 메시지 id를 부여해 평가 버튼 노출
         feedbackMessageId: view.assistantMessageId ?? undefined,
+        // agent-run-tool-trace §2.2 — 답변별 도구 실행 내역 (없으면 필드 미설정)
+        toolTrace: view.toolTrace ?? undefined,
+        excludedTools: view.excludedTools,
+        // agent-token-limit D11 — 한도 도달 배지 (없으면 필드 미설정)
+        limitReason: view.limitReason ?? undefined,
       });
       const historyAgentId =
         activeStream.kind === 'agent' ? activeStream.agentId : agentId;
@@ -344,7 +371,7 @@ const ChatPage = () => {
       }
     }
     setActiveStream(null);
-  }, [view?.streamId, view?.isDone, view?.answer, view?.error, view?.sources, view?.charts, activeStream, agentId, userId, queryClient]);
+  }, [view?.streamId, view?.isDone, view?.answer, view?.error, view?.sources, view?.charts, view?.toolTrace, view?.excludedTools, view?.limitReason, activeStream, agentId, userId, queryClient]);
 
   // ws-agent-excel-attachment: 엑셀 업로드 → file_id 발급 후 대기 첨부로 보관 (턴당 1건, 교체).
   const uploadExcel = async (file: File) => {
@@ -504,6 +531,8 @@ const ChatPage = () => {
         title={selectedAgent?.name ?? 'SUPER AI Agent'}
         messageCount={messages.length}
         agentId={selectedAgent && selectedAgent.id !== 'super' ? selectedAgent.id : undefined}
+        // agent-edit-entry FR-07: SUPER 요약에는 canEdit 이 없어 미노출
+        canEdit={selectedAgent?.canEdit ?? false}
       />
 
       <div className="flex-1 overflow-y-auto">

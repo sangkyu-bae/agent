@@ -109,3 +109,27 @@ class TestAggregate:
 
         assert len(neg) == 1
         assert neg[0].comment == "틀림"
+
+
+class TestHasNegative:
+    """negative-feedback-drilldown Design §3.3 — 조회 범위 제한 조건."""
+
+    async def test_down이_있으면_True(self, session):
+        repo = _repo(session)
+        await repo.upsert(_fb(message_id=1, rating=Rating.DOWN), "r")
+        assert await repo.has_negative(1, "r") is True
+
+    async def test_up만_있으면_False(self, session):
+        repo = _repo(session)
+        await repo.upsert(_fb(message_id=1, rating=Rating.UP), "r")
+        assert await repo.has_negative(1, "r") is False
+
+    async def test_평가가_없으면_False(self, session):
+        assert await _repo(session).has_negative(1, "r") is False
+
+    async def test_같은_메시지_평가가_섞여도_down_1건이면_True(self, session):
+        repo = _repo(session)
+        await repo.upsert(_fb(message_id=1, user_id="u1", rating=Rating.UP), "r")
+        await repo.upsert(_fb(message_id=1, user_id="u2", rating=Rating.DOWN), "r")
+        await repo.upsert(_fb(message_id=1, user_id="u3", rating=Rating.DOWN), "r")
+        assert await repo.has_negative(1, "r") is True

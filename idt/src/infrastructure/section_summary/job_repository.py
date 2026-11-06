@@ -5,7 +5,7 @@
   호출마다 독립 짧은 세션/트랜잭션(DB-001). 장수명 러너/런처가 사용한다.
   (SessionScopedLlmModelRepository 선례)
 """
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
@@ -103,6 +103,20 @@ class SectionSummaryJobRepository:
         )
         await self._session.execute(stmt)
         await self._session.flush()
+
+    async def delete_by_document(
+        self, document_id: str, request_id: str
+    ) -> int:
+        """문서 삭제 시 잡 행 정리 (kb-document-management FR-06).
+
+        메타데이터 삭제와 같은 요청 트랜잭션에 묶기 위해 세션 주입 레포에만 둔다.
+        """
+        stmt = delete(SectionSummaryJobModel).where(
+            SectionSummaryJobModel.document_id == document_id
+        )
+        result = await self._session.execute(stmt)
+        await self._session.flush()
+        return result.rowcount
 
     @staticmethod
     def _to_domain(model: SectionSummaryJobModel) -> SectionSummaryJob:

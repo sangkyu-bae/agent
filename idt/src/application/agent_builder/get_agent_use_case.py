@@ -1,4 +1,8 @@
 """GetAgentUseCase: 에이전트 정의 조회."""
+from typing import TYPE_CHECKING
+
+from src.application.tool_access.schemas import ToolAccessInfo
+from src.application.tool_access.validation import tool_access_info
 from src.application.agent_builder.document_generation_type_binding import (
     DOCUMENT_GENERATOR_TOOL_ID,
 )
@@ -15,6 +19,9 @@ from src.domain.department.interfaces import DepartmentRepositoryInterface
 from src.domain.agent_opener.interfaces import AgentOpenerRepositoryInterface
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 
+if TYPE_CHECKING:
+    from src.application.tool_access.resolver import ToolAccessResolver
+
 
 class GetAgentUseCase:
     def __init__(
@@ -26,8 +33,11 @@ class GetAgentUseCase:
         agent_middleware_repo=None,
         document_generation_type_repo=None,
         opener_repo: AgentOpenerRepositoryInterface | None = None,
+        tool_access_resolver: "ToolAccessResolver | None" = None,
     ) -> None:
         self._repository = repository
+        # tool-access-control FR-13: 붙은 도구의 조회자 기준 허용 여부 (미주입 시 None)
+        self._tool_access_resolver = tool_access_resolver
         self._dept_repository = dept_repository
         self._logger = logger
         self._agent_skill_repo = agent_skill_repo
@@ -117,6 +127,9 @@ class GetAgentUseCase:
             generation_type_info = await self._load_generation_type_info(
                 agent, request_id
             )
+            tool_access = await self._load_tool_access(
+                agent, viewer_user_id, request_id
+            )
 
             return GetAgentResponse(
                 agent_id=agent.id,
@@ -134,6 +147,7 @@ class GetAgentUseCase:
                 department_name=department_name,
                 temperature=agent.temperature,
                 max_iterations=agent.max_iterations,
+                token_limit=agent.token_limit,
                 middleware_types=middleware_types,
                 openers=openers,
                 document_generation_type=generation_type_info,
@@ -142,12 +156,35 @@ class GetAgentUseCase:
                 can_delete=can_delete,
                 created_at=agent.created_at.isoformat(),
                 updated_at=agent.updated_at.isoformat(),
+                tool_access=tool_access,
             )
         except Exception as e:
             self._logger.error(
                 "GetAgentUseCase failed", exception=e, request_id=request_id
             )
             raise
+
+    async def _load_tool_access(
+        self, agent, viewer_user_id: str | None, request_id: str
+    ) -> list[ToolAccessInfo] | None:
+        """tool-access-control FR-13 — 표시용이라 조회 실패는 상세 전체를 막지 않는다.
+
+        판정은 저장·실행 경로가 따로 한다. 실패·미배선·조회자 미상은 None
+        (기존 응답과 같은 형태 — 프론트는 None 이면 카탈로그 기준 표시로 강하).
+        """
+        if self._tool_access_resolver is None or viewer_user_id is None:
+            return None
+        try:
+            access = await self._tool_access_resolver.for_user_id(
+                viewer_user_id, request_id
+            )
+        except Exception as e:
+            self._logger.warning(
+                "tool access lookup failed — tool_access omitted",
+                request_id=request_id, agent_id=agent.id, exception=e,
+            )
+            return None
+        return tool_access_info(access, agent.workers)
 
     async def _load_generation_type_info(
         self, agent, request_id: str

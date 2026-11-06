@@ -64,6 +64,8 @@ class PipelineOutcome:
     """스튜디오 프리필용 이름 후보. 위저드는 이름을 서버 제안으로 채운다."""
 
     prompt_clamp_reason: str | None = None
+    # agent-kb-quick-setup FR-12 — 요청 kb_id 에코백 (additive).
+    kb_id: str | None = None
     """prompt_ready 에서 4000자 절단이 일어났을 때의 사유 (D3).
 
     `assembled_prompt` 는 절단된 값이므로 "보이는 것 = 저장될 것"이 성립하고,

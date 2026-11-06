@@ -174,6 +174,46 @@ export const mockExcelPreview = (fileId: string): ExcelPreviewResponse => ({
 
 export const handlers = [
 
+  // ── kb-profile-selector (Design §8.5) ───────────────────────────────────────
+  http.get(`*${API_ENDPOINTS.CHUNKING_PROFILES}`, () =>
+    HttpResponse.json({
+      profiles: [
+        {
+          profile_id: 'prof-default',
+          name: '금융 조항 기본',
+          description: '조·항 경계로 분할합니다',
+          boundary_rules: [
+            { pattern: '^제\\s*\\d+\\s*조', priority: 1, level: 'parent' },
+            { pattern: '^제\\s*\\d+\\s*항', priority: 1, level: 'child' },
+          ],
+          parent_chunk_size: 2000,
+          chunk_size: 500,
+          chunk_overlap: 50,
+          is_default: true,
+          summary_llm_model_id: 'llm-1',
+          created_at: '2026-07-01T00:00:00',
+          updated_at: '2026-07-10T00:00:00',
+        },
+        {
+          profile_id: 'prof-contract',
+          name: '계약서',
+          description: null,
+          boundary_rules: [
+            { pattern: '^제\\s*\\d+\\s*관', priority: 1, level: 'parent' },
+          ],
+          parent_chunk_size: 3000,
+          chunk_size: 800,
+          chunk_overlap: 100,
+          is_default: false,
+          summary_llm_model_id: null,
+          created_at: '2026-07-02T00:00:00',
+          updated_at: '2026-07-02T00:00:00',
+        },
+      ],
+      total: 2,
+    }),
+  ),
+
   // ── excel-preview (Design §8.5) ─────────────────────────────────────────────
   http.get(`*${API_ENDPOINTS.DOCUMENT_EXTRACTOR_FILE_PREVIEW(':fileId')}`, ({ params }) =>
     HttpResponse.json(mockExcelPreview(String(params.fileId))),
@@ -719,14 +759,77 @@ export const handlers = [
           {
             document_id: 'doc-1', filename: '여신규정.pdf', chunk_count: 12,
             chunking_strategy: 'clause_aware', created_at: '2026-07-09T10:00:00Z',
+            can_delete: true,
           },
           {
             document_id: 'doc-2', filename: '내규집.pdf', chunk_count: 8,
             chunking_strategy: 'parent_child', created_at: '2026-07-08T09:00:00Z',
+            can_delete: false,
           },
         ],
         total: 2, offset: 0, limit: 20,
       })
+  ),
+
+  // agent-kb-quick-setup: 기본 임베딩 모델 설정 + 원스톱 생성
+  http.get(`*${API_ENDPOINTS.KB_DEFAULTS}`, () =>
+    HttpResponse.json({
+      configured: true, default_embedding_model_id: 1,
+      model_display_name: 'OpenAI Embedding 3 Small',
+    })
+  ),
+  http.get(`*${API_ENDPOINTS.ADMIN_KB_DEFAULTS}`, () =>
+    HttpResponse.json({
+      configured: true, default_embedding_model_id: 1,
+      model: {
+        id: 1, provider: 'openai', model_name: 'text-embedding-3-small',
+        display_name: 'OpenAI Embedding 3 Small', vector_dimension: 1536, is_active: true,
+      },
+      warnings: [], updated_at: '2026-11-05T00:00:00',
+    })
+  ),
+  http.put(`*${API_ENDPOINTS.ADMIN_KB_DEFAULTS}`, async ({ request }) => {
+    const body = (await request.json()) as { default_embedding_model_id: number };
+    if (body.default_embedding_model_id === 99) {
+      return HttpResponse.json(
+        { detail: { code: 'EMBEDDING_MODEL_NOT_FOUND', message: '임베딩 모델을 찾을 수 없습니다' } },
+        { status: 404 }
+      );
+    }
+    return HttpResponse.json({
+      configured: true, default_embedding_model_id: body.default_embedding_model_id,
+      model: {
+        id: body.default_embedding_model_id, provider: 'openai',
+        model_name: 'text-embedding-3-large', display_name: 'OpenAI Embedding 3 Large',
+        vector_dimension: 3072, is_active: true,
+      },
+      warnings: [], updated_at: '2026-11-05T01:00:00',
+    });
+  }),
+  // jsdom 의 multipart 본문은 undici formData() 파서가 실패한다 — 파싱하지 않고 고정 응답
+  http.post(`*${API_ENDPOINTS.KNOWLEDGE_BASE_QUICK}`, () =>
+    HttpResponse.json(
+      {
+        kb_id: 'kb-quick-1', kb_name: '여신 상담봇 지식', collection_name: 'kb-quick001',
+        scope: 'PERSONAL',
+        documents: [
+          { filename: 'a.pdf', status: 'uploaded', document_id: 'doc-a', chunk_count: 12, error: null },
+        ],
+        uploaded_count: 1, failed_count: 0,
+      },
+      { status: 201 }
+    )
+  ),
+
+  // KB 문서 업로드 (agent-kb-quick-setup G1 재시도 경로) — multipart 미파싱, 고정 응답
+  http.post(`*${API_ENDPOINTS.KNOWLEDGE_BASE_DOCUMENTS(':kbId')}`, ({ params }) =>
+    HttpResponse.json({
+      kb_id: params.kbId, kb_name: 'KB', collection_name: 'kb-quick001',
+      document_id: 'doc-retry-1', filename: 'retry.pdf', total_pages: 1, chunk_count: 4,
+      chunking_strategy: 'parent_child',
+      qdrant: { status: 'success', error: null }, es: { status: 'success', error: null },
+      status: 'completed', section_summary: null,
+    })
   ),
 
   // KB (kb-management-ui): 생성
@@ -747,6 +850,18 @@ export const handlers = [
       kb_id: params.kbId,
       message: 'Knowledge base deleted. Stored vectors remain until cleanup.',
     })
+  ),
+
+  // KB (kb-document-management): 문서 단건 삭제
+  http.delete(
+    `*${API_ENDPOINTS.KNOWLEDGE_BASE_DOCUMENT_DETAIL(':kbId', ':docId')}`,
+    ({ params }) =>
+      HttpResponse.json({
+        kb_id: params.kbId, document_id: params.docId,
+        filename: '여신규정.pdf',
+        deleted_qdrant_chunks: 12, deleted_es_chunks: 12,
+        status: 'deleted',
+      })
   ),
 
   // KB (kb-management-ui): 문서 업로드
@@ -1005,6 +1120,16 @@ export const handlers = [
       ],
     });
   }),
+
+  // agent-run-source-citations: 세션 답변 근거 (기본은 근거 없음 — 기존 화면 테스트 무영향)
+  http.get('*/api/v1/conversations/agents/:agentId/sessions/:sessionId/sources', ({ params }) =>
+    HttpResponse.json({ session_id: params.sessionId, items: [] }),
+  ),
+
+  // agent-run-tool-trace: 세션 답변별 도구 실행 내역 (기본은 내역 없음 — 기존 화면 테스트 무영향)
+  http.get('*/api/v1/conversations/agents/:agentId/sessions/:sessionId/tool-traces', ({ params }) =>
+    HttpResponse.json({ session_id: params.sessionId, items: [] }),
+  ),
 
   // 에이전트별 세션 메시지 조회
   http.get('*/api/v1/conversations/agents/:agentId/sessions/:sessionId/messages', ({ params, request }) => {

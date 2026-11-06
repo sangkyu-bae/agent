@@ -9,6 +9,7 @@ import {
   useForkAgent,
 } from '@/hooks/useAgentStore';
 import { useAuthStore } from '@/store/authStore';
+import { forkExcludedNotice } from '@/utils/toolAccess';
 
 interface AgentDetailModalProps {
   agentId: string | null;
@@ -35,6 +36,7 @@ const AgentDetailModal = ({ agentId, isOpen, onClose }: AgentDetailModalProps) =
 
   const [showForkInput, setShowForkInput] = useState(false);
   const [forkName, setForkName] = useState('');
+  const [forkNotice, setForkNotice] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -52,12 +54,15 @@ const AgentDetailModal = ({ agentId, isOpen, onClose }: AgentDetailModalProps) =
 
   const handleFork = () => {
     if (!agentId) return;
+    setForkNotice(null);
     forkMutation.mutate(
       { agentId, name: forkName || undefined },
       {
-        onSuccess: () => {
+        onSuccess: (res) => {
           setShowForkInput(false);
           setForkName('');
+          // tool-access-control FR-08: 권한 없는 도구를 빼고 복제했으면 알린다
+          setForkNotice(forkExcludedNotice(res?.excluded_tools));
         },
       },
     );
@@ -258,6 +263,14 @@ const AgentDetailModal = ({ agentId, isOpen, onClose }: AgentDetailModalProps) =
             )}
             {forkMutation.isError && (
               <p className="mt-2 text-[12px] text-red-500">{forkMutation.error.message}</p>
+            )}
+            {forkNotice && (
+              <p
+                role="status"
+                className="mt-2 rounded-md border border-warning-border bg-warning-bg px-3 py-2 text-sm text-warning"
+              >
+                {forkNotice}
+              </p>
             )}
           </div>
         )}

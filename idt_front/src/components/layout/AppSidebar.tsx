@@ -1,30 +1,23 @@
 // Design Ref: ui-redesign-chat §5.5 — 256px 전체 / 64px 아이콘 레일. 접힌 상태에서도 모든 버튼은 aria-label로 접근 가능한 이름을 유지한다.
-import { useMemo, type ButtonHTMLAttributes, type ComponentType } from 'react';
+// Design Ref: sidebar-agent-list §2.1 — 에이전트 목록은 AgentList, 하단 메뉴·사용자는 SidebarDock으로 분리. props는 그대로.
+import type { ButtonHTMLAttributes, ComponentType } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   BarChart3,
-  BookOpen,
   Clock,
-  Folder,
-  KeyRound,
   LayoutGrid,
-  LogOut,
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
-  Settings,
-  ShieldCheck,
   Sparkles,
-  Star,
   Store,
   Wrench,
   type LucideProps,
 } from 'lucide-react';
-import { useAuthStore } from '@/store/authStore';
 import { useLayoutStore } from '@/store/layoutStore';
-import { useLogout } from '@/hooks/useAuth';
-import { ADMIN_ENTRY_PATH } from '@/constants/adminNav';
 import { cn } from '@/utils/cn';
+import AgentList from '@/components/layout/sidebar/AgentList';
+import SidebarDock from '@/components/layout/sidebar/SidebarDock';
 import type { MyAgent } from '@/types/agent';
 
 interface AppSidebarProps {
@@ -53,21 +46,6 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'tasks', label: '작업', path: '/jobs', icon: Clock },
   { id: 'eval', label: '평가', path: '/eval-dataset', icon: BarChart3 },
 ];
-
-const BOTTOM_ITEMS: NavItem[] = [
-  { id: 'favorites', label: '즐겨찾기', path: null, icon: Star },
-  { id: 'roles', label: '역할설정', path: null, icon: KeyRound },
-  { id: 'resources', label: '리소스', path: '/collections', icon: Folder },
-  { id: 'kb', label: '지식베이스', path: '/knowledge-bases', icon: BookOpen },
-  { id: 'settings', label: '환경설정', path: '/settings', icon: Settings },
-];
-
-const GROUP_CONFIG = [
-  { key: 'pinned', label: '고정됨' },
-  { key: 'owned', label: '내 에이전트' },
-  { key: 'subscribed', label: '구독' },
-  { key: 'forked', label: '포크' },
-] as const;
 
 interface SidebarItemProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   label: string;
@@ -127,29 +105,9 @@ const AppSidebar = ({
 }: AppSidebarProps) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuthStore();
-  const { mutate: logout, isPending: isLoggingOut } = useLogout();
   const collapsed = useLayoutStore((s) => s.isSidebarCollapsed);
   const toggleSidebar = useLayoutStore((s) => s.toggleSidebar);
   const setSidebarCollapsed = useLayoutStore((s) => s.setSidebarCollapsed);
-
-  const groups = useMemo(() => {
-    const pinned = agents.filter((a) => a.is_pinned);
-    const owned = agents.filter((a) => a.source_type === 'owned' && !a.is_pinned);
-    const subscribed = agents.filter((a) => a.source_type === 'subscribed' && !a.is_pinned);
-    const forked = agents.filter((a) => a.source_type === 'forked' && !a.is_pinned);
-
-    return GROUP_CONFIG
-      .map((cfg) => {
-        const items =
-          cfg.key === 'pinned' ? pinned :
-          cfg.key === 'owned' ? owned :
-          cfg.key === 'subscribed' ? subscribed :
-          forked;
-        return { ...cfg, agents: items };
-      })
-      .filter((g) => g.agents.length > 0);
-  }, [agents]);
 
   const handleNavClick = (item: NavItem) => {
     if (item.id === 'super') {
@@ -157,11 +115,6 @@ const AppSidebar = ({
     }
     if (item.path) navigate(item.path);
   };
-
-  const isBottomActive = (path: string | null) =>
-    !!path &&
-    // kb-management-ui D7: 상세 라우트(/knowledge-bases/:kbId)에서도 활성 유지
-    (path === '/knowledge-bases' ? location.pathname.startsWith(path) : location.pathname === path);
 
   return (
     <aside
@@ -245,152 +198,19 @@ const AppSidebar = ({
             />
           </div>
         ) : (
-          <>
-            <div className="flex items-center justify-between px-4 py-1">
-              <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-brand-400" strokeWidth={1.75} aria-hidden="true" />
-                <span className="text-sm font-medium text-sidebar-fg">에이전트</span>
-              </div>
-            </div>
-
-            <div className="mt-1 px-3">
-              {isError ? (
-                <div className="mt-4 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-center">
-                  <p className="text-xs text-danger-border">에이전트 목록을 불러오지 못했습니다</p>
-                  {onRetry && (
-                    <button
-                      type="button"
-                      onClick={onRetry}
-                      className="mt-2 rounded-md border border-sidebar-border px-3 py-1 text-xs text-sidebar-fg-muted transition-colors hover:bg-sidebar-hover hover:text-sidebar-fg"
-                    >
-                      다시 시도
-                    </button>
-                  )}
-                </div>
-              ) : isLoading ? (
-                <div className="space-y-1" aria-label="불러오는 중" role="status">
-                  {[0, 1, 2].map((i) => (
-                    <div key={i} className="flex w-full flex-col items-start rounded-md px-3 py-2">
-                      <span className="h-3 w-3/4 animate-pulse rounded-md bg-sidebar-active" />
-                      <span className="mt-2 h-2 w-1/2 animate-pulse rounded-md bg-sidebar-hover" />
-                    </div>
-                  ))}
-                </div>
-              ) : agents.length === 0 ? (
-                <div className="mt-6 text-center">
-                  <p className="text-xs text-sidebar-fg-muted">등록된 에이전트가 없습니다</p>
-                  <button
-                    type="button"
-                    onClick={() => navigate('/agent-builder')}
-                    className="mt-3 rounded-md border border-brand-500/40 px-3 py-1.5 text-xs text-brand-300 transition-colors hover:bg-brand-500/10"
-                  >
-                    에이전트 만들기
-                  </button>
-                </div>
-              ) : (
-                groups.map((group) => (
-                  <div key={group.key} className="mb-2">
-                    <div className="mb-1 px-1">
-                      <span className="text-xs font-medium text-sidebar-fg-muted">
-                        {group.label} ({group.agents.length})
-                      </span>
-                    </div>
-                    {group.agents.map((agent) => {
-                      const isSelected = agent.agent_id === selectedAgentId;
-                      return (
-                        <button
-                          key={agent.agent_id}
-                          type="button"
-                          onClick={() => {
-                            onSelectAgent(agent.agent_id);
-                            navigate('/chatpage');
-                          }}
-                          aria-current={isSelected ? 'true' : undefined}
-                          className={cn(
-                            'w-full rounded-md px-3 py-2 text-left transition-colors duration-150',
-                            isSelected
-                              ? 'bg-sidebar-active text-sidebar-fg'
-                              : 'text-sidebar-fg-muted hover:bg-sidebar-hover hover:text-sidebar-fg',
-                          )}
-                        >
-                          <div className="flex items-center justify-between">
-                            <p className="flex-1 truncate text-sm font-medium">{agent.name}</p>
-                            {agent.is_pinned && (
-                              <Star
-                                className="ml-1 h-3 w-3 shrink-0 fill-current text-brand-400"
-                                aria-label="고정됨"
-                              />
-                            )}
-                          </div>
-                          <p className="mt-0.5 truncate text-xs opacity-70">{agent.description}</p>
-                        </button>
-                      );
-                    })}
-                  </div>
-                ))
-              )}
-            </div>
-          </>
+          <AgentList
+            agents={agents}
+            selectedAgentId={selectedAgentId}
+            onSelectAgent={onSelectAgent}
+            isLoading={isLoading}
+            isError={isError}
+            onRetry={onRetry}
+          />
         )}
       </div>
 
-      {/* (f) 하단 메뉴 */}
-      <nav aria-label="보조 메뉴" className="space-y-0.5 border-t border-sidebar-border px-3 py-2">
-        {BOTTOM_ITEMS.map((item) => (
-          <SidebarItem
-            key={item.id}
-            label={item.label}
-            icon={item.icon}
-            collapsed={collapsed}
-            isActive={isBottomActive(item.path)}
-            onClick={() => item.path && navigate(item.path)}
-            className={!item.path ? 'cursor-default' : undefined}
-          />
-        ))}
-
-        {/* 관리자 진입 (role==='admin'일 때만 노출) */}
-        {user?.role === 'admin' && (
-          <SidebarItem
-            label="관리자"
-            icon={ShieldCheck}
-            collapsed={collapsed}
-            accent
-            isActive={location.pathname.startsWith('/admin')}
-            onClick={() => navigate(ADMIN_ENTRY_PATH)}
-          />
-        )}
-      </nav>
-
-      {/* (g) 사용자 + 로그아웃 */}
-      {user && (
-        <div className={cn('border-t border-sidebar-border', collapsed ? 'px-3 py-3' : 'px-4 py-3')}>
-          <div className={cn('flex items-center gap-3', collapsed && 'flex-col gap-2')}>
-            <div
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-600 text-xs font-semibold text-white"
-              title={collapsed ? user.email : undefined}
-              aria-hidden={!collapsed}
-            >
-              {user.email[0].toUpperCase()}
-            </div>
-            {!collapsed && (
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-sidebar-fg">{user.email}</p>
-                <p className="truncate text-xs text-sidebar-fg-muted">{user.email}</p>
-              </div>
-            )}
-            <button
-              type="button"
-              onClick={() => logout()}
-              disabled={isLoggingOut}
-              aria-label="로그아웃"
-              title="로그아웃"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-sidebar-fg-muted transition-colors duration-150 hover:bg-sidebar-hover hover:text-danger-border disabled:opacity-50"
-            >
-              <LogOut className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
-            </button>
-          </div>
-        </div>
-      )}
+      {/* (f)(g) 하단 메뉴 도크 + 사용자 */}
+      <SidebarDock collapsed={collapsed} />
     </aside>
   );
 };

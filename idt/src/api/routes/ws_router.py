@@ -290,6 +290,10 @@ async def ws_agent_run(
             auth_ctx=auth_ctx,
             # agent-memory-injection Act-1: 대화 라우트만 메모리 주입 opt-in.
             inject_memory=True,
+            # agent-run-source-citations FR-12: 근거 칩을 그리는 이 경로만 조회.
+            include_sources=True,
+            # agent-run-tool-trace §4.3: 답변별 도구 실행 내역도 이 경로만 조회.
+            include_tool_trace=True,
         ):
             ws_msg = AgentRunEventWsAdapter.to_ws_message(event)
             await manager.send_to_room(

@@ -4,6 +4,7 @@ from typing import Annotated
 from pydantic import BaseModel, Field, StringConstraints
 
 from src.application.document_extractor.schemas import TemplateSlotDto
+from src.application.tool_access.schemas import ExcludedToolInfo, ToolAccessInfo
 
 
 
@@ -126,6 +127,8 @@ class CreateAgentRequest(BaseModel):
     temperature: float = Field(0.70, ge=0.0, le=2.0)
     # agent-recursion-limit D10: supervisor 반복 한도 (미전달 시 25)
     max_iterations: int = Field(25, ge=10, le=1000)
+    # agent-token-limit D4: supervisor 토큰 예산 (미전달 시 50000, 범위 8000~500000)
+    token_limit: int = Field(50000, ge=8000, le=500000)
     tool_ids: list[str] | None = None
     tool_configs: dict[str, RagToolConfigRequest] | None = None
     sub_agent_configs: list[SubAgentConfigRequest] | None = None
@@ -175,6 +178,8 @@ class CreateAgentResponse(BaseModel):
     department_id: str | None = None
     temperature: float
     max_iterations: int = 25
+    # agent-token-limit D4
+    token_limit: int = 50000
     # agent-opener D4: 저장된 오프너(정규화 후). 미주입·없음 = []
     openers: list[str] = []
     created_at: str
@@ -190,6 +195,8 @@ class UpdateAgentRequest(BaseModel):
     temperature: float | None = Field(None, ge=0.0, le=2.0)
     # agent-recursion-limit D10: None = 반복 한도 변경 안 함
     max_iterations: int | None = Field(None, ge=10, le=1000)
+    # agent-token-limit D4: None = 토큰 예산 변경 안 함
+    token_limit: int | None = Field(None, ge=8000, le=500000)
     # agent-update-tool-editing D §4.2: None = 도구 변경 안 함,
     # [] = 사용자 선택 도구 전부 해제(빌트인은 규칙에 따라 재주입),
     # [...] = 목표 상태 전체 교체. 카탈로그 표기(internal:x / mcp:srv:tool) 수용.
@@ -257,6 +264,8 @@ class GetAgentResponse(BaseModel):
     temperature: float
     # agent-recursion-limit D10: edit 폼 프라임용
     max_iterations: int = 25
+    # agent-token-limit D4: edit 폼 프라임용
+    token_limit: int = 50000
     # builtin-middleware D5: 적용 미들웨어 스냅샷 — edit 폼 프라임용
     middleware_types: list[str] = []
     # agent-opener D4: sort_order ASC — edit 폼 프라임용
@@ -268,6 +277,9 @@ class GetAgentResponse(BaseModel):
     can_delete: bool
     created_at: str
     updated_at: str
+    # tool-access-control FR-13 (additive): 붙은 도구의 조회자 기준 허용 여부.
+    # None = 판정 미배선(기존 응답과 동일). 빌더는 카탈로그에 없는 붙은 도구의 칩을 이걸로 그린다.
+    tool_access: list[ToolAccessInfo] | None = None
 
 
 class RunAgentRequest(BaseModel):
@@ -295,6 +307,11 @@ class RunAgentResponse(BaseModel):
     request_id: str
     session_id: str
     run_id: str | None = None  # AGENT-OBS-001: ai_run.id (관측성)
+    # agent-run-feedback-wiring Design §3.4 (D-05): 저장된 assistant 메시지 id —
+    # 평가(👍/👎) 대상 키. persist_conversation=False 면 None (additive).
+    assistant_message_id: int | None = None
+    # tool-access-control FR-11 (additive): 실행자 권한이 없어 이번 실행에서 뺀 도구.
+    excluded_tools: list[ExcludedToolInfo] = []
 
 
 class ToolMetaResponse(BaseModel):
@@ -387,6 +404,8 @@ class ForkAgentResponse(BaseModel):
     visibility: str
     temperature: float
     llm_model_id: str
+    # tool-access-control FR-08 (additive): 권한이 없어 복제본에서 뺀 도구.
+    excluded_tools: list[ExcludedToolInfo] = []
 
 
 class MyAgentSummary(BaseModel):

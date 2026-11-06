@@ -15,6 +15,10 @@ import { useAuthStore } from '@/store/authStore';
 import { useWebSocket, type WebSocketStatus } from '@/hooks/useWebSocket';
 import type { AgentAttachmentRef } from '@/types/agentAttachment';
 import type { ChartPayload } from '@/types/chart';
+import type { DocumentSource } from '@/types/chat';
+import type { ToolTrace } from '@/types/toolTrace';
+import type { ExcludedTool } from '@/types/toolAccess';
+import type { LimitReason } from '@/types/websocket';
 import type { AgentRunMessage } from '@/types/websocket';
 import { wsUrl } from '@/utils/wsUrl';
 
@@ -34,6 +38,18 @@ export interface AgentRunStreamState {
   answer: string | null;
   // supervisor-chart-builder-node: 답변 완료 시 함께 내려오는 Chart.js 페이로드.
   charts: ChartPayload[];
+  // agent-run-feedback-wiring D-01: 저장된 assistant 메시지 id — 평가(👍/👎) 대상 키.
+  // agent_answer_completed 에 assistant_message_id 가 없으면(미저장·구 서버) null.
+  assistantMessageId: number | null;
+  // agent-run-source-citations: 답변 근거 칩. 근거가 없으면 빈 배열.
+  sources: DocumentSource[];
+  // agent-run-tool-trace §2.2: 답변별 도구 실행 내역. 도구 호출이 없으면 null.
+  toolTrace: ToolTrace | null;
+  // tool-access-control FR-11: 실행자 권한이 없어 뺀 도구. 없으면 빈 배열.
+  excludedTools: ExcludedTool[];
+  // agent-token-limit D11: 한도 도달 플래그·사유. 없으면 false/null (구 서버 호환).
+  limitReached: boolean;
+  limitReason: LimitReason | null;
   error: { code: string; message: string } | null;
   isDone: boolean;
   // chatpage-rerequest-stale-state-fix Design §3.3
@@ -58,6 +74,12 @@ const INITIAL_STATE: Omit<AgentRunStreamState, 'streamId'> = {
   tokens: '',
   answer: null,
   charts: [],
+  assistantMessageId: null,
+  sources: [],
+  toolTrace: null,
+  excludedTools: [],
+  limitReached: false,
+  limitReason: null,
   error: null,
   isDone: false,
 };
@@ -141,6 +163,15 @@ export function useAgentRunStream(
           ...s,
           answer: msg.data.answer,
           charts: msg.data.charts ?? [],
+          // agent-run-feedback-wiring: 저장했을 때만 오는 additive 키
+          assistantMessageId:
+            typeof msg.data.assistant_message_id === 'number' ? msg.data.assistant_message_id : null,
+          sources: msg.data.sources ?? [],
+          toolTrace: msg.data.tool_trace ?? null,
+          excludedTools: msg.data.excluded_tools ?? [],
+          // agent-token-limit D11: additive 키 — 부재면 기본값
+          limitReached: msg.data.limit_reached ?? false,
+          limitReason: msg.data.limit_reason ?? null,
         }));
         break;
       case 'agent_run_completed':

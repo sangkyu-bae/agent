@@ -1,6 +1,7 @@
 """CreateAgentUseCase: 에이전트 생성 오케스트레이션."""
 import uuid
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 
 from src.application.agent_builder.document_generation_type_binding import (
     build_document_generation_type_plan,
@@ -65,6 +66,13 @@ from src.domain.prompt_composer.interfaces import PromptRepositoryPort
 from src.domain.agent_opener.interfaces import AgentOpenerRepositoryInterface
 from src.domain.agent_opener.policies import OpenerPolicy
 from src.domain.tool_catalog.interfaces import ToolCatalogRepositoryInterface
+from src.application.tool_access.validation import (
+    ensure_new_tools_allowed,
+    partition_tool_workers,
+)
+
+if TYPE_CHECKING:
+    from src.application.tool_access.resolver import ToolAccessResolver
 
 
 class CreateAgentUseCase:
@@ -88,8 +96,12 @@ class CreateAgentUseCase:
         middleware_catalog_repo=None,
         prompt_version_reader: PromptRepositoryPort | None = None,
         opener_repo: AgentOpenerRepositoryInterface | None = None,
+        tool_access_resolver: "ToolAccessResolver | None" = None,
     ) -> None:
         self._repository = repository
+        # Design Ref: tool-access-control §2.2 (FR-06·07) — 저장 시 도구 권한 판정.
+        # 미주입 = 판정 없음(기존 동작). 프로덕션 주입은 배선 계약 테스트가 고정한다.
+        self._tool_access_resolver = tool_access_resolver
         self._llm_model_repository = llm_model_repository
         self._perm_repo = perm_repo
         self._logger = logger
@@ -153,6 +165,19 @@ class CreateAgentUseCase:
                 )
             else:
                 skeleton = WorkflowSkeleton(workers=[], flow_hint="")
+
+            # Step 1.2 (tool-access-control FR-06): 사용자가 고른 도구는 생성 시점에
+            # 전부 "신규"다 — 하나라도 불허면 403 으로 생성 전체를 막는다.
+            # 조회 실패는 올린다(권한 미확인 상태로 저장하지 않는다 — Design §6.2).
+            tool_access = None
+            if self._tool_access_resolver is not None:
+                tool_access = await self._tool_access_resolver.for_user_id(
+                    request.user_id, request_id
+                )
+                ensure_new_tools_allowed(
+                    tool_access,
+                    [w.tool_id for w in skeleton.workers if w.worker_type == "tool"],
+                )
 
             # Step 1.5: 서브 에이전트 워커 빌드
             sub_agent_workers: list[WorkerDefinition] = []
@@ -234,6 +259,17 @@ class CreateAgentUseCase:
             builtin_workers = await self._skeleton_builder.build_builtin_workers(
                 all_workers, request.exclude_builtin_tool_ids, request_id
             )
+            # tool-access-control FR-07: 생성자에게 허용되지 않은 빌트인은 주입하지 않는다.
+            if tool_access is not None:
+                builtin_workers, skipped = partition_tool_workers(
+                    tool_access, builtin_workers
+                )
+                if skipped:
+                    self._logger.info(
+                        "builtin tools skipped — no permission",
+                        request_id=request_id,
+                        tool_ids=[w.tool_id for w in skipped],
+                    )
             all_workers = all_workers + builtin_workers
 
             # Step 2.75 (approval-gate FR-05): 단독 워커 제약.
@@ -276,6 +312,7 @@ class CreateAgentUseCase:
                 department_id=request.department_id,
                 temperature=request.temperature,
                 max_iterations=request.max_iterations,
+                token_limit=request.token_limit,
                 created_at=now,
                 updated_at=now,
                 middleware_types=middleware_types,
@@ -338,6 +375,7 @@ class CreateAgentUseCase:
                 department_id=saved.department_id,
                 temperature=saved.temperature,
                 max_iterations=saved.max_iterations,
+                token_limit=saved.token_limit,
                 openers=openers,
                 created_at=saved.created_at.isoformat(),
                 has_sub_agents=any(w.worker_type == "sub_agent" for w in saved.workers),

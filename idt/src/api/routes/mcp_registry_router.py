@@ -10,8 +10,17 @@ from src.application.mcp_registry.schemas import (
     RegisterMCPServerRequest,
     UpdateMCPServerRequest,
 )
+from src.interfaces.dependencies.auth import require_role
 
-router = APIRouter(prefix="/api/v1/mcp-registry", tags=["MCP Registry"])
+# Design Ref: tool-access-control §4.1 (Plan FR-16) — 6개 엔드포인트 전부 인증이 없었다.
+# 도구 권한을 만들어도 누구나 MCP 서버를 등록·삭제하면 우회되므로 라우터 단위로 잠근다.
+# 조회도 admin 전용: 응답에 사내 서버 주소(endpoint)·server_config 가 실리고,
+# 프론트 소비처는 /admin/mcp-servers 하나뿐이다 (Do 단계 사용자 결정).
+router = APIRouter(
+    prefix="/api/v1/mcp-registry",
+    tags=["MCP Registry"],
+    dependencies=[Depends(require_role("admin"))],
+)
 
 
 # ── DI 플레이스홀더 (main.py에서 override) ──────────────────────────

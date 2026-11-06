@@ -35,10 +35,14 @@ describe('adminNav 상수 — 그룹 구조', () => {
       '/admin/dashboard',
       '/admin/users',
       '/admin/departments',
+      // tool-access-control FR-14: 도구 권한 (org)
+      '/admin/tool-access',
       '/admin/ragas',
       '/admin/agent-runs',
       '/admin/llm-models',
       '/admin/chunking-profiles',
+      // agent-kb-quick-setup: 지식베이스 기본값 (docs-quality)
+      '/admin/kb-defaults',
       // multimodal-extractor: 멀티모달 추출 (docs-quality)
       '/admin/multimodal',
       // golden-sample-blueprint: 발표자료 양식 (docs-quality)

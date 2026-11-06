@@ -18,9 +18,22 @@ from src.application.middleware_agent.schemas import (
 )
 
 
+def _fake_admin():
+    from src.domain.auth.entities import User, UserRole, UserStatus
+    return User(
+        email="admin@test.com", password_hash="h",
+        role=UserRole.ADMIN, status=UserStatus.APPROVED, id=1,
+    )
+
+
 def _make_app(create_uc=None, get_uc=None, run_uc=None, update_uc=None) -> FastAPI:
+    # tool-access-control §0 F5: 라우터가 admin 전용이 되어 인증을 대체한다.
+    # 401/403 자체는 tests/api/test_admin_only_routers_auth.py 가 검증한다.
+    from src.interfaces.dependencies.auth import get_current_user
+
     app = FastAPI()
     app.include_router(router)
+    app.dependency_overrides[get_current_user] = _fake_admin
     if create_uc:
         app.dependency_overrides[get_create_use_case] = lambda: create_uc
     if get_uc:

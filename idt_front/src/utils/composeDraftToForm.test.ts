@@ -28,6 +28,7 @@ const baseForm: AgentBuilderFormData = {
   excludedBuiltinMiddlewares: [],
   middlewares: [],
   maxIterations: MAX_ITERATIONS.DEFAULT,
+  tokenLimit: 50000,
   openers: [],
 };
 

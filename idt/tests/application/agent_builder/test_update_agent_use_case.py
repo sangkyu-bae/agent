@@ -517,3 +517,23 @@ class TestUpdateAgentSkillSync:
         )
         use_case._skill_sync.sync.assert_awaited_once()
         assert use_case._skill_sync.sync.call_args.args[1] == ["s1", "s2"]
+
+
+class TestUpdateAgentTokenLimit:
+    """agent-token-limit D4/D5 — update 경로 전달 (Plan SC: SC-2)."""
+
+    @pytest.mark.asyncio
+    async def test_token_limit_updated(self):
+        use_case, repository, agent = _make_use_case()
+        request = UpdateAgentRequest(token_limit=65000)
+        await use_case.execute(agent.id, request, "req-1")
+        assert agent.token_limit == 65000
+
+    @pytest.mark.asyncio
+    async def test_none_keeps_token_limit(self):
+        agent = _make_agent()
+        agent.token_limit = 77000
+        use_case, _, _ = _make_use_case(agent=agent)
+        request = UpdateAgentRequest(name="새 이름")
+        await use_case.execute(agent.id, request, "req-1")
+        assert agent.token_limit == 77000

@@ -62,6 +62,8 @@ export const useUpdateBuilderAgent = () =>
       queryClient.invalidateQueries({
         queryKey: queryKeys.agentStore.detail(agentId),
       });
+      // agent-edit-entry §2.4: 채팅 사이드바·헤더(useMyAgents, agent.my)도 갱신
+      queryClient.invalidateQueries({ queryKey: queryKeys.agent.all });
     },
   });
 

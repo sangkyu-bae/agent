@@ -61,6 +61,12 @@ class AgentPipelineRequest(BaseModel):
     intent: IntentEchoIn | None = None
     """확정된 의도 재사용. 서버가 spec 으로 재검증한 뒤에만 신뢰한다 (D2)."""
 
+    kb_id: str | None = Field(None, max_length=36)
+    """agent-kb-quick-setup FR-12 — 위저드가 만든 KB.
+
+    CREATE 단계가 RAG 도구와 tool_configs 를 주입한다.
+    """
+
 
 class StageRecordOut(BaseModel):
     """단계 1개의 wire 표현 — steps[] 원소이자 SSE 이벤트 payload."""
@@ -109,3 +115,5 @@ class AgentPipelineResponse(BaseModel):
     # --- agent-create-wizard §4.3 (정지 응답 전용, optional) ---
     suggested_name: str | None = None
     prompt_clamp_reason: str | None = None
+    # agent-kb-quick-setup FR-12 — 요청 kb_id 에코백 (additive)
+    kb_id: str | None = None

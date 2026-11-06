@@ -69,7 +69,9 @@ authApiClient.interceptors.response.use(
       detail && typeof detail === 'object' && typeof detail.code === 'string'
         ? detail.code
         : undefined;
-    return Promise.reject(new ApiError(message, status, code));
+    // tool-access-control: 객체 detail 은 원본도 보존 (tool_ids 등 추가 필드용)
+    const rawDetail = detail && typeof detail === 'object' ? detail : undefined;
+    return Promise.reject(new ApiError(message, status, code, rawDetail));
   }
 );
 

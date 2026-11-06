@@ -14,8 +14,16 @@ from src.application.middleware_agent.schemas import (
 )
 from src.application.middleware_agent.update_middleware_agent_use_case import UpdateMiddlewareAgentUseCase
 from src.domain.agent_builder.tool_registry import get_all_tools
+from src.interfaces.dependencies.auth import require_role
 
-router = APIRouter(prefix="/api/v2/agents", tags=["middleware-agent"])
+# Design Ref: tool-access-control §0 F5 — 레거시 실험 경로(v2)는 인증 없이 실행 시
+# ToolFactory 로 도구를 직접 만든다. 도구 권한 판정을 우회하지 못하도록 라우터
+# 전체를 admin 전용으로 잠근다 (admin 은 모든 도구 허용이라 필터는 불필요).
+router = APIRouter(
+    prefix="/api/v2/agents",
+    tags=["middleware-agent"],
+    dependencies=[Depends(require_role("admin"))],
+)
 
 
 # DI placeholders → main.py에서 dependency_overrides로 교체

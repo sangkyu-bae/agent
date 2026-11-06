@@ -53,6 +53,8 @@ class KbDocumentSummary:
     chunk_count: int
     chunk_strategy: str
     created_at: Optional[datetime]
+    # kb-document-management FR-08: 문서별 삭제 가능 여부 계산용 업로더
+    user_id: str = ""
 
 
 @dataclass(frozen=True)

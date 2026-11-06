@@ -77,6 +77,21 @@ export const useDeleteKnowledgeBase = () => {
   });
 };
 
+/** 문서 단건 삭제 (kb-document-management Design §5.3) —
+ *  실패해도 일부 청크가 지워졌을 수 있어 settled에서 무효화한다 */
+export const useDeleteKbDocument = (kbId: string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (documentId: string) =>
+      knowledgeBaseService.deleteKbDocument(kbId, documentId),
+    onSettled: () => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.knowledgeBases.all,
+      });
+    },
+  });
+};
+
 // ── KB 저장 내용 조회 (kb-content-browser Design §5.2) ──────────
 
 export const useKbDocumentSummary = (

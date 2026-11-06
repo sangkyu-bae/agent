@@ -1,17 +1,34 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
+  useDeleteKbDocument,
   useKnowledgeBase,
   useKbDocuments,
 } from '@/hooks/useKnowledgeBases';
+import { ApiError } from '@/services/api/ApiError';
 import { SCOPE_LABELS } from '@/types/collection';
 import type { KbDocumentInfo } from '@/types/knowledgeBase';
+import DeleteKbDocumentDialog from '@/components/knowledge-base/DeleteKbDocumentDialog';
 import KbChunkingSettingsCard from '@/components/knowledge-base/KbChunkingSettingsCard';
 import KbDocumentContentPanel from '@/components/knowledge-base/KbDocumentContentPanel';
 import KbDocumentTable from '@/components/knowledge-base/KbDocumentTable';
 import KbSearchSection from '@/components/knowledge-base/KbSearchSection';
 import KbStatusCards from '@/components/knowledge-base/KbStatusCards';
 import KbUploadDocumentModal from '@/components/knowledge-base/KbUploadDocumentModal';
+
+// 403·404 서버 메시지는 영문이라 화면 문구로 바꾼다. 409·503은 서버 한국어 메시지를 쓴다.
+const DOCUMENT_DELETE_ERROR_MAP: Record<number, string> = {
+  403: '이 문서를 삭제할 권한이 없습니다',
+  404: '이미 삭제되었거나 찾을 수 없는 문서입니다',
+};
+
+const getDeleteError = (error: Error | null): string | null => {
+  if (!error) return null;
+  if (error instanceof ApiError && DOCUMENT_DELETE_ERROR_MAP[error.status]) {
+    return DOCUMENT_DELETE_ERROR_MAP[error.status];
+  }
+  return error.message || '문서를 삭제하지 못했습니다';
+};
 
 const KnowledgeBaseDetailPage = () => {
   const { kbId } = useParams<{ kbId: string }>();
@@ -25,8 +42,40 @@ const KnowledgeBaseDetailPage = () => {
     filename: string;
   } | null>(null);
 
+  // kb-document-management FR-11·12: 삭제 대상과 성공 후 상태 해제
+  const [deleteTarget, setDeleteTarget] = useState<KbDocumentInfo | null>(
+    null,
+  );
+
   const kbQuery = useKnowledgeBase(kbId);
   const docsQuery = useKbDocuments(kbId);
+  const deleteMutation = useDeleteKbDocument(kbId ?? '');
+
+  const openDeleteDialog = (doc: KbDocumentInfo) => {
+    deleteMutation.reset();
+    setDeleteTarget(doc);
+  };
+
+  const closeDeleteDialog = () => {
+    if (deleteMutation.isPending) return;
+    setDeleteTarget(null);
+  };
+
+  const confirmDelete = () => {
+    if (!deleteTarget || deleteMutation.isPending) return;
+    const deletedId = deleteTarget.document_id;
+    deleteMutation.mutate(deletedId, {
+      onSuccess: () => {
+        setSelectedDoc((prev) =>
+          prev?.document_id === deletedId ? null : prev,
+        );
+        setSearchScopeDoc((prev) =>
+          prev?.document_id === deletedId ? null : prev,
+        );
+        setDeleteTarget(null);
+      },
+    });
+  };
 
   if (!kbId) {
     navigate('/knowledge-bases');
@@ -115,6 +164,7 @@ const KnowledgeBaseDetailPage = () => {
                     filename: doc.filename,
                   })
                 }
+                onDeleteDocument={openDeleteDialog}
               />
             </div>
 
@@ -137,6 +187,15 @@ const KnowledgeBaseDetailPage = () => {
               onClose={() => setUploadOpen(false)}
               kbId={kbId}
               kbName={kb.name}
+            />
+
+            <DeleteKbDocumentDialog
+              isOpen={deleteTarget !== null}
+              filename={deleteTarget?.filename ?? ''}
+              onClose={closeDeleteDialog}
+              onConfirm={confirmDelete}
+              isPending={deleteMutation.isPending}
+              error={getDeleteError(deleteMutation.error)}
             />
           </>
         )}

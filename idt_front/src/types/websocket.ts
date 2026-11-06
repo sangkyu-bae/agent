@@ -8,6 +8,8 @@
  */
 
 import type { ChartPayload } from './chart';
+import type { DocumentSource } from './chat';
+import type { ToolTrace } from './toolTrace';
 
 export interface WSEnvelope<T = unknown> {
   type: string;
@@ -67,7 +69,25 @@ export interface AgentAnswerCompletedData {
    * 필드 부재 시 차트 미표시(하위호환).
    */
   charts?: ChartPayload[];
+  /**
+   * 저장된 assistant 메시지 id — 평가(👍/👎) 대상 키 (agent-run-feedback-wiring D-01).
+   * 저장하지 않은 실행(persist=False)·구 서버는 필드 부재 → 평가 버튼 미표시.
+   */
+  assistant_message_id?: number;
+  /** agent-run-source-citations: 답변 근거. 근거가 없으면 필드가 없다(하위호환). */
+  sources?: DocumentSource[];
+  /** agent-run-tool-trace §4.3: 도구 실행 내역. 도구 호출이 없으면 필드가 없다(하위호환). */
+  tool_trace?: ToolTrace;
+  /** tool-access-control FR-11: 실행자 권한이 없어 이번 실행에서 뺀 도구. 없으면 필드가 없다. */
+  excluded_tools?: import('./toolAccess').ExcludedTool[];
+  /** agent-recursion-limit D7 / agent-token-limit D10: 한도 도달로 조기 답변. 없으면 필드가 없다. */
+  limit_reached?: boolean;
+  /** agent-token-limit D10: 도달 사유. limit_reached 가 없으면 함께 없다. */
+  limit_reason?: LimitReason;
 }
+
+/** agent-token-limit D10: ANSWER_COMPLETED 의 한도 도달 사유 */
+export type LimitReason = 'iteration' | 'token';
 
 export interface AgentRunCompletedData {
   run_id: string | null;

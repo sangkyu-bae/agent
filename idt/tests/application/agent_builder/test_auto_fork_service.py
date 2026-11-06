@@ -110,3 +110,22 @@ async def test_no_subscribers_returns_zero(deps):
 
     count = await service.fork_for_subscribers(agent, "req-1")
     assert count == 0
+
+
+@pytest.mark.asyncio
+async def test_auto_fork_copies_token_limit(deps):
+    """agent-token-limit FR-08: 자동 포크도 원본의 token_limit를 복사한다."""
+    service, agent_repo, sub_repo = deps
+    agent = _make_agent()
+    agent.token_limit = 99000
+
+    sub_repo.find_subscribers_by_agent.return_value = [
+        _make_subscription("user-A", "agent-1"),
+    ]
+    agent_repo.list_by_user.return_value = []
+    agent_repo.save.side_effect = lambda a, req_id: a
+    sub_repo.delete_by_agent.return_value = 1
+
+    await service.fork_for_subscribers(agent, "req-1")
+    forked = agent_repo.save.call_args[0][0]
+    assert forked.token_limit == 99000

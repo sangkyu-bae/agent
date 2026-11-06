@@ -4,6 +4,7 @@ import type { RagToolConfig } from '@/types/ragToolConfig';
 import type { AgentBuilderFormData } from '@/types/agentBuilder';
 import type { ComposeAgentDraftResponse } from '@/types/agentComposer';
 import type { StagedSchedule } from '@/types/agentSchedule';
+import type { ToolAccessInfo } from '@/types/toolAccess';
 import StudioHeader from './StudioHeader';
 import LeftConfigPanel from './LeftConfigPanel';
 import AgentTestPanel from './AgentTestPanel';
@@ -26,6 +27,8 @@ interface StudioLayoutProps {
   onStagedScheduleRemove: (localId: string) => void;
   /** agent-settings-tab D6: 설정 탭 반복 한도 확정값 반영 */
   onMaxIterationsChange: (value: number) => void;
+  /** agent-token-limit D12 */
+  onTokenLimitChange: (value: number) => void;
   /** agent-opener §5.1: 오프너 탭 staged 목록 반영 */
   onOpenersChange: (next: string[]) => void;
   onApplyDraft: (draft: ComposeAgentDraftResponse) => void;
@@ -42,6 +45,11 @@ interface StudioLayoutProps {
   isModelsLoading: boolean;
   isModelsError: boolean;
   onRetryModels: () => void;
+  /** tool-access-control FR-13: 에이전트 상세의 붙은 도구별 허용 여부 (edit 전용) */
+  toolAccess?: ToolAccessInfo[] | null;
+  /** agent-kb-quick-setup: 지식 문서 블록 → 폼 부착/해제 */
+  onKbAttached?: (kbId: string) => void;
+  onKbDetached?: () => void;
 }
 
 /**
@@ -63,6 +71,7 @@ const StudioLayout = ({
   onStagedScheduleAdd,
   onStagedScheduleRemove,
   onMaxIterationsChange,
+  onTokenLimitChange,
   onOpenersChange,
   onApplyDraft,
   onSave,
@@ -77,6 +86,9 @@ const StudioLayout = ({
   isModelsLoading,
   isModelsError,
   onRetryModels,
+  toolAccess,
+  onKbAttached,
+  onKbDetached,
 }: StudioLayoutProps) => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: '#fff' }}>
@@ -99,6 +111,9 @@ const StudioLayout = ({
             onSkillToggle={onSkillToggle}
             onRagConfigChange={onRagConfigChange}
             onDraftArgKeyChange={onDraftArgKeyChange}
+            toolAccess={toolAccess}
+            onKbAttached={onKbAttached}
+            onKbDetached={onKbDetached}
             onBuiltinToggle={onBuiltinToggle}
             onMiddlewareToggle={onMiddlewareToggle}
             isEditMode={mode === 'edit'}
@@ -130,6 +145,7 @@ const StudioLayout = ({
             onStagedScheduleAdd={onStagedScheduleAdd}
             onStagedScheduleRemove={onStagedScheduleRemove}
             onMaxIterationsChange={onMaxIterationsChange}
+            onTokenLimitChange={onTokenLimitChange}
             onOpenersChange={onOpenersChange}
           />
         </div>

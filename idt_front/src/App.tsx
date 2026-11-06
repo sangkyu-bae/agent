@@ -23,12 +23,14 @@ import AdminMcpServersPage from '@/pages/AdminMcpServersPage';
 import AdminLlmModelsPage from '@/pages/AdminLlmModelsPage';
 import AdminChunkingProfilesPage from '@/pages/AdminChunkingProfilesPage';
 import AdminMultimodalPage from '@/pages/AdminMultimodalPage';
+import AdminKbDefaultsPage from '@/pages/AdminKbDefaultsPage';
 import AdminBlueprintsPage from '@/pages/AdminBlueprintsPage';
 import AdminSkillsPage from '@/pages/AdminSkillsPage';
 import AdminRagasPage from '@/pages/AdminRagasPage';
 import AdminAgentRunsPage from '@/pages/AdminAgentRunsPage';
 import AdminDashboardPage from '@/pages/AdminDashboardPage';
 import AdminToolsPage from '@/pages/AdminToolsPage';
+import AdminToolAccessPage from '@/pages/AdminToolAccessPage';
 import AdminMiddlewarePage from '@/pages/AdminMiddlewarePage';
 import WikiPage from '@/pages/WikiPage';
 import AgentKnowledgePage from '@/pages/AgentKnowledgePage';
@@ -93,6 +95,7 @@ const App = () => (
           <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
           <Route path="/admin/users" element={<AdminUsersPage />} />
           <Route path="/admin/departments" element={<AdminDepartmentsPage />} />
+          <Route path="/admin/tool-access" element={<AdminToolAccessPage />} />
           <Route path="/admin/mcp-servers" element={<AdminMcpServersPage />} />
           {/* builtin-tools D9: 도구 카탈로그 + 빌트인 토글 */}
           <Route path="/admin/tools" element={<AdminToolsPage />} />
@@ -101,6 +104,7 @@ const App = () => (
           <Route path="/admin/llm-models" element={<AdminLlmModelsPage />} />
           <Route path="/admin/chunking-profiles" element={<AdminChunkingProfilesPage />} />
           <Route path="/admin/multimodal" element={<AdminMultimodalPage />} />
+          <Route path="/admin/kb-defaults" element={<AdminKbDefaultsPage />} />
           <Route path="/admin/blueprints" element={<AdminBlueprintsPage />} />
           <Route path="/admin/skills" element={<AdminSkillsPage />} />
           <Route path="/admin/ragas" element={<AdminRagasPage />} />

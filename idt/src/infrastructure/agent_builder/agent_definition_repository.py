@@ -38,6 +38,7 @@ class AgentDefinitionRepository(AgentDefinitionRepositoryInterface):
                 department_id=agent.department_id,
                 temperature=agent.temperature,
                 max_iterations=agent.max_iterations,
+                token_limit=agent.token_limit,
                 include_user_context=agent.include_user_context,
                 forked_from=agent.forked_from,
                 forked_at=agent.forked_at,
@@ -115,6 +116,8 @@ class AgentDefinitionRepository(AgentDefinitionRepositoryInterface):
             model.department_id = agent.department_id
             model.temperature = agent.temperature
             model.max_iterations = agent.max_iterations
+            # agent-token-limit D5: 미반영 시 설정 변경이 조용히 무효
+            model.token_limit = agent.token_limit
             # agent-builder-edit-mapping FR-5: 미반영 시 모델 변경이 조용히 무효
             model.llm_model_id = agent.llm_model_id
             # agent-update-tool-editing: 도구 재구성 시 flow_hint 도 바뀐다 —
@@ -430,6 +433,7 @@ class AgentDefinitionRepository(AgentDefinitionRepositoryInterface):
             department_id=model.department_id,
             temperature=model.temperature,
             max_iterations=model.max_iterations,
+            token_limit=model.token_limit,
             include_user_context=model.include_user_context,
             forked_from=model.forked_from,
             forked_at=model.forked_at,

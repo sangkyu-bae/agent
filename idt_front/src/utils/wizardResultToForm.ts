@@ -11,6 +11,7 @@
  * 모델/온도는 스튜디오 기본값을 쓴다 — 위저드 단계를 늘리지 않기 위해서다.
  */
 import { applyToolsToForm } from './agentFormPrefill';
+import { attachKbToForm } from './kbQuickSetup';
 import type { AgentBuilderFormData } from '@/types/agentBuilder';
 import type { WizardResult } from '@/store/agentDraftStore';
 import type { CatalogTool } from '@/types/toolCatalog';
@@ -23,9 +24,13 @@ export const wizardResultToForm = (
   result: WizardResult,
   prev: AgentBuilderFormData,
   { catalogTools }: WizardToFormDeps,
-): AgentBuilderFormData => ({
-  ...prev,
-  ...applyToolsToForm(result.toolIds, prev, catalogTools),
-  name: result.suggestedName,
-  systemPrompt: result.systemPrompt,
-});
+): AgentBuilderFormData => {
+  const form: AgentBuilderFormData = {
+    ...prev,
+    ...applyToolsToForm(result.toolIds, prev, catalogTools),
+    name: result.suggestedName,
+    systemPrompt: result.systemPrompt,
+  };
+  // agent-kb-quick-setup FR-13: 문서 단계의 KB 를 RAG 도구 + kb_id 로 프리필
+  return result.kbId ? attachKbToForm(form, result.kbId) : form;
+};

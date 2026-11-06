@@ -9,7 +9,7 @@ import type { CatalogTool } from '@/types/toolCatalog';
 import type { AgentBuilderFormData } from '@/types/agentBuilder';
 import type { RagToolConfig } from '@/types/ragToolConfig';
 import { DEFAULT_RAG_CONFIG } from '@/types/ragToolConfig';
-import { MAX_ITERATIONS } from '@/constants/agentSettings';
+import { MAX_ITERATIONS, TOKEN_LIMIT } from '@/constants/agentSettings';
 import { mapDraftToolIdsToCatalog } from './draftToolMapping';
 import { draftFromGenerationTypeInfo } from './documentGenerator';
 import { draftFromWorkerToolConfig } from '@/utils/presentationGenerator';
@@ -92,6 +92,8 @@ export function mapDetailToForm(
     ),
     // agent-settings-tab D5: 서버는 항상 값을 반환 — 폴백은 방어용
     maxIterations: detail.max_iterations ?? MAX_ITERATIONS.DEFAULT,
+    // agent-token-limit D12: 구 서버 응답은 필드 부재 → 기본값
+    tokenLimit: detail.token_limit ?? TOKEN_LIMIT.DEFAULT,
     // agent-opener FR-10: edit 프라임 (구 서버 응답은 필드 부재 → [])
     openers: detail.openers ?? [],
   };

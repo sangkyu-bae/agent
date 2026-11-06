@@ -15,6 +15,14 @@ export const chunkingProfileService = {
     return data;
   },
 
+  // 일반 사용자용 active 목록 — KB 화면은 관리자 API를 호출하지 않는다
+  getActiveChunkingProfiles: async (): Promise<ChunkingProfileListResponse> => {
+    const { data } = await authApiClient.get<ChunkingProfileListResponse>(
+      API_ENDPOINTS.CHUNKING_PROFILES
+    );
+    return data;
+  },
+
   createChunkingProfile: async (
     req: ChunkingProfileRequest
   ): Promise<ChunkingProfile> => {

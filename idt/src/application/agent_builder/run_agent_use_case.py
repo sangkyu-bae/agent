@@ -86,6 +86,10 @@ from src.domain.agent_builder.schemas import (
     SupervisorConfig,
     WorkflowDefinition,
 )
+from src.domain.agent_run.interfaces import (
+    RunSourcesReaderPort,
+    RunToolTraceReaderPort,
+)
 from src.domain.agent_run.value_objects import (
     AgentRunEvent,
     AgentRunEventType,
@@ -107,6 +111,8 @@ from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.application.pii_masking.message_masker import PiiMessageMasker
 from src.domain.pii_masking.policies import PiiRunSummaryPolicy
 from src.domain.pii_masking.schemas import PiiRunScope
+from src.domain.tool_access.value_objects import ToolAccessSet
+from src.application.tool_access.validation import excluded_info
 from src.domain.prompt_guard.interfaces import PromptGuardPort
 from src.domain.prompt_guard.policies import BLOCK_NOTICE_KO, BlockedTurnPolicy
 from src.domain.prompt_guard.schemas import GuardDecision, GuardTier, InputSource
@@ -148,6 +154,8 @@ class _StreamState:
     final_messages: list = field(default_factory=list)
     # agent-recursion-limit D7: supervisor 가드의 limit_reached 캡처 → payload 플래그.
     limit_reached: bool = False
+    # agent-token-limit D10: 도달 사유 latch (최초값 유지). 빈 값이면 payload 키 생략.
+    limit_reason: str = ""
     # supervisor-chart-builder-node: chart_builder 노드가 생성한 Chart.js config.
     charts: list = field(default_factory=list)
     # analysis-source-preservation: analysis_node가 방출한 원천 데이터 채널.
@@ -164,6 +172,8 @@ class _StreamState:
     pii_token_nodes: dict = field(default_factory=dict)
     # FR-13 (Check G-2): 실패·한도 초과 경로에서도 요약을 남기려고 상태에 둔다.
     pii_scope: Any = None
+    # tool-access-control FR-11: 권한으로 뺀 워커(서브에이전트 포함). 정상·강등 답변이 함께 쓴다.
+    excluded_workers: list = field(default_factory=list)
 
 
 def _redact_state_images(state: dict) -> dict:
@@ -176,6 +186,15 @@ def _redact_state_images(state: dict) -> dict:
 def _image_attachments(attachments: list[dict] | None) -> list[dict]:
     """첨부 dict 중 이미지만 (chat-image-attachment Design §3.2)."""
     return [a for a in attachments or [] if a.get("type") == "image"]
+
+
+def _saved_message_id(saved: Any) -> int | None:
+    """저장 결과에서 정수 id 만 꺼낸다 (agent-run-feedback-wiring §6.1).
+
+    id 미발급·테스트 대역(MagicMock)이면 None — payload 에 키를 싣지 않는다.
+    """
+    message_id = getattr(getattr(saved, "id", None), "value", None)
+    return message_id if isinstance(message_id, int) else None
 
 
 def _persisted_query(request: RunAgentRequest) -> str:
@@ -298,9 +317,19 @@ class RunAgentUseCase:
         # pii-masking-integration §2.1 / D-03: 외부 LLM 경계 PII 마스킹. None 이면
         # 해제 — compile 에 scope 를 넘기지 않고 토큰도 그대로 흘린다(무회귀).
         pii_masker: Optional[PiiMessageMasker] = None,
+        # agent-run-source-citations §2.3: 답변 근거 조회. None 이면 sources 없음.
+        run_sources: Optional[RunSourcesReaderPort] = None,
+        # agent-run-tool-trace §2.2: 답변별 도구 실행 내역 조회. None 이면 tool_trace 없음.
+        run_tool_trace: Optional[RunToolTraceReaderPort] = None,
+        # tool-access-control §2.1 (FR-09·10): 실행자 기준 도구 권한. None 이면 필터
+        # 없음(기존 동작). 프로덕션 주입은 배선 계약 테스트가 고정한다.
+        tool_access_resolver=None,
     ) -> None:
         self._pii_masker = pii_masker
         self._repository = repository
+        self._tool_access_resolver = tool_access_resolver
+        self._run_sources = run_sources
+        self._run_tool_trace = run_tool_trace
         self._image_block_builder = image_block_builder
         self._image_max_count = image_max_count
         self._image_detail = image_detail
@@ -339,6 +368,8 @@ class RunAgentUseCase:
         *,
         auth_ctx: AuthContext | None = None,
         inject_memory: bool = False,
+        include_sources: bool = False,
+        include_tool_trace: bool = False,
     ) -> AsyncIterator[AgentRunEvent]:
         """transport-독립 SSE/WS용 이벤트 스트림 (Design §5.2.2).
 
@@ -346,6 +377,12 @@ class RunAgentUseCase:
         주입은 **대화 라우트(WS·REST·SSE)만 True 로 opt-in** 한다. 웹훅·백그라운드
         잡도 auth_ctx 를 넘기므로 auth_ctx 유무로는 대화 여부를 구분할 수 없다 —
         기본 False(fail-closed)로 소유자 메모리가 외부 발송 결과에 섞이지 않게 한다.
+
+        include_sources — agent-run-source-citations FR-12: 근거 칩을 그리는 WS
+        경로만 True. 웹훅·백그라운드·RAGAS 에 조회 쿼리를 더하지 않는다.
+
+        include_tool_trace — agent-run-tool-trace §4.3: 답변별 도구 실행 내역을 그리는
+        WS 경로만 True. include_sources 와 같은 이유로 기본 False.
 
         이벤트 시퀀스:
             RUN_STARTED → (NODE_STARTED|NODE_COMPLETED|TOOL_*|TOKEN)*
@@ -411,11 +448,13 @@ class RunAgentUseCase:
             # pii-masking-integration §3.1 (FR-08): 런 1개의 vault.
             # 서브에이전트까지 같은 vault를 공유한다.
             pii_scope = self._start_pii_scope(state)
+            # tool-access-control FR-11: 권한으로 뺀 워커(서브에이전트 포함) 수집
             graph, initial_state, graph_config = await self._prepare_graph(
                 agent=agent, request=request, session_id=session_id,
                 callback=callback, run_id=run_id, request_id=request_id,
                 auth_ctx=auth_ctx, inject_memory=inject_memory,
                 pii_scope=pii_scope,
+                excluded_sink=state.excluded_workers,
             )
             node_names = _collect_node_names(agent.to_workflow_definition())
 
@@ -439,7 +478,7 @@ class RunAgentUseCase:
             )
             # chat-chart-persistence D5: 차트 페이로드를 메시지와 함께 영속화.
             # 빈 리스트는 None으로 저장 (D2) — 재진입 시 이력 API가 복원.
-            await self._save_assistant_message(
+            message_id = await self._save_assistant_message(
                 answer, request.user_id, session_id, agent_id,
                 charts=state.charts or None,
                 analysis_data=snapshot,
@@ -453,15 +492,23 @@ class RunAgentUseCase:
                 request=request, request_id=request_id,
                 session_id=session_id,
             )
-            answer_payload: dict = {"answer": answer, "tools_used": tools_used}
-            if approval_id:
-                answer_payload["approval_pending"] = True
-                answer_payload["approval_id"] = approval_id
-            # agent-recursion-limit D7: True일 때만 부착 (charts 선례와 동형).
-            if state.limit_reached:
-                answer_payload["limit_reached"] = True
-            if state.charts:
-                answer_payload["charts"] = state.charts
+            # Design Ref: agent-run-feedback-wiring §4.3 — payload 는 _answer_payload 가
+            # 만든다. agent-recursion-limit D7 / charts 선례: 플래그는 truthy 일 때만.
+            answer_payload = self._answer_payload(
+                answer, tools_used, message_id,
+                approval_pending=bool(approval_id), approval_id=approval_id,
+                limit_reached=state.limit_reached, charts=state.charts,
+                # agent-token-limit D10: 빈 문자열이면 _answer_payload가 키를 생략
+                limit_reason=state.limit_reason,
+                # tool-access-control FR-11 (additive): 비어 있으면 키 생략
+                excluded_tools=self._excluded_payload(state),
+            )
+            await self._attach_sources(
+                answer_payload, run_id, request_id, include_sources,
+            )
+            await self._attach_tool_trace(
+                answer_payload, run_id, request_id, include_tool_trace,
+            )
             yield self._build_event(
                 seq, AgentRunEventType.ANSWER_COMPLETED, run_id, answer_payload,
             )
@@ -497,6 +544,8 @@ class RunAgentUseCase:
                 gre, seq=seq, run_id=run_id, state=state,
                 request=request, session_id=session_id,
                 agent_id=agent_id, request_id=request_id,
+                include_sources=include_sources,
+                include_tool_trace=include_tool_trace,
             ):
                 yield ev
         except Exception as e:
@@ -540,6 +589,9 @@ class RunAgentUseCase:
         run_id_str: Optional[str] = None
         session_id: str = request.session_id or ""
         failure_message: Optional[str] = None
+        # agent-run-feedback-wiring G-M1: ANSWER 없이 끝나는 분기가 생겨도 미정의 금지
+        assistant_message_id: int | None = None
+        excluded_tools: list = []
 
         async for ev in self.stream(
             agent_id, request, request_id,
@@ -552,6 +604,9 @@ class RunAgentUseCase:
             elif ev.event_type == AgentRunEventType.ANSWER_COMPLETED:
                 final_answer = ev.payload["answer"]
                 tools_used = list(ev.payload["tools_used"])
+                # agent-run-feedback-wiring D-05: 저장했을 때만 키가 있다.
+                assistant_message_id = ev.payload.get("assistant_message_id")
+                excluded_tools = list(ev.payload.get("excluded_tools") or [])
             elif ev.event_type == AgentRunEventType.RUN_FAILED:
                 failure_message = ev.payload.get("message", "unknown failure")
 
@@ -566,6 +621,8 @@ class RunAgentUseCase:
             request_id=request_id,
             session_id=session_id,
             run_id=run_id_str,
+            assistant_message_id=assistant_message_id,
+            excluded_tools=excluded_tools,
         )
 
     # ── pii-masking-integration (Design §3.1, §4.5, FR-13) ───────────────
@@ -673,13 +730,14 @@ class RunAgentUseCase:
         안내문 저장 → ANSWER_COMPLETED(guard_blocked=True, D2) → complete_run
         → RUN_COMPLETED.
         """
-        await self._save_assistant_message(
+        message_id = await self._save_assistant_message(
             BLOCK_NOTICE_KO, request.user_id, session_id, agent_id,
             persist=request.persist_conversation,
         )
+        # Design Ref: agent-run-feedback-wiring §4.3 (D-04) — 차단 턴도 평가 대상.
         yield self._build_event(
             seq, AgentRunEventType.ANSWER_COMPLETED, run_id,
-            {"answer": BLOCK_NOTICE_KO, "tools_used": [], "guard_blocked": True},
+            self._answer_payload(BLOCK_NOTICE_KO, [], message_id, guard_blocked=True),
         )
         if self._tracker is not None and run_id is not None:
             await self._tracker.complete_run(
@@ -693,6 +751,43 @@ class RunAgentUseCase:
             },
         )
 
+    async def _attach_sources(
+        self,
+        payload: dict,
+        run_id: Optional[RunId],
+        request_id: str,
+        include_sources: bool,
+    ) -> None:
+        """답변 payload 에 근거를 더한다. 있을 때만 키를 싣는다 (charts 선례).
+
+        Design Ref: agent-run-source-citations §4.2. 조회 실패는 리더가 빈 목록으로
+        흡수하므로 답변을 막지 않는다 (Plan FR-11).
+        """
+        if not include_sources or self._run_sources is None or run_id is None:
+            return
+        items = await self._run_sources.load_for_run(run_id, request_id)
+        if items:
+            payload["sources"] = [item.to_payload() for item in items]
+
+    async def _attach_tool_trace(
+        self,
+        payload: dict,
+        run_id: Optional[RunId],
+        request_id: str,
+        include_tool_trace: bool,
+    ) -> None:
+        """답변 payload 에 도구 실행 내역을 더한다. 있을 때만 키를 싣는다.
+
+        Design Ref: agent-run-tool-trace §4.3 — 세션 API 와 같은 서비스를 지나 재진입
+        화면과 같은 내역이 된다 (Plan R4). 조회 실패는 리더가 None 으로 흡수한다.
+        플래그를 먼저 보므로 __new__ 로 만든 테스트 픽스처도 속성 없이 동작한다.
+        """
+        if not include_tool_trace or self._run_tool_trace is None or run_id is None:
+            return
+        trace = await self._run_tool_trace.load_for_run(run_id, request_id)
+        if trace is not None and trace.items:
+            payload["tool_trace"] = trace.to_payload()
+
     async def _degraded_completion_events(
         self,
         error: GraphRecursionError,
@@ -704,6 +799,8 @@ class RunAgentUseCase:
         session_id: str,
         agent_id: str,
         request_id: str,
+        include_sources: bool = False,
+        include_tool_trace: bool = False,
     ) -> AsyncIterator[AgentRunEvent]:
         """GraphRecursionError 안전망 (agent-recursion-limit D9).
 
@@ -728,15 +825,26 @@ class RunAgentUseCase:
         snapshot = self._collect_snapshot(
             request, state.final_messages, state.analysis_source,
         )
-        await self._save_assistant_message(
+        message_id = await self._save_assistant_message(
             answer, request.user_id, session_id, agent_id,
             charts=state.charts or None,
             analysis_data=snapshot,
             persist=request.persist_conversation,
         )
+        # Design Ref: agent-run-feedback-wiring §4.3 (D-04) — 강등 답변도 평가 대상.
+        answer_payload = self._answer_payload(
+            answer, tools_used, message_id, limit_reached=True,
+            # agent-token-limit D10: GraphRecursionError 강등은 반복 한도 계열
+            limit_reason="iteration",
+            # tool-access-control Check G-03: 강등 답변도 제외 도구를 알린다
+            excluded_tools=self._excluded_payload(state),
+        )
+        await self._attach_sources(answer_payload, run_id, request_id, include_sources)
+        await self._attach_tool_trace(
+            answer_payload, run_id, request_id, include_tool_trace,
+        )
         yield self._build_event(
-            seq, AgentRunEventType.ANSWER_COMPLETED, run_id,
-            {"answer": answer, "tools_used": tools_used, "limit_reached": True},
+            seq, AgentRunEventType.ANSWER_COMPLETED, run_id, answer_payload,
         )
         run_url: Optional[str] = None
         if self._tracker is not None and run_id is not None:
@@ -914,6 +1022,7 @@ class RunAgentUseCase:
         auth_ctx: AuthContext | None = None,
         inject_memory: bool = False,
         pii_scope: Optional[PiiRunScope] = None,
+        excluded_sink: list | None = None,
     ) -> tuple[Any, dict, dict]:
         """llm_model 로드 + messages 빌드 + compile + initial_state + graph_config."""
         # agent-model-benchmark D1: 모델·temperature 오버라이드 해석 단일 지점.
@@ -938,7 +1047,11 @@ class RunAgentUseCase:
         workflow = agent.to_workflow_definition()
         workflow = await self._inject_attached_skills(workflow, agent, request_id)
         # agent-recursion-limit D1: 에이전트별 반복 한도를 단일 소스로 주입.
-        sv_config = SupervisorConfig(max_iterations=agent.max_iterations)
+        # agent-token-limit D6: 토큰 예산도 같은 단일 소스에서 주입.
+        sv_config = SupervisorConfig(
+            max_iterations=agent.max_iterations,
+            token_limit=agent.token_limit,
+        )
         # agent-memory-injection §6.2 D8: 대화 실행 경로에서만, compile 직전 1회.
         # Act-1 (Analysis G1): 대화 여부는 호출자의 inject_memory opt-in 으로만
         # 판정한다 — 웹훅·백그라운드 잡도 auth_ctx 를 넘기므로 auth_ctx 유무는
@@ -967,12 +1080,21 @@ class RunAgentUseCase:
             memory_block=memory_block,
             # 해제 시에는 인자 자체를 넘기지 않는다 — 기존 compile 호출 형태 보존.
             **({"pii_scope": pii_scope} if pii_scope is not None else {}),
+            # tool-access-control §0 F1: auth_ctx 있으면 그것으로, 없으면(스케줄·RAGAS)
+            # request.user_id 로 판정. 조회 실패는 도구 없이 실행(Fail-Closed).
+            tool_access=await self._resolve_tool_access(
+                auth_ctx, request.user_id, request_id
+            ),
+            excluded_sink=excluded_sink,
         )
 
+        excluded_ids = {w.worker_id for w in (excluded_sink or [])}
         initial_state = build_initial_state(
             messages=messages,
             config=sv_config,
-            available_workers=[w.worker_id for w in workflow.workers],
+            available_workers=[
+                w.worker_id for w in workflow.workers if w.worker_id not in excluded_ids
+            ],
             attachments=getattr(request, "attachments", None),
         )
 
@@ -981,6 +1103,35 @@ class RunAgentUseCase:
             user_id=request.user_id, callback=callback,
         )
         return graph, initial_state, graph_config
+
+    async def _resolve_tool_access(
+        self,
+        auth_ctx: AuthContext | None,
+        user_id: str | None,
+        request_id: str,
+    ) -> ToolAccessSet | None:
+        """tool-access-control §2.2·§6.2 — 실행자 허용 도구 집합.
+
+        - Resolver 미주입: None(필터 없음 — 기존 동작, 단위 테스트 무회귀)
+        - auth_ctx 있음(채팅·웹훅·잡): for_auth_ctx — 쿼리 1회
+        - auth_ctx 없음(스케줄·승인 재개·RAGAS): for_user_id
+        - 조회 실패: deny_all — 권한 미확인 상태로 도구를 쓰지 않는다(Fail-Closed).
+          에이전트는 도구 없이 대화형으로 계속 실행된다.
+        """
+        if self._tool_access_resolver is None:
+            return None
+        try:
+            if auth_ctx is not None:
+                return await self._tool_access_resolver.for_auth_ctx(
+                    auth_ctx, request_id
+                )
+            return await self._tool_access_resolver.for_user_id(user_id, request_id)
+        except Exception as e:
+            self._logger.error(
+                "tool access resolve failed — running without tools",
+                exception=e, request_id=request_id,
+            )
+            return ToolAccessSet.deny_all()
 
     async def _build_memory_block(
         self,
@@ -1128,7 +1279,13 @@ class RunAgentUseCase:
         if ev_type == "on_chain_start":
             return self._map_chain_start(name, node_names, seq, run_id, state)
         if ev_type == "on_chain_end":
-            return self._map_chain_end(name, data, node_names, seq, run_id, state)
+            # agent-token-limit Act-1 (Analysis G-2): 서브 에이전트 그래프의 노드
+            # 이벤트도 부모 스트림에 올라온다 (실측: 최상위 노드 parent_ids 1,
+            # 최상위 그래프 0, 중첩 노드 3). 한도 신호는 최상위에서만 latch한다.
+            nested = len(raw.get("parent_ids") or []) > 1
+            return self._map_chain_end(
+                name, data, node_names, seq, run_id, state, nested=nested,
+            )
         if ev_type == "on_tool_start":
             return self._map_tool_start(name, raw, data, seq, run_id, state)
         if ev_type == "on_tool_end":
@@ -1284,8 +1441,10 @@ class RunAgentUseCase:
             llm_model=llm_model,
             temperature=agent.temperature,
             request_id=request_id,
+            # agent-token-limit D6 (Plan FR-04): 승인 재개도 같은 값.
             supervisor_config=SupervisorConfig(
-                max_iterations=agent.max_iterations
+                max_iterations=agent.max_iterations,
+                token_limit=agent.token_limit,
             ),
             depth=0,
             visited={agent.id},
@@ -1294,6 +1453,10 @@ class RunAgentUseCase:
             agent_id=agent.id,
             subject_user_id=subject_user_id,
             **({"pii_scope": pii_scope} if pii_scope is not None else {}),
+            # tool-access-control §0 F1: 재개 런엔 auth_ctx 가 없다 — 원래 요청자 기준.
+            tool_access=await self._resolve_tool_access(
+                None, subject_user_id, request_id
+            ),
         )
         try:
             result = await graph.ainvoke(state)
@@ -1412,14 +1575,20 @@ class RunAgentUseCase:
     def _map_chain_end(
         self, name: str, data: dict, node_names: set[str],
         seq: _SeqCounter, run_id: Optional[RunId], state: _StreamState,
+        *, nested: bool = False,
     ) -> Optional[AgentRunEvent]:
         # 어떤 chain_end이든 messages가 있으면 final_messages 갱신 (top-level이 마지막)
         output = data.get("output")
         if isinstance(output, dict) and "messages" in output:
             state.final_messages = list(output["messages"])
         # agent-recursion-limit D7: supervisor 가드의 limit_reached 캡처 (latch).
-        if isinstance(output, dict) and output.get("limit_reached"):
+        # agent-token-limit Act-1 (G-2): 중첩(서브 에이전트) 이벤트는 제외 — 서브
+        # 한도 도달이 부모 payload에 새면 부모 답변(안내 없음)과 배지가 어긋난다.
+        if not nested and isinstance(output, dict) and output.get("limit_reached"):
             state.limit_reached = True
+            # agent-token-limit D10: 사유도 latch — 최초값 유지
+            if not state.limit_reason:
+                state.limit_reason = str(output.get("limit_reason") or "")
         # supervisor-chart-builder-node: chart_builder 노드 output의 charts 캡처.
         # truthy일 때만 갱신 → 빈 배열이 유효 charts를 덮어쓰지 않음.
         if isinstance(output, dict) and output.get("charts"):
@@ -1785,9 +1954,11 @@ class RunAgentUseCase:
         charts: Optional[list[dict]] = None,
         analysis_data: Optional[dict] = None,
         persist: bool = True,
-    ) -> None:
+    ) -> int | None:
         """assistant message 저장 (user message 이후 turn_index 자동 계산).
 
+        반환: 저장된 메시지 id — ANSWER_COMPLETED 의 `assistant_message_id`
+        (agent-run-feedback-wiring §4.3). persist=False 또는 id 미발급이면 None.
         agent-model-benchmark D2: persist=False면 건너뛴다 (강등 경로도 동시 적용).
         chat-chart-persistence: charts는 표시 전용 메타 — LLM 컨텍스트(_build_messages)
         에는 재투입하지 않는다 (Design D7).
@@ -1795,7 +1966,7 @@ class RunAgentUseCase:
         데이터 스냅샷 (요약 입력에는 미포함).
         """
         if not persist:
-            return
+            return None
 
         def _build(turn: int) -> ConversationMessage:
             return ConversationMessage(
@@ -1813,8 +1984,30 @@ class RunAgentUseCase:
 
         # Design Ref: agent-run-turn-index-fix §6.1 D3 — user 저장과 같은 별도 세션
         # 경로. 요청 세션 스냅샷으로 계산하던 기존 결함(같은 turn 저장) 제거.
-        # 반환값(None)은 유지 — id 반환은 agent-run-feedback-wiring(#2) 범위.
-        await self._persist_message(user_id, session_id, _build)
+        saved = await self._persist_message(user_id, session_id, _build)
+        return _saved_message_id(saved)
+
+    @staticmethod
+    def _excluded_payload(state: "_StreamState") -> list[dict]:
+        """tool-access-control FR-11 — ANSWER_COMPLETED 의 excluded_tools (빈 목록이면 키 생략)."""
+        return [e.model_dump() for e in excluded_info(state.excluded_workers)]
+
+    @staticmethod
+    def _answer_payload(
+        answer: str, tools_used: list[str], message_id: int | None, **flags,
+    ) -> dict:
+        """ANSWER_COMPLETED payload 의 단일 생성 지점 (agent-run-feedback-wiring D-02).
+
+        `assistant_message_id` 는 저장했을 때만, flags 는 truthy 일 때만 싣는다
+        (charts·limit_reached 선례). 헬퍼 우회는 test_answer_payload_contract 가 막는다.
+        """
+        payload: dict = {"answer": answer, "tools_used": tools_used}
+        if message_id is not None:
+            payload["assistant_message_id"] = message_id
+        for key, value in flags.items():
+            if value:
+                payload[key] = value
+        return payload
 
     def _resolve_answer(self, state: "_StreamState") -> tuple[str, list[str]]:
         """런의 최종 답변 결정 — 승인 대기면 결정적 템플릿.

@@ -106,8 +106,12 @@ class TestMcpPutNull:
         )
         uc = MagicMock()
         uc.execute = AsyncMock(side_effect=ValueError("stop"))
+        from src.interfaces.dependencies.auth import get_current_user
+
         app = FastAPI()
         app.include_router(router)
+        # tool-access-control FR-16: MCP 레지스트리 라우터가 admin 전용이 됐다.
+        app.dependency_overrides[get_current_user] = lambda: _admin()
         app.dependency_overrides[get_update_use_case] = lambda: uc
         client = TestClient(app)
 

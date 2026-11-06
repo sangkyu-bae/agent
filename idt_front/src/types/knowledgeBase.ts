@@ -50,6 +50,8 @@ export interface CreateKnowledgeBaseRequest {
   department_id?: string | null;
   collection_name: string;
   use_clause_chunking?: boolean;
+  // kb-profile-selector: null = 기본 프로파일 따름 (late-binding)
+  chunking_profile_id?: string | null;
   // kb-custom-chunking (D1): 독립 opt-in — 조항 청킹과 상호배타
   use_custom_chunking?: boolean;
   custom_chunking_config?: CustomChunkingConfig | null;
@@ -74,6 +76,18 @@ export interface KbDocumentInfo {
   chunk_count: number;
   chunking_strategy: string;
   created_at: string | null;
+  /** 서버가 KB 정책으로 계산한 삭제 가능 여부 (kb-document-management FR-08) */
+  can_delete: boolean;
+}
+
+/** DELETE /knowledge-bases/{kbId}/documents/{docId} (kb-document-management §4.2) */
+export interface KbDocumentDeleteResponse {
+  kb_id: string;
+  document_id: string;
+  filename: string;
+  deleted_qdrant_chunks: number;
+  deleted_es_chunks: number;
+  status: string;
 }
 
 export interface KbDocumentListResponse {

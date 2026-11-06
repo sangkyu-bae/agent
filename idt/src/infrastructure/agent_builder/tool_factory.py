@@ -206,8 +206,14 @@ class ToolFactory:
         tool_config: dict | None = None,
         *,
         subject_user_id: str | None = None,
+        allowed_tool_names: frozenset[str] | None = None,
     ) -> list[BaseTool]:
         """tool_id가 가리키는 도구 '전부'를 반환한다.
+
+        allowed_tool_names — tool-access-control FR-12: 서버 단위 참조에서 실행자에게
+        허용된 MCP 도구명. None = 전부(기존 동작·admin). 개별 도구 참조는 컴파일러
+        워커 필터가 이미 판정했으므로 무시한다. 허용 도구가 서버에 하나도 없으면
+        ValueError — 컴파일러가 워커 단위로 격리한다.
 
         Design Ref: fix-mcp-tool-call-not-reaching-server §6.1 E6 —
         레거시 `mcp_{server}`는 서버 하나를 가리킬 뿐 도구를 특정하지 못한다.
@@ -230,6 +236,22 @@ class ToolFactory:
         )
         if not ref.is_server_level:
             return [self._bind_tool(ref, tool_id, request_id, tools)]
+
+        if allowed_tool_names is not None:
+            available = len(tools)
+            tools = [
+                t for t in tools
+                if getattr(t, "mcp_tool_name", None) in allowed_tool_names
+            ]
+            self._logger.info(
+                "MCP server-level tools filtered by permission",
+                request_id=request_id, tool_id=tool_id,
+                available=available, permitted=len(tools),
+            )
+            if not tools:
+                raise ValueError(
+                    f"No permitted MCP tools on server {ref.server_id!r}"
+                )
 
         self._logger.info(
             "MCP tools bound",

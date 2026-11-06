@@ -127,6 +127,8 @@ export interface AgentPipelineRequest {
   tools_confirmed?: boolean;
   /** 확정된 의도 재사용 (D2). 서버가 spec 으로 재검증한다. */
   intent?: PipelineIntentEcho | null;
+  /** agent-kb-quick-setup FR-11/12: 문서 단계에서 만든 KB — CREATE 가 RAG 도구를 주입한다. */
+  kb_id?: string | null;
 }
 
 export interface AgentPipelineResponse {
@@ -151,6 +153,8 @@ export interface AgentPipelineResponse {
   /** 절단이 일어났을 때의 사유. null 이면 절단 없음. */
   prompt_clamp_reason: string | null;
   bind_ok: boolean | null;
+  /** agent-kb-quick-setup FR-12: 요청 kb_id 에코백 (additive, 구형 응답에는 없음). */
+  kb_id?: string | null;
   /** status='failed'(SSE 합성) 일 때만 존재한다. */
   error?: { message: string };
 }

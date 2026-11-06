@@ -112,6 +112,123 @@ describe('CreateKnowledgeBaseModal — kb-management-ui', () => {
     );
   });
 
+  // ── kb-profile-selector Design §8.3 ──────────────────────────
+
+  const chooseClauseMode = async () => {
+    await userEvent.click(
+      screen.getByRole('button', { name: /고급 옵션/ }),
+    );
+    await userEvent.click(
+      screen.getByRole('radio', { name: /조항 단위 청킹/ }),
+    );
+  };
+
+  const chooseProfile = async (name: string) => {
+    await userEvent.click(
+      await screen.findByRole('combobox', { name: '청킹 프로파일' }),
+    );
+    await userEvent.click(screen.getByRole('option', { name }));
+  };
+
+  it('M1: 조항 모드에서 고른 프로파일 ID를 제출한다', async () => {
+    const onSubmit = renderModal();
+    await fillRequiredFields();
+    await chooseClauseMode();
+    await chooseProfile('계약서');
+
+    await userEvent.click(screen.getByRole('button', { name: '생성' }));
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        use_clause_chunking: true,
+        chunking_profile_id: 'prof-contract',
+      }),
+    );
+  });
+
+  it('M2: 기본 프로파일 따름이면 null을 제출한다', async () => {
+    const onSubmit = renderModal();
+    await fillRequiredFields();
+    await chooseClauseMode();
+    await screen.findByText(/경계 규칙 2개/);
+
+    await userEvent.click(screen.getByRole('button', { name: '생성' }));
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        use_clause_chunking: true,
+        chunking_profile_id: null,
+      }),
+    );
+  });
+
+  it('M3: 조항 모드가 아니면 프로파일 ID를 보내지 않는다', async () => {
+    const onSubmit = renderModal();
+    await fillRequiredFields();
+    await chooseClauseMode();
+    await chooseProfile('계약서');
+    await userEvent.click(
+      screen.getByRole('radio', { name: /기본 청킹/ }),
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: '생성' }));
+
+    expect(onSubmit.mock.calls[0][0].chunking_profile_id).toBeUndefined();
+  });
+
+  it('M4: 조항 모드를 고르기 전에는 프로파일 목록을 조회하지 않는다', async () => {
+    let calls = 0;
+    server.use(
+      http.get(`*${API_ENDPOINTS.CHUNKING_PROFILES}`, () => {
+        calls += 1;
+        return HttpResponse.json({ profiles: [], total: 0 });
+      }),
+    );
+    renderModal();
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(calls).toBe(0);
+  });
+
+  it('M5: 닫으면 선택값을 초기화한다', async () => {
+    renderModal();
+    await chooseClauseMode();
+    await chooseProfile('계약서');
+
+    await userEvent.click(screen.getByRole('button', { name: '취소' }));
+    await chooseClauseMode();
+
+    expect(
+      await screen.findByRole('combobox', { name: '청킹 프로파일' }),
+    ).toHaveTextContent('기본 프로파일 따름');
+  });
+
+  it('M5-1: 닫혔다가 다시 열리면(isOpen false→true) 선택값을 초기화한다', async () => {
+    const props = {
+      onClose: vi.fn(),
+      onSubmit: vi.fn(),
+      isPending: false,
+      error: null,
+    };
+    const { rerender } = render(
+      <CreateKnowledgeBaseModal isOpen {...props} />,
+      { wrapper: createWrapper() },
+    );
+    await chooseClauseMode();
+    await chooseProfile('계약서');
+
+    rerender(<CreateKnowledgeBaseModal isOpen={false} {...props} />);
+    rerender(<CreateKnowledgeBaseModal isOpen {...props} />);
+
+    expect(
+      screen.queryByRole('radio', { name: /조항 단위 청킹/ }),
+    ).not.toBeInTheDocument();
+    await chooseClauseMode();
+    expect(
+      await screen.findByRole('combobox', { name: '청킹 프로파일' }),
+    ).toHaveTextContent('기본 프로파일 따름');
+  });
+
   // ── kb-custom-chunking §6.1 ──────────────────────────────────
 
   it('커스텀 청킹 radio 선택 시 설정 폼이 열리고 제출값에 config가 담긴다', async () => {

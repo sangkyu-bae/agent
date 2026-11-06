@@ -338,3 +338,68 @@ describe('LeftConfigPanel — 승인 필요 도구 본문 인자', () => {
     expect(screen.queryByLabelText(/본문 인자/)).not.toBeInTheDocument();
   });
 });
+
+describe('LeftConfigPanel — 권한 없는 붙은 도구 (tool-access-control FR-13)', () => {
+  const TOOL_ACCESS = [
+    { tool_id: 'internal:web_search', name: '웹 검색', permitted: true },
+    { tool_id: 'internal:python_code_executor', name: 'Python 코드 실행', permitted: false },
+  ];
+
+  it('카탈로그에 없는 붙은 도구를 tool_access 이름 + "권한 없음" 칩으로 보인다', () => {
+    renderPanel(
+      { tools: ['internal:web_search', 'python_code_executor'] },
+      vi.fn(),
+      { isEditMode: true, toolAccess: TOOL_ACCESS },
+    );
+    expect(screen.getByText('Python 코드 실행')).toBeInTheDocument();
+    expect(screen.getByText('권한 없음')).toBeInTheDocument();
+    expect(screen.queryByText('추가된 도구가 없습니다')).not.toBeInTheDocument();
+  });
+
+  it('제거 버튼은 폼의 원래 id 로 토글한다', async () => {
+    const onToolToggle = vi.fn();
+    renderPanel(
+      { tools: ['python_code_executor'] },
+      vi.fn(),
+      { isEditMode: true, toolAccess: TOOL_ACCESS, onToolToggle },
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Python 코드 실행 제거' }));
+    expect(onToolToggle).toHaveBeenCalledWith('python_code_executor');
+  });
+
+  it('카탈로그 로딩 중에는 그리지 않는다', () => {
+    renderPanel(
+      { tools: ['python_code_executor'] },
+      vi.fn(),
+      { isEditMode: true, toolAccess: TOOL_ACCESS, catalogTools: undefined, isToolsLoading: true },
+    );
+    expect(screen.queryByText('권한 없음')).not.toBeInTheDocument();
+  });
+});
+
+describe('LeftConfigPanel — 지식 문서 블록 (agent-kb-quick-setup FR-06)', () => {
+  it('생성 모드 + 핸들러가 있으면 도구함에 지식 문서 블록이 렌더된다', async () => {
+    renderPanel({}, vi.fn(), { onKbAttached: vi.fn(), onKbDetached: vi.fn() });
+    expect(await screen.findByRole('region', { name: '지식 문서' })).toBeInTheDocument();
+    expect(screen.getByLabelText('지식 문서 파일 선택')).toBeInTheDocument();
+    expect(screen.queryByText('지식 문서 연결은 새 에이전트 생성 시 가능합니다')).not.toBeInTheDocument();
+  });
+
+  it('편집 모드에서는 블록 대신 안내 한 줄만 보인다', () => {
+    renderPanel({}, vi.fn(), { isEditMode: true, onKbAttached: vi.fn(), onKbDetached: vi.fn() });
+    expect(screen.getByText('지식 문서 연결은 새 에이전트 생성 시 가능합니다')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: '지식 문서' })).not.toBeInTheDocument();
+  });
+
+  it('KB 가 연결돼 있으면 연결 배지에 KB 이름이 보인다', async () => {
+    renderPanel(
+      {
+        tools: [RAG_TOOL_ID],
+        toolConfigs: { [RAG_TOOL_ID]: { ...DEFAULT_RAG_CONFIG, kb_id: 'kb-public-1' } },
+      },
+      vi.fn(),
+      { onKbAttached: vi.fn(), onKbDetached: vi.fn() },
+    );
+    expect(await screen.findByText(/연결됨: 전사 규정/)).toBeInTheDocument();
+  });
+});

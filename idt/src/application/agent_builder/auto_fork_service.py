@@ -66,6 +66,7 @@ class AutoForkService:
                     department_id=None,
                     temperature=agent.temperature,
                     max_iterations=agent.max_iterations,
+                    token_limit=agent.token_limit,
                     forked_from=agent.id,
                     forked_at=now,
                     created_at=now,

@@ -51,6 +51,8 @@ export interface AgentDetail {
   middleware_types?: string[];
   // agent-settings-tab: supervisor 반복 한도 (edit 폼 프라임용 — 서버는 항상 반환)
   max_iterations?: number;
+  // agent-token-limit D4: supervisor 토큰 예산 (edit 폼 프라임용 — 구 서버는 부재)
+  token_limit?: number;
   // agent-opener D4: 오프너 목록 (edit 폼 프라임용, sort_order ASC)
   openers?: string[];
   // doc-generator FR-12: 활성 문서 유형 (edit 폼 프리필용 — 없으면 null/생략)
@@ -68,6 +70,8 @@ export interface AgentDetail {
   can_delete: boolean;
   created_at: string;
   updated_at: string;
+  /** tool-access-control FR-13: 붙은 도구의 조회자 기준 허용 여부 (판정 미배선·실패 시 null) */
+  tool_access?: import('./toolAccess').ToolAccessInfo[] | null;
 }
 
 export interface SubscribeResponse {
@@ -96,6 +100,8 @@ export interface ForkAgentResponse {
   visibility: string;
   temperature: number;
   llm_model_id: string;
+  /** tool-access-control FR-08: 권한이 없어 복제본에서 뺀 도구 (없으면 빈 배열·생략) */
+  excluded_tools?: import('./toolAccess').ExcludedTool[];
 }
 
 export type MyAgentFilter = 'all' | 'owned' | 'subscribed' | 'forked';

@@ -28,6 +28,29 @@ describe('MessageBubble', () => {
     expect(screen.getByText('### 분석 결과')).toBeInTheDocument();
   });
 
+  it('어시스턴트 메시지에 도구 실행 내역이 있으면 접힌 헤더를 그린다 (agent-run-tool-trace)', () => {
+    const message: Message = {
+      ...baseMessage,
+      role: 'assistant',
+      content: '답변',
+      toolTrace: {
+        omitted_count: 0,
+        items: [{ seq: 1, kind: 'tool', label: 'list_inquiries', status: 'success' }],
+      },
+    };
+    render(<MessageBubble message={message} />);
+    expect(screen.getByRole('button', { name: /도구 실행 내역 \(1\)/ })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+  });
+
+  it('도구 실행 내역이 없으면 헤더를 그리지 않는다', () => {
+    const message: Message = { ...baseMessage, role: 'assistant', content: '답변' };
+    render(<MessageBubble message={message} />);
+    expect(screen.queryByRole('button', { name: /도구 실행 내역/ })).toBeNull();
+  });
+
   it('스트리밍 중이면 커서 요소를 렌더한다', () => {
     const message: Message = {
       ...baseMessage,
@@ -37,5 +60,36 @@ describe('MessageBubble', () => {
     };
     const { container } = render(<MessageBubble message={message} />);
     expect(container.querySelector('.animate-pulse')).not.toBeNull();
+  });
+});
+
+// agent-token-limit Design D11 §5.2 — 한도 도달 배지
+describe('MessageBubble — 한도 도달 배지', () => {
+  it('limitReason=token 이면 토큰 예산 안내를 그린다', () => {
+    const message: Message = {
+      ...baseMessage, role: 'assistant', content: '답변', limitReason: 'token',
+    };
+    render(<MessageBubble message={message} />);
+    expect(screen.getByText(/토큰 예산 한도에 도달/)).toBeInTheDocument();
+  });
+
+  it('limitReason=iteration 이면 반복 실행 안내를 그린다', () => {
+    const message: Message = {
+      ...baseMessage, role: 'assistant', content: '답변', limitReason: 'iteration',
+    };
+    render(<MessageBubble message={message} />);
+    expect(screen.getByText(/반복 실행 한도에 도달/)).toBeInTheDocument();
+  });
+
+  it('스트리밍 중이거나 사유가 없으면 배지를 그리지 않는다', () => {
+    const streaming: Message = {
+      ...baseMessage, role: 'assistant', content: '답', isStreaming: true, limitReason: 'token',
+    };
+    const { unmount } = render(<MessageBubble message={streaming} />);
+    expect(screen.queryByText(/한도에 도달/)).toBeNull();
+    unmount();
+    const plain: Message = { ...baseMessage, role: 'assistant', content: '답' };
+    render(<MessageBubble message={plain} />);
+    expect(screen.queryByText(/한도에 도달/)).toBeNull();
   });
 });

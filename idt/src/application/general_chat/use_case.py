@@ -172,9 +172,15 @@ class GeneralChatUseCase:
         prompt_guard: PromptGuardPort | None = None,
         # pii-masking-integration §2.1: 외부 LLM 경계 PII 마스킹. None 이면 해제(D-03).
         pii_masker: PiiMessageMasker | None = None,
+        # tool-access-control Check G-01: 실행자 도구 권한. None 이면 필터 없음(기존 동작).
+        # tool_id_resolver 는 도구 → 카탈로그 id (tool-recommender 와 같은 규칙).
+        tool_access_resolver=None,
+        tool_id_resolver=None,
     ) -> None:
         self._pii_masker = pii_masker
         self._tool_builder = chat_tool_builder
+        self._tool_access_resolver = tool_access_resolver
+        self._tool_id_resolver = tool_id_resolver
         self._prompt_guard = prompt_guard
         # runtime-datetime-context D3/D8: [현재 날짜] 블록 기준 타임존
         # (main.py가 settings.agent_timezone 주입). None이면 블록 생략 — 무회귀.
@@ -306,6 +312,36 @@ class GeneralChatUseCase:
         await self._tracker.complete_run(
             run_id, langsmith_trace_id=trace_id, langsmith_run_url=run_url,
         )
+
+    async def _permitted_tools(
+        self, tools: list, auth_ctx: AuthContext | None, user_id, request_id: str
+    ) -> list:
+        """tool-access-control Check G-01 — 실행자에게 허용된 도구만 바인딩.
+
+        판정 규칙은 에이전트 실행과 같다(ToolAccessSet): auth_ctx 가 있으면 그것,
+        없으면 user_id. 조회 실패는 도구 없이 대화(Fail-Closed). 도구 id 를 해석하지
+        못하면 비관리자에게는 불허.
+        """
+        if self._tool_access_resolver is None or self._tool_id_resolver is None:
+            return tools
+        try:
+            if auth_ctx is not None:
+                access = await self._tool_access_resolver.for_auth_ctx(auth_ctx, request_id)
+            else:
+                access = await self._tool_access_resolver.for_user_id(user_id, request_id)
+        except Exception as e:
+            self._logger.error(
+                "general chat tool access resolve failed — no tools bound",
+                exception=e, request_id=request_id,
+            )
+            return []
+        kept = [t for t in tools if access.allows(self._tool_id_resolver.resolve(t))]
+        if len(kept) != len(tools):
+            self._logger.info(
+                "general chat tools excluded — no permission",
+                request_id=request_id, excluded=len(tools) - len(kept),
+            )
+        return kept
 
     def _create_agent(
         self,
@@ -458,6 +494,10 @@ class GeneralChatUseCase:
 
             tools = await self._tool_builder.build(
                 top_k=request.top_k, request_id=request_id, auth_ctx=auth_ctx,
+            )
+            # tool-access-control Check G-01: 권한 판정이 관련도 선별보다 먼저다.
+            tools = await self._permitted_tools(
+                tools, auth_ctx, request.user_id, request_id
             )
             # tool-recommender Design §4.3: 바인딩 직전 질의 기준으로 도구를 좁힌다.
             # Plan SC: 회귀 방지 — 실패 시 filter가 입력을 그대로 돌려주므로

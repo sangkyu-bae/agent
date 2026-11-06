@@ -1,5 +1,12 @@
 """WorkflowCompiler: WorkflowDefinition → Custom StateGraph CompiledGraph 동적 컴파일."""
+import dataclasses
 from typing import Any, Awaitable, Callable, Optional, TYPE_CHECKING
+
+from src.application.tool_access.validation import (
+    excluded_tools_notice,
+    partition_tool_workers,
+)
+from src.domain.tool_access.value_objects import ToolAccessSet
 
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain.agents import create_agent
@@ -128,6 +135,7 @@ from src.domain.agent_builder.policies import (
     NestingDepthPolicy,
     QualityGatePolicy,
     SearchPipelinePolicy,
+    TokenLimitPolicy,
     ToolCallBudgetPolicy,
     ToolErrorPolicy,
 )
@@ -498,6 +506,29 @@ DEEP_SEARCH_TOOL_ID = "tavily_search"
 _SEARCH_MODES = frozenset({LEGACY_SEARCH_MODE, DEEP_SEARCH_MODE})
 
 
+# agent-token-limit D9: 한도 도달 사유별 final_answer 안내 블록.
+_LIMIT_NOTICE_TITLES = {
+    "iteration": "반복 한도 도달 안내",
+    "token": "토큰 한도 도달 안내",
+}
+_LIMIT_NOTICE_CAUSES = {
+    "iteration": "실행 반복 한도에 도달하여",
+    "token": "토큰 예산 한도에 도달하여",
+}
+
+
+def _render_limit_notice(reason: str) -> str:
+    """limit_reason → 안내 지시 블록. 미지 사유(빈 값·구 스냅샷)는 일반 문구."""
+    title = _LIMIT_NOTICE_TITLES.get(reason, "실행 한도 도달 안내")
+    cause = _LIMIT_NOTICE_CAUSES.get(reason, "실행 한도에 도달하여")
+    return (
+        f"\n\n[{title}]\n"
+        f"{cause} 지금까지 수집된 정보만으로 답변합니다. "
+        "이 사실을 답변에서 자연스럽게 언급하고, 수집 정보가 부족한 부분은 "
+        "추측하지 말고 부족하다고 명시하세요."
+    )
+
+
 class WorkflowCompiler:
     """WorkflowDefinition → Custom StateGraph CompiledGraph 동적 컴파일."""
 
@@ -635,6 +666,8 @@ class WorkflowCompiler:
         subject_user_id: str | None = None,
         memory_block: str = "",
         pii_scope: PiiRunScope | None = None,
+        tool_access: "ToolAccessSet | None" = None,
+        excluded_sink: list | None = None,
     ):
         # pii_scope — pii-masking-integration §3.1 (FR-08): 런 1개의 vault. 호출자
         # (RunAgentUseCase)가 만들어 넘기고 서브에이전트 재귀에도 그대로 전달한다.
@@ -643,7 +676,31 @@ class WorkflowCompiler:
         # memory_block — agent-memory-injection §6.1 D1: 호출자(RunAgentUseCase)가
         # 조립한 사용자 메모리 블록. 기본 "" 이면 변경 전과 프롬프트 바이트 동일(D5).
         # 서브에이전트 재귀(_compile_sub_agent)에는 넘기지 않는다 — depth=0 한정(D4).
+        # tool_access — tool-access-control §2.1 ①: 실행자 허용 도구 집합. None = 필터
+        # 없음(기존 동작). 프로덕션 호출 지점이 넘기는지는 AST 계약 테스트가 고정한다.
+        # excluded_sink — 권한으로 뺀 워커를 호출자에게 돌려주는 수집 리스트(서브에이전트 포함).
         NestingDepthPolicy.validate_depth(depth)
+
+        # Design Ref: tool-access-control §2.1 ① — 판정은 워커 목록 한 지점에서 한다.
+        # 전용 노드(문서·발표·이미지·엑셀)는 ToolFactory 를 거치지 않으므로 여기서
+        # 빼야 덮인다. 권한 제외는 '도구 생성 실패'가 아니라서 failed_worker_ids 에
+        # 넣지 않는다 — 전부 빠져도 대화형으로 컴파일된다.
+        excluded_notice = ""
+        if tool_access is not None:
+            kept_workers, excluded_workers = partition_tool_workers(
+                tool_access, workflow.workers
+            )
+            if excluded_workers:
+                workflow = dataclasses.replace(workflow, workers=kept_workers)
+                excluded_notice = excluded_tools_notice(excluded_workers)
+                if excluded_sink is not None:
+                    excluded_sink.extend(excluded_workers)
+                self._logger.info(
+                    "tool workers excluded — no permission",
+                    request_id=request_id, depth=depth,
+                    run_id=str(run_id) if run_id is not None else None,
+                    tool_ids=[w.tool_id for w in excluded_workers],
+                )
 
         config = supervisor_config or SupervisorConfig()
         self._logger.info(
@@ -678,7 +735,10 @@ class WorkflowCompiler:
                 agent_id=agent_id,
                 request_id=request_id,
             )
-            effective_supervisor_prompt = prefix + workflow.supervisor_prompt
+            # tool-access-control FR-11: 제외 안내는 supervisor·final_answer 가 함께 본다.
+            effective_supervisor_prompt = (
+                prefix + excluded_notice + workflow.supervisor_prompt
+            )
 
             # ToolFactory가 bind_auth_ctx를 지원하면 현재 auth_ctx 주입.
             # (Phase 5에서 ToolFactory에 메서드 추가됨)
@@ -755,6 +815,9 @@ class WorkflowCompiler:
                         include_user_context=include_user_context,
                         subject_user_id=subject_user_id,
                         pii_scope=pii_scope,
+                        # tool-access-control §2.1 ③: 하위 그래프도 같은 실행자 기준
+                        tool_access=tool_access,
+                        excluded_sink=excluded_sink,
                     )
                     worker_map[worker_def.worker_id] = sub_node
                     # subagent-context-scope FR-10: 래퍼가 이미 노드 함수다.
@@ -871,16 +934,25 @@ class WorkflowCompiler:
                 # 레거시 mcp_{server} 워커는 서버의 도구 전체를 받아야 한다.
                 # 첫 도구만 넘기면 나머지는 LLM 도구 목록에 없어 호출이 성립하지
                 # 않고 MCP 서버에 요청이 가지 않는다(module-1 실측).
-                if parse_mcp_tool_id(worker_def.tool_id) is not None:
+                mcp_ref = parse_mcp_tool_id(worker_def.tool_id)
+                if mcp_ref is not None:
                     # Design Ref: §6.2 — MCP 서버 1개 장애가 에이전트 전체를
                     # 죽이지 않도록 워커 단위로 격리한다. tool_registry가 서버
                     # 단위로 쓰는 격리 철학을 워커 레벨에 맞춘 것.
                     # 배선 오류(E1/E2)는 격리 대상이 아니다 — 조용한 실패 재발 방지.
+                    # tool-access-control FR-12: 레거시 서버 단위 참조는 허용 도구만
+                    # 바인딩한다 (None = admin, 전부). 개별 도구 참조는 위 필터로 끝.
+                    name_filter: dict = {}
+                    if tool_access is not None and mcp_ref.is_server_level:
+                        name_filter["allowed_tool_names"] = (
+                            tool_access.allowed_mcp_tool_names(mcp_ref.server_id)
+                        )
                     try:
                         worker_tools = await self._tool_factory.create_all_async(
                             worker_def.tool_id, request_id,
                             tool_config=worker_def.tool_config,
                             subject_user_id=subject_user_id,
+                            **name_filter,
                         )
                     except McpWiringError:
                         # Design Ref: §6.2 — 배선 누락은 개발자 실수다.
@@ -976,7 +1048,14 @@ class WorkflowCompiler:
                         )
                         wiki_tools = [tool]
                         instruction = _WIKI_WORKER_INSTRUCTION
-                        if is_folder_mode:
+                        # tool-access-control §2.1 ④: 동봉 도구도 따로 판정한다. 불허면
+                        # 폴더 지도 지시도 쓰지 않는다(없는 도구를 쓰라고 안내하지 않게).
+                        if is_folder_mode and tool_access is not None and not tool_access.allows("wiki_list"):
+                            self._logger.info(
+                                "wiki_list bundling skipped — no permission",
+                                request_id=request_id,
+                            )
+                        elif is_folder_mode:
                             instruction = _WIKI_FOLDER_WORKER_INSTRUCTION
                             try:
                                 wiki_tools.append(
@@ -1385,6 +1464,8 @@ class WorkflowCompiler:
         include_user_context: bool = True,
         subject_user_id: str | None = None,
         pii_scope: PiiRunScope | None = None,
+        tool_access: "ToolAccessSet | None" = None,
+        excluded_sink: list | None = None,
     ):
         if self._agent_repository is None:
             raise ValueError("agent_repository is required for sub_agent compilation")
@@ -1424,6 +1505,8 @@ class WorkflowCompiler:
             subject_user_id=subject_user_id,
             # FR-08: 부모와 같은 vault — 자식 결과의 placeholder도 부모 런에서 원복된다.
             pii_scope=pii_scope,
+            tool_access=tool_access,
+            excluded_sink=excluded_sink,
         )
 
         # subagent-context-scope FR-09: 연결별 전략 선택 지점 (현재는 항상 기본값).
@@ -1433,6 +1516,8 @@ class WorkflowCompiler:
             # chat-image-attachment D-03: 서브 모델 비전 여부로 이미지 전달/마커 결정
             supports_vision=bool(getattr(sub_llm_model, "supports_vision", False)),
             provider=str(getattr(sub_llm_model, "provider", "")),
+            # agent-token-limit D7: 서브 정의의 토큰 예산 (독립 구조)
+            token_limit=sub_agent.token_limit,
         )
 
     @staticmethod
@@ -1740,16 +1825,11 @@ class WorkflowCompiler:
                 logger.warning("final_answer_node: no worker outputs found")
                 blocks.append("(수집된 결과 없음)")
 
-            # agent-recursion-limit D7-①: 한도 도달 시 안내 지시 블록 추가.
+            # agent-recursion-limit D7-① / agent-token-limit D9: 한도 도달 시 사유별
+            # 안내 지시 블록. limit_reason 키가 없는 재개 스냅샷은 일반 문구로 폴백.
             limit_notice = ""
             if state.get("limit_reached"):
-                limit_notice = (
-                    "\n\n[반복 한도 도달 안내]\n"
-                    "실행 반복 한도에 도달하여 지금까지 수집된 정보만으로 "
-                    "답변합니다. 이 사실을 답변에서 자연스럽게 언급하고, "
-                    "수집 정보가 부족한 부분은 추측하지 말고 부족하다고 "
-                    "명시하세요."
-                )
+                limit_notice = _render_limit_notice(state.get("limit_reason", ""))
 
             # worker-capability-denial-guard §6.2 Q1 (module-6 실런 a217f45e 확정):
             # supervisor 안내 블록은 이 노드에 닿지 않아 워커의 '어떤 도구로도
@@ -2903,6 +2983,7 @@ class WorkflowCompiler:
         *,
         supports_vision: bool = False,
         provider: str = "",
+        token_limit: int = TokenLimitPolicy.DEFAULT,
     ):
         # D-07: 인자로 받는다 — __init__을 거치지 않은 인스턴스(테스트)도 동작.
         strategy = strategy or TaskWithOriginStrategy()
@@ -2921,11 +3002,14 @@ class WorkflowCompiler:
             sub_limit = IterationLimitPolicy.sub_agent_limit(
                 state.get("max_iterations", IterationLimitPolicy.DEFAULT)
             )
+            # agent-token-limit D7 (Plan SC: SC-4): 토큰 예산은 서브 에이전트 자기
+            # 정의의 값 — 부모 절반 상속(state["token_limit"] // 2)은 폐기했다.
+            # 부모의 token_usage 합산(아래 out)은 유지한다.
             sub_initial = build_initial_state(
                 messages=sub_messages_in,
                 config=SupervisorConfig(
                     max_iterations=sub_limit,
-                    token_limit=state["token_limit"] // 2,
+                    token_limit=token_limit,
                 ),
                 available_workers=[],
                 # image-generation-tool D-09: 서브 그래프 이미지 상한 = 부모의 절반

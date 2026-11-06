@@ -106,3 +106,17 @@ async def test_fork_not_found(deps):
 
     with pytest.raises(ValueError, match="에이전트를 찾을 수 없"):
         await uc.execute("source-1", "forker-1", None, [], "req-1")
+
+
+@pytest.mark.asyncio
+async def test_fork_copies_token_limit(deps):
+    """agent-token-limit FR-08: 포크는 원본의 token_limit를 복사한다."""
+    uc, agent_repo = deps
+    source = _make_agent()
+    source.token_limit = 123000
+    agent_repo.find_by_id.return_value = source
+    agent_repo.save.side_effect = lambda agent, req_id: agent
+
+    await uc.execute("source-1", "forker-1", None, [], "req-1")
+    saved = agent_repo.save.call_args[0][0]
+    assert saved.token_limit == 123000

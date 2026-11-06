@@ -14,10 +14,15 @@ Design Ref: §2.1/§2.2 — async generator 하나가 단계 이벤트와 최종
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from dataclasses import dataclass, field, replace
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.application.tool_access.resolver import ToolAccessResolver
 
 from src.application.agent_builder.schemas import (
     CreateAgentRequest,
     CreateAgentResponse,
+    RagToolConfigRequest,
 )
 from src.application.agent_create_pipeline.events import (
     PipelineOutcome,
@@ -69,6 +74,8 @@ class _Run:
     stop: PipelineStop | None = None
     tools_confirmed: bool = False
     intent_echo: IntentResult | None = None
+    # agent-kb-quick-setup FR-12 — 위저드가 만든 KB. CREATE 에서 RAG 도구 주입.
+    kb_id: str | None = None
     records: list[StageRecord] = field(default_factory=list)
     intent: IntentResult | None = None
     selection: SelectionResult | None = None
@@ -90,9 +97,13 @@ class AgentCreatePipelineUseCase:
         logger: LoggerInterface,
         spec: IntentSpec | None = None,
         limits: SlotLimits | None = None,
+        tool_access_resolver: "ToolAccessResolver | None" = None,
     ) -> None:
         self._intent = intent_use_case
         self._candidates = candidate_reader
+        # tool-access-control module-3: 셀렉터 후보를 요청 사용자 허용 도구로 한정.
+        # 추천과 저장(CreateAgentUseCase 검증) 기준을 맞춘다. 미주입 = 전체 후보.
+        self._tool_access_resolver = tool_access_resolver
         self._selector = tool_selector
         self._compose = compose_use_case
         self._create = create_agent_use_case
@@ -116,6 +127,7 @@ class AgentCreatePipelineUseCase:
         stop_after: PipelineStop | None = None,
         tools_confirmed: bool = False,
         intent_echo: IntentResult | None = None,
+        kb_id: str | None = None,
     ) -> AsyncIterator[StageEvent | PipelineOutcome]:
         """파이프라인 실행 — StageEvent* 를 yield 하고 PipelineOutcome 으로 끝난다.
 
@@ -137,6 +149,7 @@ class AgentCreatePipelineUseCase:
             stop=stop_after,
             tools_confirmed=tools_confirmed,
             intent_echo=intent_echo,
+            kb_id=kb_id,
         )
         self._logger.info(
             "pipeline start",
@@ -242,7 +255,9 @@ class AgentCreatePipelineUseCase:
             return StageRecord(
                 PipelineStage.TOOLS, StageStatus.OK, selection.reason
             )
-        candidates = await self._candidates.list_active()
+        candidates = await self._allowed_candidates(
+            await self._candidates.list_active(), ctx
+        )
         if candidates:
             selection = await self._selector.select(
                 PipelinePolicy.build_selector_query(ctx.user_request, ctx.intent),
@@ -287,10 +302,31 @@ class AgentCreatePipelineUseCase:
             )
         return StageRecord(PipelineStage.PROMPT, StageStatus.OK)
 
+    async def _allowed_candidates(self, candidates, ctx: _Run):
+        """후보 리더 포트 계약(예외 금지 → 빈 후보 강하)과 같은 규칙으로 실패를 다룬다."""
+        if self._tool_access_resolver is None or not candidates:
+            return candidates
+        try:
+            access = await self._tool_access_resolver.for_user_id(
+                ctx.user_id, ctx.request_id
+            )
+        except Exception as e:
+            self._logger.warning(
+                "pipeline tool access lookup failed — empty candidates",
+                request_id=ctx.request_id, exception=e,
+            )
+            return ()
+        return tuple(c for c in candidates if access.allows_reference(c.tool_id))
+
     async def _run_create(self, ctx: _Run) -> StageRecord:
         assert ctx.selection is not None and ctx.compose is not None
         prompt, clamp_reason = PipelinePolicy.clamp_prompt(
             ctx.compose.prompt.assembled
+        )
+        # agent-kb-quick-setup FR-12: kb_id 가 있으면 RAG 도구 + tool_configs 주입.
+        # KB 존재·읽기권한은 CreateAgentUseCase 의 기존 검증을 그대로 거친다.
+        tool_ids, kb_cfgs = PipelinePolicy.with_knowledge_tool(
+            PipelinePolicy.resolve_tool_ids(ctx.selection), ctx.kb_id
         )
         request = CreateAgentRequest(
             user_request=ctx.user_request[:1000],
@@ -299,7 +335,12 @@ class AgentCreatePipelineUseCase:
             ),
             user_id=ctx.user_id,
             llm_model_id=ctx.llm_model_id,
-            tool_ids=list(PipelinePolicy.resolve_tool_ids(ctx.selection)),
+            tool_ids=list(tool_ids),
+            tool_configs=(
+                {k: RagToolConfigRequest(**v) for k, v in kb_cfgs.items()}
+                if kb_cfgs
+                else None
+            ),
             system_prompt=prompt,
             visibility="private",  # 공개 범위 승격은 기존 PATCH 경로로 (§7)
         )
@@ -335,6 +376,7 @@ class AgentCreatePipelineUseCase:
             questions=tuple(ctx.intent.questions),
             round=ctx.round + 1,
             intent=ctx.intent,
+            kb_id=ctx.kb_id,
         )
 
     def _stopped_outcome(self, ctx: _Run) -> PipelineOutcome:
@@ -373,6 +415,7 @@ class AgentCreatePipelineUseCase:
             suggested_name=PipelinePolicy.resolve_agent_name(
                 ctx.name, ctx.intent, ctx.user_request
             ),
+            kb_id=ctx.kb_id,
         )
 
     def _created_outcome(self, ctx: _Run) -> PipelineOutcome:
@@ -402,4 +445,5 @@ class AgentCreatePipelineUseCase:
             agent_name=ctx.agent.name,
             assembled_prompt=ctx.agent.system_prompt,
             bind_ok=ctx.bind_ok,
+            kb_id=ctx.kb_id,
         )

@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { ArrowLeft, X } from 'lucide-react';
 import { useToolCatalog } from '@/hooks/useToolCatalog';
 import { useLlmModels } from '@/hooks/useLlmModels';
 import {
@@ -12,6 +13,7 @@ import {
 import { useCreateSchedule } from '@/hooks/useAgentSchedules';
 import StudioLayout from '@/components/agent-builder/StudioLayout';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
+import IconButton from '@/components/ui/IconButton';
 import type { StagedSchedule } from '@/types/agentSchedule';
 import type { RagToolConfig } from '@/types/ragToolConfig';
 import { DEFAULT_RAG_CONFIG } from '@/types/ragToolConfig';
@@ -19,7 +21,7 @@ import type { StoreAgentSummary } from '@/types/agentStore';
 import type { AgentBuilderFormData } from '@/types/agentBuilder';
 import type { ComposeAgentDraftResponse } from '@/types/agentComposer';
 import { MAX_ATTACHED_SKILLS } from '@/constants/agentSkill';
-import { MAX_ITERATIONS } from '@/constants/agentSettings';
+import { MAX_ITERATIONS, TOKEN_LIMIT } from '@/constants/agentSettings';
 import { DOCUMENT_EXTRACTOR_TOOL_ID } from '@/types/documentExtractor';
 import { DOCUMENT_GENERATOR_TOOL_ID } from '@/types/documentGenerator';
 import { PRESENTATION_GENERATOR_TOOL_ID } from '@/types/presentationGenerator';
@@ -32,6 +34,7 @@ import {
 } from '@/utils/imageGeneration';
 import { filterActiveImageModels, filterChatModels } from '@/utils/llmModelKind';
 import { buildToolIdsForSave } from '@/utils/agentToolPayload';
+import { attachKbToForm, detachKbFromForm } from '@/utils/kbQuickSetup';
 import { buildDocumentTemplateRequest } from '@/utils/documentTemplate';
 import { buildDocumentGenerationTypeRequest } from '@/utils/documentGenerator';
 import { composeDraftToForm } from '@/utils/composeDraftToForm';
@@ -47,6 +50,8 @@ import type { LlmModel } from '@/types/llmModel';
 import { mapDetailToForm, RAG_CATALOG_TOOL_ID } from '@/utils/agentDetailMapping';
 import { buildToolConfigsForSave } from '@/utils/toolConfigPayload';
 import { buildOpenersForSave } from '@/utils/openerPayload';
+import { toolAccessDeniedMessage } from '@/utils/toolAccess';
+import { AGENT_EDIT_PARAM, RETURN_TO_PARAM, parseSafeReturnTo } from '@/utils/agentEditLink';
 
 type ViewMode = 'list' | 'create' | 'edit';
 
@@ -119,6 +124,8 @@ const DEFAULT_FORM: AgentBuilderFormData = {
   excludedBuiltinMiddlewares: [],
   middlewares: [],
   maxIterations: MAX_ITERATIONS.DEFAULT,
+  // agent-token-limit D12
+  tokenLimit: TOKEN_LIMIT.DEFAULT,
   openers: [],
 };
 
@@ -148,9 +155,29 @@ const AgentBuilderPage = () => {
   // agent-create-entry FR-11: 진입 화면(/agent-builder/new) 경유로 들어왔는지.
   // [취소] 복귀 지점을 목록 대신 진입 화면으로 되돌리는 데만 쓴다.
   const [fromEntry, setFromEntry] = useState(false);
+  // agent-edit-entry Design §3.2: 외부 화면이 ?edit=&returnTo= 로 편집을 연다.
+  // 복귀 경로는 저장·취소 콜백에서만 읽고 리렌더가 필요 없어 ref 에 둔다.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const returnToRef = useRef<string | null>(null);
+  const [editEntryNotice, setEditEntryNotice] = useState<string | null>(null);
+
+  /** 목록으로 돌아갈 때 편집 진입 파라미터만 URL 에서 지운다 */
+  const clearEditParams = useCallback(() => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete(AGENT_EDIT_PARAM);
+        next.delete(RETURN_TO_PARAM);
+        return next;
+      },
+      { replace: true },
+    );
+  }, [setSearchParams]);
 
   const { data: agentsData, isLoading: isAgentsLoading, isError: isAgentsError, refetch: refetchAgents } = useMyBuilderAgents();
-  const { data: editDetail } = useBuilderAgentDetail(editingId && view === 'edit' ? editingId : null);
+  const { data: editDetail, isError: isEditDetailError } = useBuilderAgentDetail(
+    editingId && view === 'edit' ? editingId : null,
+  );
   const { data: catalogTools, isLoading: isToolsLoading, isError: isToolsError, refetch: refetchTools } = useToolCatalog();
   const { data: allModels, isLoading: isModelsLoading, isError: isModelsError, refetch: refetchModels } = useLlmModels();
   // image-generation-tool Design §4.2 / D-05: 에이전트(채팅) 모델 후보는 chat 종류만.
@@ -181,6 +208,8 @@ const AgentBuilderPage = () => {
   const primedAgentRef = useRef<string | null>(null);
   useEffect(() => {
     if (view !== 'edit' || !editingId || !editDetail) return;
+    // agent-edit-entry §6: 권한 없는 상세는 프라임하지 않는다 (denied effect 가 목록으로 전환)
+    if (!editDetail.can_edit) return;
     if (isModelsLoading || isToolsLoading) return;
     if (primedAgentRef.current === editingId) return;
     primedAgentRef.current = editingId;
@@ -201,7 +230,24 @@ const AgentBuilderPage = () => {
     consumedIntentRef.current = true;
 
     const intent = useAgentDraftStore.getState().consumePendingIntent();
-    if (!intent) return;
+    const editParam = searchParams.get(AGENT_EDIT_PARAM);
+    if (!intent) {
+      // agent-edit-entry FR-01/02: 같은 1회 소비 지점에서 ?edit 를 받는다 (intent 우선).
+      // 상태 전이는 handleEdit 과 같고, 폼 채우기는 기존 프라임 effect 가 맡는다.
+      if (!editParam) return;
+      returnToRef.current = parseSafeReturnTo(searchParams.get(RETURN_TO_PARAM));
+      /* eslint-disable react-hooks/set-state-in-effect --
+         URL 진입 소비는 mount 후 1회만 가능하고, ref 가드로 캐스케이드가 없다 */
+      setEditingId(editParam);
+      setPromptError(null);
+      setFromEntry(false);
+      primedAgentRef.current = null;
+      setView('edit');
+      /* eslint-enable react-hooks/set-state-in-effect */
+      return;
+    }
+    // intent 가 이겼으면 남은 편집 파라미터는 새로고침 혼선을 막기 위해 지운다
+    if (editParam) clearEditParams();
 
     // agent-create-wizard §2.2 — 위저드는 프롬프트 세션을 남기고 온다.
     // 저장 성공 직후 그 세션에 agent_id 를 백필해야 버전 이력이 연결된다.
@@ -209,16 +255,31 @@ const AgentBuilderPage = () => {
     // 읽으며, 값이 바뀌어도 리렌더가 필요 없다.
     wizardRef.current = intent.kind === 'wizard' ? intent.result : null;
 
-    /* eslint-disable react-hooks/set-state-in-effect --
-       라우트 간 핸드오프 소비는 mount 후 1회만 가능하고, ref 가드로 캐스케이드가 없다 */
+    // 라우트 간 핸드오프 소비는 mount 후 1회만 가능하고, ref 가드로 캐스케이드가 없다.
+    // (set-state-in-effect 는 effect 당 첫 호출에서만 보고되어 위 ?edit 분기의 억제가 이 effect 를 덮는다)
     setEditingId(null);
     setPromptError(null);
     primedAgentRef.current = null;
     setFromEntry(true);
     setForm(prefillFromIntent(intent, { catalogTools, models }));
     setView('create');
+  }, [isToolsLoading, isModelsLoading, catalogTools, models, searchParams, clearEditParams]);
+
+  // agent-edit-entry FR-03: 상세 실패 또는 can_edit=false 면 편집을 열지 않는다
+  useEffect(() => {
+    if (view !== 'edit' || !editingId) return;
+    // 데이터가 이미 있으면 재조회 실패(TanStack v5: data 유지 + isError)는 권한 판정이 아니다
+    const denied = (isEditDetailError && !editDetail) || (editDetail && !editDetail.can_edit);
+    if (!denied) return;
+    /* eslint-disable react-hooks/set-state-in-effect --
+       서버 판정 결과를 1회 반영한다. 목록 전환으로 조건이 풀려 재실행되지 않는다 */
+    setEditingId(null);
+    setView('list');
+    setEditEntryNotice('이 에이전트를 수정할 권한이 없거나 찾을 수 없습니다.');
     /* eslint-enable react-hooks/set-state-in-effect */
-  }, [isToolsLoading, isModelsLoading, catalogTools, models]);
+    returnToRef.current = null;
+    clearEditParams();
+  }, [view, editingId, editDetail, isEditDetailError, clearEditParams]);
 
   // 폼 변경 시 지침이 채워지면 인라인 에러 해제 (effect 내 setState 지양)
   const handleFormChange = (next: AgentBuilderFormData) => {
@@ -227,6 +288,7 @@ const AgentBuilderPage = () => {
   };
 
   const handleNew = () => {
+    setEditEntryNotice(null);
     setForm(DEFAULT_FORM);
     setEditingId(null);
     setPromptError(null);
@@ -237,6 +299,7 @@ const AgentBuilderPage = () => {
   };
 
   const handleEdit = (agent: StoreAgentSummary) => {
+    setEditEntryNotice(null);
     setEditingId(agent.agent_id);
     setPromptError(null);
     setFromEntry(false);
@@ -306,6 +369,8 @@ const AgentBuilderPage = () => {
             middleware_types: form.middlewares,
             // agent-settings-tab D5: 프라임 값 기반 항상 전송
             max_iterations: form.maxIterations,
+            // agent-token-limit D12: 프라임 값 기반 항상 전송
+            token_limit: form.tokenLimit,
             // agent-opener FR-09: 프라임 기준 전체 교체 (빈 행 제거, 빈 배열=전부 삭제)
             openers: buildOpenersForSave(form.openers),
             // undefined = 템플릿 변경 안 함, 값 = 교체 (기존 soft-delete)
@@ -339,7 +404,7 @@ const AgentBuilderPage = () => {
             });
           },
           onError: (error) => {
-            setSaveResult({ type: 'error', message: imageGenerationSaveErrorMessage(error.message) });
+            setSaveResult({ type: 'error', message: saveErrorMessage(error) });
           },
         },
       );
@@ -396,6 +461,8 @@ const AgentBuilderPage = () => {
           image_generation: buildImageGenerationRequest(form.imageGenerationDraft),
           // agent-settings-tab D5: 설정 탭 반복 한도 (기본 25)
           max_iterations: form.maxIterations,
+          // agent-token-limit D12: 설정 탭 토큰 예산 (기본 50000)
+          token_limit: form.tokenLimit,
           // agent-opener FR-09: 빈 행 제거 후 전송 (없으면 생략)
           openers: (() => {
             const cleaned = buildOpenersForSave(form.openers);
@@ -443,12 +510,22 @@ const AgentBuilderPage = () => {
             });
           },
           onError: (error) => {
-            setSaveResult({ type: 'error', message: imageGenerationSaveErrorMessage(error.message) });
+            setSaveResult({ type: 'error', message: saveErrorMessage(error) });
           },
         },
       );
     }
   };
+
+  // tool-access-control §4.2: 저장 403 TOOL_ACCESS_DENIED 면 어떤 도구 때문인지 이름으로 안내.
+  // 그 외는 기존 문구 매핑(이미지 생성 오류 코드 등) 그대로.
+  function saveErrorMessage(error: Error): string {
+    const nameOf = (catalogId: string) =>
+      catalogTools?.find((t) => t.tool_id === catalogId)?.name ??
+      editDetail?.tool_access?.find((t) => t.tool_id === catalogId)?.name ??
+      catalogId;
+    return toolAccessDeniedMessage(error, nameOf) ?? imageGenerationSaveErrorMessage(error.message);
+  }
 
   const handleToolToggle = (toolId: string) => {
     setForm((prev) => {
@@ -544,6 +621,11 @@ const AgentBuilderPage = () => {
     setForm((prev) => ({ ...prev, maxIterations: value }));
   };
 
+  // agent-token-limit D12: 동일 규칙 — clamp 완료 확정값만 올라온다
+  const handleTokenLimitChange = (value: number) => {
+    setForm((prev) => ({ ...prev, tokenLimit: value }));
+  };
+
   // agent-opener §5.1: 오프너 탭은 staged 배열만 올린다 (검증은 서버 — 422는 기존 실패 경로)
   const handleOpenersChange = (next: string[]) => {
     setForm((prev) => ({ ...prev, openers: next }));
@@ -575,6 +657,14 @@ const AgentBuilderPage = () => {
     }));
   };
 
+  // agent-kb-quick-setup FR-07: 지식 문서 블록 → RAG 도구 추가 + kb_id
+  const handleKbAttached = (kbId: string) => {
+    setForm((prev) => attachKbToForm(prev, kbId));
+  };
+  const handleKbDetached = () => {
+    setForm((prev) => detachKbFromForm(prev));
+  };
+
   const handleRagConfigChange = (config: RagToolConfig) => {
     setForm((prev) => ({
       ...prev,
@@ -584,27 +674,58 @@ const AgentBuilderPage = () => {
 
   // agent-create-entry FR-11: 진입 화면 경유면 그 화면으로 되돌리고,
   // 그 외(목록 헤더·빈 상태·편집)는 기존대로 목록 뷰로 복귀한다.
+  // agent-edit-entry FR-04: 복귀 우선순위는 returnTo > 진입 화면 > 목록.
+  // returnTo 는 ?edit 진입에서만 채워지므로 생성 흐름은 기존 동작 그대로다.
+  const goBackAfterEdit = (): boolean => {
+    // 소비 전(카탈로그 로딩 중) [뒤로]는 아직 ref 가 비어 있어 URL 에서 직접 읽는다
+    const target = returnToRef.current ?? parseSafeReturnTo(searchParams.get(RETURN_TO_PARAM));
+    if (!target) return false;
+    navigate(target);
+    return true;
+  };
+
   const handleCancel = () => {
+    if (goBackAfterEdit()) return;
     if (fromEntry) {
       navigate('/agent-builder/new');
       return;
     }
+    clearEditParams();
     setView('list');
   };
 
   const handleSaveResultConfirm = () => {
     if (saveResult?.type === 'success') {
+      setSaveResult(null);
+      if (goBackAfterEdit()) return;
       setFromEntry(false);
+      clearEditParams();
       setView('list');
+      return;
     }
     setSaveResult(null);
   };
 
   const isSaving = createMutation.isPending || updateMutation.isPending;
 
+  // agent-edit-entry Design §5.3: ?edit 소비 전(카탈로그·모델 로딩)과 프라임·권한 판정 전에는
+  // 목록·빈 폼 대신 로딩 화면. 소비·거부·목록 복귀 모두 edit 파라미터를 지우거나 view 를 바꾼다.
+  const isEditEntryPending =
+    (view === 'list' && searchParams.has(AGENT_EDIT_PARAM) && !editEntryNotice) ||
+    (view === 'edit' && !editDetail?.can_edit);
+
   return (
     <>
-      {view === 'list' ? (
+      {isEditEntryPending ? (
+        <div style={{ position: 'relative', display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ position: 'absolute', top: 12, left: 12 }}>
+            <IconButton aria-label="뒤로" onClick={handleCancel}>
+              <ArrowLeft className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+            </IconButton>
+          </div>
+          <p className="text-sm text-fg-subtle" role="status">에이전트를 불러오는 중…</p>
+        </div>
+      ) : view === 'list' ? (
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: '#fff' }}>
           {/* 헤더 */}
           <header className="flex shrink-0 items-center justify-between border-b border-zinc-200 bg-white px-6 py-4">
@@ -641,6 +762,21 @@ const AgentBuilderPage = () => {
             </div>
           </header>
 
+          {/* agent-edit-entry Design §5.4: ?edit 진입 권한 없음 안내 */}
+          {editEntryNotice && (
+            <div className="shrink-0 px-6 pt-4">
+              <div
+                role="alert"
+                className="flex items-center justify-between gap-3 rounded-xl border border-warning-border bg-warning-bg px-4 py-3 text-sm text-warning"
+              >
+                <span>{editEntryNotice}</span>
+                <IconButton aria-label="안내 닫기" size="sm" onClick={() => setEditEntryNotice(null)}>
+                  <X className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                </IconButton>
+              </div>
+            </div>
+          )}
+
           {/* 콘텐츠 */}
           <div style={{ flex: 1, overflowY: 'auto' }}>
             <ListView
@@ -663,12 +799,17 @@ const AgentBuilderPage = () => {
           onToolToggle={handleToolToggle}
           onSkillToggle={handleSkillToggle}
           onRagConfigChange={handleRagConfigChange}
+          onKbAttached={handleKbAttached}
+          onKbDetached={handleKbDetached}
           onDraftArgKeyChange={handleDraftArgKeyChange}
+          // tool-access-control FR-13: 권한 없는 붙은 도구 칩 (edit 에서만 상세가 있다)
+          toolAccess={view === 'edit' ? editDetail?.tool_access : undefined}
           onBuiltinToggle={handleBuiltinToggle}
           onMiddlewareToggle={handleMiddlewareToggle}
           onStagedScheduleAdd={handleStagedScheduleAdd}
           onStagedScheduleRemove={handleStagedScheduleRemove}
           onMaxIterationsChange={handleMaxIterationsChange}
+          onTokenLimitChange={handleTokenLimitChange}
           onOpenersChange={handleOpenersChange}
           onApplyDraft={handleApplyDraft}
           onSave={handleSave}

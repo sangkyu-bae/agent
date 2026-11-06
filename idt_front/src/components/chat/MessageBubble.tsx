@@ -6,6 +6,9 @@ import SourceCitation from './SourceCitation';
 import ChartRenderer from './ChartRenderer';
 import MarkdownRenderer from './MarkdownRenderer';
 import MessageFeedback from './MessageFeedback';
+import ToolTraceList from './ToolTraceList';
+import { excludedToolsNotice } from '@/utils/toolAccess';
+import { limitReachedNotice } from '@/utils/limitNotice';
 
 interface MessageBubbleProps {
   message: Message;
@@ -67,6 +70,20 @@ const AssistantMessage = ({ message }: { message: Message }) => (
         )}
         {message.sources && message.sources.length > 0 && (
           <SourceCitation sources={message.sources} />
+        )}
+        {/* agent-run-tool-trace §5.1: 근거 칩 다음, 평가 버튼 앞. 도구가 없으면 컴포넌트가 비운다 */}
+        {!message.isStreaming && message.toolTrace && <ToolTraceList trace={message.toolTrace} />}
+        {/* agent-token-limit D11: 한도 도달로 조기 답변한 경우 사유 안내 */}
+        {!message.isStreaming && limitReachedNotice(message.limitReason, undefined) && (
+          <p className="rounded-md border border-warning-border bg-warning-bg px-3 py-2 text-sm text-warning">
+            {limitReachedNotice(message.limitReason, undefined)}
+          </p>
+        )}
+        {/* tool-access-control FR-11: 실행자 권한이 없어 이번 답변에서 뺀 도구 */}
+        {!message.isStreaming && excludedToolsNotice(message.excludedTools) && (
+          <p className="rounded-md border border-warning-border bg-warning-bg px-3 py-2 text-sm text-warning">
+            {excludedToolsNotice(message.excludedTools)}
+          </p>
         )}
         {/* agent-eval-gate: 스트리밍 완료된 답변에 평가 버튼 (평가 대상 id 확정 시) */}
         {!message.isStreaming && feedbackId(message) !== null && (

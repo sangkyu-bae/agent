@@ -868,3 +868,29 @@ class TestCreateAgentSkillSync:
         )
         await use_case.execute(request, "req-1")
         use_case._skill_sync.sync.assert_not_awaited()
+
+
+class TestCreateAgentTokenLimit:
+    """agent-token-limit D4/D5 — create 경로 전달 (Plan SC: SC-2)."""
+
+    @pytest.mark.asyncio
+    async def test_default_token_limit_saved_and_returned(self):
+        use_case, repository, _ = _make_use_case()
+        request = CreateAgentRequest(
+            user_request="테스트", name="테스트", user_id="user-1", system_prompt=PROMPT,
+        )
+        result = await use_case.execute(request, "req-1")
+        saved = repository.save.call_args[0][0]
+        assert saved.token_limit == 50000
+        assert result.token_limit == 50000
+
+    @pytest.mark.asyncio
+    async def test_custom_token_limit_passthrough(self):
+        use_case, repository, _ = _make_use_case()
+        request = CreateAgentRequest(
+            user_request="테스트", name="테스트", user_id="user-1", system_prompt=PROMPT,
+            token_limit=120000,
+        )
+        result = await use_case.execute(request, "req-1")
+        assert repository.save.call_args[0][0].token_limit == 120000
+        assert result.token_limit == 120000

@@ -108,10 +108,11 @@ export const queryKeys = {
     options: () => [...queryKeys.blueprints.all, 'options'] as const,
   },
 
-  // ── Chunking Profiles (admin) ──────────────────────────
+  // ── Chunking Profiles ──────────────────────────────────
   chunkingProfiles: {
     all: ['chunkingProfiles'] as const,
     list: () => [...queryKeys.chunkingProfiles.all, 'list'] as const,
+    active: () => [...queryKeys.chunkingProfiles.all, 'active'] as const,
   },
 
   // ── RAG Tools ──────────────────────────────────────────
@@ -142,6 +143,13 @@ export const queryKeys = {
     // KB 리트리버 테스트 (kb-retrieval-test)
     searchHistory: (kbId: string, params?: { limit?: number; offset?: number }) =>
       [...queryKeys.knowledgeBases.all, 'searchHistory', kbId, params] as const,
+  },
+
+  // ── KB 기본값 (agent-kb-quick-setup) ───────────────────
+  kbDefaults: {
+    all: ['kbDefaults'] as const,
+    user: () => [...queryKeys.kbDefaults.all, 'user'] as const,
+    admin: () => [...queryKeys.kbDefaults.all, 'admin'] as const,
   },
 
   // ── Embedding Models ────────────────────────────────────
@@ -193,6 +201,8 @@ export const queryKeys = {
       [...queryKeys.eval.all, 'feedback', messageId] as const,
     agents: () => [...queryKeys.eval.all, 'agents'] as const,
     recentNegative: () => [...queryKeys.eval.all, 'recentNegative'] as const,
+    negativeDrilldown: (messageId: number) =>
+      [...queryKeys.eval.all, 'negativeDrilldown', messageId] as const,
     // eval-hub: 평가 허브 (테스트셋·실행·메트릭·대시보드)
     testsets: (params?: { limit?: number; offset?: number }) =>
       [...queryKeys.eval.all, 'testsets', params] as const,
@@ -311,6 +321,13 @@ export const queryKeys = {
     mcpServers: () => [...queryKeys.admin.all, 'mcpServers'] as const,
     /** 특정 MCP 서버 상세 */
     mcpServer: (id: string) => [...queryKeys.admin.mcpServers(), id] as const,
+    /** tool-access-control: 도구 권한 (기본 세트·부서·사용자) */
+    toolAccess: () => [...queryKeys.admin.all, 'toolAccess'] as const,
+    toolAccessDefault: () => [...queryKeys.admin.toolAccess(), 'default'] as const,
+    toolAccessDepartment: (deptId: string) =>
+      [...queryKeys.admin.toolAccess(), 'department', deptId] as const,
+    toolAccessUser: (userId: number) =>
+      [...queryKeys.admin.toolAccess(), 'user', userId] as const,
     /** Skill 목록 (scope 별) */
     skills: (params?: import('@/types/skill').ListSkillsRequest) =>
       [...queryKeys.admin.all, 'skills', params] as const,

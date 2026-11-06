@@ -1,6 +1,7 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { act, render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { focusManager } from '@tanstack/react-query';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeAll, afterEach, afterAll, describe, it, expect } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { server } from '@/__tests__/mocks/server';
@@ -240,6 +241,8 @@ const EDIT_DETAIL = {
   skill_ids: [],
   middleware_types: [],
   max_iterations: 500,
+  // agent-token-limit: edit 프라임 검증용
+  token_limit: 60000,
   workers: [],
   flow_hint: '',
   llm_model_id: 'model-1',
@@ -480,6 +483,8 @@ describe('AgentBuilderPage 설정 탭 (agent-settings-tab)', () => {
     await user.click(screen.getByRole('button', { name: '저장' }));
     await waitFor(() => expect(captured).not.toBeNull());
     expect(captured!.max_iterations).toBe(25);
+    // agent-token-limit D12: 토큰 예산 기본값도 함께 전송
+    expect(captured!.token_limit).toBe(50000);
   });
 
   it('edit 프라임(500) → 300으로 수정 저장 → update에 max_iterations가 실린다', async () => {
@@ -517,9 +522,16 @@ describe('AgentBuilderPage 설정 탭 (agent-settings-tab)', () => {
     fireEvent.change(input, { target: { value: '300' } });
     fireEvent.blur(input);
 
+    // agent-token-limit D12: detail의 token_limit(60000) 프라임 → 70000으로 수정
+    const tokenInput = screen.getByRole('spinbutton', { name: '토큰 예산' });
+    expect(tokenInput).toHaveValue(60000);
+    fireEvent.change(tokenInput, { target: { value: '70000' } });
+    fireEvent.blur(tokenInput);
+
     await user.click(screen.getByRole('button', { name: '저장' }));
     await waitFor(() => expect(captured).not.toBeNull());
     expect(captured!.max_iterations).toBe(300);
+    expect(captured!.token_limit).toBe(70000);
   });
 });
 
@@ -659,6 +671,36 @@ describe('AgentBuilderPage 위저드 핸드오프', () => {
 
     await waitFor(() => expect(calls.versions).toHaveLength(1));
     expect(calls.versions[0]).toMatchObject({ assembled: '사람이 고친 지침' });
+  });
+
+  it('저장 403 TOOL_ACCESS_DENIED 면 권한 없는 도구 이름을 안내한다 (tool-access-control)', async () => {
+    useBuilderHandlers();
+    server.use(
+      http.post('*/api/v1/agents', () =>
+        HttpResponse.json(
+          {
+            detail: {
+              code: 'TOOL_ACCESS_DENIED',
+              message: '권한이 없는 도구가 포함되어 있습니다',
+              tool_ids: ['internal:tavily_search'],
+            },
+          },
+          { status: 403 },
+        ),
+      ),
+    );
+    seedWizardIntent();
+    renderPage();
+    const user = userEvent.setup();
+
+    await waitFor(() =>
+      expect(screen.getByPlaceholderText('새 에이전트')).toHaveValue('문서 Q&A 봇'),
+    );
+    await user.click(screen.getByRole('button', { name: /저장/ }));
+
+    expect(
+      await screen.findByText('권한이 없는 도구가 있어 저장할 수 없습니다: Tavily 웹 검색'),
+    ).toBeInTheDocument();
   });
 
   it('바인딩이 409여도 저장은 성공으로 유지한다', async () => {
@@ -1176,8 +1218,263 @@ describe('AgentBuilderPage 이미지 생성 도구 (image-generation-tool)', () 
     await enterCreateView(user);
 
     await user.click(screen.getByRole('button', { name: '모델 설정' }));
-    await user.click(await screen.findByRole('combobox'));
+    // agent-kb-quick-setup: 도구함 지식 문서 블록에도 combobox 가 있어 이름으로 고른다
+    await user.click(await screen.findByRole('combobox', { name: '모델' }));
     expect(await screen.findByRole('option', { name: /GPT-4o/ })).toBeInTheDocument();
     expect(screen.queryByRole('option', { name: /GPT Image 1/ })).not.toBeInTheDocument();
+  });
+});
+
+// ── agent-edit-entry Design §8.3 ─────────────────────────────
+
+describe('AgentBuilderPage 편집 진입 (agent-edit-entry)', () => {
+  const LocationDisplay = () => {
+    const location = useLocation();
+    return <div data-testid="location">{location.pathname + location.search}</div>;
+  };
+
+  /** 지정 경로로 진입. 빌더 밖 경로(/chatpage 등)로 이동하면 빌더는 언마운트된다 */
+  const renderAt = (entry: string) =>
+    render(
+      <MemoryRouter initialEntries={[entry]}>
+        <Routes>
+          <Route path="/agent-builder" element={<AgentBuilderPage />} />
+          <Route path="*" element={null} />
+        </Routes>
+        <LocationDisplay />
+      </MemoryRouter>,
+      { wrapper: createWrapper() },
+    );
+
+  const editEntryHandlers = (
+    detail: () => Response = () => HttpResponse.json(EDIT_DETAIL),
+  ) =>
+    server.use(
+      http.get('*/api/v1/tool-catalog', () => HttpResponse.json(CATALOG)),
+      http.get('*/api/v1/llm-models', () => HttpResponse.json(LLM_MODELS)),
+      http.get('*/api/v1/agents', () =>
+        HttpResponse.json({ agents: [EDIT_SUMMARY], total: 1, page: 1, size: 20 }),
+      ),
+      http.get('*/api/v1/agents/a-9', detail),
+      http.patch('*/api/v1/agents/a-9', () =>
+        HttpResponse.json({
+          agent_id: 'a-9',
+          name: '수정용 봇',
+          system_prompt: '기존 지침',
+          updated_at: '2026-11-05T00:00:00Z',
+        }),
+      ),
+    );
+
+  const location = () => screen.getByTestId('location').textContent;
+  const DENIED = '이 에이전트를 수정할 권한이 없거나 찾을 수 없습니다.';
+
+  afterEach(() => useAgentDraftStore.getState().clearPendingIntent());
+
+  it('C4: ?edit 로 들어오면 목록을 거치지 않고 해당 에이전트 편집 스튜디오를 연다', async () => {
+    editEntryHandlers();
+    renderAt('/agent-builder?edit=a-9');
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('에이전트 이름')).toHaveValue('수정용 봇'),
+    );
+    expect(screen.queryByRole('button', { name: '새 에이전트' })).not.toBeInTheDocument();
+  });
+
+  it('C5: 상세가 오기 전에는 로딩 문구를 보여준다', async () => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    server.use(
+      http.get('*/api/v1/tool-catalog', () => HttpResponse.json(CATALOG)),
+      http.get('*/api/v1/llm-models', () => HttpResponse.json(LLM_MODELS)),
+      http.get('*/api/v1/agents', () =>
+        HttpResponse.json({ agents: [EDIT_SUMMARY], total: 1, page: 1, size: 20 }),
+      ),
+      http.get('*/api/v1/agents/a-9', async () => {
+        await gate;
+        return HttpResponse.json(EDIT_DETAIL);
+      }),
+    );
+    renderAt('/agent-builder?edit=a-9');
+
+    expect(await screen.findByText('에이전트를 불러오는 중…')).toBeInTheDocument();
+    expect(screen.queryByLabelText('에이전트 이름')).not.toBeInTheDocument();
+    release();
+    await waitFor(() =>
+      expect(screen.getByLabelText('에이전트 이름')).toHaveValue('수정용 봇'),
+    );
+  });
+
+  it('C6: 상세의 can_edit=false 면 목록 + 권한 없음 배너, 스튜디오는 열지 않는다', async () => {
+    editEntryHandlers(() => HttpResponse.json({ ...EDIT_DETAIL, can_edit: false }));
+    renderAt('/agent-builder?edit=a-9&returnTo=%2Fchatpage');
+
+    // 카탈로그·모델 settled → 소비 → 상세 조회 → 판정 순서라 전체 실행 부하에서 1초를 넘길 수 있다
+    expect(await screen.findByRole('alert', {}, { timeout: 3000 })).toHaveTextContent(DENIED);
+    expect(screen.getByRole('button', { name: '새 에이전트' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('에이전트 이름')).not.toBeInTheDocument();
+    // 배너 렌더와 URL replace 커밋은 같은 틱이 아닐 수 있다
+    await waitFor(() => expect(location()).toBe('/agent-builder'));
+  });
+
+  it('C7: 상세 404 도 권한 없음 배너로 처리한다', async () => {
+    editEntryHandlers(() => HttpResponse.json({ detail: 'not found' }, { status: 404 }));
+    renderAt('/agent-builder?edit=a-9');
+
+    expect(await screen.findByRole('alert', {}, { timeout: 3000 })).toHaveTextContent(DENIED);
+    expect(screen.queryByLabelText('에이전트 이름')).not.toBeInTheDocument();
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: '안내 닫기' }));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('C8: returnTo 가 있으면 [뒤로(취소)] 시 그 경로로 돌아간다', async () => {
+    editEntryHandlers();
+    const user = userEvent.setup();
+    renderAt('/agent-builder?edit=a-9&returnTo=%2Fchatpage');
+    await waitFor(() =>
+      expect(screen.getByLabelText('에이전트 이름')).toHaveValue('수정용 봇'),
+    );
+
+    await user.click(screen.getByRole('button', { name: '뒤로' }));
+
+    expect(location()).toBe('/chatpage');
+  });
+
+  it('C9: returnTo 가 있으면 저장 성공 [확인] 시 그 경로로 돌아간다', async () => {
+    editEntryHandlers();
+    const user = userEvent.setup();
+    renderAt('/agent-builder?edit=a-9&returnTo=%2Fagents%2Fa-9%2Fworkspace');
+    await waitFor(() =>
+      expect(screen.getByLabelText('에이전트 이름')).toHaveValue('수정용 봇'),
+    );
+
+    await user.click(screen.getByRole('button', { name: '저장' }));
+    await screen.findByText('에이전트가 성공적으로 수정되었습니다.');
+    await user.click(screen.getByRole('button', { name: '확인' }));
+
+    expect(location()).toBe('/agents/a-9/workspace');
+  });
+
+  it('C10: returnTo 가 없으면 [취소] 시 목록으로 가고 URL 파라미터를 지운다', async () => {
+    editEntryHandlers();
+    const user = userEvent.setup();
+    renderAt('/agent-builder?edit=a-9');
+    await waitFor(() =>
+      expect(screen.getByLabelText('에이전트 이름')).toHaveValue('수정용 봇'),
+    );
+
+    await user.click(screen.getByRole('button', { name: '뒤로' }));
+
+    expect(await screen.findByRole('button', { name: '새 에이전트' })).toBeInTheDocument();
+    expect(location()).toBe('/agent-builder');
+  });
+
+  it('C11: 외부 URL returnTo 는 무시하고 목록으로 간다', async () => {
+    editEntryHandlers();
+    const user = userEvent.setup();
+    renderAt('/agent-builder?edit=a-9&returnTo=https%3A%2F%2Fevil.com');
+    await waitFor(() =>
+      expect(screen.getByLabelText('에이전트 이름')).toHaveValue('수정용 봇'),
+    );
+
+    await user.click(screen.getByRole('button', { name: '뒤로' }));
+
+    expect(await screen.findByRole('button', { name: '새 에이전트' })).toBeInTheDocument();
+    expect(location()).toBe('/agent-builder');
+  });
+
+  it('C12: 위저드 intent 가 있으면 ?edit 보다 우선한다 (create 뷰)', async () => {
+    editEntryHandlers();
+    useAgentDraftStore.getState().setPendingIntent({
+      kind: 'wizard',
+      result: {
+        systemPrompt: '위저드 지침',
+        promptEdited: false,
+        toolIds: [],
+        suggestedName: '위저드 봇',
+        sessionId: 'ps1',
+        versionId: 'pv1',
+      },
+    });
+    renderAt('/agent-builder?edit=a-9');
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('에이전트 이름')).toHaveValue('위저드 봇'),
+    );
+    // intent 가 이기면 남은 ?edit 는 지운다 (새로고침 시 편집으로 바뀌지 않게)
+    await waitFor(() => expect(location()).toBe('/agent-builder'));
+  });
+
+  // ── Check 갭 보완 ──
+
+  it('C14: 편집 중 상세 재조회가 실패해도 권한 없음으로 튕기지 않는다', async () => {
+    let calls = 0;
+    editEntryHandlers(() => {
+      calls += 1;
+      return calls === 1
+        ? HttpResponse.json(EDIT_DETAIL)
+        : HttpResponse.json({ detail: 'boom' }, { status: 500 });
+    });
+    const user = userEvent.setup();
+    renderAt('/agent-builder?edit=a-9&returnTo=%2Fchatpage');
+    await waitFor(() =>
+      expect(screen.getByLabelText('에이전트 이름')).toHaveValue('수정용 봇'),
+    );
+
+    // 배경 재조회(앱에서는 저장 후 무효화·포커스 복귀) 실패를 포커스 복귀로 재현한다.
+    // 저장 무효화는 전역 queryClient 대상이라 테스트 래퍼의 클라이언트에는 닿지 않는다.
+    act(() => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+    });
+    await waitFor(() => expect(calls).toBeGreaterThanOrEqual(2));
+    await new Promise((r) => setTimeout(r, 200));
+    act(() => focusManager.setFocused(undefined));
+
+    // 스튜디오 내부 패널(승인 게이트 등)의 자체 alert 는 무관 — 권한 없음 배너만 확인
+    expect(screen.queryByText(DENIED)).not.toBeInTheDocument();
+    expect(screen.getByLabelText('에이전트 이름')).toHaveValue('수정용 봇');
+    await user.click(screen.getByRole('button', { name: '뒤로' }));
+    expect(location()).toBe('/chatpage');
+  });
+
+  it('C15: 카탈로그 로딩 중 ?edit 진입은 목록 대신 로딩 문구를 보여준다', async () => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    editEntryHandlers();
+    server.use(
+      http.get('*/api/v1/tool-catalog', async () => {
+        await gate;
+        return HttpResponse.json(CATALOG);
+      }),
+    );
+    renderAt('/agent-builder?edit=a-9');
+
+    expect(await screen.findByText('에이전트를 불러오는 중…')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '새 에이전트' })).not.toBeInTheDocument();
+    release();
+    await waitFor(() =>
+      expect(screen.getByLabelText('에이전트 이름')).toHaveValue('수정용 봇'),
+    );
+  });
+
+  it('C16: 로딩 화면의 [뒤로]는 returnTo 로 돌아간다', async () => {
+    const gate = new Promise<void>(() => {});
+    editEntryHandlers(() => HttpResponse.json(EDIT_DETAIL));
+    server.use(
+      http.get('*/api/v1/agents/a-9', async () => {
+        await gate;
+        return HttpResponse.json(EDIT_DETAIL);
+      }),
+    );
+    const user = userEvent.setup();
+    renderAt('/agent-builder?edit=a-9&returnTo=%2Fchatpage');
+
+    await screen.findByText('에이전트를 불러오는 중…');
+    await user.click(screen.getByRole('button', { name: '뒤로' }));
+
+    expect(location()).toBe('/chatpage');
   });
 });

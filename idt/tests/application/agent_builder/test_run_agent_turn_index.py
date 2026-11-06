@@ -75,6 +75,7 @@ def _session_factory(store: _Store):
 
 def _uc(store: _Store | None, legacy_repo=None) -> RunAgentUseCase:
     uc = RunAgentUseCase.__new__(RunAgentUseCase)
+    uc._tool_access_resolver = None  # tool-access-control: optional 의존성 (None=필터 없음)
     uc._logger = MagicMock()
     uc._session_factory = _session_factory(store) if store is not None else None
     uc._message_repo = legacy_repo or MagicMock()

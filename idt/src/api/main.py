@@ -253,6 +253,13 @@ from src.api.routes.mcp_registry_router import (
     get_delete_use_case as get_mcp_delete_use_case,
     get_test_use_case as get_mcp_test_use_case,
 )
+# tool-access-control §4.1 (FR-04): 관리자 도구 권한 API
+from src.api.routes.admin_tool_access_router import (
+    router as admin_tool_access_router,
+    get_default_tool_access_use_case,
+    get_department_tool_access_use_case,
+    get_user_tool_access_use_case,
+)
 from src.api.routes.agent_composer_router import (
     router as agent_composer_router,
     get_compose_agent_use_case,
@@ -283,7 +290,9 @@ from src.api.routes.eval_router import (
     get_get_feedback_use_case,
     get_delete_feedback_use_case,
     get_agent_eval_stats_use_case,
+    get_negative_drilldown_use_case,
 )
+from src.application.eval.drilldown_use_case import GetNegativeDrilldownUseCase
 from src.application.eval.use_cases import (
     SubmitFeedbackUseCase,
     GetFeedbackUseCase,
@@ -334,6 +343,8 @@ from src.api.routes.knowledge_base_router import (
     router as knowledge_base_router,
     get_knowledge_base_use_case,
     get_kb_upload_use_case,
+    get_kb_quick_create_use_case,
+    get_delete_kb_document_use_case,
     get_kb_document_chunks_use_case,
     get_kb_document_summary_use_case,
     get_kb_section_summaries_use_case,
@@ -397,8 +408,15 @@ from src.application.agent_builder.run_agent_use_case import RunAgentUseCase
 from src.application.agent_run.aggregator import UsageAggregator
 from src.application.agent_run.cost_calculator import CostCalculator
 from src.application.agent_run.model_name_resolver import ModelNameResolver
+from src.application.agent_run.run_sources import RunSourcesService
+from src.application.agent_run.run_tool_trace import RunToolTraceService
 from src.application.agent_run.schemas import RunObservabilityConfig
 from src.application.agent_run.tracker import RunTracker
+from src.infrastructure.agent_run.run_sources_reader import SessionScopedRunSourcesReader
+from src.infrastructure.agent_run.run_tool_trace_reader import SessionScopedRunToolTraceReader
+from src.infrastructure.doc_browse.document_metadata_repository import (
+    DocumentMetadataRepository,
+)
 from src.application.agent_builder.get_agent_use_case import GetAgentUseCase
 from src.application.agent_builder.list_agents_use_case import ListAgentsUseCase
 from src.application.agent_builder.delete_agent_use_case import DeleteAgentUseCase
@@ -555,6 +573,27 @@ from src.infrastructure.mcp_registry.identity_token import HmacIdentityTokenSign
 from src.infrastructure.security.secret_cipher import SecretCipher
 
 
+def _make_run_sources_service(session: AsyncSession, logger) -> RunSourcesService:
+    """답변 근거 서비스 조립 — 저장소 3종이 같은 세션을 쓴다 (DB-001)."""
+    return RunSourcesService(
+        SqlAlchemyAgentRunRepository(session),
+        DocumentMetadataRepository(session, logger),
+        ToolCatalogRepository(session, logger),
+        logger,
+        max_items=settings.agent_run_sources_max_items,
+    )
+
+
+def _make_run_tool_trace_service(session: AsyncSession, logger) -> RunToolTraceService:
+    """도구 실행 내역 서비스 조립 (agent-run-tool-trace §2.1) — 저장소가 같은 세션을 쓴다."""
+    return RunToolTraceService(
+        SqlAlchemyAgentRunRepository(session),
+        ToolCatalogRepository(session, logger),
+        logger,
+        max_items=settings.agent_run_tool_trace_max_items,
+    )
+
+
 def _mcp_cipher() -> SecretCipher | None:
     """settings.mcp_secret_key가 설정돼 있으면 SecretCipher를, 없으면 None을 반환한다.
 
@@ -657,6 +696,14 @@ from src.api.routes.agent_run_router import (
     get_usage_timeseries_use_case,
     get_my_usage_timeseries_use_case,
     get_message_retrievals_use_case,
+    get_session_sources_use_case,
+    get_session_tool_traces_use_case,
+)
+from src.application.agent_run.use_cases.get_session_sources_use_case import (
+    GetSessionSourcesUseCase,
+)
+from src.application.agent_run.use_cases.get_session_tool_traces_use_case import (
+    GetSessionToolTracesUseCase,
 )
 from src.application.llm_model.create_llm_model_use_case import CreateLlmModelUseCase
 from src.application.llm_model.update_llm_model_use_case import UpdateLlmModelUseCase
@@ -2408,6 +2455,40 @@ def create_agent_run_factories():
     )
 
 
+def create_session_sources_factory():
+    """agent-run-source-citations §4.2: 세션 답변 근거 — 저장소가 요청 세션 1개를 쓴다."""
+    app_logger = get_app_logger()
+
+    def session_sources_factory(
+        session: AsyncSession = Depends(get_session),
+    ) -> GetSessionSourcesUseCase:
+        return GetSessionSourcesUseCase(
+            message_repo=SQLAlchemyConversationMessageRepository(session),
+            agent_run_repo=SqlAlchemyAgentRunRepository(session),
+            sources=_make_run_sources_service(session, app_logger),
+            logger=app_logger,
+        )
+
+    return session_sources_factory
+
+
+def create_session_tool_traces_factory():
+    """agent-run-tool-trace §4.2: 세션 답변별 도구 실행 내역 — 요청 세션 1개를 쓴다."""
+    app_logger = get_app_logger()
+
+    def session_tool_traces_factory(
+        session: AsyncSession = Depends(get_session),
+    ) -> GetSessionToolTracesUseCase:
+        return GetSessionToolTracesUseCase(
+            message_repo=SQLAlchemyConversationMessageRepository(session),
+            agent_run_repo=SqlAlchemyAgentRunRepository(session),
+            traces=_make_run_tool_trace_service(session, app_logger),
+            logger=app_logger,
+        )
+
+    return session_tool_traces_factory
+
+
 def create_embedding_model_factories():
     """Return per-request DI factories for Embedding Model Registry."""
     app_logger = get_app_logger()
@@ -2829,6 +2910,9 @@ def create_general_chat_use_case_factory():
             prompt_guard=get_prompt_guard(),
             # pii-masking-integration §2.1: None 이면 해제(D-03)
             pii_masker=get_pii_masker(),
+            # tool-access-control Check G-01: 일반 채팅(REST·WS) 도구도 실행자 권한으로 거른다
+            tool_access_resolver=make_tool_access_resolver(session, app_logger),
+            tool_id_resolver=_general_chat_tool_id_resolver(),
         )
 
     return _factory
@@ -3310,6 +3394,8 @@ def create_agent_builder_factories():
             prompt_version_reader=_make_prompt_version_reader(session),
             # agent-opener D4.4
             opener_repo=_make_agent_opener_repo(session),
+            # tool-access-control FR-06·07: 저장 시 도구 권한 판정
+            tool_access_resolver=make_tool_access_resolver(session, app_logger),
         )
 
     def update_uc_factory(session: AsyncSession = Depends(get_session)):
@@ -3343,6 +3429,8 @@ def create_agent_builder_factories():
             ),
             # agent-opener D4.4
             opener_repo=_make_agent_opener_repo(session),
+            # tool-access-control FR-06·07: 신규 도구만 권한 판정
+            tool_access_resolver=make_tool_access_resolver(session, app_logger),
         )
 
     # agent-schedule Design §6.2: RunAgentUseCase 조립 본문을 함수로 추출해
@@ -3388,6 +3476,21 @@ def create_agent_builder_factories():
             memory_assembler=get_memory_assembler(),
             # pii-masking-integration §4.5: 런 scope·토큰 원복. None 이면 해제
             pii_masker=get_pii_masker(),
+            # agent-run-source-citations §2.1: 답변 근거는 별도 세션에서 읽는다.
+            run_sources=SessionScopedRunSourcesReader(
+                get_session_factory(),
+                lambda s: _make_run_sources_service(s, app_logger),
+                app_logger,
+            ),
+            # agent-run-tool-trace §2.2: 근거와 같이 별도 세션으로 런 1개를 조립한다.
+            run_tool_trace=SessionScopedRunToolTraceReader(
+                get_session_factory(),
+                lambda s: _make_run_tool_trace_service(s, app_logger),
+                app_logger,
+            ),
+            # tool-access-control §2.1 (FR-09·10): 실행 경로 8종(REST·SSE·WS·웹훅·잡·
+            # 스케줄·승인 재개·RAGAS)이 모두 이 빌더를 거친다 — 주입 지점 단일.
+            tool_access_resolver=make_tool_access_resolver(session, app_logger),
         )
 
     def run_uc_factory(session: AsyncSession = Depends(get_session)):
@@ -3409,6 +3512,8 @@ def create_agent_builder_factories():
             ),
             # agent-opener D4.4: edit 폼 프라임
             opener_repo=_make_agent_opener_repo(session),
+            # tool-access-control FR-13: 붙은 도구의 허용 여부 표시
+            tool_access_resolver=make_tool_access_resolver(session, app_logger),
         )
 
     def list_uc_factory(session: AsyncSession = Depends(get_session)):
@@ -3451,6 +3556,8 @@ def create_agent_builder_factories():
             logger=app_logger,
             # agent-opener FR-07: 포크 시 오프너 복사
             opener_repo=_make_agent_opener_repo(session),
+            # tool-access-control FR-08: 권한 없는 도구 제외 복제
+            tool_access_resolver=make_tool_access_resolver(session, app_logger),
         )
 
     def list_my_uc_factory(session: AsyncSession = Depends(get_session)):
@@ -3563,7 +3670,17 @@ def _build_approval_executor(app_logger):
         # pii-masking-integration §4.6 (FR-11): 승인 후 집행 경로도 같은 검사.
         pii_inspector=get_pii_inspector(),
     )
-    return CompositeActionExecutor(executors=[mcp_executor], logger=app_logger)
+    # tool-access-control §0 F4: 집행기는 싱글턴이라 판정마다 세션을 여는 체커를 쓴다.
+    from src.application.tool_access.checker import SessionScopedToolAccessChecker
+
+    return CompositeActionExecutor(
+        executors=[mcp_executor], logger=app_logger,
+        access_checker=SessionScopedToolAccessChecker(
+            session_factory=get_session_factory(),
+            resolver_factory=lambda s: make_tool_access_resolver(s, app_logger),
+            logger=app_logger,
+        ),
+    )
 
 
 def create_approval_factories(build_run_agent_uc):
@@ -4411,10 +4528,14 @@ def create_unified_upload_factories():
     return use_case_factory
 
 
-def create_knowledge_base_factories(unified_upload_factory, summary_launcher=None):
+def create_knowledge_base_factories(
+    unified_upload_factory, summary_launcher=None, collection_use_case_factory=None
+):
     """Return per-request DI factories for Knowledge Base (knowledge-base-scoping Design §8).
 
     summary_launcher: 섹션 요약 잡 킥오프 싱글턴 (card-section-summary D14, 선택).
+    collection_use_case_factory: agent-kb-quick-setup §9.4 — 주어지면 컬렉션 미지정
+        KB 생성 시 기본 임베딩 모델로 전용 컬렉션을 자동 생성한다(같은 요청 세션).
     """
     from src.infrastructure.collection.qdrant_collection_repository import QdrantCollectionRepository
     from src.infrastructure.collection.permission_repository import CollectionPermissionRepository
@@ -4423,7 +4544,11 @@ def create_knowledge_base_factories(unified_upload_factory, summary_launcher=Non
     from src.infrastructure.department.department_repository import DepartmentRepository
     from src.infrastructure.knowledge_base.repository import KnowledgeBaseRepository
     from src.domain.knowledge_base.policy import KnowledgeBasePolicy
-    from src.application.knowledge_base.collection_assigner import UserSelectedCollectionAssigner
+    from src.application.knowledge_base.collection_assigner import (
+        AutoProvisionCollectionAssigner,
+        UserSelectedCollectionAssigner,
+    )
+    from src.api.kb_defaults_di import build_kb_default_setting_use_case
     from src.application.knowledge_base.use_case import KnowledgeBaseUseCase
     from src.application.knowledge_base.upload_use_case import KnowledgeBaseUploadUseCase
     from src.application.knowledge_base.chunking_resolver import ChunkingSettingsResolver
@@ -4445,9 +4570,17 @@ def create_knowledge_base_factories(unified_upload_factory, summary_launcher=Non
             policy=CollectionPermissionPolicy(),
             logger=app_logger,
         )
-        return UserSelectedCollectionAssigner(
+        user_selected = UserSelectedCollectionAssigner(
             collection_repo=collection_repo,
             perm_service=perm_service,
+        )
+        if collection_use_case_factory is None:
+            return user_selected
+        return AutoProvisionCollectionAssigner(
+            fallback=user_selected,
+            defaults=build_kb_default_setting_use_case(session, app_logger),
+            collection_use_case=collection_use_case_factory(session),
+            logger=app_logger,
         )
 
     def kb_use_case_factory(session: AsyncSession = Depends(get_session)):
@@ -4497,7 +4630,24 @@ def create_knowledge_base_factories(unified_upload_factory, summary_launcher=Non
             logger=app_logger,
         )
 
-    return kb_use_case_factory, kb_upload_factory, kb_documents_factory
+    def kb_quick_create_factory(session: AsyncSession = Depends(get_session)):
+        # agent-kb-quick-setup §9.4: 같은 요청 세션으로 KB UseCase + 업로드 UseCase 조합
+        from src.application.knowledge_base.quick_create_use_case import (
+            QuickCreateKnowledgeBaseUseCase,
+        )
+
+        return QuickCreateKnowledgeBaseUseCase(
+            kb_use_case=kb_use_case_factory(session),
+            upload_use_case=kb_upload_factory(session),
+            logger=app_logger,
+        )
+
+    return (
+        kb_use_case_factory,
+        kb_upload_factory,
+        kb_documents_factory,
+        kb_quick_create_factory,
+    )
 
 
 def create_kb_browse_factories(kb_use_case_factory):
@@ -4574,6 +4724,98 @@ def create_kb_browse_factories(kb_use_case_factory):
         )
 
     return summary_factory, sections_factory, chunks_factory
+
+
+def create_kb_document_delete_factory(kb_use_case_factory):
+    """KB 문서 삭제 DI (kb-document-management Design §11.2).
+
+    Qdrant/ES 클라이언트는 싱글턴. 가드·메타·잡 행·활동 로그는 같은 요청 세션을
+    공유해 메타와 잡 행이 함께 커밋된다.
+    """
+    from src.application.collection.activity_log_service import ActivityLogService
+    from src.application.collection.permission_service import (
+        CollectionPermissionService,
+    )
+    from src.application.knowledge_base.content_browse_guard import (
+        KbDocumentGuard,
+    )
+    from src.application.knowledge_base.delete_document_use_case import (
+        DeleteKbDocumentUseCase,
+    )
+    from src.domain.collection.permission_policy import CollectionPermissionPolicy
+    from src.domain.doc_browse.policies import DocumentDeletePolicy
+    from src.domain.knowledge_base.policy import KnowledgeBasePolicy
+    from src.domain.section_summary.policy import SectionSummaryJobPolicy
+    from src.infrastructure.collection.activity_log_repository import (
+        ActivityLogRepository,
+    )
+    from src.infrastructure.collection.permission_repository import (
+        CollectionPermissionRepository,
+    )
+    from src.infrastructure.department.department_repository import (
+        DepartmentRepository,
+    )
+    from src.infrastructure.doc_browse.document_metadata_repository import (
+        DocumentMetadataRepository,
+    )
+    from src.infrastructure.section_summary.job_repository import (
+        SectionSummaryJobRepository,
+    )
+
+    app_logger = get_app_logger()
+    qdrant_client = AsyncQdrantClient(
+        host=settings.qdrant_host,
+        port=settings.qdrant_port,
+    )
+    es_config = ElasticsearchConfig(
+        ES_HOST=settings.es_host,
+        ES_PORT=settings.es_port,
+        ES_SCHEME=settings.es_scheme,
+    )
+    es_client = ElasticsearchClient.from_config(es_config)
+    es_repo = ElasticsearchRepository(
+        client=es_client, logger=StructuredLogger("kb_document_delete.es")
+    )
+
+    def _deleter(session: AsyncSession) -> DeleteDocumentUseCase:
+        log_repo = ActivityLogRepository(session, app_logger)
+        perm_service = CollectionPermissionService(
+            perm_repo=CollectionPermissionRepository(session, app_logger),
+            dept_repo=DepartmentRepository(session, app_logger),
+            policy=CollectionPermissionPolicy(),
+            logger=app_logger,
+        )
+        return DeleteDocumentUseCase(
+            document_metadata_repo=DocumentMetadataRepository(
+                session, app_logger
+            ),
+            qdrant_client=qdrant_client,
+            es_repo=es_repo,
+            es_index=settings.es_index,
+            permission_service=perm_service,
+            activity_log_service=ActivityLogService(log_repo, app_logger),
+            policy=DocumentDeletePolicy(),
+            logger=StructuredLogger("kb_document_delete.deleter"),
+        )
+
+    def delete_factory(session: AsyncSession = Depends(get_session)):
+        return DeleteKbDocumentUseCase(
+            guard=KbDocumentGuard(
+                kb_use_case=kb_use_case_factory(session),
+                document_metadata_repo=DocumentMetadataRepository(
+                    session, app_logger
+                ),
+                logger=StructuredLogger("kb_document_delete.guard"),
+            ),
+            deleter=_deleter(session),
+            job_repo=SectionSummaryJobRepository(session, app_logger),
+            policy=KnowledgeBasePolicy(),
+            job_policy=SectionSummaryJobPolicy(),
+            logger=StructuredLogger("kb_document_delete"),
+            stale_seconds=settings.section_summary_stale_seconds,
+        )
+
+    return delete_factory
 
 
 def create_kb_search_factories(kb_use_case_factory):
@@ -4856,13 +5098,79 @@ def create_collection_search_factories():
     return search_uc_factory, history_uc_factory
 
 
+def _general_chat_tool_id_resolver():
+    """tool-access-control Check G-01: 일반 채팅 도구 → 카탈로그 id (tool-recommender 와 같은 규칙)."""
+    from src.infrastructure.tool_selection.adapters.langchain_filter import (
+        DefaultToolIdResolver,
+    )
+
+    return DefaultToolIdResolver()
+
+
+def make_tool_access_resolver(session: AsyncSession, logger):
+    """tool-access-control §2.1 — 요청 세션 하나로 묶인 ToolAccessResolver (DB-001).
+
+    목록·저장·포크·상세·추천 후보 팩토리가 모두 이 함수로만 만든다 —
+    주입 여부는 tests/api/test_tool_access_di_wiring.py 가 고정한다.
+    """
+    from src.application.tool_access.resolver import ToolAccessResolver
+    from src.infrastructure.tool_access.repository import ToolAccessRepository
+
+    return ToolAccessResolver(
+        grant_repo=ToolAccessRepository(session=session, logger=logger),
+        user_repo=UserRepository(session=session, logger=logger),
+        department_repo=DepartmentRepository(session=session, logger=logger),
+        logger=logger,
+    )
+
+
+def create_tool_access_factories():
+    """tool-access-control §9.1: 관리자 도구 권한 UseCase per-request 팩토리."""
+    from src.application.tool_access.admin_use_cases import (
+        DefaultToolAccessUseCase,
+        DepartmentToolAccessUseCase,
+        UserToolAccessUseCase,
+    )
+    from src.infrastructure.tool_access.repository import ToolAccessRepository
+
+    app_logger = get_app_logger()
+
+    def _grants(session: AsyncSession) -> ToolAccessRepository:
+        return ToolAccessRepository(session=session, logger=app_logger)
+
+    def _catalog(session: AsyncSession) -> ToolCatalogRepository:
+        return ToolCatalogRepository(session=session, logger=app_logger)
+
+    def default_factory(session: AsyncSession = Depends(get_session)):
+        return DefaultToolAccessUseCase(_grants(session), _catalog(session), app_logger)
+
+    def department_factory(session: AsyncSession = Depends(get_session)):
+        return DepartmentToolAccessUseCase(
+            _grants(session), _catalog(session),
+            DepartmentRepository(session=session, logger=app_logger), app_logger,
+        )
+
+    def user_factory(session: AsyncSession = Depends(get_session)):
+        return UserToolAccessUseCase(
+            _grants(session), _catalog(session),
+            UserRepository(session=session, logger=app_logger),
+            DepartmentRepository(session=session, logger=app_logger), app_logger,
+        )
+
+    return default_factory, department_factory, user_factory
+
+
 def create_tool_catalog_factories():
     """Return per-request DI factories for Tool Catalog use cases."""
     app_logger = get_app_logger()
 
     def list_factory(session: AsyncSession = Depends(get_session)):
         repo = ToolCatalogRepository(session=session, logger=app_logger)
-        return ListToolCatalogUseCase(repository=repo, logger=app_logger)
+        # tool-access-control FR-05: 비관리자는 허용 도구만
+        return ListToolCatalogUseCase(
+            repository=repo, logger=app_logger,
+            access_resolver=make_tool_access_resolver(session, app_logger),
+        )
 
     def sync_factory(session: AsyncSession = Depends(get_session)):
         tool_catalog_repo = ToolCatalogRepository(session=session, logger=app_logger)
@@ -4975,6 +5283,8 @@ def create_agent_composer_factories():
                 session=session, logger=app_logger
             ),
             logger=app_logger,
+            # tool-access-control module-3: 초안 후보를 허용 도구로 한정
+            tool_access_resolver=make_tool_access_resolver(session, app_logger),
         )
 
     return compose_factory
@@ -5783,6 +6093,12 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_assign_user_department_use_case] = _dept_assign_f
     app.dependency_overrides[get_remove_user_department_use_case] = _dept_remove_f
 
+    # Tool Access DI (tool-access-control §4.1)
+    _ta_default_f, _ta_dept_f, _ta_user_f = create_tool_access_factories()
+    app.dependency_overrides[get_default_tool_access_use_case] = _ta_default_f
+    app.dependency_overrides[get_department_tool_access_use_case] = _ta_dept_f
+    app.dependency_overrides[get_user_tool_access_use_case] = _ta_user_f
+
     # Tool Catalog DI
     (
         _tc_list_f, _tc_sync_f, _tc_builtin_f, _tc_meta_f,
@@ -5936,6 +6252,8 @@ def create_app() -> FastAPI:
                 create_agent_use_case=create_uc,
                 logger=logger,
                 limits=_pipeline_limits,
+                # tool-access-control module-3: 셀렉터 후보를 허용 도구로 한정
+                tool_access_resolver=make_tool_access_resolver(session, logger),
             )
 
         app.dependency_overrides[get_agent_pipeline_use_case] = _pipeline_factory
@@ -6000,6 +6318,12 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_usage_timeseries_use_case] = _usage_timeseries_f
     app.dependency_overrides[get_my_usage_timeseries_use_case] = _my_usage_timeseries_f
     app.dependency_overrides[get_message_retrievals_use_case] = _message_retrievals_f
+    app.dependency_overrides[get_session_sources_use_case] = (
+        create_session_sources_factory()
+    )
+    app.dependency_overrides[get_session_tool_traces_use_case] = (
+        create_session_tool_traces_factory()
+    )
 
     # Admin Dashboard DI (admin-dashboard Design D2)
     (
@@ -6067,10 +6391,26 @@ def create_app() -> FastAPI:
             recent_negative_limit=settings.eval_recent_negative_limit,
         )
 
+    def _eval_drilldown_f(session: AsyncSession = Depends(get_session)):
+        # Design Ref: negative-feedback-drilldown §4.6 — 저장소 전부 같은 요청 세션
+        logger = get_app_logger()
+        message_repo = SQLAlchemyConversationMessageRepository(session)
+        return GetNegativeDrilldownUseCase(
+            feedback_repo=MessageFeedbackRepository(session, logger),
+            message_repo=message_repo,
+            retrievals=GetMessageRetrievalsUseCase(
+                agent_run_repo=SqlAlchemyAgentRunRepository(session),
+                message_repo=message_repo,
+                logger=logger,
+            ),
+            logger=logger,
+        )
+
     app.dependency_overrides[get_submit_feedback_use_case] = _eval_submit_f
     app.dependency_overrides[get_get_feedback_use_case] = _eval_get_f
     app.dependency_overrides[get_delete_feedback_use_case] = _eval_delete_f
     app.dependency_overrides[get_agent_eval_stats_use_case] = _eval_stats_f
+    app.dependency_overrides[get_negative_drilldown_use_case] = _eval_drilldown_f
 
     # Skill Builder DI
     (
@@ -6113,13 +6453,16 @@ def create_app() -> FastAPI:
     _section_summary_launcher, _section_summary_query_factory = (
         create_section_summary_components()
     )
-    _kb_uc_factory, _kb_upload_factory, _kb_documents_factory = (
+    _kb_uc_factory, _kb_upload_factory, _kb_documents_factory, _kb_quick_factory = (
         create_knowledge_base_factories(
-            _unified_upload_uc_factory, _section_summary_launcher
+            _unified_upload_uc_factory,
+            _section_summary_launcher,
+            collection_use_case_factory=_collection_uc_factory,
         )
     )
     app.dependency_overrides[get_knowledge_base_use_case] = _kb_uc_factory
     app.dependency_overrides[get_kb_upload_use_case] = _kb_upload_factory
+    app.dependency_overrides[get_kb_quick_create_use_case] = _kb_quick_factory
     app.dependency_overrides[get_list_kb_documents_use_case] = (
         _kb_documents_factory
     )
@@ -6138,6 +6481,10 @@ def create_app() -> FastAPI:
     )
     app.dependency_overrides[get_kb_document_chunks_use_case] = (
         _kb_chunks_factory
+    )
+    # KB 문서 삭제 DI (kb-document-management)
+    app.dependency_overrides[get_delete_kb_document_use_case] = (
+        create_kb_document_delete_factory(_kb_uc_factory)
     )
     # KB 검색/히스토리 DI (kb-retrieval-test)
     _kb_search_factory, _kb_search_history_factory = (
@@ -6333,6 +6680,7 @@ def create_app() -> FastAPI:
     app.include_router(llm_model_router)
     app.include_router(embedding_model_router)
     app.include_router(mcp_registry_router)
+    app.include_router(admin_tool_access_router)
     app.include_router(wiki_router)
     app.include_router(memory_router)
     app.include_router(eval_router)
@@ -6350,6 +6698,10 @@ def create_app() -> FastAPI:
     app.include_router(collection_search_router)
     app.include_router(ragas_router)
     app.include_router(preview_router)
+    # agent-kb-quick-setup: DI + /api/v1/admin/kb-defaults, /api/v1/kb-defaults 라우터
+    from src.api.kb_defaults_di import wire_kb_defaults
+
+    wire_kb_defaults(app, get_session=get_session, logger=get_app_logger())
     # multimodal-extractor: DI + /api/v1/admin/multimodal 라우터 (preview 라우터 선등록 후)
     from src.api.multimodal_di import wire_multimodal
 
