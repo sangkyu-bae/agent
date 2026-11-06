@@ -67,6 +67,13 @@ class TestPriorityAndOverlap:
         types = set(_types(text))
         assert {PiiType.RRN, PiiType.PHONE, PiiType.EMAIL} <= types
 
+    def test_detect_dense_text_returns_every_match_without_overlap(self):
+        sentence = "담당 010-1234-5678로 문의, 계좌 110-123-456789입니다. "
+        matches = RegexPiiDetector().detect(sentence * 200)
+        assert len(matches) == 400
+        spans = [(m.start, m.end) for m in matches]
+        assert all(a[1] <= b[0] for a, b in zip(spans, spans[1:]))
+
     def test_matches_sorted_by_start(self):
         text = "010-1234-5678 그리고 900101-1234567"
         matches = RegexPiiDetector().detect(text)

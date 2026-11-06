@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import bisect
 import re
 
 from src.domain.pii_masking.patterns import (
@@ -36,7 +37,7 @@ class RegexPiiDetector:
 
     def detect(self, text: str) -> list[PiiMatch]:
         """우선순위 순으로 비중첩 PiiMatch 목록을 반환(start 오름차순)."""
-        occupied: list[tuple[int, int]] = []
+        occupied: list[tuple[int, int]] = []  # start 오름차순 유지
         results: list[PiiMatch] = []
         for pii_type in DETECTION_PRIORITY:
             for pattern in _PATTERNS[pii_type]:
@@ -47,7 +48,7 @@ class RegexPiiDetector:
                     value = match.group()
                     if not self._policy.is_valid(pii_type, value):
                         continue
-                    occupied.append(span)
+                    bisect.insort(occupied, span)
                     results.append(
                         PiiMatch(
                             pii_type=pii_type,
@@ -61,6 +62,13 @@ class RegexPiiDetector:
 
     @staticmethod
     def _overlaps(span: tuple[int, int], occupied: list[tuple[int, int]]) -> bool:
-        """span이 기존 점유 구간과 겹치면 True."""
+        """span이 기존 점유 구간과 겹치면 True.
+
+        점유 구간은 서로 겹치지 않고 정렬돼 있어 양옆 이웃만 보면 된다. 전체를 훑으면
+        PII가 많은 문서에서 제곱으로 느려진다(50KB 960건 기준 168ms).
+        """
         start, end = span
-        return any(start < o_end and o_start < end for o_start, o_end in occupied)
+        index = bisect.bisect_left(occupied, span)
+        if index > 0 and occupied[index - 1][1] > start:
+            return True
+        return index < len(occupied) and occupied[index][0] < end
