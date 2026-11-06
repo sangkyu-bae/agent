@@ -7,6 +7,10 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+# wizard-template-request §4.2 — 기존 생성 요청 모델을 재사용한다 (CreateAgentRequest
+# 와 같은 위치의 application 스키마, kb_defaults 선례).
+from src.application.agent_builder.schemas import DocumentTemplateRequest
+
 
 class PipelineTurnIn(BaseModel):
     """대화 이력 1턴 (intent/compose 의 Turn 계약과 동일)."""
@@ -67,6 +71,23 @@ class AgentPipelineRequest(BaseModel):
     CREATE 단계가 RAG 도구와 tool_configs 를 주입한다.
     """
 
+    document_template: DocumentTemplateRequest | None = None
+    """wizard-template-request §4.2 — 위저드 양식 카드가 확정한 템플릿.
+
+    CREATE 단계가 CreateAgentRequest.document_template 로 그대로 넘긴다.
+    검증·저장은 기존 document_template_binding 경로(우회 없음). 확정 도구에
+    문서추출기가 없으면 422.
+    """
+
+
+class DocumentRequestOut(BaseModel):
+    """확정 도구가 필요로 하는 문서 요청 1건 (wizard-template-request §4.2)."""
+
+    tool_id: str
+    kind: Literal["form_template"]
+    message: str
+    accept: list[str] = Field(default_factory=list)
+
 
 class StageRecordOut(BaseModel):
     """단계 1개의 wire 표현 — steps[] 원소이자 SSE 이벤트 payload."""
@@ -117,3 +138,11 @@ class AgentPipelineResponse(BaseModel):
     prompt_clamp_reason: str | None = None
     # agent-kb-quick-setup FR-12 — 요청 kb_id 에코백 (additive)
     kb_id: str | None = None
+    # --- wizard-template-request §4.2 (additive, 기본값으로 기존 소비자 무영향) ---
+    document_requests: list[DocumentRequestOut] = Field(default_factory=list)
+    """확정 도구가 필요로 하는 문서 요청. 모든 status 에서 계산.
+
+    need_input 은 빈 배열.
+    """
+    document_template_attached: bool = False
+    """요청에 document_template 이 실려 있었는지 에코백 (D7)."""

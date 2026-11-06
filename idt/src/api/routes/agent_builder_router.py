@@ -13,6 +13,7 @@ from fastapi.responses import StreamingResponse
 from src.domain.auth.entities import User
 from src.infrastructure.agent_run.sse_formatter import AgentRunEventSseFormatter
 from src.domain.agent_run.auth_context import AuthContext
+from src.domain.document_extractor.exceptions import DocumentExtractorError
 from src.domain.tool_access.exceptions import ToolAccessDeniedError
 from src.interfaces.dependencies.auth import (
     get_current_user,
@@ -186,6 +187,11 @@ async def create_agent(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     except ValueError as e:
         raise _attach_skill_http_error(e)
+    except DocumentExtractorError as e:
+        # wizard-template-request Act-1 (G2): 템플릿 슬롯·토큰 검증 실패는 입력 오류.
+        # ValueError 를 상속하지 않아 그동안 500 으로 샜다. 위저드 템플릿은 전부
+        # 이 경로(스튜디오 [저장])로 저장되므로 여기 매핑이 실사용자를 보호한다.
+        raise HTTPException(status_code=422, detail=str(e))
 
 
 @router.get("/my", response_model=ListMyAgentsResponse)
@@ -266,6 +272,9 @@ async def update_agent(
         )
     except ValueError as e:
         raise save_error_http_exception(e)
+    except DocumentExtractorError as e:
+        # wizard-template-request Act-1 (G2): 생성 핸들러와 같은 422 매핑 (수정 경로)
+        raise HTTPException(status_code=422, detail=str(e))
 
 
 @router.post("/{agent_id}/run", response_model=RunAgentResponse)

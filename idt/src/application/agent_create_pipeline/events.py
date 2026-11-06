@@ -7,6 +7,7 @@ UseCase 의 async generator 가 yield 하는 두 타입. 라우터가 소비 방
 from dataclasses import dataclass
 from typing import Literal
 
+from src.domain.agent_create_pipeline.policies import DocumentRequest
 from src.domain.agent_create_pipeline.stages import StageRecord
 from src.domain.intent.schemas import IntentResult, SlotQuestion
 
@@ -71,3 +72,13 @@ class PipelineOutcome:
     `assembled_prompt` 는 절단된 값이므로 "보이는 것 = 저장될 것"이 성립하고,
     절단 사실은 이 필드로만 알 수 있다.
     """
+
+    # --- wizard-template-request §4.2 (additive) ---
+    document_requests: tuple[DocumentRequest, ...] = ()
+    """확정 도구가 필요로 하는 문서 요청 (D1).
+
+    모든 status 에서 계산한다. need_input 은 빈 튜플.
+    """
+
+    document_template_attached: bool = False
+    """요청에 document_template 이 실려 있었는지 에코백 (D7)."""

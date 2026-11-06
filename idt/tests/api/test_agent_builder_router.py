@@ -593,3 +593,44 @@ class TestAgentOpenerContract:
         resp = client.get(f"/api/v1/agents/{agent_id}")
         assert resp.status_code == 200
         assert resp.json()["openers"] == ["a"]
+
+
+# ── wizard-template-request Act-1 (G2) — 템플릿 검증 예외 422 매핑 ─────────────
+
+
+class TestTemplateValidationErrorMapping:
+    """InvalidSlotError/TemplateTokenMismatchError 는 ValueError 가 아니라 500 이었다.
+
+    위저드 템플릿은 전부 스튜디오 [저장](이 라우터)으로 저장되므로 여기 매핑이
+    실사용자를 보호한다 (Analysis G2).
+    """
+
+    def test_create_agent_invalid_slot_returns_422(self):
+        from src.domain.document_extractor.exceptions import InvalidSlotError
+
+        mock_uc = MagicMock()
+        mock_uc.execute = AsyncMock(
+            side_effect=InvalidSlotError("slot key 'a b' is invalid")
+        )
+        client = _make_client({get_create_agent_use_case: lambda: mock_uc})
+
+        resp = client.post("/api/v1/agents", json={
+            "user_request": "양식 봇",
+            "name": "양식 봇",
+            "user_id": "user-1",
+        })
+        assert resp.status_code == 422
+        assert "slot key" in resp.json()["detail"]
+
+    def test_update_agent_token_mismatch_returns_422(self):
+        from src.domain.document_extractor.exceptions import TemplateTokenMismatchError
+
+        mock_uc = MagicMock()
+        mock_uc.execute = AsyncMock(
+            side_effect=TemplateTokenMismatchError("skeleton tokens != slots")
+        )
+        client = _make_client({get_update_agent_use_case: lambda: mock_uc})
+
+        resp = client.patch("/api/v1/agents/some-id", json={"name": "새 이름"})
+        assert resp.status_code == 422
+        assert "skeleton" in resp.json()["detail"]
