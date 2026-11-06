@@ -7,7 +7,7 @@
 > **Author**: 배상규
 > **Date**: 2026-11-02
 > **Status**: Draft
-> **선행 사이클**: [pii-masking.plan.md](pii-masking.plan.md) · [report](../../04-report/pii-masking.report.md) (엔진 완료, 배선 범위 제외)
+> **선행 사이클**: [pii-masking.plan.md](../../../01-plan/features/pii-masking.plan.md) · [report](../../../04-report/pii-masking.report.md) (엔진 완료, 배선 범위 제외)
 
 ---
 

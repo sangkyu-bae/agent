@@ -6,7 +6,7 @@
 > **Author**: 배상규
 > **Completion Date**: 2026-11-05
 > **PDCA Cycle**: Plan v0.2 → Design v0.6 → Do 4모듈 → Check → Act-1
-> **선행 사이클**: [pii-masking.report.md](pii-masking.report.md) (엔진 완료, 배선 제외)
+> **선행 사이클**: [pii-masking.report.md](../../../04-report/pii-masking.report.md) (엔진 완료, 배선 제외)
 
 ---
 
@@ -87,9 +87,9 @@
 
 | Phase | Document | Status |
 |-------|----------|--------|
-| Plan | [pii-masking-integration.plan.md](../01-plan/features/pii-masking-integration.plan.md) | ✅ v0.2 |
-| Design | [pii-masking-integration.design.md](../02-design/features/pii-masking-integration.design.md) | ✅ v0.6 |
-| Check | [pii-masking-integration.analysis.md](../03-analysis/pii-masking-integration.analysis.md) | ✅ v0.2 |
+| Plan | [pii-masking-integration.plan.md](pii-masking-integration.plan.md) | ✅ v0.2 |
+| Design | [pii-masking-integration.design.md](pii-masking-integration.design.md) | ✅ v0.6 |
+| Check | [pii-masking-integration.analysis.md](pii-masking-integration.analysis.md) | ✅ v0.2 |
 | Act | 현재 문서 | ✅ |
 
 ---
