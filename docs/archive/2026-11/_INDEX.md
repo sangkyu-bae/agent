@@ -8,6 +8,7 @@
 | agent-edit-entry | completed | 100% (Check 90% → Act-1) | 2026-11-05 | [agent-edit-entry/](agent-edit-entry/) |
 | agent-run-tool-trace | completed | 97.5% (Check, Minor 4건 수정) | 2026-11-05 | [agent-run-tool-trace/](agent-run-tool-trace/) |
 | pii-masking-integration | completed | 95.8% (Check 89.4% → Act-1) | 2026-11-06 | [pii-masking-integration/](pii-masking-integration/) |
+| wizard-template-request | completed | 95% (Check 92% → Act-1) | 2026-11-06 | [wizard-template-request/](wizard-template-request/) |
 
 > 백엔드·프론트 전용 사이클은 `idt/docs/archive/2026-11/`, `idt_front/docs/archive/2026-11/` 에 있다.
 
@@ -49,3 +50,8 @@
 | pii-masking-integration | action 초안 생성기가 사용자가 준 본문 대신 다른 문장을 만듦 (shadow에서도 재현, 마스킹 무관) | 기존 결함 | 소형 사이클 후보 |
 | pii-masking-integration | Minor G-5·G-7·G-8, `test_no_pii_in_logs`·호출 단위 성능 벤치 미작성 | 테스트·정리 | 해당 파일 수정 시 |
 | pii-masking-integration | 부분 테스트 묶음 실행 시 `test_pii_masking_di`가 `main` import로 LangSmith 키를 다시 올려 일반 채팅 테스트가 순서 오염으로 깨짐 (전체 스위트에선 미재현) | 테스트 격리 | 소형 사이클 후보 |
+| **wizard-template-request** | **프론트 전체 vitest 회귀 FAILED diff 미실행** — 시스템 메모리 부족으로 두 번 중단. master에서 `vitest --no-file-parallelism` 1회 | 회귀 증명 | **다음 프론트 작업 전** |
+| wizard-template-request | 수동 E2E L3-01~03 (위저드→양식 첨부→스튜디오 저장→상세 `template_id`, 건너뛰기→`?edit` 안내, 추출기 미추천 화면 동일) — MCP 변환 도구 등록 로컬 필요 | 확인 | MCP 도구 등록 후 |
+| wizard-template-request | `SourceFileArchiver.promote`가 `source_file_id` 소유자를 검증하지 않음 (스튜디오 경로도 동일) | 기존 결함 | 소형 사이클 후보 |
+| wizard-template-request | Minor G4~G8: 스튜디오 패널 공유 에러 유틸, 카드 에러 detail 보조 표시·[다시 올리기], aria-live 상시 마운트, `document_template_attached` 프론트 소비 | 화면 소형 | 해당 파일 수정 시 |
+| wizard-template-request | 위저드 직접 생성 버튼(스튜디오 진입 0회) — 무저장 계약 변경, 문서생성기 예시 문서→섹션 추출 | 스코프 후보 | 별도 Plan |
