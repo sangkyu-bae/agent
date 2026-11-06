@@ -22,6 +22,7 @@ if TYPE_CHECKING:
 from src.application.agent_builder.schemas import (
     CreateAgentRequest,
     CreateAgentResponse,
+    DocumentTemplateRequest,
     RagToolConfigRequest,
 )
 from src.application.agent_create_pipeline.events import (
@@ -76,6 +77,9 @@ class _Run:
     intent_echo: IntentResult | None = None
     # agent-kb-quick-setup FR-12 — 위저드가 만든 KB. CREATE 에서 RAG 도구 주입.
     kb_id: str | None = None
+    # wizard-template-request §4.2 — 위저드 양식 카드가 확정한 템플릿.
+    # CREATE 에서 CreateAgentRequest 로 그대로 전달 (검증은 기존 바인딩 경로).
+    document_template: DocumentTemplateRequest | None = None
     records: list[StageRecord] = field(default_factory=list)
     intent: IntentResult | None = None
     selection: SelectionResult | None = None
@@ -128,6 +132,7 @@ class AgentCreatePipelineUseCase:
         tools_confirmed: bool = False,
         intent_echo: IntentResult | None = None,
         kb_id: str | None = None,
+        document_template: DocumentTemplateRequest | None = None,
     ) -> AsyncIterator[StageEvent | PipelineOutcome]:
         """파이프라인 실행 — StageEvent* 를 yield 하고 PipelineOutcome 으로 끝난다.
 
@@ -150,6 +155,7 @@ class AgentCreatePipelineUseCase:
             tools_confirmed=tools_confirmed,
             intent_echo=intent_echo,
             kb_id=kb_id,
+            document_template=document_template,
         )
         self._logger.info(
             "pipeline start",
@@ -328,6 +334,11 @@ class AgentCreatePipelineUseCase:
         tool_ids, kb_cfgs = PipelinePolicy.with_knowledge_tool(
             PipelinePolicy.resolve_tool_ids(ctx.selection), ctx.kb_id
         )
+        # Design Ref: wizard-template-request D3 — 저장 전에 정합 검증.
+        # Plan SC-6: 추출기 없는 템플릿은 422 로 끝나고 저장 UseCase 를 안 부른다.
+        PipelinePolicy.validate_template_tools(
+            tool_ids, has_template=ctx.document_template is not None
+        )
         request = CreateAgentRequest(
             user_request=ctx.user_request[:1000],
             name=PipelinePolicy.resolve_agent_name(
@@ -343,6 +354,9 @@ class AgentCreatePipelineUseCase:
             ),
             system_prompt=prompt,
             visibility="private",  # 공개 범위 승격은 기존 PATCH 경로로 (§7)
+            # wizard-template-request FR-04: 그대로 전달. 검증·저장은 기존
+            # document_template_binding 경로가 수행한다 (우회 없음).
+            document_template=ctx.document_template,
         )
         ctx.agent = await self._create.execute(request, ctx.request_id)
         return StageRecord(PipelineStage.CREATE, StageStatus.OK, clamp_reason)
@@ -377,6 +391,7 @@ class AgentCreatePipelineUseCase:
             round=ctx.round + 1,
             intent=ctx.intent,
             kb_id=ctx.kb_id,
+            document_template_attached=ctx.document_template is not None,
         )
 
     def _stopped_outcome(self, ctx: _Run) -> PipelineOutcome:
@@ -416,6 +431,12 @@ class AgentCreatePipelineUseCase:
                 ctx.name, ctx.intent, ctx.user_request
             ),
             kb_id=ctx.kb_id,
+            # wizard-template-request D1: 확정 목록 기준 — 뒤로가기·재확정 후에도
+            # 프론트가 요청 목록을 재동기화할 수 있다.
+            document_requests=PipelinePolicy.document_requests_for(
+                ctx.selection.final_ids, ctx.intent
+            ),
+            document_template_attached=ctx.document_template is not None,
         )
 
     def _created_outcome(self, ctx: _Run) -> PipelineOutcome:
@@ -446,4 +467,8 @@ class AgentCreatePipelineUseCase:
             assembled_prompt=ctx.agent.system_prompt,
             bind_ok=ctx.bind_ok,
             kb_id=ctx.kb_id,
+            document_requests=PipelinePolicy.document_requests_for(
+                ctx.selection.final_ids, ctx.intent
+            ),
+            document_template_attached=ctx.document_template is not None,
         )

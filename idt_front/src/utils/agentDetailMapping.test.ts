@@ -300,3 +300,47 @@ describe('mapDetailToForm — 본문 인자 복원', () => {
     expect(mapDetailToForm(detail, [makeModel()], []).draftArgKeys).toEqual({});
   });
 });
+
+
+// ── wizard-template-request Act-1 (G3) — 저장된 양식 존재 프라임 ──────────────
+
+describe('mapDetailToForm — savedTemplateId (저장된 양식 존재)', () => {
+  const extractorWorker = (tool_config: Record<string, unknown> | null): WorkerInfo => ({
+    ...makeWorker({ tool_id: 'document_extractor' }),
+    tool_config,
+  });
+
+  it('추출기 워커 tool_config.template_id 가 있으면 savedTemplateId 로 프라임한다', () => {
+    const form = mapDetailToForm(
+      makeDetail({
+        tool_ids: ['document_extractor'],
+        workers: [extractorWorker({ template_id: 'tpl-1', output_format: 'docx' })],
+      }),
+      [makeModel()],
+      [],
+    );
+    expect(form.savedTemplateId).toBe('tpl-1');
+    // 드래프트로 되돌리지 않는다 — 원본 파일 id 가 만료돼 재저장이 실패하기 때문
+    expect(form.documentExtractorDraft ?? null).toBeNull();
+  });
+
+  it('추출기 워커가 없거나 template_id 가 없으면 null', () => {
+    expect(
+      mapDetailToForm(makeDetail(), [makeModel()], []).savedTemplateId,
+    ).toBeNull();
+    expect(
+      mapDetailToForm(
+        makeDetail({ workers: [extractorWorker({ output_format: 'docx' })] }),
+        [makeModel()],
+        [],
+      ).savedTemplateId,
+    ).toBeNull();
+    expect(
+      mapDetailToForm(
+        makeDetail({ workers: [extractorWorker(null)] }),
+        [makeModel()],
+        [],
+      ).savedTemplateId,
+    ).toBeNull();
+  });
+});

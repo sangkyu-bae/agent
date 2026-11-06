@@ -189,6 +189,12 @@ export interface AgentBuilderFormData {
   skills: string[];
   // document-template-extractor: 확정 전까지 프론트가 보유하는 드래프트 (R4)
   documentExtractorDraft?: DocumentExtractorDraft | null;
+  /**
+   * wizard-template-request Act-1 (G3): edit 모드 프라임 전용 — 서버에 이미 저장된
+   * 양식 템플릿 id (추출기 워커 tool_config.template_id). 저장 요청에는 보내지 않는다.
+   * 드래프트가 null 이어도 이 값이 있으면 "양식 미등록"이 아니라 "등록됨"이다.
+   */
+  savedTemplateId?: string | null;
   // doc-generator: 문서 유형 드래프트 (저장 시 document_generation_type으로 전송)
   documentGeneratorDraft?: DocumentGeneratorDraft | null;
   // golden-sample-blueprint: 발표자료 설정 드래프트 (저장 시 presentation_generator로 전송)

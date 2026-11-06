@@ -403,3 +403,23 @@ describe('LeftConfigPanel — 지식 문서 블록 (agent-kb-quick-setup FR-06)'
     expect(await screen.findByText(/연결됨: 전사 규정/)).toBeInTheDocument();
   });
 });
+
+
+// ── wizard-template-request Act-1 (G3) — 저장된 양식이 있으면 "미등록"이 아니다 ──
+
+describe('LeftConfigPanel — 저장된 양식 배지 (G3)', () => {
+  it('드래프트 없음 + savedTemplateId 있음 → "양식 등록됨" 배지, 미등록 배지 없음', () => {
+    renderPanel({ tools: [DOCUMENT_EXTRACTOR_TOOL_ID], savedTemplateId: 'tpl-1' });
+    expect(screen.getByText(/양식 등록됨/)).toBeInTheDocument();
+    expect(screen.queryByText(/양식 미등록/)).toBeNull();
+  });
+
+  it('드래프트가 있으면 savedTemplateId 와 무관하게 드래프트 상태를 보여준다', () => {
+    renderPanel({
+      tools: [DOCUMENT_EXTRACTOR_TOOL_ID],
+      savedTemplateId: 'tpl-1',
+      documentExtractorDraft: { ...DRAFT, confirmed: true },
+    });
+    expect(screen.getByText(/양식 확정됨/)).toBeInTheDocument();
+  });
+});

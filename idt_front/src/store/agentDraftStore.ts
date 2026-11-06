@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { ComposeAgentDraftResponse } from '@/types/agentComposer';
+import type { DocumentExtractorDraft } from '@/types/documentExtractor';
 
 // Design Ref: agent-create-entry §2.4 — 진입 화면(/agent-builder/new)과 스튜디오는
 // 서로 다른 라우트에 있어 폼 상태를 직접 넘길 수 없다. 이 스토어가 그 경계를 잇되,
@@ -23,6 +24,11 @@ export interface WizardResult {
   versionId: string | null;
   /** agent-kb-quick-setup FR-13: 문서 단계에서 연결한 KB (없으면 undefined/null) */
   kbId?: string | null;
+  /**
+   * wizard-template-request FR-12 (D2): 양식 카드가 확정한 추출기 드래프트.
+   * 스튜디오 드래프트와 같은 형태라 폼에 그대로 꽂힌다. 없으면 undefined/null.
+   */
+  documentExtractorDraft?: DocumentExtractorDraft | null;
 }
 
 /** 진입 화면이 스튜디오에 넘기는 1회성 의도. */

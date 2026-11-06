@@ -9,6 +9,8 @@
  * 실제로 Do 단계 재작업을 유발한 함정이다.
  */
 
+import type { DocumentTemplateRequest } from './documentExtractor';
+
 /** 고정 5단계. 화면은 항상 이 순서로 진행바를 렌더한다 (백엔드 STAGE_ORDER). */
 export const PIPELINE_STAGE = {
   INTENT: 'intent',
@@ -112,6 +114,40 @@ export interface PipelineIntentEcho {
   degraded: boolean;
 }
 
+/**
+ * wizard-template-request §4.2 — 확정 도구가 필요로 하는 문서 종류 (서버 wire 값).
+ * 지금은 양식(문서추출기) 하나뿐이며, 카드는 kind 로 분기한다.
+ */
+export const DOCUMENT_REQUEST_KIND = {
+  FORM_TEMPLATE: 'form_template',
+} as const;
+
+export type DocumentRequestKind =
+  (typeof DOCUMENT_REQUEST_KIND)[keyof typeof DOCUMENT_REQUEST_KIND];
+
+/** 서버가 계산한 문서 요청 1건 — 문구는 서버 소유라 화면은 표시만 한다. */
+export interface PipelineDocumentRequest {
+  tool_id: string;
+  kind: DocumentRequestKind;
+  message: string;
+  accept: string[];
+}
+
+/**
+ * 스튜디오 추출기 패널의 "양식 미등록" 안내 (wizard-template-request FR-13 / D5).
+ * 스튜디오 직접 추가·`?edit` 경로에는 서버 문구가 없어 세 경로 공통 상수를 쓴다.
+ */
+export const FORM_TEMPLATE_EMPTY_NOTICE =
+  '양식 미등록 — 이 에이전트가 채울 양식 파일(PDF 또는 DOCX)을 올려주세요. ' +
+  '양식의 빈칸을 찾아 채움 항목으로 만듭니다.';
+
+/**
+ * Act-1 (G3): 서버에 이미 저장된 양식이 있을 때의 안내. 상세 응답에는 템플릿 본문이
+ * 없어 드래프트로 되돌리지 못하므로, "미등록"이 아니라 "등록됨·교체 가능"을 알린다.
+ */
+export const FORM_TEMPLATE_REPLACE_NOTICE =
+  '양식이 등록되어 있습니다. 새 파일을 올리면 기존 양식이 교체됩니다.';
+
 export interface AgentPipelineRequest {
   user_request: string;
   history?: PipelineHistoryTurn[];
@@ -129,6 +165,12 @@ export interface AgentPipelineRequest {
   intent?: PipelineIntentEcho | null;
   /** agent-kb-quick-setup FR-11/12: 문서 단계에서 만든 KB — CREATE 가 RAG 도구를 주입한다. */
   kb_id?: string | null;
+  /**
+   * wizard-template-request FR-04: 양식 카드가 확정한 템플릿. CREATE 가
+   * CreateAgentRequest.document_template 로 그대로 넘긴다. 확정 도구에
+   * 문서추출기가 없으면 서버 422.
+   */
+  document_template?: DocumentTemplateRequest | null;
 }
 
 export interface AgentPipelineResponse {
@@ -155,6 +197,10 @@ export interface AgentPipelineResponse {
   bind_ok: boolean | null;
   /** agent-kb-quick-setup FR-12: 요청 kb_id 에코백 (additive, 구형 응답에는 없음). */
   kb_id?: string | null;
+  /** wizard-template-request §4.2: 확정 도구가 필요로 하는 문서 요청 (additive, 기본 []). */
+  document_requests?: PipelineDocumentRequest[];
+  /** wizard-template-request D7: 요청에 document_template 이 실려 있었는지 에코백. */
+  document_template_attached?: boolean;
   /** status='failed'(SSE 합성) 일 때만 존재한다. */
   error?: { message: string };
 }

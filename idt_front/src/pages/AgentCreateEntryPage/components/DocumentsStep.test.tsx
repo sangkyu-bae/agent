@@ -74,3 +74,67 @@ describe('DocumentsStep', () => {
     expect(screen.getByText('✓ 건너뜀')).toBeInTheDocument();
   });
 });
+
+// ── wizard-template-request Design §8.3 L2-01·L2-11·FR-15 — 양식 요청 카드 조립 ──
+
+const FORM_REQUEST = {
+  tool_id: 'internal:document_extractor',
+  kind: 'form_template' as const,
+  message: '여신심의서 작성에 쓸 양식 파일(PDF 또는 DOCX)을 올려주세요.',
+  accept: ['pdf', 'docx'],
+};
+
+const confirmedDraft = () => ({
+  sourceFileId: 'file-1',
+  sourceFormat: 'docx' as const,
+  html: '<p>{{company}}</p>',
+  slots: [
+    { key: 'company', label: '회사명', slot_type: 'value' as const, description: '', fill_hint: '', sample_value: 'ㅇㅇ상사' },
+  ],
+  mcpPdfToHtmlToolId: 'mcp:pdf',
+  mcpHtmlToDocToolId: 'mcp:doc',
+  regenCount: 0,
+  confirmed: true,
+  templateName: '여신심의서',
+  htmlSkeleton: '<p>{{company}}</p>',
+});
+
+describe('DocumentsStep — 양식 요청 카드 (wizard-template-request)', () => {
+  it('document_requests 가 0건이면 카드가 없다 (L2-01)', () => {
+    renderStep();
+    expect(screen.queryByRole('region', { name: '양식 요청' })).not.toBeInTheDocument();
+  });
+
+  it('form_template 요청이 있으면 카드가 참고 문서 블록 위에 뜬다', async () => {
+    renderStep({ documentRequests: [FORM_REQUEST] });
+    const card = screen.getByRole('region', { name: '양식 요청' });
+    expect(card).toHaveTextContent(/여신심의서 작성에 쓸 양식 파일/);
+    const kb = await screen.findByRole('region', { name: '지식 문서' });
+    expect(card.compareDocumentPosition(kb) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('양식만 확정돼도(KB 없이) [계속]이 활성화된다 (FR-14)', () => {
+    renderStep({ documentRequests: [FORM_REQUEST], templateDraft: confirmedDraft() });
+    expect(screen.getByRole('button', { name: '계속' })).not.toBeDisabled();
+  });
+
+  it('추출 진행 중이면 [건너뛰기]·[계속]이 모두 비활성이다 (FR-15)', () => {
+    renderStep({
+      documentRequests: [FORM_REQUEST],
+      templateDraft: confirmedDraft(),
+      templateBusy: true,
+    });
+    expect(screen.getByRole('button', { name: '건너뛰기' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '계속' })).toBeDisabled();
+  });
+
+  it('잠긴 상태에서 양식만 등록됐어도 "문서 연결 완료"로 표기한다', () => {
+    renderStep({
+      documentRequests: [FORM_REQUEST],
+      templateDraft: confirmedDraft(),
+      locked: true,
+    });
+    expect(screen.getByText('✓ 문서 연결 완료')).toBeInTheDocument();
+    expect(screen.getByText('✓ 양식 등록: 여신심의서 · 슬롯 1개')).toBeInTheDocument();
+  });
+});

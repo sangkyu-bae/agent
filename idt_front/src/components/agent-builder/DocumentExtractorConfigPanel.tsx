@@ -14,10 +14,16 @@ import type {
   TemplateSlot,
 } from '@/types/documentExtractor';
 import { IDLE_RESUGGEST_MS, MAX_REGEN } from '@/types/documentExtractor';
+import { FORM_TEMPLATE_EMPTY_NOTICE } from '@/types/agentPipeline';
 
 interface DocumentExtractorConfigPanelProps {
   draft: DocumentExtractorDraft | null;
   onChange: (draft: DocumentExtractorDraft | null) => void;
+  /**
+   * wizard-template-request FR-13 (D5): 드래프트가 없을 때 상단에 띄우는 "양식 미등록"
+   * 안내. 위저드 건너뛰기·`?edit`·스튜디오 직접 추가 세 경로 공통 상수가 기본값이다.
+   */
+  emptyNotice?: string;
 }
 
 interface AddSlotFeedback {
@@ -40,6 +46,7 @@ const SLOT_TYPE_BADGE = {
 const DocumentExtractorConfigPanel = ({
   draft,
   onChange,
+  emptyNotice = FORM_TEMPLATE_EMPTY_NOTICE,
 }: DocumentExtractorConfigPanelProps) => {
   const [instruction, setInstruction] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -278,6 +285,15 @@ const DocumentExtractorConfigPanel = ({
       {/* 업로드 */}
       {!draft && (
         <div>
+          {/* wizard-template-request FR-13 — 도구는 있는데 양식이 없는 상태를 먼저 알린다 */}
+          {emptyNotice && (
+            <p
+              role="status"
+              className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12.5px] text-amber-800"
+            >
+              {emptyNotice}
+            </p>
+          )}
           <input
             ref={fileInputRef}
             type="file"

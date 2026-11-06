@@ -24,6 +24,10 @@ import { useCollections } from '@/hooks/useRagToolConfig';
 import { useKnowledgeBases } from '@/hooks/useKnowledgeBases';
 import { MAX_ATTACHED_SKILLS } from '@/constants/agentSkill';
 import { DOCUMENT_EXTRACTOR_TOOL_ID } from '@/types/documentExtractor';
+import {
+  FORM_TEMPLATE_EMPTY_NOTICE,
+  FORM_TEMPLATE_REPLACE_NOTICE,
+} from '@/types/agentPipeline';
 import type { DocumentExtractorDraft } from '@/types/documentExtractor';
 import { DOCUMENT_GENERATOR_TOOL_ID } from '@/types/documentGenerator';
 import type { DocumentGeneratorDraft } from '@/types/documentGenerator';
@@ -492,7 +496,10 @@ const LeftConfigPanel = ({
                       />
                     )}
                     {tool.tool_id === DOCUMENT_EXTRACTOR_TOOL_ID && (
-                      <ExtractorSummaryBadge draft={form.documentExtractorDraft ?? null} />
+                      <ExtractorSummaryBadge
+                        draft={form.documentExtractorDraft ?? null}
+                        savedTemplateId={form.savedTemplateId ?? null}
+                      />
                     )}
                     {tool.tool_id === DOCUMENT_GENERATOR_TOOL_ID && (
                       <GeneratorSummaryBadge draft={form.documentGeneratorDraft ?? null} />
@@ -645,6 +652,10 @@ const LeftConfigPanel = ({
       <DocumentExtractorConfigModal
         isOpen={isExtractorConfigOpen}
         draft={form.documentExtractorDraft ?? null}
+        // wizard-template-request Act-1 (G3): 저장된 양식이 있으면 "교체" 안내로 바꾼다
+        emptyNotice={
+          form.savedTemplateId ? FORM_TEMPLATE_REPLACE_NOTICE : FORM_TEMPLATE_EMPTY_NOTICE
+        }
         onChange={(draft) => onChange({ ...form, documentExtractorDraft: draft })}
         onClose={() => setExtractorConfigOpen(false)}
       />
@@ -834,10 +845,19 @@ export const RagConfigSummaryBadge = ({
 
 interface ExtractorSummaryBadgeProps {
   draft: DocumentExtractorDraft | null;
+  /** wizard-template-request Act-1 (G3): 서버에 저장된 양식이 있으면 미등록이 아니다 */
+  savedTemplateId?: string | null;
 }
 
-const ExtractorSummaryBadge = ({ draft }: ExtractorSummaryBadgeProps) => {
+const ExtractorSummaryBadge = ({ draft, savedTemplateId }: ExtractorSummaryBadgeProps) => {
   if (!draft) {
+    if (savedTemplateId) {
+      return (
+        <p className="mt-1.5 inline-block rounded bg-emerald-50 px-1.5 py-0.5 text-[11.5px] font-medium text-emerald-700">
+          ✓ 양식 등록됨
+        </p>
+      );
+    }
     return (
       <p className="mt-1.5 inline-block rounded bg-amber-50 px-1.5 py-0.5 text-[11.5px] font-medium text-amber-600">
         ⚠ 양식 미등록

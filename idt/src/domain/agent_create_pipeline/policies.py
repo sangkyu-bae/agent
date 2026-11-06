@@ -7,6 +7,8 @@ degraded 판정 원칙은 위키 `degradation-vs-failure-boundary` 를 따른다
 "쓸 수 있는 결과가 존재하는가". 여기서는 그 판정에 필요한 순수 계산만 한다.
 """
 from collections.abc import Sequence
+from dataclasses import dataclass
+from enum import StrEnum
 from typing import Literal
 
 from src.domain.agent_create_pipeline.spec import PURPOSE_SLOT_KEY
@@ -31,6 +33,38 @@ _STOP_STATUS: dict[PipelineStop, str] = {
     PipelineStop.TOOLS: "tools_proposed",
     PipelineStop.PROMPT: "prompt_ready",
 }
+
+# Design Ref: wizard-template-request §4.2 — 빌더 카탈로그 표기의 문서추출기 도구 id.
+# 프론트 DOCUMENT_EXTRACTOR_TOOL_ID 와 동일 문자열 (types/documentExtractor.ts).
+EXTRACTOR_TOOL_ID = "internal:document_extractor"
+
+
+class DocumentRequestKind(StrEnum):
+    """확정 도구가 필요로 하는 문서 종류 — wire 값(프론트 분기 키)."""
+
+    FORM_TEMPLATE = "form_template"
+
+
+@dataclass(frozen=True)
+class DocumentRequest:
+    """위저드가 사용자에게 띄울 문서 요청 1건 (Design §3.1)."""
+
+    tool_id: str
+    kind: DocumentRequestKind
+    message: str
+    accept: tuple[str, ...] = ("pdf", "docx")
+
+
+# Design Ref: wizard-template-request §4.2 — 요청 문구는 서버 소유 결정적 템플릿.
+# LLM 을 쓰지 않으므로 degraded 가 없고, 후속에 LLM 문구로 바꿔도 프론트 무변경.
+FORM_TEMPLATE_MESSAGE_WITH_PURPOSE = (
+    "{purpose}에 쓸 양식 파일(PDF 또는 DOCX)을 올려주세요. "
+    "양식의 빈칸을 찾아 채움 항목으로 만듭니다."
+)
+FORM_TEMPLATE_MESSAGE_DEFAULT = (
+    "이 에이전트가 채울 양식 파일(PDF 또는 DOCX)을 올려주세요. "
+    "양식의 빈칸을 찾아 채움 항목으로 만듭니다."
+)
 
 
 class PipelinePolicy:
@@ -224,6 +258,50 @@ class PipelinePolicy:
         if KNOWLEDGE_TOOL_ID not in ids:
             ids = (*ids, KNOWLEDGE_TOOL_ID)
         return ids, {KNOWLEDGE_TOOL_ID: {"kb_id": clean}}
+
+    # ── 문서 요청 (wizard-template-request §4.2) ─────────────────────────
+
+    @staticmethod
+    def document_requests_for(
+        tool_ids: Sequence[str], result: IntentResult | None
+    ) -> tuple[DocumentRequest, ...]:
+        """확정 도구 목록이 필요로 하는 문서 요청 (Plan FR-01~03).
+
+        요청은 **확정 목록의 함수**다 — 추천 결과가 아니라 사용자가 확정한
+        목록으로 계산하므로 도구 단계에서 추출기를 빼면 요청도 사라진다.
+        degraded 의도의 슬롯은 쓰지 않는다 (LLM 출력 신뢰 경계).
+        """
+        if EXTRACTOR_TOOL_ID not in tuple(tool_ids):
+            return ()
+        purpose = ""
+        if result is not None and not result.degraded:
+            purpose = " ".join(result.filled_slots.get(PURPOSE_SLOT_KEY, "").split())
+        message = (
+            FORM_TEMPLATE_MESSAGE_WITH_PURPOSE.format(purpose=purpose)
+            if purpose
+            else FORM_TEMPLATE_MESSAGE_DEFAULT
+        )
+        return (
+            DocumentRequest(
+                tool_id=EXTRACTOR_TOOL_ID,
+                kind=DocumentRequestKind.FORM_TEMPLATE,
+                message=message,
+            ),
+        )
+
+    @staticmethod
+    def validate_template_tools(
+        tool_ids: Sequence[str], has_template: bool
+    ) -> None:
+        """템플릿이 왔는데 추출기가 없으면 ValueError (Plan FR-05 / Design D3).
+
+        저장 **전에** 호출한다 — CreateAgentUseCase 의 워커 부재 ValueError 에
+        기대면 그 예외가 트랜잭션 안에서 나는지 보장이 없다.
+        """
+        if has_template and EXTRACTOR_TOOL_ID not in tuple(tool_ids):
+            raise ValueError(
+                "문서추출기 도구가 없는 에이전트에는 양식을 등록할 수 없습니다"
+            )
 
     @staticmethod
     def empty_candidate_selection(

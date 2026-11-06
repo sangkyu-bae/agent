@@ -366,3 +366,29 @@ describe('DocumentExtractorConfigPanel — 재요청', () => {
     expect(updated.regenCount).toBe(1);
   });
 });
+
+// ── wizard-template-request FR-13 (D5) — "양식 미등록" 안내 ──────────────────
+
+describe('DocumentExtractorConfigPanel — 양식 미등록 안내 (L2-10)', () => {
+  it('드래프트가 없으면 공통 안내 문구를 상단에 띄운다', () => {
+    renderWithQuery(
+      <DocumentExtractorConfigPanel draft={null} onChange={vi.fn()} />,
+    );
+    expect(screen.getByRole('status')).toHaveTextContent(/양식 미등록/);
+    expect(screen.getByLabelText('양식 문서 업로드')).toBeInTheDocument();
+  });
+
+  it('드래프트가 있으면 안내를 띄우지 않는다', () => {
+    renderWithQuery(
+      <DocumentExtractorConfigPanel draft={draftFixture()} onChange={vi.fn()} />,
+    );
+    expect(screen.queryByText(/양식 미등록/)).not.toBeInTheDocument();
+  });
+
+  it('emptyNotice 를 빈 문자열로 주면 안내를 끈다', () => {
+    renderWithQuery(
+      <DocumentExtractorConfigPanel draft={null} onChange={vi.fn()} emptyNotice="" />,
+    );
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+});

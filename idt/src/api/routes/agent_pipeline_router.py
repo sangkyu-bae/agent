@@ -37,11 +37,13 @@ from src.domain.agent_create_pipeline.stages import (
     StageStatus,
 )
 from src.domain.auth.entities import User
+from src.domain.document_extractor.exceptions import DocumentExtractorError
 from src.domain.intent.schemas import IntentResult, SlotAnswer, Turn
 from src.interfaces.dependencies.auth import get_current_user
 from src.interfaces.schemas.agent_pipeline import (
     AgentPipelineRequest,
     AgentPipelineResponse,
+    DocumentRequestOut,
     IntentSummaryOut,
     QuestionOut,
     StageRecordOut,
@@ -89,6 +91,10 @@ async def run_pipeline(
     except PromptSessionNotFoundError:
         raise HTTPException(status_code=404, detail=_NOT_FOUND)
     except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except DocumentExtractorError as e:
+        # wizard-template-request D4 — 템플릿 슬롯·토큰 검증 실패는 입력 오류다.
+        # (ValueError 를 상속하지 않아 별도 매핑. 스튜디오 /agents 경로는 미매핑.)
         raise HTTPException(status_code=422, detail=str(e))
     if outcome is None:  # 제너레이터는 항상 outcome 으로 끝나는 계약이다
         raise HTTPException(status_code=500, detail="pipeline produced no result")
@@ -210,6 +216,8 @@ def _run_kwargs(
         "intent_echo": _to_intent_echo(request.intent),
         # agent-kb-quick-setup FR-12 — 미지정이면 None 이라 기존 호출 동작 불변
         "kb_id": request.kb_id,
+        # wizard-template-request FR-04 — 스키마 객체 그대로 전달 (변환 없음)
+        "document_template": request.document_template,
     }
 
 
@@ -275,6 +283,16 @@ def _to_response(outcome: PipelineOutcome) -> AgentPipelineResponse:
         bind_ok=outcome.bind_ok,
         suggested_name=outcome.suggested_name,
         prompt_clamp_reason=outcome.prompt_clamp_reason,
+        document_requests=[
+            DocumentRequestOut(
+                tool_id=r.tool_id,
+                kind=r.kind.value,
+                message=r.message,
+                accept=list(r.accept),
+            )
+            for r in outcome.document_requests
+        ],
+        document_template_attached=outcome.document_template_attached,
     )
 
 

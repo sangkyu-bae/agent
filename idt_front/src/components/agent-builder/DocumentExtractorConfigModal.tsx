@@ -7,6 +7,8 @@ interface DocumentExtractorConfigModalProps {
   draft: DocumentExtractorDraft | null;
   onChange: (draft: DocumentExtractorDraft | null) => void;
   onClose: () => void;
+  /** wizard-template-request FR-13/G3: 드래프트 없을 때 패널 상단 안내 (미지정=기본 상수) */
+  emptyNotice?: string;
 }
 
 /**
@@ -19,6 +21,7 @@ const DocumentExtractorConfigModal = ({
   draft,
   onChange,
   onClose,
+  emptyNotice,
 }: DocumentExtractorConfigModalProps) => {
   if (!isOpen) return null;
 
@@ -40,7 +43,11 @@ const DocumentExtractorConfigModal = ({
         </button>
       }
     >
-      <DocumentExtractorConfigPanel draft={draft} onChange={onChange} />
+      <DocumentExtractorConfigPanel
+        draft={draft}
+        onChange={onChange}
+        emptyNotice={emptyNotice}
+      />
     </Modal>
   );
 };

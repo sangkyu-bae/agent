@@ -163,3 +163,71 @@ describe('wizardResultToForm — kbId (agent-kb-quick-setup FR-13)', () => {
     expect(form.toolConfigs[RAG_CATALOG_TOOL_ID]).toBeUndefined();
   });
 });
+
+// ── wizard-template-request FR-12 (D2) — 양식 드래프트 핸드오프 ──────────────
+
+const confirmedDraft = () => ({
+  sourceFileId: 'file-1',
+  sourceFormat: 'docx' as const,
+  html: '<p>ㅇㅇ상사</p>',
+  slots: [
+    {
+      key: 'company',
+      label: '회사명',
+      slot_type: 'value' as const,
+      description: '',
+      fill_hint: '',
+      sample_value: 'ㅇㅇ상사',
+    },
+  ],
+  mcpPdfToHtmlToolId: 'mcp:pdf',
+  mcpHtmlToDocToolId: 'mcp:doc',
+  regenCount: 0,
+  confirmed: true,
+  templateName: '여신심의서',
+  htmlSkeleton: '<p>{{company}}</p>',
+});
+
+describe('wizardResultToForm — 양식 드래프트 (wizard-template-request)', () => {
+  const EXTRACTOR = 'internal:document_extractor';
+  const catalog = [...CATALOG, tool(EXTRACTOR)];
+
+  it('추출기 도구 + 확정 드래프트면 폼에 그대로 꽂힌다', () => {
+    const draft = confirmedDraft();
+    const form = wizardResultToForm(
+      result({ toolIds: ['internal:a', EXTRACTOR], documentExtractorDraft: draft }),
+      FORM,
+      { catalogTools: catalog },
+    );
+    expect(form.documentExtractorDraft).toBe(draft);
+    expect(form.tools).toContain(EXTRACTOR);
+  });
+
+  it('추출기 도구가 빠졌으면 드래프트를 꽂지 않는다 (고아 방지)', () => {
+    const form = wizardResultToForm(
+      result({ toolIds: ['internal:a'], documentExtractorDraft: confirmedDraft() }),
+      FORM,
+      { catalogTools: catalog },
+    );
+    expect(form.documentExtractorDraft ?? null).toBeNull();
+  });
+
+  it('미확정 드래프트는 꽂지 않는다', () => {
+    const form = wizardResultToForm(
+      result({
+        toolIds: [EXTRACTOR],
+        documentExtractorDraft: { ...confirmedDraft(), confirmed: false },
+      }),
+      FORM,
+      { catalogTools: catalog },
+    );
+    expect(form.documentExtractorDraft ?? null).toBeNull();
+  });
+
+  it('드래프트가 없으면 기존 동작과 같다', () => {
+    const form = wizardResultToForm(result({ toolIds: [EXTRACTOR] }), FORM, {
+      catalogTools: catalog,
+    });
+    expect(form.documentExtractorDraft ?? null).toBeNull();
+  });
+});
