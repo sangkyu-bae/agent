@@ -839,3 +839,207 @@ describe('진행바', () => {
     expect(screen.getByText('추천 실패')).toBeInTheDocument();
   });
 });
+
+// ── wizard-template-request Design §8.3 L2-07·L2-08 — 양식 카드 ↔ 파이프라인 요청 ──
+
+describe('⑥ 양식 요청 카드 (wizard-template-request)', () => {
+  const FORM_REQUEST = {
+    tool_id: 'internal:document_extractor',
+    kind: 'form_template' as const,
+    message: '문서 Q&A에 쓸 양식 파일(PDF 또는 DOCX)을 올려주세요.',
+    accept: ['pdf', 'docx'],
+  };
+  const EXTRACT = {
+    source_file_id: 'file-1',
+    source_format: 'docx',
+    html: '<p>회사명: ㅇㅇ상사</p>',
+    preview_html: null,
+    suggested_slots: [
+      {
+        key: 'company',
+        label: '회사명',
+        slot_type: 'value',
+        description: '',
+        fill_hint: '',
+        sample_value: 'ㅇㅇ상사',
+      },
+    ],
+    mcp_pdf_to_html_tool_id: 'mcp:pdf',
+    mcp_html_to_doc_tool_id: 'mcp:doc',
+  };
+  const stubExtract = () =>
+    server.use(
+      http.post(`*${API_ENDPOINTS.DOCUMENT_EXTRACTOR_EXTRACT}`, () =>
+        HttpResponse.json(EXTRACT),
+      ),
+    );
+
+  const goToDocuments = async (toolsResult: AgentPipelineResponse = TOOLS_PROPOSED) => {
+    stubToolCatalog();
+    stubExtract();
+    const stub = stubStream([
+      sseBody(toolsResult, ['intent', 'tools']),
+      sseBody(
+        { ...PROMPT_READY, document_requests: toolsResult.document_requests ?? [] },
+        ['intent', 'tools', 'prompt'],
+      ),
+    ]);
+    renderPage();
+    const user = await submitDescription();
+    await screen.findByText('이 도구들을 사용할까요?');
+    await user.click(screen.getByRole('button', { name: '이 도구로 진행' }));
+    await screen.findByText('참고할 문서가 있나요?');
+    return { user, stub };
+  };
+
+  const uploadAndConfirm = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.upload(
+      screen.getByLabelText('양식 파일 선택'),
+      new File(['PK'], '여신심의서.docx'),
+    );
+    await user.click(await screen.findByRole('button', { name: '이대로 사용' }));
+    await screen.findByText('✓ 양식 등록: 여신심의서 · 슬롯 1개');
+  };
+
+  it('요청이 없으면 카드가 없다 (L2-01)', async () => {
+    await goToDocuments();
+    expect(screen.queryByRole('region', { name: '양식 요청' })).not.toBeInTheDocument();
+  });
+
+  it('첨부 → 확인 → [계속] 하면 PROMPT 요청에 document_template 이 실린다 (L2-07)', async () => {
+    const { user, stub } = await goToDocuments({
+      ...TOOLS_PROPOSED,
+      final_tool_ids: ['internal:a', 'internal:document_extractor'],
+      document_requests: [FORM_REQUEST],
+    });
+    expect(screen.getByRole('region', { name: '양식 요청' })).toHaveTextContent(
+      /문서 Q&A에 쓸 양식 파일/,
+    );
+    await uploadAndConfirm(user);
+    await user.click(screen.getByRole('button', { name: '계속' }));
+
+    await waitFor(() => expect(stub.requests).toHaveLength(2));
+    const body = stub.requests[1] as {
+      document_template?: Record<string, unknown> & { slots: unknown[] };
+    };
+    expect(body.document_template).toMatchObject({
+      name: '여신심의서',
+      source_file_id: 'file-1',
+      source_format: 'docx',
+      html_skeleton: '<p>회사명: {{company}}</p>',
+    });
+    expect(body.document_template?.slots).toHaveLength(1);
+    // 프롬프트 단계 — 카드는 잠긴 이력으로 남는다 (FR-11)
+    await screen.findByText(PROMPT_READY.assembled_prompt!);
+    expect(screen.getByText('✓ 양식 등록: 여신심의서 · 슬롯 1개')).toBeInTheDocument();
+  });
+
+  it('[건너뛰기]는 템플릿 없이 보내고 이력에 건너뜀을 남긴다 (FR-10/11)', async () => {
+    const { user, stub } = await goToDocuments({
+      ...TOOLS_PROPOSED,
+      document_requests: [FORM_REQUEST],
+    });
+    await user.click(screen.getByRole('button', { name: '건너뛰기' }));
+    await waitFor(() => expect(stub.requests).toHaveLength(2));
+    expect(stub.requests[1]).not.toHaveProperty('document_template');
+    await screen.findByText(PROMPT_READY.assembled_prompt!);
+    expect(screen.getByText('✓ 건너뜀(양식)')).toBeInTheDocument();
+  });
+
+  it('서버가 빈 요청 목록을 돌려주면 카드·템플릿이 버려진다 (L2-08)', async () => {
+    stubToolCatalog();
+    stubExtract();
+    const stub = stubStream([
+      sseBody(
+        {
+          ...TOOLS_PROPOSED,
+          final_tool_ids: ['internal:a', 'internal:document_extractor'],
+          document_requests: [FORM_REQUEST],
+        },
+        ['intent', 'tools'],
+      ),
+      // 확정 목록에서 추출기가 빠진 경우 서버는 빈 목록을 준다 (FR-03)
+      sseBody({ ...PROMPT_READY, document_requests: [] }, ['intent', 'tools', 'prompt']),
+    ]);
+    renderPage();
+    const user = await submitDescription();
+    await screen.findByText('이 도구들을 사용할까요?');
+    await user.click(screen.getByRole('button', { name: '이 도구로 진행' }));
+    await screen.findByText('참고할 문서가 있나요?');
+    await uploadAndConfirm(user);
+    await user.click(screen.getByRole('button', { name: '계속' }));
+    await waitFor(() => expect(stub.requests).toHaveLength(2));
+    expect(stub.requests[1]).toHaveProperty('document_template');
+    await screen.findByText(PROMPT_READY.assembled_prompt!);
+    expect(screen.queryByRole('region', { name: '양식 요청' })).not.toBeInTheDocument();
+  });
+});
+
+// ── wizard-template-request FR-12 (L2-09) — 직접 만들기 핸드오프 ────────────
+
+describe('⑦ 양식 드래프트 핸드오프 (wizard-template-request)', () => {
+  it('확정한 양식 드래프트를 WizardResult 에 실어 스튜디오로 넘긴다', async () => {
+    stubToolCatalog();
+    server.use(
+      http.post(`*${API_ENDPOINTS.DOCUMENT_EXTRACTOR_EXTRACT}`, () =>
+        HttpResponse.json({
+          source_file_id: 'file-1',
+          source_format: 'docx',
+          html: '<p>회사명: ㅇㅇ상사</p>',
+          preview_html: null,
+          suggested_slots: [
+            {
+              key: 'company',
+              label: '회사명',
+              slot_type: 'value',
+              description: '',
+              fill_hint: '',
+              sample_value: 'ㅇㅇ상사',
+            },
+          ],
+          mcp_pdf_to_html_tool_id: 'mcp:pdf',
+          mcp_html_to_doc_tool_id: 'mcp:doc',
+        }),
+      ),
+    );
+    const request = {
+      tool_id: 'internal:document_extractor',
+      kind: 'form_template' as const,
+      message: '양식을 올려주세요.',
+      accept: ['pdf', 'docx'],
+    };
+    stubStream([
+      sseBody(
+        {
+          ...TOOLS_PROPOSED,
+          final_tool_ids: ['internal:a', 'internal:document_extractor'],
+          document_requests: [request],
+        },
+        ['intent', 'tools'],
+      ),
+      sseBody({ ...PROMPT_READY, document_requests: [request] }, ['intent', 'tools', 'prompt']),
+    ]);
+    renderPage();
+    const user = await submitDescription();
+    await screen.findByText('이 도구들을 사용할까요?');
+    await user.click(screen.getByRole('button', { name: '이 도구로 진행' }));
+    await screen.findByText('참고할 문서가 있나요?');
+    await user.upload(
+      screen.getByLabelText('양식 파일 선택'),
+      new File(['PK'], '여신심의서.docx'),
+    );
+    await user.click(await screen.findByRole('button', { name: '이대로 사용' }));
+    await user.click(screen.getByRole('button', { name: '계속' }));
+    await screen.findByText(PROMPT_READY.assembled_prompt!);
+    await user.click(screen.getByRole('button', { name: '스튜디오로 보내기' }));
+
+    const intent = useAgentDraftStore.getState().pendingIntent;
+    expect(intent?.kind).toBe('wizard');
+    if (intent?.kind !== 'wizard') return;
+    expect(intent.result.documentExtractorDraft).toMatchObject({
+      confirmed: true,
+      templateName: '여신심의서',
+      htmlSkeleton: '<p>회사명: {{company}}</p>',
+    });
+  });
+});

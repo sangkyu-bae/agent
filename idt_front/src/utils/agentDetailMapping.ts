@@ -96,5 +96,25 @@ export function mapDetailToForm(
     tokenLimit: detail.token_limit ?? TOKEN_LIMIT.DEFAULT,
     // agent-opener FR-10: edit 프라임 (구 서버 응답은 필드 부재 → [])
     openers: detail.openers ?? [],
+    // wizard-template-request Act-1 (G3): 저장된 양식 존재 여부 — 상세 응답에는
+    // 템플릿 본문이 없고 워커 tool_config.template_id 만 있다. 드래프트로 되돌리지
+    // 않는 이유: 원본 파일 id 가 만료돼 재저장 시 실패하므로 "존재 표시"만 한다.
+    savedTemplateId: savedTemplateIdFromWorkers(detail.workers),
   };
 }
+
+/** 추출기 워커의 저장 형식 tool_id (worker.tool_id) */
+const EXTRACTOR_WORKER_TOOL_ID = 'document_extractor';
+
+/** 추출기 워커 tool_config 의 template_id (없으면 null). */
+export const savedTemplateIdFromWorkers = (
+  workers: AgentDetail['workers'],
+): string | null => {
+  const worker = workers.find(
+    (w) =>
+      (w.worker_type ?? 'tool') === 'tool' && w.tool_id === EXTRACTOR_WORKER_TOOL_ID,
+  );
+  const templateId = (worker?.tool_config as { template_id?: unknown } | undefined)
+    ?.template_id;
+  return typeof templateId === 'string' && templateId ? templateId : null;
+};

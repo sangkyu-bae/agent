@@ -16,9 +16,12 @@ import type {
   AgentPipelineRequest,
   AgentPipelineResponse,
   PipelineAnswer,
+  PipelineDocumentRequest,
   PipelineIntentEcho,
   PipelineQuestion,
 } from '@/types/agentPipeline';
+import type { DocumentExtractorDraft } from '@/types/documentExtractor';
+import { buildDocumentTemplateRequest } from '@/utils/documentTemplate';
 import EntryHero from './components/EntryHero';
 import DescriptionComposer from './components/DescriptionComposer';
 import EntryActionCards from './components/EntryActionCards';
@@ -63,6 +66,13 @@ interface WizardState {
   suggestedName: string;
   /** agent-kb-quick-setup FR-11: 문서 단계에서 연결한 KB */
   kbId: string | null;
+  // wizard-template-request §3.1 — 양식 요청 카드 상태 4필드.
+  /** 마지막 tools_proposed/prompt_ready 응답의 문서 요청 목록 (D1) */
+  documentRequests: PipelineDocumentRequest[];
+  /** 추출 결과 + 확정 상태. 스튜디오 드래프트와 같은 형태 (D2) */
+  templateDraft: DocumentExtractorDraft | null;
+  templateSkipped: boolean;
+  templateBusy: boolean;
 }
 
 const EMPTY: WizardState = {
@@ -82,6 +92,30 @@ const EMPTY: WizardState = {
   versionId: null,
   suggestedName: '',
   kbId: null,
+  documentRequests: [],
+  templateDraft: null,
+  templateSkipped: false,
+  templateBusy: false,
+};
+
+/**
+ * 응답의 document_requests 를 상태에 반영한다 (D1 / FR-03).
+ * 요청이 사라지면(사용자가 추출기를 뺀 경우) 보관 템플릿도 버린다 —
+ * 남겨두면 서버가 422 로 거절한다 (FR-05).
+ */
+const syncDocumentRequests = (
+  sent: WizardState,
+  result: AgentPipelineResponse,
+): Pick<WizardState, 'documentRequests' | 'templateDraft' | 'templateSkipped'> => {
+  const documentRequests = result.document_requests ?? [];
+  if (documentRequests.length > 0) {
+    return {
+      documentRequests,
+      templateDraft: sent.templateDraft,
+      templateSkipped: sent.templateSkipped,
+    };
+  }
+  return { documentRequests, templateDraft: null, templateSkipped: false };
 };
 
 /**
@@ -173,6 +207,7 @@ const AgentCreateEntryPage = () => {
         selectedIds: result.final_tool_ids,
         unknownIds: result.unknown_tool_ids,
         suggestedName: result.suggested_name ?? sent.suggestedName,
+        ...syncDocumentRequests(sent, result),
       });
       setStep('tools');
       return;
@@ -190,6 +225,7 @@ const AgentCreateEntryPage = () => {
         versionId: result.version_id,
         unknownIds: result.unknown_tool_ids,
         suggestedName: result.suggested_name ?? sent.suggestedName,
+        ...syncDocumentRequests(sent, result),
       });
       setStep('prompt');
     }
@@ -283,28 +319,51 @@ const AgentCreateEntryPage = () => {
   };
 
   /** 문서 단계 [건너뛰기]/[계속] — 기존 PROMPT 요청에 kb_id 만 더 싣는다. */
-  const requestPrompt = (sessionId: string | null = null) => {
+  const requestPrompt = (
+    sessionId: string | null = null,
+    snapshot: WizardState = state,
+  ) => {
     if (pipeline.isPending) return;
+    const template = buildDocumentTemplateRequest(
+      snapshot.templateDraft,
+      snapshot.suggestedName || '양식',
+    );
     dispatch(
       {
-        user_request: state.userRequest,
-        answers: state.answers,
-        round: state.round,
-        tool_ids: state.selectedIds,
+        user_request: snapshot.userRequest,
+        answers: snapshot.answers,
+        round: snapshot.round,
+        tool_ids: snapshot.selectedIds,
         // D1 — 확정 목록이므로 셀렉터를 다시 돌리지 않는다.
         tools_confirmed: true,
         // D2 — 의도를 재사용해 단계 간 근거가 갈리지 않게 한다.
-        intent: state.intentEcho,
+        intent: snapshot.intentEcho,
         ...(sessionId ? { session_id: sessionId } : {}),
-        ...(state.kbId ? { kb_id: state.kbId } : {}),
+        ...(snapshot.kbId ? { kb_id: snapshot.kbId } : {}),
+        // wizard-template-request FR-08: 확정 템플릿만 동봉 (미확정이면 undefined)
+        ...(template ? { document_template: template } : {}),
         stop_after: PIPELINE_STOP.PROMPT,
       },
-      state,
+      snapshot,
     );
   };
 
-  const handleSkipDocuments = () => requestPrompt();
+  /** 건너뛰기 — 미확정 양식은 버리고 이력에 "건너뜀"으로 남긴다 (FR-10/11). */
+  const handleSkipDocuments = () => {
+    if (pipeline.isPending || state.templateBusy) return;
+    const skippedTemplate = !state.templateDraft?.confirmed;
+    const next: WizardState = skippedTemplate
+      ? { ...state, templateDraft: null, templateSkipped: true }
+      : state;
+    setState(next);
+    requestPrompt(null, next);
+  };
   const handleContinueFromDocuments = () => requestPrompt();
+
+  const handleTemplateDraftChange = (draft: DocumentExtractorDraft | null) =>
+    setState((prev) => ({ ...prev, templateDraft: draft, templateSkipped: false }));
+  const handleTemplateBusyChange = (busy: boolean) =>
+    setState((prev) => ({ ...prev, templateBusy: busy }));
 
   /** 업로드/기존 KB 선택 — 문서 검색 도구를 확정 목록에 더한다 (FR-07 과 대칭). */
   const handleKbAttached = (kbId: string) => {
@@ -339,6 +398,10 @@ const AgentCreateEntryPage = () => {
         versionId: state.versionId,
         // agent-kb-quick-setup FR-13: 스튜디오가 RAG 도구 + kb_id 로 프리필한다
         kbId: state.kbId,
+        // wizard-template-request FR-12: 확정 템플릿을 추출기 드래프트로 넘긴다 (D2)
+        documentExtractorDraft: state.templateDraft?.confirmed
+          ? state.templateDraft
+          : null,
       },
     });
   };
@@ -492,6 +555,13 @@ const AgentCreateEntryPage = () => {
           onDetach={handleKbDetached}
           onSkip={handleSkipDocuments}
           onContinue={handleContinueFromDocuments}
+          // wizard-template-request §5.1 — 서버 요청이 있을 때만 양식 카드가 뜬다
+          documentRequests={state.documentRequests}
+          templateDraft={state.templateDraft}
+          templateSkipped={state.templateSkipped}
+          templateBusy={state.templateBusy}
+          onTemplateDraftChange={handleTemplateDraftChange}
+          onTemplateBusyChange={handleTemplateBusyChange}
         />
       )}
 
