@@ -4,9 +4,9 @@
 >
 > **Project**: sangplusbot (Agent Builder)
 > **Date**: 2026-11-04
-> **Plan**: [agent-run-tool-trace.plan.md](../01-plan/features/agent-run-tool-trace.plan.md)
-> **Design**: [agent-run-tool-trace.design.md](../02-design/features/agent-run-tool-trace.design.md)
-> **Branch**: `feature/agent-run-tool-trace` (worktree `wt/agent-run-tool-trace`, 미커밋)
+> **Plan**: [agent-run-tool-trace.plan.md](agent-run-tool-trace.plan.md)
+> **Design**: [agent-run-tool-trace.design.md](agent-run-tool-trace.design.md)
+> **Branch**: `feature/agent-run-tool-trace` — PR #89 머지(2026-11-04), 2026-11-05 아카이브
 
 ---
 

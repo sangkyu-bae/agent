@@ -6,6 +6,7 @@
 | sidebar-agent-list | completed | 99.8% (Check 99.0% → Act-1) | 2026-11-04 | [sidebar-agent-list/](sidebar-agent-list/) |
 | agent-kb-quick-setup | completed | 98.9% (Check 95.5% → Act-1) | 2026-11-05 | [agent-kb-quick-setup/](agent-kb-quick-setup/) |
 | agent-edit-entry | completed | 100% (Check 90% → Act-1) | 2026-11-05 | [agent-edit-entry/](agent-edit-entry/) |
+| agent-run-tool-trace | completed | 97.5% (Check, Minor 4건 수정) | 2026-11-05 | [agent-run-tool-trace/](agent-run-tool-trace/) |
 | pii-masking-integration | completed | 95.8% (Check 89.4% → Act-1) | 2026-11-06 | [pii-masking-integration/](pii-masking-integration/) |
 
 > 백엔드·프론트 전용 사이클은 `idt/docs/archive/2026-11/`, `idt_front/docs/archive/2026-11/` 에 있다.
@@ -38,6 +39,10 @@
 | agent-edit-entry | 구독 에이전트에서 수정 아이콘 미노출 화면 확인 (단위 테스트로만 확인) | 확인 | 구독 데이터가 있을 때 |
 | agent-edit-entry | 저장 후 브라우저 뒤로가기 시 편집 화면 재진입 (`navigate` push) — `replace` 검토 | UX 소형 | 요청 시 |
 | agent-edit-entry | 사이드바 항목 hover 수정 아이콘 | 기능 확장 | 요청 시 |
+| agent-run-tool-trace | 375·768 폭 화면 확인 (데스크톱 폭에서만 확인) | 확인 | 다음 채팅 화면 작업 시 |
+| agent-run-tool-trace | 하단 "추론 진행" 패널의 UUID 런타임 도구 이름 — `ToolCatalogLookup` 재사용 | 기존 동작 | 소형 사이클 후보 |
+| agent-run-tool-trace | 스트리밍 중 supervisor 라우팅 JSON 토큰 노출, 종료 판단 2줄 연속 기록 | 기존 동작 | 소형 사이클 후보 |
+| agent-run-tool-trace | 프론트 커버리지 미측정 (`@vitest/coverage-v8` 미설치), 헤더 N은 상한 안 도구만 셈(G-02) | 측정·소형 | 요청 시 |
 | **pii-masking-integration** | **배포는 shadow(기본)로 — `PII masking summary`·`MCP PII inspected` 로그로 오탐 확인 후 `PII_MASKING_MODE=on`. on 전환 시 `LANGSMITH_TRACING` 끄기(상태 원본 기록)** | 운영 절차 | **on 전환 전 필수** |
 | pii-masking-integration | 실제 PII를 반환하는 MCP로 on 실런 1회 (고객 문의 MCP는 서버에서 사전 마스킹) | 검증 | on 전환 전 |
 | pii-masking-integration | 외부 도구 인자 마스킹(Tavily·Perplexity·외부 MCP), 임베딩 API 쿼리, 이미지, 이름·주소(NER) | 잔여 위험 | shadow 집계 후 별도 Plan |
