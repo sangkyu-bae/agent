@@ -15,6 +15,7 @@ from src.domain.document_extractor.policies import (
     DocumentFilePolicy,
     HtmlSanitizePolicy,
     RegenPolicy,
+    SlotGroupPolicy,
     SlotPolicy,
     SlotValuePolicy,
     TemplateTokenPolicy,
@@ -140,17 +141,48 @@ class TestUnfilledSlotPolicy:
     def test_filled_value(self):
         assert UnfilledSlotPolicy.is_unfilled("5억 원") is False
 
-    def test_render_unfilled_contains_key_and_label(self):
+    def test_render_unfilled_contains_key_but_not_label(self):
+        """라벨은 병기하지 않는다 (2026-11-06): 양식의 라벨과 중복되고
+        년/월/일처럼 한 줄에 여러 슬롯이 있으면 표식이 어색해진다."""
         markup = UnfilledSlotPolicy.render_unfilled(_slot())
         assert 'data-unfilled="loan_amount"' in markup
-        assert "여신금액" in markup
+        assert "여신금액" not in markup
         assert markup.startswith("<mark")
+        assert markup.endswith(f"{UnfilledSlotPolicy.UNFILLED_MARKER}</mark>")
 
     def test_render_unfilled_contains_text_marker(self):
         """D8: html→docx 변환(htmldocx)이 mark 스타일을 소실해도
         텍스트 표식 [미기재]는 산출물에 생존해야 한다 (PoC 실측)."""
         markup = UnfilledSlotPolicy.render_unfilled(_slot())
         assert "[미기재]" in markup
+
+
+class TestSlotGroupPolicy:
+    """같은 라벨 묶음(년/월/일)은 전부 채우거나 전부 공란 (규칙 7 결정적 후처리)."""
+
+    _DATE = [
+        _slot("d_year", "심의일자"),
+        _slot("d_month", "심의일자"),
+        _slot("d_day", "심의일자"),
+        _slot("company", "업체명"),
+    ]
+
+    def test_partial_group_is_blanked_entirely(self):
+        values = {"d_year": None, "d_month": "11", "d_day": "", "company": "한빛상사"}
+        out = SlotGroupPolicy.blank_partial_groups(self._DATE, values)
+        assert out["d_year"] is None and out["d_month"] is None and out["d_day"] is None
+        assert out["company"] == "한빛상사"  # 단일 슬롯은 영향 없음
+
+    def test_fully_filled_group_is_kept(self):
+        values = {"d_year": "2026", "d_month": "11", "d_day": "06", "company": None}
+        out = SlotGroupPolicy.blank_partial_groups(self._DATE, values)
+        assert (out["d_year"], out["d_month"], out["d_day"]) == ("2026", "11", "06")
+        assert out["company"] is None
+
+    def test_does_not_mutate_input(self):
+        values = {"d_year": None, "d_month": "11", "d_day": "06", "company": "x"}
+        SlotGroupPolicy.blank_partial_groups(self._DATE, values)
+        assert values["d_month"] == "11"
 
 
 class TestSlotValuePolicy:

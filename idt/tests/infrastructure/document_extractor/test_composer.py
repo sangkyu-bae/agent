@@ -28,6 +28,7 @@ class FakeLLM:
     async def ainvoke(self, messages, config=None):
         self.call_count += 1
         self.configs.append(config)
+        self.last_messages = messages
         response = MagicMock()
         response.content = self._contents.pop(0)
         return response
@@ -207,3 +208,96 @@ class TestCompose:
         )
         result = await _compose(composer, llm, tool_config=config)
         assert result.filename == "여신심의서.docx"
+
+
+# ── 2026-11-06 피드백: 공란 표식에 라벨 미병기 · 오늘 날짜 주입 · 라벨 묶음 일관성 ──
+
+
+def _date_template() -> DocumentTemplate:
+    now = datetime.now(timezone.utc)
+    return DocumentTemplate(
+        id=str(uuid.uuid4()), agent_id="agent-1",
+        worker_id="document_extractor_worker", name="여신심의서",
+        html_skeleton=(
+            "<p>심의일자: {{d_year}}년 {{d_month}}월 {{d_day}}일</p>"
+            "<p>업체명: {{company}}</p>"
+        ),
+        slots=[
+            TemplateSlot(key="d_year", label="심의일자", slot_type="value"),
+            TemplateSlot(key="d_month", label="심의일자", slot_type="value"),
+            TemplateSlot(key="d_day", label="심의일자", slot_type="value"),
+            TemplateSlot(key="company", label="업체명", slot_type="value"),
+        ],
+        source_file_ref="ref", source_format="docx", status="active",
+        created_at=now, updated_at=now,
+    )
+
+
+class TestUnfilledMarkerAndDates:
+    @pytest.mark.asyncio
+    async def test_unfilled_marker_has_no_label(self):
+        """'[미기재] 여신금액'처럼 라벨이 중복 표기되지 않는다."""
+        composer, adapter = _composer()
+        llm = FakeLLM([json.dumps({"loan_amount": None, "opinion": "소견"})])
+        result = await _compose(composer, llm)
+        assert "[미기재]" in adapter.html_received
+        assert "[미기재] 여신금액" not in adapter.html_received
+        assert result.unfilled_labels == ["여신금액"]
+
+    @pytest.mark.asyncio
+    async def test_today_date_is_given_to_llm(self):
+        """규칙 6: [기준 정보]의 오늘 날짜가 user 메시지에 실린다."""
+        from datetime import date
+
+        composer, _ = _composer()
+        llm = FakeLLM([json.dumps({"loan_amount": "5억", "opinion": "소견"})])
+        await _compose(composer, llm)
+        user_msg = llm.last_messages[-1]["content"]
+        assert "[기준 정보]" in user_msg
+        assert f"오늘 날짜: {date.today().isoformat()}" in user_msg
+        assert user_msg.index("[기준 정보]") < user_msg.index("[근거 자료]")
+
+    @pytest.mark.asyncio
+    async def test_partial_date_group_is_blanked(self):
+        """규칙 7 후처리: 년/일이 비면 월만 채워진 반쪽 날짜가 되지 않는다."""
+        composer, adapter = _composer()
+        llm = FakeLLM([json.dumps(
+            {"d_year": None, "d_month": "11", "d_day": None, "company": "한빛상사"}
+        )])
+        result = await _compose(composer, llm, template=_date_template())
+        assert "11월" not in adapter.html_received.replace("[미기재]월", "")
+        assert adapter.html_received.count("[미기재]") == 3
+        assert result.filled_slots == {"업체명": "한빛상사"}
+        assert result.unfilled_labels == ["심의일자", "심의일자", "심의일자"]
+
+    @pytest.mark.asyncio
+    async def test_full_date_group_is_kept(self):
+        composer, adapter = _composer()
+        llm = FakeLLM([json.dumps(
+            {"d_year": "2026", "d_month": "11", "d_day": "06", "company": None}
+        )])
+        await _compose(composer, llm, template=_date_template())
+        assert "2026년 11월 06일" in adapter.html_received
+        assert adapter.html_received.count("[미기재]") == 1
+
+
+class TestSampleValueFormatHint:
+    def test_prompt_shows_sample_value_format_for_value_slots(self):
+        """규칙 8: 예시값 형식을 보여줘 고정 문구 반복('연연 5.8%')을 막는다."""
+        now = datetime.now(timezone.utc)
+        template = DocumentTemplate(
+            id="t", agent_id="a", worker_id="w", name="여신심의서",
+            html_skeleton="<p>연 {{rate}}</p><p>{{opinion}}</p>",
+            slots=[
+                TemplateSlot(key="rate", label="적용 금리", slot_type="value",
+                             sample_value="5.8%"),
+                TemplateSlot(key="opinion", label="심사 의견", slot_type="generated",
+                             sample_value="긴\n\t서술"),
+            ],
+            source_file_ref="ref", source_format="docx", status="active",
+            created_at=now, updated_at=now,
+        )
+        prompt = DocumentComposer._build_prompt(template)
+        assert "rate (value): 적용 금리 / 예시값 형식: 5.8%" in prompt
+        # generated 슬롯은 예시 서술을 보여주지 않는다 (예시 문장 복제 방지)
+        assert "긴 서술" not in prompt
