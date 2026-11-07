@@ -301,3 +301,128 @@ class TestSampleValueFormatHint:
         assert "rate (value): 적용 금리 / 예시값 형식: 5.8%" in prompt
         # generated 슬롯은 예시 서술을 보여주지 않는다 (예시 문장 복제 방지)
         assert "긴 서술" not in prompt
+
+
+# ── docx-format-preserving-fill §8.3 — 원본 DOCX 직접 채움 분기 (C-01~05) ─────────
+
+
+class FakeFiller:
+    def __init__(self, result):
+        self.result = result
+        self.calls: list[tuple] = []
+
+    def fill(self, source_path, slots, values, request_id):
+        self.calls.append((source_path, [s.key for s in slots], dict(values)))
+        return self.result
+
+
+def _docx_template() -> DocumentTemplate:
+    now = datetime.now(timezone.utc)
+    return DocumentTemplate(
+        id=str(uuid.uuid4()), agent_id="agent-1",
+        worker_id="document_extractor_worker", name="여신심의서",
+        html_skeleton="<p>금액: {{loan_amount}}</p><p>소견: {{opinion}}</p>",
+        slots=[
+            TemplateSlot(key="loan_amount", label="여신금액", slot_type="value"),
+            TemplateSlot(key="opinion", label="소견", slot_type="generated"),
+        ],
+        source_file_ref="uploads/document_templates/t.docx",
+        source_format="docx", status="active",
+        created_at=now, updated_at=now,
+    )
+
+
+def _docx_config() -> DocumentExtractorToolConfig:
+    return DocumentExtractorToolConfig(
+        template_id="t-1", mcp_pdf_to_html_tool_id="mcp_p2h",
+        mcp_html_to_doc_tool_id="mcp_h2d", output_format="docx",
+    )
+
+
+class _SpyStore(FakeStore):
+    def save(self, *, file_bytes, filename, attachment_type, owner_user_id):
+        self.saved = file_bytes
+        return super().save(file_bytes=file_bytes, filename=filename,
+                            attachment_type=attachment_type, owner_user_id=owner_user_id)
+
+
+def _docx_composer(filler, adapter=None):
+    from src.infrastructure.document_extractor.docx_filler import DocxFillResult  # noqa: F401
+
+    adapter = adapter or FakeAdapter()
+    store = _SpyStore()
+    logger = MagicMock()
+    composer = DocumentComposer(
+        conversion_adapter=adapter, attachment_store=store, logger=logger,
+        docx_filler=filler,
+    )
+    return composer, adapter, store, logger
+
+
+_VALUES = json.dumps({"loan_amount": "5억", "opinion": None})
+
+
+class TestDocxDirectFill:
+    @pytest.mark.asyncio
+    async def test_docx_template_uses_filler_without_mcp(self):  # C-01
+        from src.infrastructure.document_extractor.docx_filler import DocxFillResult
+
+        filler = FakeFiller(DocxFillResult(b"DOCX-DIRECT"))
+        composer, adapter, store, logger = _docx_composer(filler)
+        result = await _compose(composer, FakeLLM([_VALUES]),
+                                template=_docx_template(), tool_config=_docx_config())
+        assert adapter.html_received is None  # MCP 변환 미호출
+        assert store.saved == b"DOCX-DIRECT"
+        assert filler.calls[0][0] == "uploads/document_templates/t.docx"
+        assert filler.calls[0][2] == {"loan_amount": "5억", "opinion": None}
+        assert result.filename == "여신심의서.docx"
+        assert logger.info.call_args.kwargs["path"] == "docx_direct"
+
+    @pytest.mark.asyncio
+    async def test_missing_sample_falls_back_to_html(self):  # C-02 / SC-5
+        from src.infrastructure.document_extractor.docx_filler import DocxFillResult
+
+        filler = FakeFiller(DocxFillResult(None, ["opinion"], "sample_not_found"))
+        composer, adapter, store, logger = _docx_composer(filler)
+        await _compose(composer, FakeLLM([_VALUES]),
+                       template=_docx_template(), tool_config=_docx_config())
+        assert adapter.html_received is not None
+        assert store.saved == b"FILE-BYTES"
+        warn = logger.warning.call_args
+        assert warn.args[0] == "DocumentComposer docx fill fallback"
+        assert warn.kwargs["missing_keys"] == ["opinion"]
+        assert warn.kwargs["reason"] == "sample_not_found"
+        assert logger.info.call_args.kwargs["path"] == "html"
+
+    @pytest.mark.asyncio
+    async def test_pdf_template_never_calls_filler(self):  # C-03 / SC-6
+        from src.infrastructure.document_extractor.docx_filler import DocxFillResult
+
+        filler = FakeFiller(DocxFillResult(b"X"))
+        composer, adapter, _, _ = _docx_composer(filler)
+        await _compose(composer, FakeLLM([_VALUES]))  # 기본 템플릿은 pdf
+        assert filler.calls == []
+        assert adapter.html_received is not None
+
+    @pytest.mark.asyncio
+    async def test_docx_source_but_pdf_output_uses_html(self):  # D6
+        from src.infrastructure.document_extractor.docx_filler import DocxFillResult
+
+        filler = FakeFiller(DocxFillResult(b"X"))
+        composer, adapter, _, _ = _docx_composer(filler)
+        await _compose(composer, FakeLLM([_VALUES]),
+                       template=_docx_template(), tool_config=_config())
+        assert filler.calls == []
+
+    @pytest.mark.asyncio
+    async def test_result_contract_same_on_both_paths(self):  # C-05
+        from src.infrastructure.document_extractor.docx_filler import DocxFillResult
+
+        direct, *_ = _docx_composer(FakeFiller(DocxFillResult(b"D")))
+        fallback, *_ = _docx_composer(FakeFiller(DocxFillResult(None, ["x"], "sample_not_found")))
+        a = await _compose(direct, FakeLLM([_VALUES]),
+                           template=_docx_template(), tool_config=_docx_config())
+        b = await _compose(fallback, FakeLLM([_VALUES]),
+                           template=_docx_template(), tool_config=_docx_config())
+        assert a.filled_slots == b.filled_slots == {"여신금액": "5억"}
+        assert a.unfilled_labels == b.unfilled_labels == ["소견"]

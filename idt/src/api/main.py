@@ -3158,10 +3158,13 @@ def create_agent_builder_factories():
         # 공유하므로, 여기 한 번의 주입으로 두 경로가 모두 커버된다.
         font_embedder=create_html_font_embedder(settings, app_logger),
     )
+    # docx-format-preserving-fill §4: Word 원본 직접 채움(서식 보존). 실패 시 composer 가 HTML 폴백.
+    from src.infrastructure.document_extractor.docx_filler import DocxFiller
     _dt_composer = DocumentComposer(
         conversion_adapter=_dt_conversion_adapter,
         attachment_store=_attachment_store or create_attachment_store(),
         logger=app_logger,
+        docx_filler=DocxFiller(app_logger),
     )
     _dt_archiver = SourceFileArchiver(
         attachment_store=_attachment_store or create_attachment_store(),
