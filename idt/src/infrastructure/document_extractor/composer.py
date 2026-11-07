@@ -7,11 +7,13 @@ import html as html_lib
 import json
 import re
 from dataclasses import dataclass, field
+from datetime import date
 
 from src.domain.agent_attachment.value_objects import AttachmentType
 from src.domain.document_extractor.exceptions import ComposeError
 from src.domain.document_extractor.policies import (
     COMPOSE_GUIDELINES,
+    SlotGroupPolicy,
     SlotValuePolicy,
     UnfilledSlotPolicy,
 )
@@ -24,6 +26,14 @@ from src.infrastructure.langsmith.langsmith import (
 )
 
 _CODE_FENCE_RE = re.compile(r"^```[a-zA-Z]*\n|\n```$")
+
+_WEEKDAYS_KO = ("월", "화", "수", "목", "금", "토", "일")
+
+
+def _today_block(today: date | None = None) -> str:
+    """[기준 정보] 블록 — 오늘 날짜는 LLM 이 쓸 수 있는 사실 값이다 (규칙 6)."""
+    d = today or date.today()
+    return f"[기준 정보]\n오늘 날짜: {d.isoformat()} ({_WEEKDAYS_KO[d.weekday()]})"
 
 
 @dataclass(frozen=True)
@@ -108,6 +118,7 @@ class DocumentComposer:
             {
                 "role": "user",
                 "content": (
+                    f"{_today_block()}\n\n"
                     f"[근거 자료]\n{evidence_block or '(수집된 근거 없음)'}\n\n"
                     f"[대화]\n{conversation_block or '(대화 없음)'}"
                 ),
@@ -121,7 +132,8 @@ class DocumentComposer:
             content = getattr(response, "content", str(response))
             values, error = self._parse_values(content, required_keys)
             if values is not None:
-                return values
+                # 규칙 7 의 결정적 후처리 — 년/월/일 묶음이 반쪽만 채워지지 않게
+                return SlotGroupPolicy.blank_partial_groups(template.slots, values)
             last_error = error
             self._logger.warning(
                 "DocumentComposer llm contract violation, retrying",
@@ -161,6 +173,9 @@ class DocumentComposer:
             f"- {s.key} ({s.slot_type}): {s.label}"
             + (f" — {s.description}" if s.description else "")
             + (f" / 힌트: {s.fill_hint}" if s.fill_hint else "")
+            # 규칙 8: 예시값 형식을 보여줘야 양식의 고정 문구("연", "개월")를 반복하지 않는다
+            + (f" / 예시값 형식: {' '.join(s.sample_value.split())}"
+               if s.sample_value and s.slot_type == "value" else "")
             for s in template.slots
         )
         return (

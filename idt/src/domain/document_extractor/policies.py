@@ -143,17 +143,49 @@ class UnfilledSlotPolicy:
     def is_unfilled(value: str | None) -> bool:
         return value is None or not value.strip()
 
+    UNFILLED_MARKER = "[미기재]"
+
     @staticmethod
     def render_unfilled(slot: TemplateSlot) -> str:
         """공란 슬롯 표식 — 사람이 채울 지점을 하이라이트(Plan 결정 6).
 
         [미기재] 텍스트 병기(D8): html→docx 엔진(htmldocx)이 mark 배경
         스타일을 소실해도 표식이 산출물에 생존하도록 한다 (PoC 실측).
+
+        라벨은 병기하지 않는다 (2026-11-06 사용자 피드백): 양식에는 이미
+        라벨("문서번호:")이 있어 "[미기재] 문서번호"가 중복되고, 년/월/일처럼
+        한 줄에 여러 슬롯이 있으면 "[미기재] 심의일자년 [미기재] 심의일자일"이
+        된다. 어느 슬롯인지는 data-unfilled 속성으로 남긴다.
         """
         return (
             f'<mark data-unfilled="{slot.key}" '
-            f'style="background:#FFF3B0">[미기재] {slot.label}</mark>'
+            f'style="background:#FFF3B0">{UnfilledSlotPolicy.UNFILLED_MARKER}</mark>'
         )
+
+
+class SlotGroupPolicy:
+    """같은 라벨을 공유하는 슬롯 묶음의 일관성 (예: 심의일자 → 년/월/일 3슬롯).
+
+    추출기는 "2026년 11월 06일" 같은 값을 라벨은 같고 key 만 다른 슬롯 여러 개로
+    쪼갠다. LLM 이 그중 일부만 채우면 "[미기재]년 11월 [미기재]일"처럼 반쪽짜리
+    값이 된다. 묶음은 전부 채우거나 전부 비운다 — 결정적 후처리라 프롬프트
+    규칙이 지켜지지 않아도 성립한다.
+    """
+
+    @staticmethod
+    def blank_partial_groups(slots: list[TemplateSlot], values: dict) -> dict:
+        """라벨 묶음 중 하나라도 공란이면 묶음 전체를 None 으로 만든 사본을 반환."""
+        groups: dict[str, list[str]] = {}
+        for slot in slots:
+            groups.setdefault(slot.label.strip(), []).append(slot.key)
+        result = dict(values)
+        for keys in groups.values():
+            if len(keys) < 2:
+                continue
+            if any(UnfilledSlotPolicy.is_unfilled(result.get(k)) for k in keys):
+                for k in keys:
+                    result[k] = None
+        return result
 
 
 class SlotValuePolicy:
@@ -201,4 +233,12 @@ COMPOSE_GUIDELINES = """당신은 등록된 문서 양식(템플릿)의 슬롯�
 3. generated 슬롯: [근거 자료]에 있는 내용만 기반으로 서술한다. 근거에 없는 주장·수치를 만들지 않는다.
 4. 근거가 없는 슬롯은 반드시 null로 둔다. 추정·창작·일반 상식으로 채우는 것을 금지한다. (미근거 = 공란)
 5. 값에 HTML 태그나 {{ }} 토큰을 포함하지 않는다.
+6. 날짜 슬롯: [기준 정보]의 오늘 날짜는 사실 값이다. 작성일·심의일·신청일처럼
+   "이 문서를 만드는 날"을 뜻하는 슬롯은 대화나 근거에 다른 날짜가 명시되지 않는 한
+   오늘 날짜로 채운다. 과거 사건의 날짜(계약일·감정일 등)는 근거에 있을 때만 채운다.
+7. 같은 라벨을 공유하는 슬롯 묶음(예: 심의일자의 년/월/일)은 전부 채우거나
+   전부 null로 둔다. 일부만 채우지 않는다.
+8. value 슬롯 값은 "예시값 형식"과 같은 모양으로 쓴다. 양식에 이미 있는 앞뒤 문구
+   (예: 예시값이 "5.8%"이면 "연 5.8%"가 아니라 "5.8%", 예시값이 "36"이면 "36개월"이
+   아니라 "36")를 값에 반복하지 않는다.
 """
