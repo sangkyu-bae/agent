@@ -48,11 +48,18 @@ class DocumentComposer:
     """지정 템플릿 + 누적 컨텍스트 → 채운 HTML → MCP 변환 → 첨부 저장."""
 
     def __init__(
-        self, conversion_adapter, attachment_store, logger: LoggerInterface
+        self,
+        conversion_adapter,
+        attachment_store,
+        logger: LoggerInterface,
+        docx_filler=None,
     ) -> None:
         self._adapter = conversion_adapter
         self._store = attachment_store
         self._logger = logger
+        # Design Ref: docx-format-preserving-fill §4 — 선택 주입.
+        # None 이면 기존 HTML 경로만 쓴다.
+        self._docx_filler = docx_filler
 
     async def compose(
         self,
@@ -71,12 +78,17 @@ class DocumentComposer:
         )
         html, filled, unfilled = self._replace_tokens(template, values)
 
-        file_bytes = await self._adapter.to_document(
-            html,
-            tool_config.output_format,
-            tool_config.mcp_html_to_doc_tool_id,
-            request_id,
-        )
+        # Plan SC-1: 원본이 Word 면 원본에 직접 채워 서식 보존, 안 되면 HTML 경로
+        file_bytes = self._fill_docx(template, tool_config, values, request_id)
+        path = "docx_direct"
+        if file_bytes is None:
+            path = "html"
+            file_bytes = await self._adapter.to_document(
+                html,
+                tool_config.output_format,
+                tool_config.mcp_html_to_doc_tool_id,
+                request_id,
+            )
         filename = f"{template.name}.{tool_config.output_format}"
         stored = self._store.save(
             file_bytes=file_bytes,
@@ -91,6 +103,7 @@ class DocumentComposer:
             file_id=stored.file_id,
             filled_count=len(filled),
             unfilled_count=len(unfilled),
+            path=path,
         )
         return ComposeResult(
             file_id=stored.file_id,
@@ -98,6 +111,31 @@ class DocumentComposer:
             filled_slots=filled,
             unfilled_labels=unfilled,
         )
+
+    def _fill_docx(
+        self,
+        template: DocumentTemplate,
+        tool_config: DocumentExtractorToolConfig,
+        values: dict,
+        request_id: str,
+    ) -> bytes | None:
+        """원본 DOCX 직접 채움 (D6: 원본·출력 모두 docx 일 때만). None = HTML 폴백."""
+        if self._docx_filler is None:
+            return None
+        if template.source_format != "docx" or tool_config.output_format != "docx":
+            return None
+        result = self._docx_filler.fill(
+            template.source_file_ref, template.slots, values, request_id
+        )
+        if result.file_bytes is None:
+            self._logger.warning(
+                "DocumentComposer docx fill fallback",
+                request_id=request_id,
+                template_id=template.id,
+                reason=result.reason,
+                missing_keys=result.missing_keys,
+            )
+        return result.file_bytes
 
     async def _decide_slot_values(
         self,

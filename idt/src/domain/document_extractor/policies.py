@@ -188,6 +188,45 @@ class SlotGroupPolicy:
         return result
 
 
+class SampleSpanPolicy:
+    """예시값(sample_value) 위치 계산 — 원본 DOCX 직접 채움용 (순수 문자열 규칙).
+
+    Design Ref: docx-format-preserving-fill §3.1 — 프론트 tokenizeHtml 과 같은 의미:
+    공백 차이를 무시하고 첫 출현을 찾는다. 반환 구간은 원본 text 인덱스이며
+    매칭 글자 사이의 공백은 구간에 포함된다(함께 지워진다).
+    """
+
+    @staticmethod
+    def find_span(text: str, sample: str) -> tuple[int, int] | None:
+        needle = "".join(ch for ch in sample if not ch.isspace())
+        if not needle:
+            return None
+        positions = [i for i, ch in enumerate(text) if not ch.isspace()]
+        haystack = "".join(text[i] for i in positions)
+        at = haystack.find(needle)
+        if at < 0:
+            return None
+        return positions[at], positions[at + len(needle) - 1] + 1
+
+    @staticmethod
+    def split_span(
+        lengths: list[int], span: tuple[int, int]
+    ) -> list[tuple[int, int, int]]:
+        """구간을 세그먼트별 [(index, local_start, local_end)]로 나눈다.
+
+        빈 조각은 제외한다.
+        """
+        start, end = span
+        parts: list[tuple[int, int, int]] = []
+        offset = 0
+        for index, length in enumerate(lengths):
+            lo, hi = max(start, offset), min(end, offset + length)
+            if lo < hi:
+                parts.append((index, lo - offset, hi - offset))
+            offset += length
+        return parts
+
+
 class SlotValuePolicy:
     """채움 값 정제 — 토큰 주입 방지. HTML escape는 치환기(composer) 책임."""
 
