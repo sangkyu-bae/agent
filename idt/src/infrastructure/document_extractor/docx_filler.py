@@ -46,7 +46,17 @@ _AFTER_HIGHLIGHT = {
     "eastAsianLayout",
     "specVanish",
     "oMath",
+    "rPrChange",  # Act-1 G3: CT_RPr 의 마지막 자식 (서식 변경 추적)
 }
+
+# Act-1 G2: XML 1.0 이 허용하지 않는 제어문자 — lxml 이 ValueError 를 낸다.
+# (PDF 추출 근거에서 섞여 들어올 수 있다.) \t \n 은 허용, \r 은 줄바꿈 처리 전에 제거.
+_XML_INVALID = {c: None for c in range(0x20) if c not in (0x09, 0x0A)}
+
+# Act-1 G4: 사용자가 올린 문서를 파싱하므로 엔티티·네트워크 해석을 명시적으로 끈다.
+_PARSER = etree.XMLParser(resolve_entities=False, no_network=True)
+
+_PUA_BASE = 0xE000  # 사용자 정의 영역 (U+E000~U+F8FF)
 
 
 def _w(tag: str) -> str:
@@ -57,7 +67,9 @@ def _w(tag: str) -> str:
 class DocxFillResult:
     file_bytes: bytes | None
     missing_keys: list[str] = field(default_factory=list)
-    reason: str | None = None  # None | sample_not_found | source_missing | parse_error
+    # None | sample_not_found | placeholder_lost
+    #      | source_missing | parse_error | fill_error
+    reason: str | None = None
 
 
 class DocxFiller:
@@ -80,27 +92,42 @@ class DocxFiller:
         try:
             data = path.read_bytes()
             with zipfile.ZipFile(io.BytesIO(data)) as zf:
-                root = etree.fromstring(zf.read(_DOCUMENT_PART))
+                root = etree.fromstring(zf.read(_DOCUMENT_PART), _PARSER)
         except (OSError, zipfile.BadZipFile, KeyError, etree.XMLSyntaxError) as e:
             self._logger.warning(
                 "DocxFiller parse failed", request_id=request_id, exception=e
             )
             return DocxFillResult(None, reason="parse_error")
+        try:
+            return _fill_root(data, root, slots, values)
+        except Exception as e:  # noqa: BLE001 — Act-1 G2: D4 유일 흡수 지점, HTML 폴백
+            self._logger.warning(
+                "DocxFiller fill failed", request_id=request_id, exception=e
+            )
+            return DocxFillResult(None, reason="fill_error")
 
-        # 1단계: 칸 순서대로 위치만 잡는다 (자리표시). 값을 바로 넣으면 다음 칸이
-        # 방금 넣은 값 안을 찾을 수 있다 (예: 문서번호 값 안의 연도). 프론트가
-        # {{key}} 로 토큰화하는 것과 같은 의미다.
-        missing = [
-            s.key
-            for i, s in enumerate(slots)
-            if not _place_slot(root, s, _placeholder(i))
-        ]
-        if missing:
-            return DocxFillResult(None, missing_keys=missing, reason="sample_not_found")
-        # 2단계: 자리표시를 실제 값으로
-        for i, slot in enumerate(slots):
-            _materialize(root, _placeholder(i), values.get(slot.key))
-        return DocxFillResult(_rezip(data, root))
+
+def _fill_root(
+    data: bytes, root: etree._Element, slots: list[TemplateSlot], values: dict
+) -> DocxFillResult:
+    # 1단계: 칸 순서대로 위치만 잡는다 (자리표시). 값을 바로 넣으면 다음 칸이
+    # 방금 넣은 값 안을 찾을 수 있다 (예: 문서번호 값 안의 연도). 프론트가
+    # {{key}} 로 토큰화하는 것과 같은 의미다.
+    missing = [
+        s.key for i, s in enumerate(slots) if not _place_slot(root, s, _placeholder(i))
+    ]
+    if missing:
+        return DocxFillResult(None, missing_keys=missing, reason="sample_not_found")
+    # 2단계: 자리표시를 실제 값으로. 하나라도 소비되지 않으면 문서가 손상된
+    # 것이므로 성공으로 내보내지 않는다 (Act-1 G1 안전망).
+    lost = [
+        s.key
+        for i, s in enumerate(slots)
+        if not _materialize(root, _placeholder(i), values.get(s.key))
+    ]
+    if lost:
+        return DocxFillResult(None, missing_keys=lost, reason="placeholder_lost")
+    return DocxFillResult(_rezip(data, root))
 
 
 # ── 색인 (Design §3.3) ─────────────────────────────────────────────────────
@@ -130,8 +157,13 @@ def _owned_by(t: etree._Element, p: etree._Element) -> bool:
 
 
 def _placeholder(index: int) -> str:
-    """사용자 정의 영역 문자로 감싼 자리표시 — 어떤 예시값과도 매칭되지 않는다."""
-    return f"{index}"
+    """칸마다 사용자 정의 영역 문자 1개 — 숫자를 담지 않는다.
+
+    Act-1 G1: PUA+번호+PUA 형태는 안의 숫자를 뒤 칸의 숫자 예시값("1")이
+    찾아 들어가 앞 칸 값이 사라졌다(재현됨). 예시값에는 PUA 문자가 없으므로
+    1글자 자리표시는 어떤 예시값과도 겹치지 않는다. 칸 상한(30)은 PUA 범위 안이다.
+    """
+    return chr(_PUA_BASE + index)
 
 
 def _place_slot(root: etree._Element, slot: TemplateSlot, placeholder: str) -> bool:
@@ -146,8 +178,8 @@ def _place_slot(root: etree._Element, slot: TemplateSlot, placeholder: str) -> b
     return False
 
 
-def _materialize(root: etree._Element, placeholder: str, raw) -> None:
-    """자리표시 하나만 담은 run 을 값 run 으로 바꾼다.
+def _materialize(root: etree._Element, placeholder: str, raw) -> bool:
+    """자리표시 하나만 담은 run 을 값 run 으로 바꾼다. 못 찾으면 False.
 
     첫 run 서식은 1단계에서 이미 복사돼 있다.
     """
@@ -156,7 +188,8 @@ def _materialize(root: etree._Element, placeholder: str, raw) -> None:
             run = t.getparent()
             run.remove(t)
             _fill_value(run, raw)
-            return
+            return True
+    return False
 
 
 # ── 적용 (Design §3.2) ─────────────────────────────────────────────────────
@@ -193,7 +226,8 @@ def _fill_value(run: etree._Element, raw) -> None:
         _add_highlight(rpr if rpr is not None else _ensure_rpr(run))
         _append_text(run, UnfilledSlotPolicy.UNFILLED_MARKER)
         return
-    lines = SlotValuePolicy.sanitize(str(raw)).split("\n")
+    value = SlotValuePolicy.sanitize(str(raw)).replace("\r\n", "\n")
+    lines = value.translate(_XML_INVALID).split("\n")
     for i, line in enumerate(lines):
         if i:
             etree.SubElement(run, _w("br"))
@@ -228,7 +262,11 @@ def _add_highlight(rpr: etree._Element) -> None:
     highlight = etree.Element(_w("highlight"))
     highlight.set(_w("val"), UNFILLED_HIGHLIGHT)
     for i, child in enumerate(rpr):
-        if etree.QName(child).localname in _AFTER_HIGHLIGHT:
+        if not isinstance(child.tag, str):  # 주석·처리 지시문은 건너뛴다
+            continue
+        name = etree.QName(child)
+        # Act-1 G3: w: 이외 네임스페이스(w14 등 확장)는 스키마상 w: 요소 뒤에 온다
+        if name.namespace != W_NS or name.localname in _AFTER_HIGHLIGHT:
             rpr.insert(i, highlight)
             return
     rpr.append(highlight)
