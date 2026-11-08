@@ -222,3 +222,110 @@ class TestFallback:
         assert res.file_bytes is None and res.reason == "parse_error"
         assert logger.warning.called
         assert "exception" in logger.warning.call_args.kwargs
+
+
+# ── Act-1 (Analysis G1~G4) ────────────────────────────────────────────────
+
+
+class TestAct1:
+    def test_digit_sample_does_not_hit_earlier_placeholder(self, tmp_path):  # G1
+        """자리표시에 숫자가 있으면 뒤 칸의 숫자 예시값('1')이 그 안을 찾았다."""
+        texts = ["갑"] + [f"A{i}" for i in range(11)] + ["끝 1"]
+        src = _docx(tmp_path, "".join(_p(_run(t)) for t in texts))
+        slots = (
+            [_slot("k0", "갑")]
+            + [_slot(f"a{i}", f"A{i}") for i in range(11)]
+            + [_slot("one", "1")]
+        )
+        values = {s.key: f"V_{s.key}" for s in slots}
+        res = _filler()[0].fill(src, slots, values, "r")
+        assert res.file_bytes is not None
+        text = _text(_doc(res))
+        for s in slots:
+            assert f"V_{s.key}" in text
+        assert "끝 V_one" in text
+        assert not any(0xE000 <= ord(c) <= 0xF8FF for c in text)
+
+    def test_value_control_chars_are_stripped(self, tmp_path):  # G2
+        src = _docx(tmp_path, _p(_run("값")))
+        res = _filler()[0].fill(src, [_slot("v", "값")], {"v": "A\x00B\x0bC\r\nD"}, "r")
+        assert res.file_bytes is not None
+        root = _doc(res)
+        assert _text(root) == "ABCD"
+        assert len(root.findall(".//w:br", NS)) == 1
+
+    def test_unexpected_error_after_parse_falls_back(self, tmp_path, monkeypatch):  # G2
+        from src.infrastructure.document_extractor import docx_filler as mod
+
+        def boom(*a, **k):
+            raise RuntimeError("unexpected")
+
+        monkeypatch.setattr(mod, "_rezip", boom)
+        src = _docx(tmp_path, _p(_run("값")))
+        filler, logger = _filler()
+        res = filler.fill(src, [_slot("v", "값")], {"v": "x"}, "r")
+        assert res.file_bytes is None and res.reason == "fill_error"
+        assert "exception" in logger.warning.call_args.kwargs
+
+    def test_highlight_before_underline_and_rprchange(self, tmp_path):  # G3
+        rpr = (
+            '<w:rPr><w:b/><w:u w:val="single"/>'
+            '<w:rPrChange w:id="1" w:author="a"><w:rPr/></w:rPrChange></w:rPr>'
+        )
+        src = _docx(tmp_path, _p(_run("값", rpr)))
+        res = _filler()[0].fill(src, [_slot("v", "값")], {"v": None}, "r")
+        marker = next(
+            r
+            for r in _doc(res).iter(f"{{{W}}}r")
+            if "[미기재]" in "".join(r.itertext())
+        )
+        names = [etree.QName(c).localname for c in marker.find("w:rPr", NS)]
+        assert names.index("highlight") < names.index("u") < names.index("rPrChange")
+
+    def test_highlight_before_foreign_namespace_element(self, tmp_path):  # G3
+        w14 = "http://schemas.microsoft.com/office/word/2010/wordml"
+        rpr = f'<w:rPr xmlns:w14="{w14}"><w:b/><w14:ligatures w14:val="all"/></w:rPr>'
+        src = _docx(tmp_path, _p(_run("값", rpr)))
+        res = _filler()[0].fill(src, [_slot("v", "값")], {"v": None}, "r")
+        marker = next(
+            r
+            for r in _doc(res).iter(f"{{{W}}}r")
+            if "[미기재]" in "".join(r.itertext())
+        )
+        names = [etree.QName(c).localname for c in marker.find("w:rPr", NS)]
+        assert names.index("highlight") < names.index("ligatures")
+
+    def test_external_entity_not_resolved(self, tmp_path):  # G4
+        secret = tmp_path / "secret.txt"
+        secret.write_text("TOPSECRET", encoding="utf-8")
+        xml = (
+            '<?xml version="1.0"?>'
+            f'<!DOCTYPE d [<!ENTITY x SYSTEM "file:///{secret.as_posix()}">]>'
+            f'<w:document xmlns:w="{W}"><w:body><w:p><w:r><w:t>&x; 값</w:t></w:r></w:p>'
+            "</w:body></w:document>"
+        )
+        path = tmp_path / "xxe.docx"
+        with zipfile.ZipFile(path, "w") as z:
+            z.writestr("word/document.xml", xml)
+        res = _filler()[0].fill(str(path), [_slot("v", "값")], {"v": "x"}, "r")
+        if res.file_bytes is not None:
+            assert "TOPSECRET" not in _text(_doc(res))
+
+    def test_zip_without_document_xml(self, tmp_path):  # I-10 보강
+        path = tmp_path / "nodoc.docx"
+        with zipfile.ZipFile(path, "w") as z:
+            z.writestr("word/styles.xml", STYLES)
+        res = _filler()[0].fill(str(path), [_slot("v", "값")], {"v": "x"}, "r")
+        assert res.file_bytes is None and res.reason == "parse_error"
+
+
+def test_lost_placeholder_is_not_returned_as_success(
+    tmp_path, monkeypatch
+):  # G1 안전망
+    from src.infrastructure.document_extractor import docx_filler as mod
+
+    monkeypatch.setattr(mod, "_materialize", lambda root, ph, raw: False)
+    src = _docx(tmp_path, _p(_run("값")))
+    res = _filler()[0].fill(src, [_slot("v", "값")], {"v": "x"}, "r")
+    assert res.file_bytes is None
+    assert res.reason == "placeholder_lost" and res.missing_keys == ["v"]
