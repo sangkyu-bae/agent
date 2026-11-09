@@ -3,7 +3,9 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeAll, afterEach, afterAll, describe, it, expect, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { http, HttpResponse } from 'msw';
 import { server } from '@/__tests__/mocks/server';
+import { API_ENDPOINTS } from '@/constants/api';
 import type { CatalogTool } from '@/types/toolCatalog';
 import type { LlmModel } from '@/types/llmModel';
 import type { AgentBuilderFormData } from '@/types/agentBuilder';
@@ -421,5 +423,98 @@ describe('LeftConfigPanel — 저장된 양식 배지 (G3)', () => {
       documentExtractorDraft: { ...DRAFT, confirmed: true },
     });
     expect(screen.getByText(/양식 확정됨/)).toBeInTheDocument();
+  });
+});
+
+// ── extractor-template-preview §5.4 (F10) — 저장 양식 이름 배지·보기 모드 ──
+
+const SAVED_TEMPLATE = {
+  template_id: 'tpl-1',
+  name: '여신 승인 신청서',
+  source_format: 'docx',
+  html_skeleton: '<p>{{borrower_name}}</p>',
+  slots: [
+    {
+      key: 'borrower_name', label: '차주명', slot_type: 'value',
+      description: '', sample_value: '홍길동',
+    },
+  ],
+  samples_hidden: false,
+  is_inherited: false,
+  updated_at: '2026-11-09T00:00:00',
+};
+
+describe('LeftConfigPanel — 저장 양식 이름 배지 (extractor-template-preview)', () => {
+  it('F10: 수정 화면에서 저장 양식을 조회해 배지에 이름·슬롯 수·포맷을 보여준다', async () => {
+    server.use(
+      http.get(`*${API_ENDPOINTS.AGENT_DOCUMENT_TEMPLATE(':agentId')}`, () =>
+        HttpResponse.json(SAVED_TEMPLATE),
+      ),
+    );
+    renderPanel(
+      { tools: [DOCUMENT_EXTRACTOR_TOOL_ID], savedTemplateId: 'tpl-1' },
+      vi.fn(),
+      { agentId: 'agent-1', isEditMode: true },
+    );
+
+    expect(await screen.findByText(/여신 승인 신청서 · 슬롯 1 · DOCX/)).toBeInTheDocument();
+  });
+
+  it('조회 실패 시 기존 "양식 등록됨" 배지로 폴백한다', async () => {
+    server.use(
+      http.get(`*${API_ENDPOINTS.AGENT_DOCUMENT_TEMPLATE(':agentId')}`, () =>
+        HttpResponse.json({ detail: 'Document template not found' }, { status: 404 }),
+      ),
+    );
+    renderPanel(
+      { tools: [DOCUMENT_EXTRACTOR_TOOL_ID], savedTemplateId: 'tpl-1' },
+      vi.fn(),
+      { agentId: 'agent-1', isEditMode: true },
+    );
+
+    expect(await screen.findByText(/양식 등록됨/)).toBeInTheDocument();
+  });
+
+  it('F3: 드래프트가 있으면 저장 양식을 조회하지 않고 드래프트 배지를 보여준다', async () => {
+    let calls = 0;
+    server.use(
+      http.get(`*${API_ENDPOINTS.AGENT_DOCUMENT_TEMPLATE(':agentId')}`, () => {
+        calls += 1;
+        return HttpResponse.json(SAVED_TEMPLATE);
+      }),
+    );
+    renderPanel(
+      {
+        tools: [DOCUMENT_EXTRACTOR_TOOL_ID],
+        savedTemplateId: 'tpl-1',
+        documentExtractorDraft: { ...DRAFT, confirmed: true },
+      },
+      vi.fn(),
+      { agentId: 'agent-1', isEditMode: true },
+    );
+
+    expect(screen.getByText(/양식 확정됨/)).toBeInTheDocument();
+    // 조회가 나갔다면 이 사이에 핸들러가 불린다
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(calls).toBe(0);
+  });
+
+  it('설정 모달을 열면 저장된 양식 보기 모드로 열린다', async () => {
+    server.use(
+      http.get(`*${API_ENDPOINTS.AGENT_DOCUMENT_TEMPLATE(':agentId')}`, () =>
+        HttpResponse.json(SAVED_TEMPLATE),
+      ),
+    );
+    renderPanel(
+      { tools: [DOCUMENT_EXTRACTOR_TOOL_ID], savedTemplateId: 'tpl-1' },
+      vi.fn(),
+      { agentId: 'agent-1', isEditMode: true },
+    );
+    await screen.findByText(/여신 승인 신청서 · 슬롯 1/);
+
+    await userEvent.click(screen.getByRole('button', { name: '문서추출기 설정' }));
+
+    expect(await screen.findByRole('heading', { name: '저장된 양식' })).toBeInTheDocument();
+    expect(screen.getByTitle('저장된 양식 미리보기')).toBeInTheDocument();
   });
 });

@@ -28,7 +28,11 @@ import {
   FORM_TEMPLATE_EMPTY_NOTICE,
   FORM_TEMPLATE_REPLACE_NOTICE,
 } from '@/types/agentPipeline';
-import type { DocumentExtractorDraft } from '@/types/documentExtractor';
+import type {
+  AgentDocumentTemplateResponse,
+  DocumentExtractorDraft,
+} from '@/types/documentExtractor';
+import { useAgentDocumentTemplate } from '@/hooks/useAgentBuilder';
 import { DOCUMENT_GENERATOR_TOOL_ID } from '@/types/documentGenerator';
 import type { DocumentGeneratorDraft } from '@/types/documentGenerator';
 import type { PresentationGeneratorDraft } from '@/types/presentationGenerator';
@@ -141,6 +145,15 @@ const LeftConfigPanel = ({
   const { data: knowledgeBases } = useKnowledgeBases();
   const selectedSkills = (skillList?.skills ?? []).filter((s) =>
     form.skills.includes(s.id),
+  );
+
+  // extractor-template-preview §5.3: 저장 양식은 한 번만 조회해 배지·모달에 내려준다.
+  // 드래프트가 있으면 드래프트가 우선이라 조회하지 않는다.
+  const savedTemplateQuery = useAgentDocumentTemplate(
+    agentId ?? null,
+    !!form.savedTemplateId &&
+      !form.documentExtractorDraft &&
+      form.tools.includes(DOCUMENT_EXTRACTOR_TOOL_ID),
   );
 
   // R4 복원: 추출기 도구가 선택돼 있고 드래프트가 없으면 sessionStorage에서 복원
@@ -499,6 +512,7 @@ const LeftConfigPanel = ({
                       <ExtractorSummaryBadge
                         draft={form.documentExtractorDraft ?? null}
                         savedTemplateId={form.savedTemplateId ?? null}
+                        savedTemplate={savedTemplateQuery.data ?? null}
                       />
                     )}
                     {tool.tool_id === DOCUMENT_GENERATOR_TOOL_ID && (
@@ -658,6 +672,10 @@ const LeftConfigPanel = ({
         }
         onChange={(draft) => onChange({ ...form, documentExtractorDraft: draft })}
         onClose={() => setExtractorConfigOpen(false)}
+        hasSavedTemplate={!!form.savedTemplateId}
+        savedTemplate={savedTemplateQuery.data}
+        isSavedTemplateLoading={savedTemplateQuery.isLoading}
+        isSavedTemplateError={savedTemplateQuery.isError}
       />
       <DocumentGeneratorConfigModal
         isOpen={isGeneratorConfigOpen}
@@ -847,10 +865,24 @@ interface ExtractorSummaryBadgeProps {
   draft: DocumentExtractorDraft | null;
   /** wizard-template-request Act-1 (G3): 서버에 저장된 양식이 있으면 미등록이 아니다 */
   savedTemplateId?: string | null;
+  /** extractor-template-preview §5.4: 조회 성공 시 양식 이름을 보여준다 */
+  savedTemplate?: AgentDocumentTemplateResponse | null;
 }
 
-const ExtractorSummaryBadge = ({ draft, savedTemplateId }: ExtractorSummaryBadgeProps) => {
+const ExtractorSummaryBadge = ({
+  draft,
+  savedTemplateId,
+  savedTemplate,
+}: ExtractorSummaryBadgeProps) => {
   if (!draft) {
+    if (savedTemplateId && savedTemplate) {
+      return (
+        <p className="mt-1.5 inline-block rounded bg-emerald-50 px-1.5 py-0.5 text-[11.5px] font-medium text-emerald-700">
+          ✓ {savedTemplate.name} · 슬롯 {savedTemplate.slots.length} ·{' '}
+          {savedTemplate.source_format.toUpperCase()}
+        </p>
+      );
+    }
     if (savedTemplateId) {
       return (
         <p className="mt-1.5 inline-block rounded bg-emerald-50 px-1.5 py-0.5 text-[11.5px] font-medium text-emerald-700">

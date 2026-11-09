@@ -1,5 +1,7 @@
 import authApiClient from './api/authClient';
+import { ApiError } from './api/ApiError';
 import { API_ENDPOINTS } from '@/constants/api';
+import type { AgentDocumentTemplateResponse } from '@/types/documentExtractor';
 import type { AgentListResponse, AgentDetail } from '@/types/agentStore';
 import type {
   CreateBuilderAgentRequest,
@@ -37,4 +39,19 @@ export const agentBuilderService = {
     authApiClient.get<AvailableSubAgentsResponse>(
       API_ENDPOINTS.AGENT_AVAILABLE_SUB_AGENTS,
     ),
+
+  /** extractor-template-preview §6: 404(양식 없음)는 null, 그 외 오류는 전파 */
+  getDocumentTemplate: async (
+    agentId: string,
+  ): Promise<AgentDocumentTemplateResponse | null> => {
+    try {
+      const { data } = await authApiClient.get<AgentDocumentTemplateResponse>(
+        API_ENDPOINTS.AGENT_DOCUMENT_TEMPLATE(agentId),
+      );
+      return data;
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) return null;
+      throw err;
+    }
+  },
 };

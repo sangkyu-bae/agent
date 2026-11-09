@@ -10,6 +10,7 @@ import type {
   UpdateBuilderAgentResponse,
   AvailableSubAgentsResponse,
 } from '@/types/agentBuilder';
+import type { AgentDocumentTemplateResponse } from '@/types/documentExtractor';
 
 interface ListParams {
   search?: string;
@@ -29,6 +30,18 @@ export const useAvailableSubAgents = (enabled: boolean) =>
     queryFn: () =>
       agentBuilderService.listAvailableSubAgents().then((r) => r.data),
     enabled,
+  });
+
+/**
+ * extractor-template-preview §5.3: 문서추출기 저장 양식. 404 는 서비스가 null 로 바꾼다.
+ * enabled 는 호출부가 "저장 양식 있음 + 드래프트 없음"으로 계산한다.
+ */
+export const useAgentDocumentTemplate = (agentId: string | null, enabled: boolean) =>
+  useQuery<AgentDocumentTemplateResponse | null>({
+    queryKey: queryKeys.agentBuilder.documentTemplate(agentId ?? ''),
+    queryFn: () => agentBuilderService.getDocumentTemplate(agentId!),
+    enabled: !!agentId && enabled,
+    retry: false,
   });
 
 export const useBuilderAgentDetail = (agentId: string | null) =>

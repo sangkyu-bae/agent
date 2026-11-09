@@ -234,6 +234,9 @@ export const queryKeys = {
     /** 에이전트에 부착된 Skill 목록 */
     skills: (agentId: string) =>
       [...queryKeys.agentBuilder.all, 'skills', agentId] as const,
+    /** extractor-template-preview: 문서추출기 저장 양식 (저장 성공 시 all 무효화로 함께 갱신) */
+    documentTemplate: (agentId: string) =>
+      [...queryKeys.agentBuilder.all, 'documentTemplate', agentId] as const,
   },
 
   // ── Agent Schedules (agent-schedule) ───────────────────
