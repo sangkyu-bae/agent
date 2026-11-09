@@ -45,6 +45,42 @@ export interface DocumentTemplateRequest {
   mcp_html_to_doc_tool_id: string;
 }
 
+// extractor-template-preview §3.2: 저장 양식 조회 응답 (백엔드 AgentDocumentTemplateResponse)
+export interface SavedTemplateSlot {
+  key: string;
+  label: string;
+  slot_type: SlotType;
+  description: string;
+  /** 양식 원작자가 아니면 "" (samples_hidden=true) */
+  sample_value: string;
+}
+
+export interface AgentDocumentTemplateResponse {
+  template_id: string;
+  name: string;
+  source_format: 'pdf' | 'docx';
+  /** {{key}} 토큰이 들어 있는 확정 HTML — sandbox iframe 에서만 렌더링 */
+  html_skeleton: string;
+  slots: SavedTemplateSlot[];
+  samples_hidden: boolean;
+  /** 포크로 물려받은 양식 */
+  is_inherited: boolean;
+  updated_at: string;
+}
+
+// extractor-template-preview §5.4: 저장된 양식 보기 문구 (컴포넌트 파일 export 금지 규칙)
+export const SAVED_TEMPLATE_TEXT = {
+  heading: '저장된 양식',
+  previewTitle: '저장된 양식 미리보기',
+  previewNotice: '미리보기는 채울 위치 확인용이며 실제 서식과 다를 수 있습니다',
+  samplesHidden: '예시값은 양식을 만든 사용자에게만 보입니다',
+  inherited: '포크로 받은 양식',
+  loading: '저장된 양식을 불러오는 중…',
+  error: '저장된 양식을 불러오지 못했습니다',
+  replace: '새 파일로 교체',
+  backToSaved: '저장된 양식 보기',
+} as const;
+
 /**
  * 빌더 폼이 보유하는 추출 드래프트 (확정 전까지 서버 저장 없음 — stateless).
  * 확정(confirmed=true) 시 htmlSkeleton에 {{key}} 토큰화 결과가 채워진다 (D2).

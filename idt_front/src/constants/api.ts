@@ -267,6 +267,10 @@ export const API_ENDPOINTS = {
   DOCUMENT_EXTRACTOR_FILE_PREVIEW: (fileId: string) =>
     `/api/v1/document-extractor/files/${fileId}/preview`,
 
+  // extractor-template-preview: 빌더 수정 화면용 저장 양식 조회
+  AGENT_DOCUMENT_TEMPLATE: (agentId: string) =>
+    `/api/v1/agents/${agentId}/document-template`,
+
   // Agent-Skill Attach (skill-agent-integration Phase A)
   AGENT_SKILLS: (agentId: string) => `/api/v1/agents/${agentId}/skills`,
   AGENT_SKILL_DETACH: (agentId: string, skillId: string) =>

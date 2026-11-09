@@ -96,6 +96,7 @@ from src.api.routes.agent_builder_router import (
     get_attach_skill_use_case,
     get_detach_skill_use_case,
     get_list_attached_skills_use_case,
+    get_get_agent_document_template_use_case,
 )
 from src.api.routes.approval_router import (
     router as approval_router,
@@ -5613,6 +5614,26 @@ def create_skill_builder_factories():
     )
 
 
+def create_agent_document_template_factory():
+    """extractor-template-preview §4.1: 저장 양식 조회 UseCase per-request 팩토리."""
+    from src.application.agent_builder.get_agent_document_template_use_case import (
+        GetAgentDocumentTemplateUseCase,
+    )
+
+    app_logger = get_app_logger()
+
+    def factory(session: AsyncSession = Depends(get_session)):
+        return GetAgentDocumentTemplateUseCase(
+            agent_repository=AgentDefinitionRepository(session=session, logger=app_logger),
+            template_repository=DocumentTemplateRepository(
+                session=session, logger=app_logger
+            ),
+            logger=app_logger,
+        )
+
+    return factory
+
+
 def create_agent_skill_factories():
     """Return per-request DI factories for agent-skill attach use cases.
 
@@ -6434,6 +6455,11 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_attach_skill_use_case] = _agent_skill_attach_f
     app.dependency_overrides[get_detach_skill_use_case] = _agent_skill_detach_f
     app.dependency_overrides[get_list_attached_skills_use_case] = _agent_skill_list_f
+
+    # extractor-template-preview: 저장 양식 조회
+    app.dependency_overrides[get_get_agent_document_template_use_case] = (
+        create_agent_document_template_factory()
+    )
 
     # Middleware Agent DI
     (
