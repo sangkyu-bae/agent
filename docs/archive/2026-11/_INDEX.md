@@ -9,6 +9,7 @@
 | agent-run-tool-trace | completed | 97.5% (Check, Minor 4건 수정) | 2026-11-05 | [agent-run-tool-trace/](agent-run-tool-trace/) |
 | pii-masking-integration | completed | 95.8% (Check 89.4% → Act-1) | 2026-11-06 | [pii-masking-integration/](pii-masking-integration/) |
 | wizard-template-request | completed | 95% (Check 92% → Act-1) | 2026-11-06 | [wizard-template-request/](wizard-template-request/) |
+| extractor-template-preview | completed | 98.6% (Check, Minor 5건 즉시 반영) | 2026-11-09 | [extractor-template-preview/](extractor-template-preview/) |
 
 > 백엔드·프론트 전용 사이클은 `idt/docs/archive/2026-11/`, `idt_front/docs/archive/2026-11/` 에 있다.
 
@@ -55,3 +56,8 @@
 | wizard-template-request | `SourceFileArchiver.promote`가 `source_file_id` 소유자를 검증하지 않음 (스튜디오 경로도 동일) | 기존 결함 | 소형 사이클 후보 |
 | wizard-template-request | Minor G4~G8: 스튜디오 패널 공유 에러 유틸, 카드 에러 detail 보조 표시·[다시 올리기], aria-live 상시 마운트, `document_template_attached` 프론트 소비 | 화면 소형 | 해당 파일 수정 시 |
 | wizard-template-request | 위저드 직접 생성 버튼(스튜디오 진입 0회) — 무저장 계약 변경, 문서생성기 예시 문서→섹션 추출 | 스코프 후보 | 별도 Plan |
+| **extractor-template-preview** | **확정 토큰화가 `<style>` 텍스트를 매칭** — 로컬 "여신심의서" 양식의 `{{deliberation_date_month}}`가 `@page { size: 8.5in 11in }`에 들어감. 채움 시 페이지 크기 손상 가능, 기존 저장 양식 점검 필요 | 기존 결함 | **다음 추출기 사이클 1순위** |
+| extractor-template-preview | 반복 예시값 원문 잔존 — `tokenizeHtml`은 첫 출현만 토큰화, 포크 사용자가 skeleton 본문에서 원본 값을 볼 수 있음 (Design §7) | 보안 소형 | 소형 사이클 후보 |
+| extractor-template-preview | 실데이터 미확인 3건: 타 사용자 403, 포크 사용자 화면(예시값 숨김·"포크로 받은 양식"), 교체 후 업로드·확정·저장 E2E (단위 테스트로만 확인) | 확인 | 포크·두 번째 계정 준비 시 |
+| extractor-template-preview | DOCX 미리보기가 좁은 화면에서 축소되지 않음 (pt 페이지 폭 없음, 기존 업로드 패널과 동일) | 화면 소형 | 해당 파일 수정 시 |
+| extractor-template-preview | 스토어 상세·채팅 화면 양식 미리보기 (Plan 범위 밖) | 스코프 후보 | 요청 시 |
