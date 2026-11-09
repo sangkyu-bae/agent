@@ -22,7 +22,12 @@ from src.interfaces.dependencies.auth import (
     get_auth_context_from_query_token,
 )
 
+from src.application.agent_builder.get_agent_document_template_use_case import (
+    AgentDocumentTemplateNotFoundError,
+    AgentNotFoundError,
+)
 from src.application.agent_builder.schemas import (
+    AgentDocumentTemplateResponse,
     AvailableSubAgentsResponse,
     AvailableToolsResponse,
     CreateAgentRequest,
@@ -96,6 +101,10 @@ def get_list_my_agents_use_case():
 
 
 def get_list_available_sub_agents_use_case():
+    raise NotImplementedError
+
+
+def get_get_agent_document_template_use_case():
     raise NotImplementedError
 
 
@@ -633,6 +642,36 @@ async def list_attached_skills(
         raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get(
+    "/{agent_id}/document-template",
+    response_model=AgentDocumentTemplateResponse,
+    name="get_agent_document_template",
+)
+async def get_agent_document_template(
+    agent_id: str,
+    current_user: User = Depends(get_current_user),
+    use_case=Depends(get_get_agent_document_template_use_case),
+):
+    """빌더 수정 화면용 저장 양식 조회 (extractor-template-preview §4).
+
+    Errors:
+        404 Agent not found / Document template not found, 403 소유자 아님
+    """
+    request_id = str(uuid.uuid4())
+    try:
+        return await use_case.execute(
+            agent_id, request_id,
+            viewer_user_id=str(current_user.id),
+            viewer_role=current_user.role.value,
+        )
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except AgentNotFoundError:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    except AgentDocumentTemplateNotFoundError:
+        raise HTTPException(status_code=404, detail="Document template not found")
 
 
 @router.post(

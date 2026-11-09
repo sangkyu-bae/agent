@@ -263,6 +263,18 @@ class HtmlSanitizePolicy:
         return cleaned
 
 
+class TemplateSampleExposurePolicy:
+    """저장 양식 조회 시 슬롯 예시값 노출 판정 (extractor-template-preview Design §4.2).
+
+    예시값은 원본 문서의 실값(실명·금액)이다. 포크는 원작자의 template_id 를 공유하므로
+    조회 에이전트의 소유자가 아니라 양식을 만든 에이전트의 소유자 기준으로 판정한다.
+    """
+
+    @staticmethod
+    def can_view_samples(viewer_user_id: str, origin_owner_id: str | None) -> bool:
+        return origin_owner_id is not None and viewer_user_id == origin_owner_id
+
+
 # ── 작성/근거 지침 (D1 — 합성 프롬프트 인라인 상수, GB5·GB6) ─────────────────
 COMPOSE_GUIDELINES = """당신은 등록된 문서 양식(템플릿)의 슬롯을 채우는 문서 작성 담당자입니다.
 

@@ -1,5 +1,6 @@
 """애플리케이션 레이어 요청/응답 스키마."""
-from typing import Annotated
+from datetime import datetime
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, StringConstraints
 
@@ -244,6 +245,36 @@ class DocumentGenerationTypeInfo(BaseModel):
     sections: list[DocumentSectionRequest] = Field(default_factory=list)
     output_format: str = "docx"
     mcp_html_to_doc_tool_id: str = ""
+
+
+class SavedTemplateSlot(BaseModel):
+    """extractor-template-preview §3.1: 저장 양식 슬롯.
+
+    fill_hint 는 내부 작성 지침이라 내보내지 않는다.
+    """
+
+    key: str
+    label: str
+    slot_type: Literal["value", "generated"]
+    description: str = ""
+    # 양식 원작자가 아니면 "" (TemplateSampleExposurePolicy)
+    sample_value: str = ""
+
+
+class AgentDocumentTemplateResponse(BaseModel):
+    """extractor-template-preview §3.1: 빌더 수정 화면용 저장 양식.
+
+    서버 내부 경로(source_file_ref)는 내보내지 않는다.
+    """
+
+    template_id: str
+    name: str
+    source_format: str
+    html_skeleton: str
+    slots: list[SavedTemplateSlot]
+    samples_hidden: bool
+    is_inherited: bool
+    updated_at: datetime
 
 
 class GetAgentResponse(BaseModel):
