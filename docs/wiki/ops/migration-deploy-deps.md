@@ -1,6 +1,7 @@
 ---
 title: 마이그레이션 배포 의존성 — 기능별 필수 V버전
 status: approved
+reviewer: 배상규
 source_type: conversation
 source_refs:
   - idt/db/migration/ (V046~V060 파일 확인, 2026-08-14)
@@ -18,14 +19,22 @@ source_refs:
   - idt/db/migration/V063~V079 (v5 — 파일 헤더 주석 + ORM 모델 매핑 확인, 2026-10-13)
   - idt/docs/archive/2026-10/subagent-step-observability/subagent-step-observability.report.md (V079 운영 적용 필요)
   - idt/docs/archive/2026-09/ (agent-model-benchmark·mcp-tool-category-routing·jobs-page-revamp·mcp-identity-header — V067~V070·V076~V077)
+  - idt/db/migration/V080~V085 (v6 — 파일 헤더 주석 + ORM 매핑 grep, 2026-11-14)
+  - docs/archive/2026-10/agent-opener/agent-opener.report.md (§8.1 V080 미적용 시 500)
+  - docs/archive/2026-11/tool-access-control/tool-access-control.report.md (§8.1 배포 전 MCP 전체 동기화, G-08)
+  - docs/archive/2026-11/agent-kb-quick-setup/agent-kb-quick-setup.report.md (V084 + 기본 임베딩 모델 1회 설정)
+  - idt/docs/archive/2026-11/image-generation-tool/image-generation-tool.report.md (V081)
+  - idt/docs/archive/2026-11/agent-token-limit/agent-token-limit.report.md (V085, G-3 머지 순서)
+  - 99b1512(#94, V085) · 3f7749c(#95, V084) 머지 순서
 confidence: 0.85
-version: 5
+version: 6
 created: 2026-07-21
-updated: 2026-10-13
-verified_at: 3b6353b
-reviewer: 배상규
+updated: 2026-11-14
+verified_at: 2fc45c5
 ---
 
+> v6 (2026-11-14): **V080~V085 6건 추가**(2026-10 중순~11). 판정 방식은 v5와 동일. V083은 **배포 절차 전제(MCP 전체 동기화)**가 있는 첫 시드다. 에이전트 갱신이라 approved → draft 강등.
+>
 > v5 (2026-10-13): **V063~V079 17건 추가**(2026-08 말~2026-10). 신규 행의 "요구하는 기능"은 SQL 파일 헤더 주석,
 > "미적용 시"는 ORM 모델이 해당 컬럼을 매핑하는지(`grep`)로 판정했다 — 매핑돼 있으면 V054와 같은 유형
 > (테이블 조회 자체가 SQL 에러). 각 기능의 세부 증상은 해당 PDCA 보고서가 SoT. 에이전트 갱신이므로 approved → draft 강등 → 2026-10-13 재승인(배상규).
@@ -36,7 +45,7 @@ reviewer: 배상규
 기능 코드는 머지됐지만 마이그레이션이 배포 환경에 적용되지 않으면 런타임에서 깨진다.
 어떤 기능이 어느 V버전을 요구하는지가 PDCA 아카이브에 흩어져 있어 배포 시 확인이 어렵다.
 
-## 검증된 사실 — 미적용 시 깨지는 최근 마이그레이션 (V046~V079)
+## 검증된 사실 — 미적용 시 깨지는 최근 마이그레이션 (V046~V085)
 
 | V | 내용 | 요구하는 기능 | 미적용 시 |
 |---|---|---|---|
@@ -81,14 +90,30 @@ reviewer: 배상규
 | V078 | `approval_request`에 수정 전 원본 보존 3컬럼(`original_tool_args` 등, NULL=무수정) | approval-edit-before-approve | 모델 매핑 컬럼 — 승인 요청 조회 에러 |
 | V079 | `ai_run_step.parent_step_id`(FK 없음)·`depth`(기본 0) | subagent-step-observability ([[run-step-hierarchy-and-latency]]) | 모델 매핑 컬럼 — **런 상세·step 기록 전부 SQL 에러**(RunTracker는 모든 에이전트 실행이 탐) — **배포 전 필수** |
 
-공통: V046~V079는 전부 additive(컬럼 추가·신규 테이블·시드)라 **역방향 호환** — 먼저 적용해도 구버전 코드가 깨지지 않는다. 신규 테이블/FK는 CHARSET/COLLATE 미명시 원칙을 따른다 ([[mysql-fk-collation]]).
+### V080~V085 (v6 추가, 2026-10 중순~11)
+
+| V | 내용 | 요구하는 기능 | 미적용 시 |
+|---|---|---|---|
+| V080 | `agent_opener` 신규 테이블(agent_definition CASCADE, 저장은 전체 교체) | agent-opener (대화 시작 예시 질문) | 신규 테이블이지만 **에이전트 핵심 경로가 읽는다** — `/agents/my`·상세·생성·수정·포크가 500(보고서 §8.1) — **배포 전 필수** |
+| V081 | `llm_model.model_kind`(기본 `'chat'`)·`price_per_image_usd` | image-generation-tool (채팅·비전·서브에이전트 드롭다운은 chat만) | 모델 매핑 컬럼 — **`llm_model` 조회 자체가 깨짐**(V064와 동형) — **배포 전 필수** |
+| V082 | `tool_access_default`·`_department`·`_user` 3테이블(도구·부서·사용자 FK CASCADE) | tool-access-control (판정 = admin 전부 \| 기본 ∪ 부서 ∪ 사용자, **규칙 없는 도구는 기본 차단**) | 판정을 쓰는 도구 목록·저장·포크·실행·승인 집행 경로 실패. `tool_catalog`에 컬럼을 추가하지 않은 건 V054/V069 유형 사고를 피하려는 결정 |
+| V083 | `tool_access_default`에 **현재 카탈로그 전 도구 시드**(비활성 포함) | tool-access-control "배포 직후 동작 변화 0" | ⚠️ V082만 적용하고 V083을 빼면 **비관리자는 모든 도구가 차단**된다. 또 **시드는 적용 시점의 카탈로그만 복사**하므로 미동기화 MCP 서버의 도구는 빠진다(G-08) → **V083 전에 모든 MCP 서버 카탈로그 동기화**(`/admin/mcp-servers` 또는 `POST /api/v1/tool-catalog/sync`). 이후 sync로 생기는 도구는 기본 차단 |
+| V084 | `kb_default_setting` 단일 행(고정 id 시드, `default_embedding_model_id` 소프트 참조) | agent-kb-quick-setup (빌더 원스톱 KB) | 설정 조회 실패. 적용해도 **NULL이면 KB 자동 생성이 422**(조용한 폴백 없음) → 배포 후 관리자가 `/admin/kb-defaults`에서 기본 임베딩 모델 1회 설정 |
+| V085 | `agent_definition.token_limit` INT NOT NULL DEFAULT 50000 (8000~500000은 도메인 검증, 단위는 글자수÷4 추정치) | agent-token-limit | 모델 매핑 컬럼 — **`agent_definition` 조회 = 거의 모든 에이전트 경로 SQL 에러** — **배포 전 필수**. `agent_definition`은 create_all 생성 테이블이라([[erd-agent]]) 신규 DB는 컬럼이 이미 생기고 기존 DB만 ALTER가 필요 |
+
+**V084/V085 머지 순서 역전**: master에는 V085(#94, 2026-11-05 17:13:55)가 V084(#95, 17:14:15)보다 20초 먼저 머지됐다. 두 머지 사이 상태로 운영 배포된 적이 없다면 무관하지만, V085만 먼저 적용된 환경이 있으면 Flyway 기본 설정(outOfOrder 끔)에서는 V084가 적용되지 않는다 — 그 경우 outOfOrder 또는 수동 적용 필요. 운영 적용 절차(Flyway 사용 여부)는 아직 미확인(보고서 G-3).
+
+공통: V046~V085는 전부 additive(컬럼 추가·신규 테이블·시드)라 **역방향 호환** — 먼저 적용해도 구버전 코드가 깨지지 않는다. 신규 테이블/FK는 CHARSET/COLLATE 미명시 원칙을 따른다 ([[mysql-fk-collation]]).
 
 **"적용해도 조용한" 것과 "적용 안 하면 즉시 터지는" 것의 구분**: V054(모델에 컬럼 존재)와 V060(워커 기본 on)은 미적용 시 **기능을 안 써도** 터진다. (v5) V063~V079 중 **컬럼 추가 12건은 전부 ORM 모델에 매핑돼 있어 같은 유형**이다 — 특히 V064(`llm_model`)·V069/V072(`tool_catalog`)·V070(백그라운드 워커)·V076(`users`)·V079(`ai_run_step`)는 기능과 무관하게 앱 핵심 경로가 깨진다. 신규 테이블 5건(V065~V067·V071)과 시드 1건(V073)은 해당 기능 사용 시에만 터진다.
 
 ## 다음에 적용하는 법
 
-1. 배포 전 대상 환경에서 flyway 이력(또는 `SHOW TABLES`/`SHOW COLUMNS`)으로 **V079**까지 적용됐는지 확인한다.
+1. 배포 전 대상 환경에서 flyway 이력(또는 `SHOW TABLES`/`SHOW COLUMNS`)으로 **V085**까지 적용됐는지 확인한다.
+   V083 직전에 MCP 전체 동기화, 적용 뒤 관리자 기본 임베딩 모델 설정(V084)까지가 한 세트다.
    로컬은 flyway 이력 없이 SQL을 직접 실행해 온 환경이라(V079 보고서) "로컬에서 됐다"가 운영 적용의 증거가 아니다.
 2. 새 기능 사이클이 마이그레이션을 추가하면 이 표에 한 줄 추가한다 (기능명 + 미적용 시 증상).
+   번호는 착수 시 **다른 worktree의 미커밋 파일까지** 확인해 고른다(`ls ../wt/*/idt/db/migration` — V084 충돌을 이렇게 잡아 V085로 바꿈). 병렬 feature가 둘 다 마이그레이션을 가지면 PR 본문에 머지 순서를 적는다.
+   시드가 다른 데이터 상태(카탈로그 동기화 등)에 의존하면 Plan 리스크와 이 표에 "적용 전 절차"로 적는다(V083 선례).
 3. "마이그레이션 0" 기능도 선행 V에 의존할 수 있다(예: 환류 3부작 → V052, extraction/org-scope → V050) — 의존 열에 명시한다.
 4. 적용 후 E2E 일괄 체크리스트([[e2e-carryover-checklist]])를 소화한다 — 특히 V047은 KB E2E의 선행 조건.
