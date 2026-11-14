@@ -6096,14 +6096,18 @@ def create_app() -> FastAPI:
         lambda: _attachment_store
     )
     # excel-preview Design §4.3: 산출 .xlsx 프리뷰 (store는 다운로드와 동일 인스턴스)
-    _excel_preview_uc = PreviewExcelUseCase(
-        store=_attachment_store,
-        reader=ExcelPreviewReader(),
-        max_rows=settings.excel_preview_max_rows,
-        max_cols=settings.excel_preview_max_cols,
-        logger=StructuredLogger("excel_preview"),
+    # store 는 lifespan 에서 채워지므로 요청 시점에 읽는다 (create_app 시점엔 None).
+    _excel_preview_reader = ExcelPreviewReader()
+    _excel_preview_logger = StructuredLogger("excel_preview")
+    app.dependency_overrides[get_excel_preview_use_case] = (
+        lambda: PreviewExcelUseCase(
+            store=_attachment_store,
+            reader=_excel_preview_reader,
+            max_rows=settings.excel_preview_max_rows,
+            max_cols=settings.excel_preview_max_cols,
+            logger=_excel_preview_logger,
+        )
     )
-    app.dependency_overrides[get_excel_preview_use_case] = lambda: _excel_preview_uc
 
     # Department DI
     (
