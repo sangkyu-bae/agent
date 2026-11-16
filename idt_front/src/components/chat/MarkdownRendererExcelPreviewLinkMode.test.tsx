@@ -8,8 +8,10 @@ import MarkdownRenderer from './MarkdownRenderer';
 
 // excel-preview Design §8.3 #4 — 'link' 모드 (FR-09).
 // 트리거 상수는 vi.mock으로 고정 — 전환이 상수 1곳 변경으로 끝남을 테스트로 보증.
-vi.mock('@/types/excelPreview', () => ({
-  EXCEL_PREVIEW_TRIGGER: 'link',
+// document-file-preview §3.1: 스위치가 types/filePreview.ts 로 이관됨
+vi.mock('@/types/filePreview', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/types/filePreview')>()),
+  FILE_PREVIEW_TRIGGER: 'link',
 }));
 
 vi.mock('@/services/documentExtractorService', () => ({
@@ -18,7 +20,7 @@ vi.mock('@/services/documentExtractorService', () => ({
 
 const FILE_ID = 'b'.repeat(32);
 const xlsxLink = `다운로드: [수집결과.xlsx](/api/v1/document-extractor/files/${FILE_ID})`;
-const pdfLink = `다운로드: [보고서.pdf](/api/v1/document-extractor/files/${FILE_ID})`;
+const hwpLink = `다운로드: [보고서.hwp](/api/v1/document-extractor/files/${FILE_ID})`;
 
 beforeEach(() => {
   useExcelPreviewStore.setState({ target: null });
@@ -42,13 +44,13 @@ describe('MarkdownRenderer — excel-preview link 모드 (FR-09)', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
-  it('.xlsx 외 링크 클릭은 여전히 다운로드한다', async () => {
-    render(<MarkdownRenderer content={pdfLink} />);
-    await userEvent.click(screen.getByRole('link', { name: /보고서\.pdf/ }));
+  it('미리보기 대상이 아닌 링크 클릭은 여전히 다운로드한다', async () => {
+    render(<MarkdownRenderer content={hwpLink} />);
+    await userEvent.click(screen.getByRole('link', { name: /보고서\.hwp/ }));
 
     expect(documentExtractorService.downloadGeneratedFile).toHaveBeenCalledWith(
       FILE_ID,
-      '보고서.pdf',
+      '보고서.hwp',
     );
     expect(useExcelPreviewStore.getState().target).toBeNull();
   });

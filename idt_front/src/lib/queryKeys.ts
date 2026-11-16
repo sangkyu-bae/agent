@@ -409,4 +409,11 @@ export const queryKeys = {
     detail: (fileId: string) =>
       [...queryKeys.excelPreview.all, 'detail', fileId] as const,
   },
+
+  // ── Generated File Blob (document-file-preview) ─────────
+  generatedFile: {
+    all: ['generatedFile'] as const,
+    blob: (fileId: string) =>
+      [...queryKeys.generatedFile.all, 'blob', fileId] as const,
+  },
 } as const;

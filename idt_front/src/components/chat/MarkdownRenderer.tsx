@@ -5,7 +5,9 @@ import remarkBreaks from 'remark-breaks';
 import { FileText } from 'lucide-react';
 import { documentExtractorService } from '@/services/documentExtractorService';
 import { useExcelPreviewStore } from '@/store/excelPreviewStore';
-import { EXCEL_PREVIEW_TRIGGER } from '@/types/excelPreview';
+import { useDocumentPreviewStore } from '@/store/documentPreviewStore';
+import { FILE_PREVIEW_TRIGGER } from '@/types/filePreview';
+import { previewKindOf } from '@/utils/previewKind';
 import AuthenticatedImage from './AuthenticatedImage';
 
 interface MarkdownRendererProps {
@@ -71,15 +73,20 @@ const components: Components = {
     if (href?.startsWith(DOC_EXTRACTOR_FILE_PREFIX)) {
       const fileId = href.slice(DOC_EXTRACTOR_FILE_PREFIX.length);
       const filename = extractText(children);
-      // excel-preview Design §5.3: .xlsx 판별은 링크 텍스트(=파일명) 확장자.
-      // 모달 상태는 스토어가 소유 — 여기서는 open()만 호출 (memo 트리 밖).
-      const isXlsx = /\.xlsx$/i.test(filename);
-      const openPreview = () =>
-        useExcelPreviewStore.getState().open({ fileId, filename });
+      // excel-preview §5.3 / document-file-preview §2.1: 종류 판별은 링크 텍스트(=파일명) 확장자.
+      // 모달 상태는 종류별 스토어가 소유 — 여기서는 open()만 호출 (memo 트리 밖).
+      const kind = previewKindOf(filename);
+      const openPreview = () => {
+        if (kind === 'xlsx') {
+          useExcelPreviewStore.getState().open({ fileId, filename });
+        } else if (kind) {
+          useDocumentPreviewStore.getState().open({ fileId, filename, kind });
+        }
+      };
       const download = () =>
         void documentExtractorService.downloadGeneratedFile(fileId, filename);
-      // FR-09: 'link' 모드면 링크 클릭=프리뷰, 다운로드는 모달 안에서만
-      const linkOpensPreview = isXlsx && EXCEL_PREVIEW_TRIGGER === 'link';
+      // FR-09/FR-11: 'link' 모드면 링크 클릭=미리보기, 다운로드는 모달 안에서만
+      const linkOpensPreview = kind !== null && FILE_PREVIEW_TRIGGER === 'link';
       return (
         <>
           <a
@@ -97,7 +104,7 @@ const components: Components = {
             <FileText className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
             {children}
           </a>
-          {isXlsx && EXCEL_PREVIEW_TRIGGER === 'button' && (
+          {kind !== null && FILE_PREVIEW_TRIGGER === 'button' && (
             <button
               type="button"
               aria-label={`${filename} 미리보기`}

@@ -33,6 +33,22 @@ describe('documentExtractorService.fetchGeneratedFileBlob', () => {
         HttpResponse.json({ detail: 'not found' }, { status: 404 }),
       ),
     );
-    await expect(documentExtractorService.fetchGeneratedFileBlob('missing')).rejects.toBeTruthy();
+    // document-file-preview analysis G-03: blob 응답이어도 인터셉터가 status를 보존해야 모달 문구가 갈린다
+    await expect(documentExtractorService.fetchGeneratedFileBlob('missing')).rejects.toMatchObject({
+      name: 'ApiError',
+      status: 404,
+    });
+  });
+
+  it('403 은 ApiError.status 403 으로 전파한다 (document-file-preview §6.1)', async () => {
+    server.use(
+      http.get(`*${API_ENDPOINTS.DOCUMENT_EXTRACTOR_FILE(':fileId')}`, () =>
+        HttpResponse.json({ detail: { code: 'FORBIDDEN', message: 'no' } }, { status: 403 }),
+      ),
+    );
+    await expect(documentExtractorService.fetchGeneratedFileBlob('other')).rejects.toMatchObject({
+      name: 'ApiError',
+      status: 403,
+    });
   });
 });

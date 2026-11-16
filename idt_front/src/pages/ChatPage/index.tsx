@@ -6,6 +6,7 @@ import MessageList, { SuggestionCards, type Suggestion } from '@/components/chat
 import ChatInput from '@/components/chat/ChatInput';
 import ToolPreviewPanel from '@/components/chat/ToolPreviewPanel';
 import ExcelPreviewModal from '@/components/chat/ExcelPreviewModal';
+import DocumentPreviewModal from '@/components/chat/DocumentPreviewModal';
 import EmptyState from '@/components/ui/EmptyState';
 import { AlertTriangle, Loader2, MessageSquare } from 'lucide-react';
 import { useAgentSessionMessages } from '@/hooks/useChat';
@@ -527,6 +528,8 @@ const ChatPage = () => {
     <div className="flex h-full flex-col">
       {/* excel-preview Design §5.3: 모달은 페이지 레벨 1회 마운트 (상태는 스토어 소유) */}
       <ExcelPreviewModal />
+      {/* document-file-preview §2.1: .docx·.pdf 미리보기 모달 1회 마운트 */}
+      <DocumentPreviewModal />
       <ChatHeader
         title={selectedAgent?.name ?? 'SUPER AI Agent'}
         messageCount={messages.length}
