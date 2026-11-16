@@ -14,7 +14,7 @@ vi.mock('@/services/documentExtractorService', () => ({
 
 const FILE_ID = 'a'.repeat(32);
 const xlsxLink = `다운로드: [수집결과.xlsx](/api/v1/document-extractor/files/${FILE_ID})`;
-const pdfLink = `다운로드: [보고서.pdf](/api/v1/document-extractor/files/${FILE_ID})`;
+const hwpLink = `다운로드: [보고서.hwp](/api/v1/document-extractor/files/${FILE_ID})`;
 
 beforeEach(() => {
   useExcelPreviewStore.setState({ target: null });
@@ -52,9 +52,10 @@ describe('MarkdownRenderer — excel-preview button 모드', () => {
     expect(useExcelPreviewStore.getState().target).toBeNull();
   });
 
-  it('.xlsx 외 산출 링크에는 버튼이 없다 (FR-08)', () => {
-    render(<MarkdownRenderer content={pdfLink} />);
-    expect(screen.getByRole('link', { name: /보고서\.pdf/ })).toBeInTheDocument();
+  // document-file-preview: .docx·.pdf도 미리보기 대상이 되어 비대상 예시를 .hwp로 교체
+  it('미리보기 대상이 아닌 산출 링크에는 버튼이 없다 (FR-08)', () => {
+    render(<MarkdownRenderer content={hwpLink} />);
+    expect(screen.getByRole('link', { name: /보고서\.hwp/ })).toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
