@@ -15,7 +15,9 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
-EXTRACTOR_VERSION = "v1"
+# 추출 규칙·판정이 바뀌면 올린다 — resume 도 이전 버전 청크는 다시 추출한다.
+# v2 (2026-11-17): 조문 머리·제목 관계, 값 엔티티 청크 단위 키, LLM 언급 우선.
+EXTRACTOR_VERSION = "v2"
 GLOBAL_SCOPE = "global"
 
 _NS = uuid.UUID("6f3c1a52-8e0b-4f7e-9a1d-0c5b2e9d4a11")
@@ -215,6 +217,31 @@ class DocumentEligibilityPolicy:
     @classmethod
     def is_extractable(cls, filename: str | None) -> bool:
         return not (filename or "").strip().lower().endswith(cls._TABULAR)
+
+
+class LiteralValuePolicy:
+    """이름 자체가 값(금액·비율·기간·날짜)인지 — 값 엔티티는 청크 밖과 연결하지 않는다.
+
+    2026-11-17 실추출: "연 4.2%", "최장 36개월"이 독립 엔티티가 됐다. 같은 값이 다른
+    문서·문맥의 엔티티와 이름만으로 합쳐지면 잘못된 경로가 생긴다. 타입 이름
+    (예: '수치기준')을 코드에 두지 않고 이름의 모양으로 판단한다(일반화 원칙).
+    숫자와 단위를 지운 뒤 남는 글자가 2자 이하면 값으로 본다.
+    """
+
+    _UNITS = re.compile(
+        r"%p|bp|억원|만원|천원|개월|개년|시간|[%원억만천년월일주배건명회분초]"
+    )
+    _NON_WORD = re.compile(r"[\s\d.,~\-+/()·:]+")
+    _CLAUSE = re.compile(r"^제\s*\d+\s*조")
+    MAX_RESIDUAL_CHARS = 2
+
+    @classmethod
+    def is_literal(cls, name: str) -> bool:
+        text = unicodedata.normalize("NFKC", name or "").strip()
+        if not any(ch.isdigit() for ch in text) or cls._CLAUSE.match(text):
+            return False
+        residual = cls._NON_WORD.sub("", cls._UNITS.sub("", text.casefold()))
+        return len(residual) <= cls.MAX_RESIDUAL_CHARS
 
 
 class NameNormalizer:

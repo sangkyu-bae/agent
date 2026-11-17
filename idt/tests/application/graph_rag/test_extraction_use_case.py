@@ -202,6 +202,46 @@ async def test_rule_relations_use_refers_to_and_merge_with_llm():
 
 
 @pytest.mark.asyncio
+async def test_literal_values_are_not_linked_across_chunks():
+    # 2026-11-17 개선: "연 4.2%" 같은 값은 청크 밖과 연결하지 않는다
+    ex = _Extractor({
+        "p1": ([_m("연 4.2%", "대상", cid="p1"), _m("A상품", cid="p1")], []),
+        "p2": ([_m("연 4.2%", "대상", cid="p2"), _m("A상품", cid="p2")], []),
+    })
+    uc, jobs, store = _uc([_unit("p1", 0), _unit("p2", 1)], ex)
+    await uc.run("j1", "r")
+    values = [e for e in store.entities.values() if e.name == "연 4.2%"]
+    products = [e for e in store.entities.values() if e.name == "A상품"]
+    assert len(values) == 2 and len(products) == 1
+    assert jobs.finished[1].entities_linked == 1  # A상품만 연결
+
+
+@pytest.mark.asyncio
+async def test_llm_type_wins_for_rule_title_and_title_relation_resolves():
+    class _Rules(GraphExtractorPort):
+        async def extract(self, unit, context):
+            return ExtractionResult(
+                mentions=(
+                    Mention("제12조", "조문", "", unit.chunk_id, key="doc-1::제12조"),
+                    Mention("운전자금대출 한도", "용어", "", unit.chunk_id),
+                ),
+                relations=(RelationDraft(
+                    "doc-1::제12조", "운전자금대출 한도", "기타",
+                    "제12조(운전자금대출 한도)", unit.chunk_id,
+                ),),
+            )
+
+    unit = _unit("p1", content="제12조(운전자금대출 한도) 한도는 30% 이내로 한다.")
+    ex = _Extractor({"p1": ([_m("운전자금대출 한도", "대상")], [])})
+    uc, _, store = _uc([unit], ex, rules=_Rules())
+    await uc.run("j1", "r")
+    titles = [e for e in store.entities.values() if e.name == "운전자금대출 한도"]
+    assert len(titles) == 1 and titles[0].type == "대상"  # LLM 타입 우선
+    (rel, _), = store.relations.values()
+    assert rel.target_entity_id == titles[0].id
+
+
+@pytest.mark.asyncio
 async def test_unknown_types_become_other():
     ex = _Extractor({"p1": ([_m("A상품", "목록밖타입")], [])})
     uc, _, store = _uc([_unit("p1")], ex)

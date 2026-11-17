@@ -74,6 +74,17 @@ def test_extractable_filename(filename, ok):
     assert DocumentEligibilityPolicy.is_extractable(filename) is ok
 
 
+@pytest.mark.parametrize("name, literal", [
+    ("연 4.2%", True), ("최장 36개월", True), ("0.9%p", True), ("12억원", True),
+    ("2026년 9월", True), ("감정가의 60%", False), ("최근 결산 연매출액의 30%", False),
+    ("운전자금대출 한도", False), ("BBB 등급 가산금리", False), ("제12조", False),
+])
+def test_literal_value_policy(name, literal):
+    from src.domain.graph_rag.extraction import LiteralValuePolicy
+
+    assert LiteralValuePolicy.is_literal(name) is literal
+
+
 def test_chunk_unit_is_frozen():
     u = ChunkUnit(chunk_id="p1", document_id="d", kb_id="kb", collection_name="c",
                   content="x", chunk_index=0)

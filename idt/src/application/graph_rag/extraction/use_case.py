@@ -28,6 +28,7 @@ from src.domain.graph_rag.extraction import (
     JobCounters,
     JobMode,
     JobStatus,
+    LiteralValuePolicy,
     Mention,
     MentionWrite,
     NameNormalizer,
@@ -206,8 +207,10 @@ class ExtractGraphUseCase:
         state.counters.llm_calls += 1  # 상한 판단은 호출 전에 예약해 둔다
         llm = await self._llm.extract(unit, state.context)
         state.counters.llm_calls += llm.llm_calls - 1
+        # LLM 언급을 먼저 판정한다 — 규칙이 만든 조문 제목 개념과 이름이 같으면
+        # LLM 이 붙인 타입을 따른다(규칙 언급은 LLM 이 놓친 경우만 채운다).
         return ExtractionResult(
-            mentions=rules.mentions + llm.mentions,
+            mentions=llm.mentions + rules.mentions,
             relations=rules.relations + llm.relations,
             llm_calls=llm.llm_calls,
         )
@@ -241,17 +244,25 @@ class ExtractGraphUseCase:
     async def _resolve_all(
         self, mentions: tuple[Mention, ...], state: _RunState
     ) -> tuple[dict[str, tuple[str, str]], list[EntityWrite]]:
-        """정규화 키 → (entity_id, decision_id). 같은 청크 안 중복 언급은 하나로."""
+        """정규화 키 → (entity_id, decision_id). 같은 청크 안 중복 언급은 하나로.
+
+        값 이름(LiteralValuePolicy)은 저장 키를 청크 단위로 바꿔 청크 밖과 연결하지
+        않는다(2026-11-17 개선). 관계 끝점 조회용 키는 그대로 둔다.
+        """
         resolved: dict[str, tuple[str, str]] = {}
         new_entities: list[EntityWrite] = []
         for m in mentions:
             key, type_ = m.lookup_key, self._type(m, state)
             if not key or key in resolved:
                 continue
+            if m.key is None and LiteralValuePolicy.is_literal(m.name):
+                key_in_store = f"{m.chunk_id}::{key}"
+            else:
+                key_in_store = key
             entity_id = state.known.get(
-                (key, type_)
+                (key_in_store, type_)
             ) or await self._store.find_entity_id(  # type: ignore[union-attr]
-                GLOBAL_SCOPE, key, type_
+                GLOBAL_SCOPE, key_in_store, type_
             )
             if entity_id is None:
                 entity_id = str(uuid.uuid4())
@@ -260,7 +271,7 @@ class ExtractGraphUseCase:
                         id=entity_id,
                         scope_key=GLOBAL_SCOPE,
                         name=m.name,
-                        normalized_name=key,
+                        normalized_name=key_in_store,
                         type=type_,
                         description=m.description,
                     )

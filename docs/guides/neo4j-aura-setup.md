@@ -136,6 +136,77 @@ curl -H "Authorization: Bearer <관리자 토큰>" \
 
 어느 경우에도 업로드와 채팅은 그래프 없이 정상 동작한다.
 
+### 4.4 Neo4j 콘솔에서 그래프 직접 확인
+
+추출 결과는 Aura 콘솔에서 Cypher 쿼리로 확인한다. 이 절의 쿼리는 모두 조회 전용이다.
+
+1. https://console.neo4j.io 에 로그인한다.
+2. 인스턴스 목록에서 대상 인스턴스의 **Query**(또는 **Open → Query**)를 선택한다.
+   - 처음 연결할 때 사용자명과 비밀번호를 묻는다. 접속 정보 파일(`.txt`)의 `NEO4J_USERNAME`·`NEO4J_PASSWORD`를 입력한다.
+3. 상단 입력창에 아래 쿼리를 붙여 넣고 실행(▶ 또는 Ctrl+Enter)한다.
+   - 결과는 **Graph**(그림)와 **Table**(표) 탭으로 전환해 볼 수 있다.
+   - 그림에서 노드를 더블클릭하면 이웃 노드가 펼쳐진다.
+
+**① 전체 규모**
+
+```cypher
+MATCH (n) RETURN labels(n)[0] AS 종류, count(*) AS 개수;
+```
+
+**② 엔티티 목록(타입별)**
+
+```cypher
+MATCH (e:Entity)
+RETURN e.type AS 타입, e.name AS 이름
+ORDER BY 타입, 이름;
+```
+
+**③ 관계와 근거 문장(표)**
+
+```cypher
+MATCH (a:Entity)-[r:RELATES|REFERS_TO]->(b:Entity)
+RETURN a.name AS 출발, r.type AS 관계, b.name AS 도착, r.evidence_text AS 근거
+ORDER BY 출발;
+```
+
+**④ 조문과 제목 개념의 연결(그림)**
+
+```cypher
+MATCH p = (c:Entity {type: '조문'})-[:RELATES]->(t:Entity)
+RETURN p;
+```
+
+**⑤ 한 개념에서 2단계까지 펼치기(그림)** — 그래프 검색이 따라가는 범위와 같다.
+
+```cypher
+MATCH p = (e:Entity {name: '운전자금대출'})-[:RELATES|REFERS_TO*1..2]-(x:Entity)
+RETURN p LIMIT 50;
+```
+
+**⑥ 근거 청크까지 포함해 보기(그림)** — `MENTIONED_IN`은 엔티티가 언급된 청크다.
+
+```cypher
+MATCH p = (e:Entity {name: '운전자금대출 한도'})-[:MENTIONED_IN]->(c:Chunk)
+RETURN p;
+```
+
+**⑦ 문서 단위로 보기** — `document_id`는 관리자 API의 KB 문서 목록에서 확인한다.
+
+```cypher
+MATCH (c:Chunk {document_id: '<document_id>'})<-[:MENTIONED_IN]-(e:Entity)
+RETURN c.chunk_id AS 청크, c.extractor_version AS 추출기버전, collect(e.name) AS 엔티티;
+```
+
+**⑧ 값 엔티티 확인** — 금액·비율·기간처럼 이름 자체가 값인 엔티티는 청크 밖과 연결하지 않도록 정규화 키에 청크 id가 붙어 있다.
+
+```cypher
+MATCH (e:Entity) WHERE e.normalized_name CONTAINS '::' AND e.type <> '조문'
+RETURN e.name AS 이름, e.normalized_name AS 정규화키;
+```
+
+> 주의: 콘솔에서 `CREATE`·`MERGE`·`DELETE`·`SET`을 실행하면 그래프가 MySQL의 추출 기록과 어긋난다.
+> 그래프를 지우거나 다시 만들 때는 관리자 API의 **다시 만들기**(rebuild)를 사용한다.
+
 ---
 
 ## 5. Aura Free 운영 시 주의사항
