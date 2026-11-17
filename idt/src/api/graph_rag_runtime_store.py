@@ -76,3 +76,18 @@ class RuntimeGraphStore(GraphStorePort):
 
     async def set_document_topics(self, document_id: str, topic_ids: list[str]) -> None:
         await self._store().set_document_topics(document_id, topic_ids)
+
+    # ── module-5: 검색 ─────────────────────────────────────────────────────
+    async def link_entities(self, scope_key, phrases, embedding, topic_ids, limit):
+        return await self._store().link_entities(
+            scope_key, phrases, embedding, topic_ids, limit
+        )
+
+    async def seed_mentions(self, entity_ids, topic_ids):
+        return await self._store().seed_mentions(entity_ids, topic_ids)
+
+    async def find_paths(self, seed_ids, max_hops, hub_limit, limit):
+        return await self._store().find_paths(seed_ids, max_hops, hub_limit, limit)
+
+    async def chunks_in_scope(self, chunk_ids, topic_ids):
+        return await self._store().chunks_in_scope(chunk_ids, topic_ids)

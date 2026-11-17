@@ -7,6 +7,7 @@ neo4j 드라이버 import 는 infrastructure/graph_rag/neo4j/ 에만 둔다.
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from src.domain.graph_rag.exceptions import (
@@ -21,6 +22,7 @@ from src.domain.graph_rag.extraction import (
 )
 from src.domain.graph_rag.interfaces import GraphStorePort
 from src.domain.graph_rag.resolution import MIN_VECTOR_SIMILARITY, Candidate
+from src.domain.graph_rag.retrieval import LinkedEntity, PathHit, RetrievalPolicy
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.infrastructure.graph_rag.neo4j import cypher
 
@@ -193,6 +195,100 @@ class Neo4jGraphStore(GraphStorePort):
             document_id=document_id,
             topic_ids=list(topic_ids),
         )
+
+    # ── module-5: 검색 ─────────────────────────────────────────────────────
+
+    async def link_entities(
+        self,
+        scope_key: str,
+        phrases: list[str],
+        embedding: list[float] | None,
+        topic_ids: tuple[str, ...] | None,
+        limit: int,
+    ) -> list[LinkedEntity]:
+        scope = list(topic_ids) if topic_ids is not None else None
+
+        async def _none() -> list:
+            return []
+
+        names_q = (
+            self._query(
+                cypher.LINK_NAMES, scope_key=scope_key, phrases=phrases, topic_ids=scope
+            )
+            if phrases
+            else _none()
+        )
+        vector_q = (
+            self._query(
+                cypher.LINK_VECTOR,
+                scope_key=scope_key,
+                k=limit * 4,
+                embedding=list(embedding),
+                topic_ids=scope,
+                min_score=(1.0 + MIN_VECTOR_SIMILARITY) / 2.0,
+            )
+            if embedding
+            else _none()
+        )
+        name_rows, vector_rows = await asyncio.gather(names_q, vector_q)  # 왕복 동시
+        found: dict[str, LinkedEntity] = {}
+        for r in sorted(name_rows, key=lambda r: r["via"] != "exact"):
+            found.setdefault(
+                r["id"], LinkedEntity(r["id"], r["name"], r["type"], r["via"], 1.0)
+            )
+        for r in vector_rows:
+            found.setdefault(
+                r["id"],
+                LinkedEntity(
+                    r["id"],
+                    r["name"],
+                    r["type"],
+                    "vector",
+                    round(2 * r["score"] - 1, 4),
+                ),
+            )
+        return sorted(found.values(), key=lambda e: -e.score)[:limit]
+
+    async def seed_mentions(
+        self, entity_ids: list[str], topic_ids: tuple[str, ...] | None
+    ) -> dict[str, int]:
+        rows = await self._query(
+            cypher.SEED_MENTIONS,
+            ids=entity_ids,
+            topic_ids=list(topic_ids) if topic_ids is not None else None,
+        )
+        return {r["chunk_id"]: int(r["n"]) for r in rows}
+
+    async def find_paths(
+        self, seed_ids: list[str], max_hops: int, hub_limit: int, limit: int
+    ) -> list[PathHit]:
+        hops = RetrievalPolicy.hops(max_hops)  # 문자열에 넣기 전 범위 검증
+        rows = await self._query(
+            cypher.FIND_PATHS.format(hops=hops),
+            ids=seed_ids,
+            hub_limit=hub_limit,
+            limit=limit,
+        )
+        return [
+            PathHit(
+                tuple(r["names"]),
+                tuple(r["types"]),
+                tuple(c or "" for c in r["chunks"]),
+            )
+            for r in rows
+        ]
+
+    async def chunks_in_scope(
+        self, chunk_ids: list[str], topic_ids: tuple[str, ...] | None
+    ) -> set[str]:
+        if not chunk_ids:
+            return set()
+        rows = await self._query(
+            cypher.CHUNKS_IN_SCOPE,
+            ids=chunk_ids,
+            topic_ids=list(topic_ids) if topic_ids is not None else None,
+        )
+        return {r["chunk_id"] for r in rows}
 
 
 def _candidate(r: Any, match: str, similarity: float) -> Candidate:

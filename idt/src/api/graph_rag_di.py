@@ -28,8 +28,14 @@ from src.application.graph_rag.admin.stage_use_case import ChangeStageUseCase
 from src.application.graph_rag.admin.topics_use_case import TopicsUseCase
 from src.application.graph_rag.extraction.launcher import GraphExtractionLauncher
 from src.application.graph_rag.extraction.use_case import ExtractGraphUseCase
-from src.application.graph_rag.hooks import GraphExposure, GraphIngestHook
+from src.application.graph_rag.hooks import (
+    GraphDeletionHook,
+    GraphExposure,
+    GraphIngestHook,
+)
 from src.application.graph_rag.resolution.resolver import EntityResolver
+from src.application.graph_rag.retrieval.router import QueryTopicRouter
+from src.application.graph_rag.retrieval.source import GraphRetrievalSource
 from src.application.graph_rag.topic.classifier import DocumentTopicClassifier
 from src.application.graph_rag.topic.review import TopicReviewer
 from src.domain.extension_hooks import ExtensionHooks
@@ -38,6 +44,7 @@ from src.domain.graph_rag.interfaces import GraphSettingsReaderPort, GraphStoreP
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.infrastructure.graph_rag.decision_store import SessionScopedDecisionStore
 from src.infrastructure.graph_rag.es_chunk_reader import EsChunkSource
+from src.infrastructure.graph_rag.es_evidence_fetcher import EsEvidenceFetcher
 from src.infrastructure.graph_rag.eval_evidence import UnverifiedEvalEvidence
 from src.infrastructure.graph_rag.extract.llm_extractor import LlmGraphExtractor
 from src.infrastructure.graph_rag.extract.rule_extractor import RuleGraphExtractor
@@ -52,9 +59,14 @@ from src.infrastructure.graph_rag.resolution.jev_chooser import JevEntityChooser
 from src.infrastructure.graph_rag.resolution.llm_chooser import LlmEntityChooser
 from src.infrastructure.graph_rag.settings_reader import CachedGraphSettingsReader
 from src.infrastructure.graph_rag.topic.prompts import (
+    JEV_QUERY_INSTRUCTIONS,
+    JEV_QUERY_NONE,
+    JEV_QUERY_QID,
     JEV_TOPIC_INSTRUCTIONS,
     JEV_TOPIC_NEW,
     JEV_TOPIC_QID,
+    LLM_QUERY_NONE_HINT,
+    LLM_QUERY_SYSTEM,
     LLM_TOPIC_NEW_HINT,
     LLM_TOPIC_SYSTEM,
 )
@@ -141,6 +153,55 @@ class _Extraction:
     decisions: SessionScopedDecisionStore
     topics: SessionScopedTopicRepository
     document_topics: SessionScopedDocumentTopicStore
+    llm_model_repo: Any
+    llm_factory: Any
+    embedder: OpenAIEntityEmbedder
+    es_repo: Any
+
+
+def _build_retrieval(
+    settings: Any,
+    extraction: _Extraction,
+    reader: CachedGraphSettingsReader,
+    judgment_backend: Any,
+    logger: LoggerInterface,
+) -> GraphRetrievalSource:
+    """module-5: 질문 주제(Jev→LLM) + 연결·탐색 + ES 권한 재조회."""
+    from src.infrastructure.morph.kiwi_morph_analyzer import KiwiMorphAnalyzer
+
+    jev = (
+        JevEntityChooser(
+            judgment_backend,
+            timeout_seconds=settings.judgment_timeout_seconds,
+            qid=JEV_QUERY_QID,
+            instructions=JEV_QUERY_INSTRUCTIONS,
+            new_description=JEV_QUERY_NONE,
+        )
+        if judgment_backend is not None
+        else None
+    )
+    router = QueryTopicRouter(
+        topics=extraction.topics,
+        jev_chooser=jev,
+        llm_chooser=LlmEntityChooser(
+            extraction.llm_model_repo,
+            extraction.llm_factory,
+            reader,
+            logger,
+            system=LLM_QUERY_SYSTEM,
+            new_hint=LLM_QUERY_NONE_HINT,
+        ),
+        logger=logger,
+    )
+    return GraphRetrievalSource(
+        reader=reader,
+        store=extraction.store,
+        embedder=extraction.embedder,
+        morph=KiwiMorphAnalyzer(),
+        router=router,
+        fetcher=EsEvidenceFetcher(extraction.es_repo, settings.es_index, logger),
+        logger=logger,
+    )
 
 
 def _build_topic_classifier(
@@ -190,15 +251,11 @@ def _build_resolver(
     reader: CachedGraphSettingsReader,
     llm_model_repo: Any,
     llm_factory: Any,
+    embedder: OpenAIEntityEmbedder,
     judgment_backend: Any,
     logger: LoggerInterface,
 ) -> EntityResolver:
     """module-4: 이름 임베딩 + Jev(조립됐을 때만) + LLM 재판정·대체."""
-    embedder = OpenAIEntityEmbedder(
-        settings.graph_entity_embedding_model or settings.openai_embedding_model,
-        settings.graph_entity_embedding_dimensions,
-        api_key=getattr(settings, "openai_api_key", None),
-    )
     jev = (
         JevEntityChooser(
             judgment_backend, timeout_seconds=settings.judgment_timeout_seconds
@@ -235,11 +292,15 @@ def _build_extraction(
     store = RuntimeGraphStore(lambda: _runtime.store if _runtime else None)
     llm_model_repo = SessionScopedLlmModelRepository(session_factory, logger)
     llm_factory = LLMFactory()
+    embedder = OpenAIEntityEmbedder(
+        settings.graph_entity_embedding_model or settings.openai_embedding_model,
+        settings.graph_entity_embedding_dimensions,
+        api_key=getattr(settings, "openai_api_key", None),
+    )
+    es_repo = _build_es_repo(settings, logger)
     runner = ExtractGraphUseCase(
         jobs=job_store,
-        chunks=EsChunkSource(
-            _build_es_repo(settings, logger), settings.es_index, logger
-        ),
+        chunks=EsChunkSource(es_repo, settings.es_index, logger),
         rule_extractor=RuleGraphExtractor(),
         llm_extractor=LlmGraphExtractor(llm_model_repo, llm_factory, logger),
         store=store,
@@ -250,6 +311,7 @@ def _build_extraction(
             reader,
             llm_model_repo,
             llm_factory,
+            embedder,
             judgment_backend,
             logger,
         ),
@@ -275,6 +337,10 @@ def _build_extraction(
         decisions=decisions,
         topics=topics,
         document_topics=document_topics,
+        llm_model_repo=llm_model_repo,
+        llm_factory=llm_factory,
+        embedder=embedder,
+        es_repo=es_repo,
     )
 
 
@@ -305,10 +371,15 @@ def wire_graph_rag(
         settings, session_factory, reader, judgment_backend, logger
     )
     # owner 지정 — create_app() 재호출(테스트·리로드) 시 교체, 다른 확장과는 충돌
+    retrieval = _build_retrieval(settings, extraction, reader, judgment_backend, logger)
     hooks.register(
         owner=_OWNER,
         exposure=GraphExposure(reader),
         post_ingest=GraphIngestHook(extraction.launcher, reader),
+        supplemental=retrieval,
+        deletion=GraphDeletionHook(
+            extraction.store, extraction.document_topics, logger
+        ),
     )
     _register_routes(app, get_session, reader, extraction, settings, logger)
     _runtime = GraphRagRuntime(

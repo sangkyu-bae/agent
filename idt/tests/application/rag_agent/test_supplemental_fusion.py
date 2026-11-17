@@ -211,3 +211,44 @@ async def test_routed_result_skips_supplemental():
     assert "routed body" in out
     assert src.calls == []
     assert any(k.get("reason") == "routed_path" for _, k in logger.infos)
+
+
+# ── module-5: 보조 검색을 기존 검색과 동시에 시작 (Design §11.9 지연 대응) ─────
+
+class _SlowHybrid(_Hybrid):
+    def __init__(self, results, sleep_s=0.0, raise_exc=None):
+        super().__init__(results)
+        self._sleep, self._raise = sleep_s, raise_exc
+
+    async def execute(self, request, request_id):
+        await asyncio.sleep(self._sleep)
+        if self._raise:
+            raise self._raise
+        return SimpleNamespace(results=self._results)
+
+
+@pytest.mark.asyncio
+async def test_supplemental_runs_concurrently_with_primary():
+    import time
+
+    src = _Source([_hit("g1", "graph")], sleep_s=0.3)
+    tool, _ = _tool([], src)
+    tool.hybrid_search_use_case = _SlowHybrid([_hit("a")], sleep_s=0.3)
+    started = time.perf_counter()
+    await tool._arun("질문")
+    elapsed = time.perf_counter() - started
+    assert elapsed < 0.5  # 직렬이면 0.6초 이상
+    assert {"a", "g1"} <= set(_ids(tool))
+
+
+@pytest.mark.asyncio
+async def test_primary_failure_cancels_supplemental_task():
+    src = _Source([_hit("g1", "graph")], sleep_s=5)
+    tool, _ = _tool([], src)
+    tool.hybrid_search_use_case = _SlowHybrid([], raise_exc=RuntimeError("es down"))
+    before = {t for t in asyncio.all_tasks()}
+    with pytest.raises(RuntimeError):
+        await tool._arun("질문")  # 기존 오류 전파는 그대로
+    await asyncio.sleep(0)
+    leftover = [t for t in asyncio.all_tasks() - before if not t.done()]
+    assert leftover == []

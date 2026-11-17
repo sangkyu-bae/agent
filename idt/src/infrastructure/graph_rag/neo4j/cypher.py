@@ -154,3 +154,54 @@ SET_DOCUMENT_TOPICS = (
     "MATCH (c:Chunk {document_id: $document_id}) SET c.topic_ids = $topic_ids "
     "RETURN count(c) AS updated"
 )
+
+# ── module-5: 검색 (Design §2.2 검색) ──────────────────────────────────────
+# $topic_ids 가 null 이면 범위를 좁히지 않는다. 범위 = 그 주제 청크에 언급된 엔티티.
+_IN_SCOPE_CHUNK = (
+    "($topic_ids IS NULL OR any(t IN coalesce(c.topic_ids, []) WHERE t IN $topic_ids))"
+)
+_ENTITY_IN_SCOPE = (
+    "($topic_ids IS NULL OR EXISTS { MATCH (e)-[:MENTIONED_IN]->(c:Chunk) "
+    "WHERE any(t IN coalesce(c.topic_ids, []) WHERE t IN $topic_ids) })"
+)
+LINK_VECTOR = (
+    "CALL db.index.vector.queryNodes('" + VECTOR_INDEX_NAME + "', $k, $embedding) "
+    "YIELD node AS e, score "
+    "WHERE e.scope_key = $scope_key AND score >= $min_score "
+    "AND " + _ENTITY_IN_SCOPE + " "
+    "RETURN e.id AS id, e.name AS name, e.type AS type, score ORDER BY score DESC"
+)
+SEED_MENTIONS = (
+    "MATCH (e:Entity)-[:MENTIONED_IN]->(c:Chunk) "
+    "WHERE e.id IN $ids AND " + _IN_SCOPE_CHUNK + " "
+    "RETURN c.chunk_id AS chunk_id, count(*) AS n"
+)
+# 경유 노드(처음·끝 제외)는 관계 수가 $hub_limit 이하여야 한다. 단계 수는 검증된 int.
+FIND_PATHS = (
+    "MATCH (s:Entity) WHERE s.id IN $ids "
+    "MATCH p = (s)-[:RELATES|REFERS_TO*1..{hops}]-(:Entity) "
+    "WHERE all(n IN nodes(p)[1..-1] "
+    "WHERE COUNT {{ (n)-[:RELATES|REFERS_TO]-() }} <= $hub_limit) "
+    "RETURN [n IN nodes(p) | n.name] AS names, "
+    "[r IN relationships(p) | r.type] AS types, "
+    "[r IN relationships(p) | r.evidence_chunk_id] AS chunks "
+    "LIMIT $limit"
+)
+CHUNKS_IN_SCOPE = (
+    "MATCH (c:Chunk) WHERE c.chunk_id IN $ids AND " + _IN_SCOPE_CHUNK + " "
+    "RETURN c.chunk_id AS chunk_id"
+)
+# 정확 일치·별칭을 한 번에(왕복 1회).
+LINK_NAMES = (
+    "CALL { "
+    "UNWIND $phrases AS p "
+    "MATCH (e:Entity {scope_key: $scope_key, normalized_name: p}) "
+    "RETURN e, 'exact' AS via "
+    "UNION "
+    "UNWIND $phrases AS p "
+    "MATCH (:Alias {scope_key: $scope_key, normalized: p})-[:ALIAS_OF]->(e:Entity) "
+    "RETURN e, 'alias' AS via "
+    "} "
+    "WITH e, via WHERE " + _ENTITY_IN_SCOPE + " "
+    "RETURN e.id AS id, e.name AS name, e.type AS type, via"
+)

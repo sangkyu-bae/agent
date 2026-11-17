@@ -47,7 +47,8 @@ def test_off_registers_exposure_and_routes_without_store():
     app, hooks, _, runtime = _wire()
     assert hooks.exposure is not None
     assert hooks.post_ingest is not None          # module-3 추출 훅
-    assert hooks.supplemental is None and hooks.deletion is None  # module-5
+    assert hooks.supplemental is not None         # module-5 그래프 검색
+    assert hooks.deletion is not None             # module-5 삭제 정리
     assert runtime.store is None and runtime.backend == "off"
     paths = _paths(app)
     assert "/api/v1/admin/graph-rag/settings" in paths

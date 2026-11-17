@@ -1,7 +1,7 @@
 """graph_rag 가 코어 확장 지점에 등록하는 구현.
 
 Design Ref: graph-rag-foundation §2.1 — module-2 노출 판단, module-3 업로드 후 추출.
-GraphDeletionHook·GraphRetrievalSource 는 module-5 에서 추가된다.
+module-5: 문서 삭제 정리(GraphDeletionHook). 검색 공급자는 retrieval/source.py.
 설정을 읽지 못하면 닫힘(노출·추출 안 함).
 """
 
@@ -11,18 +11,26 @@ from typing import Any
 
 from src.domain.extension_hooks import (
     GRAPH_RAG_FEATURE,
+    DocumentDeletedEvent,
+    DocumentDeletionHook,
     DocumentIngestedEvent,
     FeatureExposurePort,
     PostIngestHook,
 )
+from src.domain.graph_rag.exceptions import GraphBackendUnavailableError
 from src.domain.graph_rag.extraction import (
     DocumentEligibilityPolicy,
     JobMode,
     TriggerSource,
 )
-from src.domain.graph_rag.interfaces import GraphSettingsReaderPort
+from src.domain.graph_rag.interfaces import (
+    DocumentTopicStorePort,
+    GraphSettingsReaderPort,
+    GraphStorePort,
+)
 from src.domain.graph_rag.policies import RolloutPolicy
 from src.domain.graph_rag.value_objects import RolloutStage
+from src.domain.logging.interfaces.logger_interface import LoggerInterface
 
 _FAILED = "failed"
 
@@ -93,3 +101,43 @@ async def capabilities_for(
     if not caller_is_admin:
         return {"visible": True}
     return {"visible": True, "stage": stage.value}
+
+
+class GraphDeletionHook(DocumentDeletionHook):
+    """문서 삭제 → 그래프 근거·주제 연결 정리 (Plan FR-15, module-5).
+
+    노출 단계와 상관없이 정리한다(이전에 추출한 그래프가 남지 않게).
+    그래프 저장소가 없으면 MySQL 주제 연결만 지운다. 예외는 코어가 삼킨다.
+    """
+
+    def __init__(
+        self,
+        store: GraphStorePort | None,
+        document_topics: DocumentTopicStorePort,
+        logger: LoggerInterface,
+    ) -> None:
+        self._store = store
+        self._links = document_topics
+        self._logger = logger
+
+    async def on_document_deleted(
+        self, event: DocumentDeletedEvent, request_id: str
+    ) -> None:
+        await self._links.replace(event.document_id, [], request_id)
+        if self._store is None:
+            return
+        try:
+            await self._store.delete_document(event.document_id)
+        except GraphBackendUnavailableError as e:
+            self._logger.warning(
+                "graph cleanup skipped — backend unavailable",
+                exception=e,
+                request_id=request_id,
+                document_id=event.document_id,
+            )
+            return
+        self._logger.info(
+            "graph document cleaned",
+            request_id=request_id,
+            document_id=event.document_id,
+        )

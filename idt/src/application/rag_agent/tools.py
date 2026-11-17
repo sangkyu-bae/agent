@@ -229,23 +229,48 @@ class InternalDocumentSearchTool(BaseTool):
             **extra,
         )
 
-    async def _with_supplemental(self, results: list, query: str) -> list:
-        """기존 결과에 보조 결과를 RRF 로 합친다. 실패·타임아웃은 기존 결과 그대로."""
+    def _start_supplemental(self, query: str) -> asyncio.Task | None:
+        """보조 검색을 기존 검색과 동시에 시작한다(graph-rag §11.9 지연 대응).
+
+        조건이 안 맞으면 None. 기존 검색이 실패하면 호출자가 cancel 한다.
+        """
         if not self._supplemental_requested():
-            return results
+            return None
         if self.supplemental_source is None:
             self._log_supplemental_skip("not_wired")
-            return results
+            return None
         hard, lenient = self._hybrid_filters()
         sq = SupplementalQuery(
             query=query, top_k=self.top_k, collection_name=self.collection_name,
             es_index=self.es_index, hard_filter=hard, lenient_filter=lenient,
             grant=self.supplemental_grant, request_id=self.request_id,
         )
-        try:
-            extra = await asyncio.wait_for(
+        return asyncio.ensure_future(
+            asyncio.wait_for(
                 self.supplemental_source.retrieve(sq), _SUPPLEMENTAL_HARD_TIMEOUT_S
             )
+        )
+
+    async def _primary_with_supplemental(self, query: str, primary):
+        """보조 검색 시작 → 기존 검색 await → (결과, 보조 task). 실패 시 task 취소."""
+        task = self._start_supplemental(query)
+        try:
+            result = await primary
+        except BaseException:
+            if task is not None:
+                task.cancel()
+            raise
+        return result, task
+
+    async def _with_supplemental(self, results: list, query: str) -> list:
+        """기존 결과에 보조 결과를 RRF 로 합친다. 실패·타임아웃은 기존 결과 그대로."""
+        return await self._merge_supplemental(results, self._start_supplemental(query))
+
+    async def _merge_supplemental(self, results: list, task) -> list:
+        if task is None:
+            return results
+        try:
+            extra = await task
         except TimeoutError:
             self._log_supplemental_skip("timeout", warn=True)
             return results
@@ -323,17 +348,20 @@ class InternalDocumentSearchTool(BaseTool):
     async def _multi_query_search(self, query: str) -> str:
         """Multi-Query 워크플로우를 통한 검색."""
         hard, lenient = self._hybrid_filters()
-        result = await self.multi_query_use_case.execute(
-            query=query,
-            request_id=self.request_id,
-            top_k=self.top_k,
-            collection_name=self.collection_name,
-            es_index=self.es_index,
-            metadata_filter=hard or None,
-            lenient_filter=lenient or None,
+        result, extra_task = await self._primary_with_supplemental(
+            query,
+            self.multi_query_use_case.execute(
+                query=query,
+                request_id=self.request_id,
+                top_k=self.top_k,
+                collection_name=self.collection_name,
+                es_index=self.es_index,
+                metadata_filter=hard or None,
+                lenient_filter=lenient or None,
+            ),
         )
 
-        results = await self._with_supplemental(result.results, query)
+        results = await self._merge_supplemental(result.results, extra_task)
         if not results:
             self._log_empty_with_auth_filter(query, mode="multi_query")
             return "관련 내부 문서를 찾지 못했습니다."
@@ -379,9 +407,11 @@ class InternalDocumentSearchTool(BaseTool):
             es_index=self.es_index,
             vector_score_threshold=self.score_threshold,
         )
-        result = await self.hybrid_search_use_case.execute(request, self.request_id)
+        result, extra_task = await self._primary_with_supplemental(
+            query, self.hybrid_search_use_case.execute(request, self.request_id)
+        )
 
-        results = await self._with_supplemental(result.results, query)
+        results = await self._merge_supplemental(result.results, extra_task)
         if not results:
             self._log_empty_with_auth_filter(query, mode="single")
             return "관련 내부 문서를 찾지 못했습니다."

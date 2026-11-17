@@ -189,3 +189,81 @@ async def test_live_set_document_topics_copies_ids_to_all_chunks():
         await store.delete_document(doc)
         await store.delete_document(other)
         await store.aclose()
+
+
+@pytest.mark.neo4j
+@pytest.mark.skipif(not _URI, reason="NEO4J_URI not set")
+@pytest.mark.asyncio
+async def test_live_link_traverse_hub_and_scope():
+    """module-5: 연결(정확·별칭·벡터)·경로·허브 경유 금지·주제 범위."""
+    from src.domain.graph_rag.extraction import AliasWrite
+    from src.domain.graph_rag.retrieval import HUB_DEGREE_LIMIT
+
+    dims = int(os.environ.get("GRAPH_ENTITY_EMBEDDING_DIMENSIONS", "512"))
+    driver = build_driver(
+        _URI, os.environ.get("NEO4J_USER", "neo4j"), os.environ["NEO4J_PASSWORD"],
+        max_pool_size=2, connect_timeout_s=10,
+    )
+    store = Neo4jGraphStore(driver, os.environ.get("NEO4J_DATABASE", "neo4j"),
+                            MagicMock())
+    scope, doc = f"test-{uuid.uuid4()}", f"test-doc-{uuid.uuid4()}"
+    ids = {k: str(uuid.uuid4()) for k in ("a", "b", "c", "hub", "far")}
+    leaves = [str(uuid.uuid4()) for _ in range(HUB_DEGREE_LIMIT + 1)]
+    vec = [1.0] + [0.0] * (dims - 1)
+    unit = ChunkUnit(chunk_id=f"chunk-{uuid.uuid4()}", document_id=doc, kb_id="kb",
+                     collection_name="c", content="x", chunk_index=0)
+
+    def ent(key, name, emb=None):
+        return EntityWrite(key, scope, name, name.lower(), "용어", "", emb)
+
+    def rel(i, s, t):
+        return RelationWrite(f"rel-{scope}-{i}", REL_RELATES, s, t, "포함", "근거",
+                             "dec", "dec")
+    rels = [rel(0, ids["a"], ids["b"]), rel(1, ids["b"], ids["c"]),
+            rel(2, ids["a"], ids["hub"]), rel(3, ids["hub"], ids["far"])]
+    rels += [rel(10 + i, ids["hub"], lf) for i, lf in enumerate(leaves)]
+    try:
+        await store.ensure_schema(dims)
+        await store.write_chunk_graph(ChunkGraphWrite(
+            unit=unit, extractor_version="v3",
+            new_entities=(ent(ids["a"], "A상품", tuple(vec)), ent(ids["b"], "B조건"),
+                          ent(ids["c"], "C기준"), ent(ids["hub"], "규정집"),
+                          ent(ids["far"], "먼개념"),
+                          *[ent(lf, f"잎{i}") for i, lf in enumerate(leaves)]),
+            mentions=(MentionWrite(ids["a"], "dec-a"),),
+            relations=tuple(rels),
+            aliases=(AliasWrite(ids["a"], scope, "에이상품", "에이상품"),),
+        ))
+        await store.set_document_topics(doc, ["t-loan"])
+
+        exact = await store.link_entities(scope, ["a상품"], None, None, 5)
+        assert [(e.id, e.via) for e in exact] == [(ids["a"], "exact")]
+        alias = await store.link_entities(scope, ["에이상품"], None, ("t-loan",), 5)
+        assert [(e.id, e.via) for e in alias] == [(ids["a"], "alias")]
+        assert await store.link_entities(scope, ["a상품"], None, ("t-other",), 5) == []
+        import asyncio as _aio
+        for _ in range(20):
+            by_vec = await store.link_entities(scope, [], vec, None, 5)
+            if by_vec:
+                break
+            await _aio.sleep(0.5)
+        assert by_vec[0].id == ids["a"] and by_vec[0].via == "vector"
+
+        mentions = await store.seed_mentions([ids["a"]], ("t-loan",))
+        assert mentions == {unit.chunk_id: 1}
+        assert await store.seed_mentions([ids["a"]], ("t-other",)) == {}
+
+        paths = await store.find_paths([ids["a"]], 2, HUB_DEGREE_LIMIT, 200)
+        ends = {p.names[-1] for p in paths}
+        assert {"B조건", "C기준", "규정집"} <= ends  # 허브까지는 간다
+        assert "먼개념" not in ends  # 허브를 지나가지는 않는다
+        assert all(p.evidence_chunk_ids[0] == unit.chunk_id for p in paths)
+
+        assert await store.chunks_in_scope([unit.chunk_id, "nope"], ("t-loan",)) == {
+            unit.chunk_id}
+        assert await store.chunks_in_scope([unit.chunk_id], ("t-other",)) == set()
+    finally:
+        await store.delete_document(doc)
+        await store._query("MATCH (e:Entity {scope_key: $s}) DETACH DELETE e", s=scope)
+        await store._query("MATCH (x:Alias {scope_key: $s}) DETACH DELETE x", s=scope)
+        await store.aclose()

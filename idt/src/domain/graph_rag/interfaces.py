@@ -25,6 +25,7 @@ from src.domain.graph_rag.resolution import (
     ResolutionDecision,
     ReviewStatus,
 )
+from src.domain.graph_rag.retrieval import LinkedEntity, PathHit
 from src.domain.graph_rag.topic import (
     DocumentTopic,
     Topic,
@@ -136,6 +137,55 @@ class GraphStorePort(ABC):
     @abstractmethod
     async def set_document_topics(self, document_id: str, topic_ids: list[str]) -> None:
         """문서의 모든 Chunk 노드 topic_ids 를 바꾼다(검색 범위 필터 복사본)."""
+
+    # ── module-5: 검색 ─────────────────────────────────────────────────────
+    @abstractmethod
+    async def link_entities(
+        self,
+        scope_key: str,
+        phrases: list[str],
+        embedding: list[float] | None,
+        topic_ids: tuple[str, ...] | None,
+        limit: int,
+    ) -> list[LinkedEntity]:
+        """질문 → 씨앗 엔티티. 정확·별칭 일치 먼저, 그다음 이름 벡터.
+
+        topic_ids 가 있으면 그 주제 청크에 언급된 엔티티만.
+        """
+
+    @abstractmethod
+    async def seed_mentions(
+        self, entity_ids: list[str], topic_ids: tuple[str, ...] | None
+    ) -> dict[str, int]:
+        """씨앗 엔티티가 언급된 청크 id → 언급 수(주제 범위 안)."""
+
+    @abstractmethod
+    async def find_paths(
+        self, seed_ids: list[str], max_hops: int, hub_limit: int, limit: int
+    ) -> list[PathHit]:
+        """씨앗에서 최대 max_hops 단계 경로. 관계가 hub_limit 넘는 노드는 경유 금지."""
+
+    @abstractmethod
+    async def chunks_in_scope(
+        self, chunk_ids: list[str], topic_ids: tuple[str, ...] | None
+    ) -> set[str]:
+        """주제 범위 안에 있는 청크 id (topic_ids None 이면 그래프에 있는 청크 전부)."""
+
+
+class EvidenceFetcherPort(ABC):
+    """그래프가 고른 청크를 ES 에서 다시 읽는다 — 도구의 권한 필터를 그대로 건다."""
+
+    @abstractmethod
+    async def fetch(
+        self,
+        chunk_ids: list[str],
+        *,
+        hard_filter: dict,
+        lenient_filter: dict,
+        collection_name: str | None,
+        es_index: str | None,
+        request_id: str,
+    ) -> list: ...
 
 
 class TopicRepositoryPort(ABC):

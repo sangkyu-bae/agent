@@ -226,6 +226,40 @@ class FakeStore(GraphStorePort):
             self.doc_topics = {}
         self.doc_topics[document_id] = list(topic_ids)
 
+    # ── module-5: 검색(메모리 그래프 위 단순 구현) ──────────────────────────
+    async def link_entities(self, scope_key, phrases, embedding, topic_ids, limit):
+        from src.domain.graph_rag.retrieval import LinkedEntity
+
+        g = self._graph()
+        return [
+            LinkedEntity(e.id, e.name, e.type, "exact", 1.0)
+            for e in g.entities.values()
+            if e.scope_key == scope_key and e.normalized_name in phrases
+        ][:limit]
+
+    async def seed_mentions(self, entity_ids, topic_ids):
+        out = {}
+        for e, c, _, _ in self._graph().mentions:
+            if e in entity_ids:
+                out[c] = out.get(c, 0) + 1
+        return out
+
+    async def find_paths(self, seed_ids, max_hops, hub_limit, limit):
+        from src.domain.graph_rag.retrieval import PathHit
+
+        g = self._graph()
+        out = []
+        for r, _ in g.relations.values():
+            if r.source_entity_id in seed_ids:
+                names = (g.entities[r.source_entity_id].name,
+                         g.entities[r.target_entity_id].name)
+                out.append(PathHit(names, (r.type,), (r.evidence_chunk_id,)
+                                   if hasattr(r, "evidence_chunk_id") else ("",)))
+        return out[:limit]
+
+    async def chunks_in_scope(self, chunk_ids, topic_ids):
+        return set(chunk_ids)
+
 
 class FakeTopics(TopicRepositoryPort):
     def __init__(self, topics=()):

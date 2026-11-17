@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from src.application.graph_rag.admin.jobs_use_case import (
@@ -184,3 +184,41 @@ async def test_trigger_rejects_spreadsheet_documents():
     with pytest.raises(GraphUnsupportedDocumentError):
         await uc.trigger("doc-x", JobMode.REBUILD, actor_id="1", request_id="r")
     assert launcher.calls == []
+
+
+# ── module-5: 삭제 훅 (FR-15) ──────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_deletion_hook_removes_graph_and_topic_links():
+    from src.application.graph_rag.hooks import GraphDeletionHook
+    from src.domain.extension_hooks import DocumentDeletedEvent
+    from src.domain.graph_rag.topic import DocumentTopic
+
+    from tests.application.graph_rag.fakes import FakeDocumentTopics, FakeStore
+
+    store, links = FakeStore(), FakeDocumentTopics()
+    links.links["doc-1"] = [DocumentTopic("doc-1", "t1", True, None, "d")]
+    store._graph().chunks["c1"] = ("doc-1", "v3")
+    hook = GraphDeletionHook(store, links, MagicMock())
+    await hook.on_document_deleted(DocumentDeletedEvent("doc-1", "kb", "col"), "r")
+    assert links.links["doc-1"] == [] and store.chunks == {}
+
+
+@pytest.mark.asyncio
+async def test_deletion_hook_without_backend_still_clears_topics():
+    from src.application.graph_rag.hooks import GraphDeletionHook
+    from src.domain.extension_hooks import DocumentDeletedEvent
+    from src.domain.graph_rag.exceptions import GraphBackendUnavailableError
+    from src.domain.graph_rag.topic import DocumentTopic
+
+    from tests.application.graph_rag.fakes import FakeDocumentTopics
+
+    links = FakeDocumentTopics()
+    links.links["doc-1"] = [DocumentTopic("doc-1", "t1", True, None, "d")]
+    await GraphDeletionHook(None, links, MagicMock()).on_document_deleted(
+        DocumentDeletedEvent("doc-1", "kb", "col"), "r")
+    assert links.links["doc-1"] == []
+    down = MagicMock()
+    down.delete_document = AsyncMock(side_effect=GraphBackendUnavailableError("x"))
+    await GraphDeletionHook(down, links, MagicMock()).on_document_deleted(
+        DocumentDeletedEvent("doc-1", "kb", "col"), "r")  # 예외 없이 끝난다
