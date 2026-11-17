@@ -3,6 +3,7 @@
 Design Ref: graph-rag-foundation §3.1 — 코어는 이 VO 와 ports.py 의 포트만 안다.
 특정 확장(그래프 등)의 용어를 넣지 않는다.
 """
+
 from __future__ import annotations
 
 from collections.abc import Mapping

@@ -895,6 +895,17 @@ idt_front/src/
 | M1-6 | 컴파일러가 grant를 항상 전달 | grant가 있을 때만 `**{"supplemental_grant": …}`로 펼쳐서 전달 | 기존 fake ToolFactory 테스트와 호환된다(`pii_scope`와 같은 방식). 계약 테스트 C4가 이 문자열을 고정한다 |
 | M1-7 | 타임아웃 위치 | 소스가 설정값으로 먼저 끊고, 도구는 하드 상한 `_SUPPLEMENTAL_HARD_TIMEOUT_S=6.0`초로 한 번 더 끊음 | 소스가 상한을 지키지 못해도 답변 경로가 막히지 않게 하는 마지막 방어선 |
 
+### 11.6 module-2 구현 중 결정 (2026-11-17)
+
+| # | Design 원안 | 구현 | 이유 |
+|---|------------|------|------|
+| M2-1 | V086 설정 / V087 추출 잡 / V088 판정 / V089 단계 이력 | **V086 설정 / V087 단계 이력 / V088 추출 잡(module-3) / V089 판정(module-4)** | Flyway 기본값 `outOfOrder=false`에서는 module-2가 V089를 먼저 적용하면 나중의 V087·V088이 무시되거나 검증에 실패한다. 승인된 DDL 내용은 그대로 두고 번호만 만드는 순서로 맞췄다 |
+| M2-2 | `main.py` 호출 1줄 | `wire_graph_rag` 1줄 + lifespan `start_graph_rag`·`close_graph_rag` 2줄 | 스키마 생성(비동기)과 드라이버 정리는 lifespan이 필요하다. 셋 다 wire하지 않으면 아무 일도 하지 않는다 |
+| M2-3 | general 전환 근거 검증 | `UnverifiedEvalEvidence`(항상 근거 불인정) 자리표시. 실검증은 module-7 | RAGAS 테이블 확인(V7) 전에는 강제 사유 경로로만 전환할 수 있다(닫힘) |
+| M2-4 | `neo4j>=5.20` | 설치 결과 6.4.1. `pyproject` extra `graph` + pytest 마커 `neo4j`(기본 제외) | 실연결 테스트는 `NEO4J_URI`가 있을 때 `-m neo4j`로만 돈다 |
+| M2-5 | 기동 시 연결 실패 처리 | 차원 불일치면 모듈 비활성(store=None), 연결 실패(Aura 정지 등)면 경고만 남기고 store 유지 | Aura Free 자동 정지는 일시적이라 재기동 없이 회복해야 한다 |
+| M2-6 | 백엔드 off일 때 노출 판단 | off여도 `GraphExposure`를 등록해 단계(stage)대로 노출 | 관리자 화면에서 백엔드가 없는 것은 health로 보이게 한다. 실제 검색은 module-5 소스가 store 부재로 건너뛴다 |
+
 ---
 
 ## Version History
@@ -904,3 +915,4 @@ idt_front/src/
 | 0.1 | 2026-11-16 | 초안 — Option C 선택, Neo4j 벡터 인덱스(D9), 비관리자 use_graph 조용히 False, general 전환 평가 기록 필수(사유 입력 시 강제 가능), DDL V086~V089 초안 | 배상규 |
 | 0.2 | 2026-11-16 | DDL V086~V089 사용자 승인 | 배상규 |
 | 0.3 | 2026-11-17 | module-1 구현 중 결정 M1-1~M1-7 (§11.5) | 배상규 |
+| 0.4 | 2026-11-17 | module-2 구현 중 결정 M2-1~M2-6 (§11.6), 마이그레이션 번호 재배치 | 배상규 |

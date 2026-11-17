@@ -15,10 +15,18 @@ _EXTENSION_PKGS = ("graph_rag",)
 _ALLOWED_IMPORTERS = ("api/main.py",)
 
 
+def _is_extension_file(rel: str) -> bool:
+    """확장 모듈 소유 파일: graph_rag/ 패키지 + 라우터·스키마 등 *graph_rag*.py."""
+    return any(
+        f"/{pkg}/" in f"/{rel}" or pkg in rel.rsplit("/", 1)[-1]
+        for pkg in _EXTENSION_PKGS
+    )
+
+
 def _py_files():
     for path in _SRC.rglob("*.py"):
         rel = path.relative_to(_SRC).as_posix()
-        if any(f"/{pkg}/" in f"/{rel}" for pkg in _EXTENSION_PKGS):
+        if _is_extension_file(rel):
             continue
         if rel in _ALLOWED_IMPORTERS or rel.endswith("_di.py"):
             continue

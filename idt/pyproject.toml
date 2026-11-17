@@ -102,6 +102,9 @@ eval = [
 judgment = [
     "typesafe-sdk>=0.7.5,<0.8",
 ]
+graph = [
+    "neo4j>=5.20",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -122,10 +125,12 @@ markers = [
     # tool-recommender Design §8.1 — 실 LLM을 호출하는 평가 테스트. CI 제외 대상.
     # 실행: pytest -m llm  /  기본 실행에서는 addopts로 자동 제외된다.
     "llm: requires a live LLM call (excluded by default)",
+    # graph-rag-foundation: 실제 Neo4j(로컬·Aura) 연결 테스트. NEO4J_URI 필요.
+    "neo4j: requires a live Neo4j (excluded by default)",
 ]
-# 기본 `pytest`는 실 LLM 테스트를 건너뛴다 — 비용·네트워크 의존 때문.
-# CLI의 -m 이 이 값을 덮어쓰므로 `pytest -m llm`으로 명시 실행할 수 있다.
-addopts = "-m 'not llm'"
+# 기본 `pytest`는 실 LLM·실 Neo4j 테스트를 건너뛴다 — 비용·네트워크 의존 때문.
+# CLI의 -m 이 이 값을 덮어쓰므로 `pytest -m llm` / `-m neo4j`로 명시 실행할 수 있다.
+addopts = "-m 'not llm and not neo4j'"
 
 [tool.ruff]
 line-length = 88

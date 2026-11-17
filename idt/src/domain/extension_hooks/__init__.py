@@ -3,6 +3,7 @@
 코어 모듈은 이 패키지만 import 한다. 확장 구현(graph_rag 등)은 import 하지 않는다
 — tests/contracts/test_extension_boundaries.py 가 고정한다.
 """
+
 from src.domain.extension_hooks.events import (
     DocumentDeletedEvent,
     DocumentIngestedEvent,

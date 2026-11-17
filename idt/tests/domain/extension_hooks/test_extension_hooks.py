@@ -67,6 +67,22 @@ def test_register_same_slot_twice_raises():
         hooks.register(supplemental=_Source())
 
 
+def test_same_owner_reregister_replaces():
+    # create_app() 이 한 프로세스에서 여러 번 불려도(테스트·리로드) 같은 모듈은 교체된다
+    hooks = ExtensionHooks()
+    first, second = _Exposure(), _Exposure()
+    hooks.register(owner="graph_rag", exposure=first)
+    hooks.register(owner="graph_rag", exposure=second)
+    assert hooks.exposure is second
+
+
+def test_different_owner_same_slot_raises():
+    hooks = ExtensionHooks()
+    hooks.register(owner="graph_rag", exposure=_Exposure())
+    with pytest.raises(ValueError):
+        hooks.register(owner="other_ext", exposure=_Exposure())
+
+
 def test_register_partial_keeps_other_slots():
     hooks = ExtensionHooks()
     hooks.register(post_ingest=_Ingest())

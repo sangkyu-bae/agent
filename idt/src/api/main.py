@@ -5939,6 +5939,11 @@ async def lifespan(app: FastAPI):
     if _background_job_worker is not None:
         _background_job_worker.start()
 
+    # graph-rag-foundation §2.1: Neo4j 스키마 멱등 생성 (wire 안 했으면 no-op)
+    from src.api.graph_rag_di import close_graph_rag, start_graph_rag
+
+    await start_graph_rag()
+
     yield
 
     # background-jobs D7: 루프·활성 job 취소 + failed 마킹 시도 (reconcile 이중 방어)
@@ -5947,6 +5952,8 @@ async def lifespan(app: FastAPI):
 
     # judgment-backend D15: 판정 백엔드 HTTP 클라이언트 정리 (best-effort)
     await _close_judgment_backend()
+    # graph-rag-foundation: Neo4j 드라이버 정리 (best-effort, wire 안 했으면 no-op)
+    await close_graph_rag()
 
     # Shutdown: Cleanup (if needed)
     _document_processor = None
@@ -6764,6 +6771,14 @@ def create_app() -> FastAPI:
 
     wire_multimodal(
         app, get_session=get_session, llm_factory=_llm_factory, logger=get_app_logger()
+    )
+    # graph-rag-foundation D11: 그래프 RAG 모듈 — 이 호출을 지우면 코어 훅은
+    # 비고 기능이 사라진다 (Plan SC-9).
+    from src.api.graph_rag_di import wire_graph_rag
+
+    wire_graph_rag(
+        app, get_session=get_session, session_factory=get_session_factory(),
+        hooks=get_extension_hooks(), logger=get_app_logger(), settings=settings,
     )
     # golden-sample-blueprint: DI + /api/v1/admin/blueprints 라우터 (multimodal 레지스트리 재사용)
     from src.api.blueprint_di import wire_blueprint

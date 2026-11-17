@@ -4,6 +4,7 @@ Design Ref: graph-rag-foundation §7 — 노출 단계가 허용하지 않는 �
 use_graph=True 를 보내면 에러 없이 False 로 바꿔 저장하고 로그만 남긴다.
 실행 시점 3중 게이트(Plan FR-20)와 함께 이중 방어다.
 """
+
 from __future__ import annotations
 
 import dataclasses
@@ -48,6 +49,7 @@ async def strip_unexposed_graph_flag(
     )
     return [
         dataclasses.replace(w, tool_config={**w.tool_config, _FLAG: False})
-        if _has_flag(w) else w
+        if _has_flag(w)
+        else w
         for w in workers
     ]

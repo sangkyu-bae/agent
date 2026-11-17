@@ -3,6 +3,7 @@
 Design Ref: graph-rag-foundation §3.1 — 확장 모듈이 구현하고, 코어는 호출만 한다.
 코어 호출 지점은 예외를 삼켜 답변·업로드·삭제 경로를 깨지 않는다(§6.2).
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod

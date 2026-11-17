@@ -402,6 +402,27 @@ class Settings(BaseSettings):
     # → JudgmentSearchDecisionAdapter(threshold=). 0~1 밖이면 ValueError.
     search_decision_judgment_threshold: float = 0.5
 
+    # Graph RAG (graph-rag-foundation Design §10.2) — 소비 지점은 전부
+    # src/api/graph_rag_di.py wire_graph_rag(). 노출 단계·추출 on/off 같은 운영값은
+    # DB(graph_rag_setting)에 있고, 여기는 접속·인프라 값만 둔다.
+    # "off"(기본) | "neo4j". 오타·드라이버 미설치·접속 정보 누락은 경고 후 off.
+    graph_backend: str = "off"
+    # 자체 호스팅 bolt://host:7687 또는 Aura neo4j+s://xxxx.databases.neo4j.io
+    # (D1-a: 주소만 바꾸면 전환, 코드 분기 없음). 비밀번호는 .env 에만.
+    neo4j_uri: str | None = None
+    neo4j_user: str = "neo4j"
+    neo4j_password: str | None = None
+    neo4j_database: str = "neo4j"
+    neo4j_max_pool_size: int = 10
+    neo4j_connect_timeout_s: float = 5.0
+    # 엔티티 이름 임베딩 — None 이면 openai_embedding_model. 차원은 벡터 인덱스와 같아야
+    # 한다(불일치면 기동 시 모듈 비활성). Aura Free 용량 때문에 512 로 축소(Design §3.2).
+    graph_entity_embedding_model: str | None = None
+    graph_entity_embedding_dimensions: int = 512
+    # 관리자 health 표시용 Aura Free 한도 (가입 시 가격 페이지에서 재확인).
+    graph_aura_free_node_limit: int = 200000
+    graph_aura_free_rel_limit: int = 400000
+
     # Application
     debug: bool = False
 
