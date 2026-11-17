@@ -8,6 +8,7 @@ from qdrant_client import models
 from src.domain.collection.schemas import ActionType
 from src.domain.doc_browse.policies import DocumentDeletePolicy
 from src.domain.doc_browse.schemas import DeleteDocumentResult
+from src.domain.extension_hooks import DocumentDeletedEvent, ExtensionHooks
 
 if TYPE_CHECKING:
     from qdrant_client import AsyncQdrantClient
@@ -46,7 +47,11 @@ class DeleteDocumentUseCase:
         activity_log_service: ActivityLogService,
         policy: DocumentDeletePolicy,
         logger: LoggerInterface,
+        extension_hooks: ExtensionHooks | None = None,
     ) -> None:
+        # graph-rag-foundation §6.2: 저장소 삭제 뒤 확장 훅(그래프 정리 등).
+        # 미등록 = 무동작.
+        self._extension_hooks = extension_hooks
         self._metadata_repo = document_metadata_repo
         self._qdrant_client = qdrant_client
         self._es_repo = es_repo
@@ -98,6 +103,9 @@ class DeleteDocumentUseCase:
             collection_name, document_id, metadata.filename,
             deleted_qdrant, user_id, request_id,
         )
+        await self._notify_deleted(
+            document_id, metadata.kb_id, collection_name, request_id
+        )
 
         self._logger.info(
             "Delete document completed",
@@ -140,6 +148,9 @@ class DeleteDocumentUseCase:
             collection_name, document_id, filename,
             deleted_qdrant, user_id, request_id,
             extra_detail=extra_detail,
+        )
+        await self._notify_deleted(
+            document_id, (extra_detail or {}).get("kb_id"), collection_name, request_id
         )
         self._logger.info(
             "Verified document delete completed",
@@ -268,6 +279,30 @@ class DeleteDocumentUseCase:
                 raise self.PermissionDeniedError(
                     f"No permission to delete document: {doc_id}"
                 )
+
+    async def _notify_deleted(
+        self,
+        document_id: str,
+        kb_id: str | None,
+        collection_name: str,
+        request_id: str,
+    ) -> None:
+        """확장 훅 통지 — 실패는 로그만 남기고 삭제 결과를 바꾸지 않는다 (§6.2)."""
+        hook = self._extension_hooks.deletion if self._extension_hooks else None
+        if hook is None:
+            return
+        event = DocumentDeletedEvent(
+            document_id=document_id, kb_id=kb_id, collection_name=collection_name
+        )
+        try:
+            await hook.on_document_deleted(event, request_id)
+        except Exception as e:
+            self._logger.error(
+                "Deletion hook failed (delete unaffected)",
+                request_id=request_id,
+                document_id=document_id,
+                exception=e,
+            )
 
     async def _delete_qdrant_chunks(
         self, collection_name: str, document_id: str

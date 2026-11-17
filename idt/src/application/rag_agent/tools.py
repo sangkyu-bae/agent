@@ -9,6 +9,7 @@ agent-user-context Design §7.2:
   - USE_RAG_SEARCH 없으면 즉시 거부 (1차)
   - READ_DEPARTMENT_DOCS 없으면 metadata_filter['visibility']='public' 강제 (2차)
 """
+import asyncio
 from typing import Any
 
 from langchain_core.tools import BaseTool
@@ -18,6 +19,8 @@ from src.application.agent_run.auth_context import get_current_auth_context
 from src.application.agent_run.context import get_current_run_context
 from src.application.agent_run.schemas import RunObservabilityConfig
 from src.domain.agent_run.auth_context import AuthContext
+from src.domain.extension_hooks import SupplementalQuery
+from src.domain.hybrid_search.policies import RankedList, RRFFusionPolicy
 from src.domain.hybrid_search.schemas import HybridSearchRequest
 from src.domain.permission.value_objects import PermissionCode
 from src.domain.rag_agent.schemas import DocumentSource
@@ -46,6 +49,10 @@ _HYBRID_IGNORED_KEYS = frozenset({"viewer_department_ids"})
 _HYBRID_LENIENT_KEYS = frozenset({"visibility"})
 # rag-routed-integration D6: 근거 헤더의 섹션 요약 1줄 절단 상한 (NFR-04)
 _ROUTED_EVIDENCE_SUMMARY_MAX = 150
+# graph-rag-foundation FR-14: 보조 검색 하드 상한(초). 소스가 설정값
+# (retrieval_timeout_ms, 최대 5000ms)으로 먼저 끊고, 이 값은 소스가 상한을
+# 못 지킬 때의 마지막 방어선.
+_SUPPLEMENTAL_HARD_TIMEOUT_S = 6.0
 
 
 _DEFAULT_OBS_CFG = RunObservabilityConfig()
@@ -92,6 +99,10 @@ class InternalDocumentSearchTool(BaseTool):
     # ── rag-routed-integration D1/D2: 라우팅 검색 opt-in (기존 search_mode와 독립) ──
     use_routed_search: bool = False
     routed_retrieval_getter: Any = None  # Callable[[], RoutedRetrievalUseCase] | None
+    # ── graph-rag-foundation §2.2 / FR-20: 보조 검색(그래프) 결합 — 3중 AND ──
+    use_supplemental: bool = False       # RagToolConfig.use_graph
+    supplemental_source: Any = None      # SupplementalRetrievalSource | None
+    supplemental_grant: Any = None       # SupplementalGrant | None (대화 경로만)
 
     def _run(self, query: str) -> str:
         raise NotImplementedError("비동기 _arun을 사용하세요.")
@@ -190,11 +201,68 @@ class InternalDocumentSearchTool(BaseTool):
         if self.use_routed_search:
             routed = await self._routed_search(query)
             if routed is not None:
+                # module-1 결정: 라우팅 결과(RoutedChunk)에는 보조 검색을 합치지 않는다.
+                if self._supplemental_requested():
+                    self._log_supplemental_skip("routed_path")
                 return routed
 
         if self.use_multi_query and self.multi_query_use_case is not None:
             return await self._multi_query_search(query)
         return await self._single_query_search(query)
+
+    # ── graph-rag-foundation §2.2: 보조 검색 결합 ─────────────────────────────
+
+    def _supplemental_requested(self) -> bool:
+        """에이전트가 opt-in 했고 대화 경로 grant 가 있을 때만 True (FR-20)."""
+        return self.use_supplemental and self.supplemental_grant is not None
+
+    def _log_supplemental_skip(
+        self, reason: str, *, warn: bool = False, **extra
+    ) -> None:
+        if self.logger is None:
+            return
+        log = self.logger.warning if warn else self.logger.info
+        log(
+            "Supplemental retrieval skipped",
+            reason=reason,
+            request_id=self.request_id,
+            **extra,
+        )
+
+    async def _with_supplemental(self, results: list, query: str) -> list:
+        """기존 결과에 보조 결과를 RRF 로 합친다. 실패·타임아웃은 기존 결과 그대로."""
+        if not self._supplemental_requested():
+            return results
+        if self.supplemental_source is None:
+            self._log_supplemental_skip("not_wired")
+            return results
+        hard, lenient = self._hybrid_filters()
+        sq = SupplementalQuery(
+            query=query, top_k=self.top_k, collection_name=self.collection_name,
+            es_index=self.es_index, hard_filter=hard, lenient_filter=lenient,
+            grant=self.supplemental_grant, request_id=self.request_id,
+        )
+        try:
+            extra = await asyncio.wait_for(
+                self.supplemental_source.retrieve(sq), _SUPPLEMENTAL_HARD_TIMEOUT_S
+            )
+        except TimeoutError:
+            self._log_supplemental_skip("timeout", warn=True)
+            return results
+        except Exception as e:
+            self._log_supplemental_skip("error", warn=True, exception=e)
+            return results
+        if extra.skip_reason is not None or not extra.hits:
+            self._log_supplemental_skip(extra.skip_reason or "empty")
+            return results
+        return RRFFusionPolicy().merge_many(
+            [
+                RankedList("primary", list(results), 1.0),
+                RankedList(extra.label, extra.hits, extra.weight),
+            ],
+            top_k=self.top_k,
+            k=self.rrf_k,
+        )
 
     def _routed_degrade(self, reason: str, **extra) -> None:
         """강등 사유 로그 (D5) — 교차검증 강등률 관측용."""
@@ -265,7 +333,8 @@ class InternalDocumentSearchTool(BaseTool):
             lenient_filter=lenient or None,
         )
 
-        if not result.results:
+        results = await self._with_supplemental(result.results, query)
+        if not results:
             self._log_empty_with_auth_filter(query, mode="multi_query")
             return "관련 내부 문서를 찾지 못했습니다."
 
@@ -277,7 +346,7 @@ class InternalDocumentSearchTool(BaseTool):
                 hit_queries.setdefault(hid, []).append(pq.query)
 
         return await self._format_results(
-            result.results,
+            results,
             search_query=query,
             query_source="multi_query",
             search_mode="hybrid",
@@ -312,12 +381,13 @@ class InternalDocumentSearchTool(BaseTool):
         )
         result = await self.hybrid_search_use_case.execute(request, self.request_id)
 
-        if not result.results:
+        results = await self._with_supplemental(result.results, query)
+        if not results:
             self._log_empty_with_auth_filter(query, mode="single")
             return "관련 내부 문서를 찾지 못했습니다."
 
         return await self._format_results(
-            result.results,
+            results,
             search_query=query,
             query_source="original",
             search_mode=self.search_mode,

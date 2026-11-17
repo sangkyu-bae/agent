@@ -883,6 +883,18 @@ idt_front/src/
 | V6 | routed 검색 결과도 `_format_results` 전에 hit 목록으로 합칠 수 있다 | `tools.py:227·367` 확인 (module-1) | routed 경로는 기록 함수에 합류 지점 별도 추가 |
 | V7 | RAGAS 실행 테이블·완료 상태 값 | erd-evaluation 위키 (module-7) | StageTransitionPolicy 검증 쿼리 조정 |
 
+### 11.5 module-1 구현 중 결정 (2026-11-17)
+
+| # | Design 원안 | 구현 | 이유 |
+|---|------------|------|------|
+| M1-1 | `DocumentDeletionHook.on_kb_deleted` | **제외** | KB 삭제는 soft delete이고 벡터도 정리 시점까지 남는다(`knowledge_base/use_case.py` delete). 그래프는 결과 청크를 ES에서 다시 조회하므로 기존 검색과 같은 기준을 따른다 |
+| M1-2 | 세 검색 경로 모두 결합 (V6 가정) | **단일·멀티쿼리만 결합, 라우팅 결과는 그대로** (`skip_reason=routed_path`) | V6 확인 결과 라우팅은 `RoutedChunk`라는 다른 타입과 별도의 기록 방식을 쓴다. 사용자 결정(2026-11-17). 라우팅이 강등되면 기존 경로로 내려가 결합이 적용된다 |
+| M1-3 | 저장 정리 대상: 생성·수정·위저드·자동 빌더 | **create·update·fork** 3곳 | V3 확인 결과 사용자가 `tool_config`를 직접 넣는 경로는 이 3곳이다. 시스템이 만드는 경로는 실행 시점 3중 AND가 막는다 |
+| M1-4 | fork의 역할 판정 | **항상 일반 사용자 기준** | fork 경로에는 역할 정보가 없다. 관리자가 fork해도 `use_graph`가 꺼진다(테스트 단계에서는 감수) |
+| M1-5 | `retrieve()`가 `list[HybridSearchResult]` 반환 | `SupplementalResult{label, hits, weight, skip_reason}` | 가중치(설정값)와 미실행 사유를 예외 없이 전달하기 위해 |
+| M1-6 | 컴파일러가 grant를 항상 전달 | grant가 있을 때만 `**{"supplemental_grant": …}`로 펼쳐서 전달 | 기존 fake ToolFactory 테스트와 호환된다(`pii_scope`와 같은 방식). 계약 테스트 C4가 이 문자열을 고정한다 |
+| M1-7 | 타임아웃 위치 | 소스가 설정값으로 먼저 끊고, 도구는 하드 상한 `_SUPPLEMENTAL_HARD_TIMEOUT_S=6.0`초로 한 번 더 끊음 | 소스가 상한을 지키지 못해도 답변 경로가 막히지 않게 하는 마지막 방어선 |
+
 ---
 
 ## Version History
@@ -891,3 +903,4 @@ idt_front/src/
 |---------|------|---------|--------|
 | 0.1 | 2026-11-16 | 초안 — Option C 선택, Neo4j 벡터 인덱스(D9), 비관리자 use_graph 조용히 False, general 전환 평가 기록 필수(사유 입력 시 강제 가능), DDL V086~V089 초안 | 배상규 |
 | 0.2 | 2026-11-16 | DDL V086~V089 사용자 승인 | 배상규 |
+| 0.3 | 2026-11-17 | module-1 구현 중 결정 M1-1~M1-7 (§11.5) | 배상규 |

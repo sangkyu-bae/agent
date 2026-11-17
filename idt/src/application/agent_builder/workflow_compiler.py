@@ -126,6 +126,7 @@ from src.application.agent_run.step_tracking import (
 )
 from src.application.agent_run.tracker import RunTracker
 from src.domain.agent_run.auth_context import AuthContext
+from src.domain.extension_hooks import SupplementalGrant
 from src.domain.agent_builder.interfaces import AgentDefinitionRepositoryInterface
 from src.domain.agent_builder.policies import (
     CircularReferencePolicy,
@@ -668,7 +669,10 @@ class WorkflowCompiler:
         pii_scope: PiiRunScope | None = None,
         tool_access: "ToolAccessSet | None" = None,
         excluded_sink: list | None = None,
+        supplemental_grant: SupplementalGrant | None = None,
     ):
+        # supplemental_grant — graph-rag-foundation FR-20: 대화 경로만 넘기는 보조 검색
+        # 허용값. None 이면 도구 생성 호출 형태가 변경 전과 같다(인자 미전달).
         # pii_scope — pii-masking-integration §3.1 (FR-08): 런 1개의 vault. 호출자
         # (RunAgentUseCase)가 만들어 넘기고 서브에이전트 재귀에도 그대로 전달한다.
         # subject_user_id — mcp-identity-header §1.1: MCP 신원 헤더의 실행 주체.
@@ -818,6 +822,8 @@ class WorkflowCompiler:
                         # tool-access-control §2.1 ③: 하위 그래프도 같은 실행자 기준
                         tool_access=tool_access,
                         excluded_sink=excluded_sink,
+                        # graph-rag-foundation FR-20: 같은 호출자 → 같은 허용값
+                        supplemental_grant=supplemental_grant,
                     )
                     worker_map[worker_def.worker_id] = sub_node
                     # subagent-context-scope FR-10: 래퍼가 이미 노드 함수다.
@@ -973,6 +979,10 @@ class WorkflowCompiler:
                     worker_tools = [self._tool_factory.create(
                         worker_def.tool_id, request_id,
                         tool_config=worker_def.tool_config,
+                        **(
+                            {"supplemental_grant": supplemental_grant}
+                            if supplemental_grant is not None else {}
+                        ),
                     )]
                 # search 노드·wiki 분기는 단일 도구 계약을 유지한다.
                 tool = worker_tools[0]
@@ -1466,6 +1476,7 @@ class WorkflowCompiler:
         pii_scope: PiiRunScope | None = None,
         tool_access: "ToolAccessSet | None" = None,
         excluded_sink: list | None = None,
+        supplemental_grant: SupplementalGrant | None = None,
     ):
         if self._agent_repository is None:
             raise ValueError("agent_repository is required for sub_agent compilation")
@@ -1507,6 +1518,7 @@ class WorkflowCompiler:
             pii_scope=pii_scope,
             tool_access=tool_access,
             excluded_sink=excluded_sink,
+            supplemental_grant=supplemental_grant,
         )
 
         # subagent-context-scope FR-09: 연결별 전략 선택 지점 (현재는 항상 기본값).

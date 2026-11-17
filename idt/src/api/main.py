@@ -489,6 +489,7 @@ from src.infrastructure.search_decision.judgment_adapter import (
     JudgmentSearchDecisionAdapter,
 )
 from src.domain.judgment.interfaces import JudgmentPort
+from src.domain.extension_hooks import ExtensionHooks
 from src.infrastructure.persistence.database import (
     get_engine,
     get_session,
@@ -846,6 +847,15 @@ _doc_chunk_use_case: Optional[DocChunkUseCase] = None
 _auto_build_use_case: Optional[AutoBuildUseCase] = None
 _auto_build_reply_use_case: Optional[AutoBuildReplyUseCase] = None
 _auto_build_session_repository: Optional[AutoBuildSessionRepository] = None
+
+# graph-rag-foundation §3.1 / D11: 코어 확장 지점 단일 레지스트리. 확장 모듈은 기동 시
+# 한 번 등록하고, 아무것도 등록하지 않으면 모든 슬롯이 None(기존 동작과 동일).
+_extension_hooks: ExtensionHooks = ExtensionHooks()
+
+
+def get_extension_hooks() -> ExtensionHooks:
+    return _extension_hooks
+
 
 # Global LLM factory and default model (initialized on startup)
 _llm_factory: LLMFactory = LLMFactory()
@@ -3136,6 +3146,8 @@ def create_agent_builder_factories():
         wiki_repo_builder=_wiki_repo_builder,
         # ★ wiki-folder-summaries: wiki_list 도구용 폴더 요약 저장소
         wiki_folder_repo_builder=_wiki_folder_repo_builder,
+        # ★ graph-rag-foundation §2.1: 보조 검색 소스(create 시점에 읽음)
+        extension_hooks=get_extension_hooks(),
     )
     # document-template-extractor Design §6: 합성 노드 의존(싱글톤).
     # 컴파일러/컴포저는 앱 싱글톤이라 per-request 세션 대신 session-scoped 어댑터 사용.
@@ -3400,6 +3412,8 @@ def create_agent_builder_factories():
             opener_repo=_make_agent_opener_repo(session),
             # tool-access-control FR-06·07: 저장 시 도구 권한 판정
             tool_access_resolver=make_tool_access_resolver(session, app_logger),
+            # graph-rag-foundation §7: 노출되지 않은 use_graph 저장 시 정리
+            extension_hooks=get_extension_hooks(),
         )
 
     def update_uc_factory(session: AsyncSession = Depends(get_session)):
@@ -3435,6 +3449,8 @@ def create_agent_builder_factories():
             opener_repo=_make_agent_opener_repo(session),
             # tool-access-control FR-06·07: 신규 도구만 권한 판정
             tool_access_resolver=make_tool_access_resolver(session, app_logger),
+            # graph-rag-foundation §7: 노출되지 않은 use_graph 저장 시 정리
+            extension_hooks=get_extension_hooks(),
         )
 
     # agent-schedule Design §6.2: RunAgentUseCase 조립 본문을 함수로 추출해
@@ -3562,6 +3578,8 @@ def create_agent_builder_factories():
             opener_repo=_make_agent_opener_repo(session),
             # tool-access-control FR-08: 권한 없는 도구 제외 복제
             tool_access_resolver=make_tool_access_resolver(session, app_logger),
+            # graph-rag-foundation §7: 포크 사본의 use_graph 정리
+            extension_hooks=get_extension_hooks(),
         )
 
     def list_my_uc_factory(session: AsyncSession = Depends(get_session)):
@@ -4615,6 +4633,8 @@ def create_knowledge_base_factories(
             logger=app_logger,
             chunking_resolver=resolver,
             summary_launcher=summary_launcher,
+            # graph-rag-foundation §2.2: 업로드 후 확장 훅
+            extension_hooks=get_extension_hooks(),
         )
 
     def kb_documents_factory(session: AsyncSession = Depends(get_session)):
@@ -4800,6 +4820,8 @@ def create_kb_document_delete_factory(kb_use_case_factory):
             activity_log_service=ActivityLogService(log_repo, app_logger),
             policy=DocumentDeletePolicy(),
             logger=StructuredLogger("kb_document_delete.deleter"),
+            # graph-rag-foundation §6.2: 삭제 후 확장 훅
+            extension_hooks=get_extension_hooks(),
         )
 
     def delete_factory(session: AsyncSession = Depends(get_session)):
@@ -6647,6 +6669,8 @@ def create_app() -> FastAPI:
             activity_log_service=log_service,
             policy=DocumentDeletePolicy(),
             logger=StructuredLogger("doc_browse.delete"),
+            # graph-rag-foundation §6.2: 삭제 후 확장 훅
+            extension_hooks=get_extension_hooks(),
         )
 
     app.dependency_overrides[get_list_documents_use_case] = _list_documents_uc_factory

@@ -8,6 +8,7 @@ from langchain_core.tools import BaseTool
 from src.domain.agent_builder.rag_tool_config import RagToolConfig, sanitize_tool_name
 from src.domain.agent_builder.tool_registry import get_tool_meta
 from src.domain.agent_run.auth_context import AuthContext
+from src.domain.extension_hooks import ExtensionHooks, SupplementalGrant
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.domain.mcp.exceptions import McpWiringError
 from src.domain.tool_catalog.mcp_tool_id import McpToolRef, parse_mcp_tool_id
@@ -35,8 +36,12 @@ class ToolFactory:
         wiki_session_factory: Any = None,          # ★ wiki-agentic-navigation: wiki_read용
         wiki_repo_builder: Any = None,             # ★ (session) -> WikiArticleRepository
         wiki_folder_repo_builder: Any = None,      # ★ wiki-folder-summaries: (session) -> WikiFolderSummaryRepository
+        extension_hooks: ExtensionHooks | None = None,  # ★ graph-rag-foundation §2.1
     ) -> None:
         self._logger = logger
+        # graph-rag-foundation §2.1: 보조 검색 소스는 create 시점에 읽는다 —
+        # 확장 모듈이 팩토리 생성 뒤(기동 후반)에 등록해도 반영된다.
+        self._extension_hooks = extension_hooks
         self._hybrid_search = hybrid_search_use_case
         self._hybrid_search_getter = hybrid_search_use_case_getter
         self._tavily_api_key = tavily_api_key
@@ -70,6 +75,11 @@ class ToolFactory:
         """
         self._auth_ctx = auth_ctx
 
+    def _supplemental_source(self) -> Any:
+        if self._extension_hooks is None:
+            return None
+        return self._extension_hooks.supplemental
+
     def _get_hybrid_search(self) -> object | None:
         if self._hybrid_search is not None:
             return self._hybrid_search
@@ -84,9 +94,18 @@ class ToolFactory:
         return self._get_hybrid_search()
 
     def create(
-        self, tool_id: str, request_id: str = "", tool_config: dict | None = None
+        self,
+        tool_id: str,
+        request_id: str = "",
+        tool_config: dict | None = None,
+        *,
+        supplemental_grant: SupplementalGrant | None = None,
     ) -> BaseTool:
-        """내부 tool_id에 해당하는 BaseTool 인스턴스 반환 (동기)."""
+        """내부 tool_id에 해당하는 BaseTool 인스턴스 반환 (동기).
+
+        supplemental_grant — graph-rag-foundation FR-20: 대화 경로 호출자가 넘긴
+        실행별 허용값. RAG 도구에만 전달하고 다른 도구는 무시한다.
+        """
         get_tool_meta(tool_id)  # 존재 여부 검증 (Unknown tool_id → ValueError)
 
         match tool_id:
@@ -120,6 +139,10 @@ class ToolFactory:
                     # ── rag-routed-integration D2: 라우팅 opt-in 배선 ──
                     use_routed_search=rag_config.use_routed_search,
                     routed_retrieval_getter=self._routed_retrieval_getter,
+                    # ── graph-rag-foundation §2.2: 보조 검색 3중 AND 의 재료 ──
+                    use_supplemental=rag_config.use_graph,
+                    supplemental_source=self._supplemental_source(),
+                    supplemental_grant=supplemental_grant,
                 )
             case "tavily_search":
                 from src.infrastructure.web_search.tavily_tool import TavilySearchTool

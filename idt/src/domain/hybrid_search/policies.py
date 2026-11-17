@@ -6,10 +6,24 @@ BM25 결과 + 벡터 검색 결과를 RRF 알고리즘으로 병합한다.
 RRF 공식: score(d) = Σ 1 / (k + rank_i(d))
 표준 k=60 (Cormack et al., 2009)
 """
+import dataclasses
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Optional
 
 from src.domain.hybrid_search.schemas import HybridSearchResult, SearchHit
+
+
+@dataclass(frozen=True)
+class RankedList:
+    """merge_many 입력 — 순위가 매겨진 결과 목록 하나와 그 가중치.
+
+    첫 목록이 기준(primary)이다: 겹치는 청크는 기준 목록의 본문·개별 점수를 유지한다.
+    """
+
+    label: str
+    hits: Sequence[HybridSearchResult]
+    weight: float
 
 
 @dataclass
@@ -105,3 +119,50 @@ class RRFFusionPolicy:
 
         results.sort(key=lambda r: r.score, reverse=True)
         return results[:top_k]
+
+    def merge_many(
+        self,
+        ranked_lists: Sequence[RankedList],
+        top_k: int,
+        k: int = DEFAULT_K,
+    ) -> list[HybridSearchResult]:
+        """이미 순위가 매겨진 결과 목록 여러 개를 가중 RRF 로 한 번 더 합친다.
+
+        Design Ref: graph-rag-foundation §2.2 — 기존 merge 는 그대로 두고, 도구의
+        최종 결과(primary)에 보조 목록(graph 등)을 합치는 용도로만 쓴다.
+        source 표기: 기준 목록에만 있으면 원래 값, 보조에만 있으면 보조 label,
+        둘 다면 "{원래 source}+{label}" (ai_retrieval_source.fusion_source 20자 이내).
+        """
+        scores: dict[str, float] = {}
+        first_seen: dict[str, HybridSearchResult] = {}
+        labels: dict[str, list[str]] = {}
+        for position, ranked in enumerate(ranked_lists):
+            seen_here: set[str] = set()
+            for rank, hit in enumerate(ranked.hits, start=1):
+                if hit.id in seen_here:
+                    continue
+                seen_here.add(hit.id)
+                scores[hit.id] = scores.get(hit.id, 0.0) + ranked.weight / (k + rank)
+                first_seen.setdefault(hit.id, hit)
+                if position > 0:
+                    labels.setdefault(hit.id, []).append(ranked.label)
+        primary_ids = {h.id for h in ranked_lists[0].hits} if ranked_lists else set()
+        fused = [
+            dataclasses.replace(
+                hit,
+                score=scores[hit_id],
+                source=_fused_source(
+                    hit, hit_id in primary_ids, labels.get(hit_id, [])
+                ),
+            )
+            for hit_id, hit in first_seen.items()
+        ]
+        fused.sort(key=lambda r: r.score, reverse=True)
+        return fused[:top_k]
+
+
+def _fused_source(hit: HybridSearchResult, in_primary: bool, extra: list[str]) -> str:
+    if not extra:
+        return hit.source
+    suffix = "+".join(extra)
+    return f"{hit.source}+{suffix}" if in_primary else suffix

@@ -13,6 +13,7 @@ from fastapi.responses import StreamingResponse
 from src.domain.auth.entities import User
 from src.infrastructure.agent_run.sse_formatter import AgentRunEventSseFormatter
 from src.domain.agent_run.auth_context import AuthContext
+from src.domain.extension_hooks import SupplementalGrant
 from src.domain.document_extractor.exceptions import DocumentExtractorError
 from src.domain.tool_access.exceptions import ToolAccessDeniedError
 from src.interfaces.dependencies.auth import (
@@ -309,6 +310,8 @@ async def run_agent(
             viewer_department_ids=list(auth_ctx.department_ids),
             # agent-memory-injection Act-1: 대화 라우트만 메모리 주입 opt-in.
             inject_memory=True,
+            # graph-rag-foundation FR-20: 대화 라우트만 보조 검색 허용값을 만든다.
+            supplemental_grant=SupplementalGrant.for_role(auth_ctx.role),
         )
     except PermissionError:
         raise HTTPException(
@@ -358,6 +361,8 @@ async def run_agent_stream(
             viewer_department_ids=list(auth_ctx.department_ids),
             # agent-memory-injection Act-1: 대화 라우트만 메모리 주입 opt-in.
             inject_memory=True,
+            # graph-rag-foundation FR-20: 대화 라우트만 보조 검색 허용값을 만든다.
+            supplemental_grant=SupplementalGrant.for_role(auth_ctx.role),
         ).__aiter__()
         try:
             while True:

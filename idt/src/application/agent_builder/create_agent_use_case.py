@@ -26,6 +26,7 @@ from src.application.agent_builder.schemas import (
     WorkerInfo,
 )
 from src.application.agent_builder.sub_agent_worker_builder import SubAgentWorkerBuilder
+from src.application.agent_builder.supplemental_flag import strip_unexposed_graph_flag
 from src.application.agent_builder.worker_skeleton_builder import (
     WorkerSkeletonBuilder,
 )
@@ -51,6 +52,7 @@ from src.domain.collection.permission_interfaces import (
 )
 from src.domain.department.interfaces import DepartmentRepositoryInterface
 from src.domain.document_extractor.policies import DEFAULT_MAX_SLOTS
+from src.domain.extension_hooks import ExtensionHooks
 from src.domain.document_generator.policies import DEFAULT_MAX_SECTIONS
 from src.domain.knowledge_base.entities import KnowledgeBase
 from src.domain.knowledge_base.interfaces import KnowledgeBaseRepositoryInterface
@@ -97,8 +99,11 @@ class CreateAgentUseCase:
         prompt_version_reader: PromptRepositoryPort | None = None,
         opener_repo: AgentOpenerRepositoryInterface | None = None,
         tool_access_resolver: "ToolAccessResolver | None" = None,
+        extension_hooks: ExtensionHooks | None = None,
     ) -> None:
         self._repository = repository
+        # graph-rag-foundation §7: 노출되지 않은 use_graph 는 저장 시 조용히 False.
+        self._extension_hooks = extension_hooks
         # Design Ref: tool-access-control §2.2 (FR-06·07) — 저장 시 도구 권한 판정.
         # 미주입 = 판정 없음(기존 동작). 프로덕션 주입은 배선 계약 테스트가 고정한다.
         self._tool_access_resolver = tool_access_resolver
@@ -193,6 +198,13 @@ class CreateAgentUseCase:
                     request_id=request_id,
                 )
 
+            # graph-rag-foundation §7: 이후 바인딩이 skeleton.workers 를
+            # 제자리 갱신하므로 같은 리스트 안에서 교체한다.
+            skeleton.workers[:] = await strip_unexposed_graph_flag(
+                skeleton.workers, self._extension_hooks,
+                caller_is_admin=(viewer_role == UserRole.ADMIN.value),
+                logger=self._logger, request_id=request_id,
+            )
             all_workers = list(skeleton.workers) + sub_agent_workers
 
             # Step 1.75 (document-template-extractor GA4): 확정 템플릿 검증 +
