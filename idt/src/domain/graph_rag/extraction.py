@@ -1,0 +1,221 @@
+"""추출 도메인 — 추출 단위·언급·관계 VO 와 순수 정책.
+
+Design Ref: graph-rag-foundation §2.2(적재)·§3.4(결정적 ID)·§11.4 V1.
+V1 확인(2026-11-17): ES 에 parent·child 가 모두 저장된다 → parent 가 있으면
+parent 만 추출 단위로 쓴다(문맥이 넓고 LLM 호출 수가 적다). 요약 청크는 제외.
+"""
+
+from __future__ import annotations
+
+import re
+import unicodedata
+import uuid
+from collections.abc import Iterable, Mapping
+from dataclasses import dataclass, field
+from enum import StrEnum
+from typing import Any
+
+EXTRACTOR_VERSION = "v1"
+GLOBAL_SCOPE = "global"
+
+_NS = uuid.UUID("6f3c1a52-8e0b-4f7e-9a1d-0c5b2e9d4a11")
+_SUMMARY_TYPES = frozenset({"section_summary", "document_summary"})
+_PARENT, _CHILD = "parent", "child"
+_EDGE_CHARS = " \t\r\n.,;:!?\"'`()[]{}<>「」『』《》〈〉【】“”‘’"
+_WS = re.compile(r"\s+")
+MIN_EVIDENCE_CHARS = 4
+
+
+class JobStatus(StrEnum):
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    PARTIAL = "partial"
+    FAILED = "failed"
+
+
+ACTIVE_JOB_STATUSES = frozenset({JobStatus.PENDING, JobStatus.PROCESSING})
+
+
+class JobMode(StrEnum):
+    RESUME = "resume"  # 같은 추출기 버전으로 끝난 청크는 건너뜀
+    REBUILD = "rebuild"  # 문서 그래프를 지우고 처음부터
+
+
+class TriggerSource(StrEnum):
+    UPLOAD = "upload"
+    ADMIN = "admin"
+
+
+@dataclass(frozen=True)
+class ChunkUnit:
+    chunk_id: str
+    document_id: str
+    kb_id: str | None
+    collection_name: str
+    content: str
+    chunk_index: int
+
+
+REL_RELATES = "RELATES"
+REL_REFERS_TO = "REFERS_TO"
+
+
+@dataclass(frozen=True)
+class Mention:
+    name: str  # 표시 이름(원문)
+    type: str
+    description: str
+    chunk_id: str
+    key: str | None = (
+        None  # 정규화 키 직접 지정(조문은 문서 단위 키) — 없으면 이름 정규화
+    )
+
+    @property
+    def lookup_key(self) -> str:
+        return self.key or NameNormalizer.normalize(self.name)
+
+
+@dataclass(frozen=True)
+class RelationDraft:
+    source: str  # 언급 이름 또는 Mention.key
+    target: str
+    type: str
+    evidence: str
+    chunk_id: str
+    kind: str = REL_RELATES
+
+
+@dataclass(frozen=True)
+class EntityWrite:
+    id: str
+    scope_key: str
+    name: str
+    normalized_name: str
+    type: str
+    description: str
+
+
+@dataclass(frozen=True)
+class MentionWrite:
+    entity_id: str
+    decision_id: str
+
+
+@dataclass(frozen=True)
+class RelationWrite:
+    id: str
+    kind: str
+    source_entity_id: str
+    target_entity_id: str
+    type: str
+    evidence_text: str
+    source_decision_id: str
+    target_decision_id: str
+
+
+@dataclass(frozen=True)
+class ChunkGraphWrite:
+    """청크 1개분 그래프 쓰기 — 한 트랜잭션으로 저장한다(재실행 시 같은 결과)."""
+
+    unit: ChunkUnit
+    extractor_version: str
+    new_entities: tuple[EntityWrite, ...]
+    mentions: tuple[MentionWrite, ...]
+    relations: tuple[RelationWrite, ...]
+
+
+@dataclass(frozen=True)
+class ExtractionContext:
+    model_id: str
+    entity_types: tuple[str, ...]
+    relation_types: tuple[str, ...]
+    request_id: str
+
+
+@dataclass(frozen=True)
+class ExtractionResult:
+    mentions: tuple[Mention, ...] = ()
+    relations: tuple[RelationDraft, ...] = ()
+    llm_calls: int = 0
+
+
+@dataclass
+class ExtractionJob:
+    id: str
+    document_id: str
+    kb_id: str | None
+    collection_name: str
+    status: JobStatus
+    mode: JobMode
+    trigger_source: TriggerSource
+    extractor_version: str = EXTRACTOR_VERSION
+    total_chunks: int = 0
+    processed_chunks: int = 0
+    failed_chunks: int = 0
+    llm_calls: int = 0
+    judge_calls: int = 0
+    entities_created: int = 0
+    entities_linked: int = 0
+    relations_created: int = 0
+    error_message: str | None = None
+    requested_by: str | None = None
+    started_at: Any = None
+    finished_at: Any = None
+    created_at: Any = None
+    updated_at: Any = None
+
+
+@dataclass
+class JobCounters:
+    processed_chunks: int = 0
+    failed_chunks: int = 0
+    llm_calls: int = 0
+    judge_calls: int = 0
+    entities_created: int = 0
+    entities_linked: int = 0
+    relations_created: int = 0
+    skipped_chunks: list[str] = field(default_factory=list)
+
+
+class ExtractionUnitPolicy:
+    @staticmethod
+    def select(docs: Iterable[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
+        candidates = [
+            d
+            for d in docs
+            if d.get("chunk_type") not in _SUMMARY_TYPES
+            and str(d.get("content") or "").strip()
+        ]
+        if any(d.get("chunk_type") == _PARENT for d in candidates):
+            candidates = [d for d in candidates if d.get("chunk_type") != _CHILD]
+        return sorted(candidates, key=lambda d: int(d.get("chunk_index") or 0))
+
+
+class EvidencePolicy:
+    """관계 근거 문장이 청크 원문에 실제로 있는지 (Plan FR-06 — 없으면 버림)."""
+
+    @staticmethod
+    def is_grounded(evidence: str | None, chunk_text: str) -> bool:
+        ev = _WS.sub(" ", (evidence or "").strip())
+        if len(ev) < MIN_EVIDENCE_CHARS:
+            return False
+        return ev in _WS.sub(" ", chunk_text)
+
+
+class NameNormalizer:
+    """정규화 키 — 표시 이름(원문)은 별도로 보존한다. 조사 제거는 module-4(Kiwi)."""
+
+    @staticmethod
+    def normalize(name: str) -> str:
+        text = unicodedata.normalize("NFKC", name or "")
+        text = _WS.sub(" ", text).strip(_EDGE_CHARS)
+        return text.casefold()
+
+
+def decision_id_for(chunk_id: str, normalized: str, type_: str) -> str:
+    return str(uuid.uuid5(_NS, f"decision:{chunk_id}:{normalized}:{type_}"))
+
+
+def relation_id_for(chunk_id: str, src_norm: str, type_: str, tgt_norm: str) -> str:
+    return str(uuid.uuid5(_NS, f"relation:{chunk_id}:{src_norm}:{type_}:{tgt_norm}"))

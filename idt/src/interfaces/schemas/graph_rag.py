@@ -6,9 +6,11 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from src.domain.graph_rag.extraction import ExtractionJob
 from src.domain.graph_rag.value_objects import (
     GraphHealth,
     GraphRagSettings,
@@ -112,3 +114,58 @@ class GraphHealthResponse(BaseModel):
 class CapabilitiesResponse(BaseModel):
     visible: bool
     stage: str | None = None
+
+
+# ── module-3: 추출 잡 ──────────────────────────────────────────────────────
+
+
+class ExtractRequest(BaseModel):
+    mode: Literal["resume", "rebuild"] = "resume"
+
+
+class ExtractAcceptedResponse(BaseModel):
+    job_id: str
+    status: str
+
+
+class ExtractionJobResponse(BaseModel):
+    id: str
+    document_id: str
+    kb_id: str | None
+    collection_name: str
+    status: str
+    mode: str
+    trigger_source: str
+    extractor_version: str
+    total_chunks: int
+    processed_chunks: int
+    failed_chunks: int
+    llm_calls: int
+    judge_calls: int
+    entities_created: int
+    entities_linked: int
+    relations_created: int
+    error_message: str | None
+    requested_by: str | None
+    started_at: datetime | None
+    finished_at: datetime | None
+    created_at: datetime | None
+
+    @classmethod
+    def from_domain(cls, j: ExtractionJob) -> ExtractionJobResponse:
+        data = {k: getattr(j, k) for k in cls.model_fields}
+        for k in ("status", "mode", "trigger_source"):
+            data[k] = getattr(j, k).value
+        return cls(**data)
+
+
+class KbDocumentJobItem(BaseModel):
+    document_id: str
+    filename: str
+    chunk_count: int
+    job: ExtractionJobResponse | None
+
+
+class KbDocumentJobsResponse(BaseModel):
+    items: list[KbDocumentJobItem]
+    total: int

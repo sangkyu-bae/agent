@@ -906,6 +906,20 @@ idt_front/src/
 | M2-5 | 기동 시 연결 실패 처리 | 차원 불일치면 모듈 비활성(store=None), 연결 실패(Aura 정지 등)면 경고만 남기고 store 유지 | Aura Free 자동 정지는 일시적이라 재기동 없이 회복해야 한다 |
 | M2-6 | 백엔드 off일 때 노출 판단 | off여도 `GraphExposure`를 등록해 단계(stage)대로 노출 | 관리자 화면에서 백엔드가 없는 것은 health로 보이게 한다. 실제 검색은 module-5 소스가 store 부재로 건너뛴다 |
 
+### 11.7 module-3 구현 중 결정 (2026-11-17)
+
+| # | Design 원안 | 구현 | 이유 |
+|---|------------|------|------|
+| M3-1 | V1 가정: parent 청크가 ES에 있는지 확인 필요 | **확인됨**: ES에 parent·child·요약이 모두 저장된다. parent가 있으면 parent만, 없으면(full·semantic·section_aware) 그 청크를, 요약(`section_summary`·`document_summary`)은 제외 | parent는 문맥이 넓고 LLM 호출 수가 적다. 근거 `chunk_id`는 parent id다. 하이브리드 결과의 child id와 겹침 처리는 module-5에서 정한다 |
+| M3-2 | 판정(module-4) | module-3는 **임시 판정**: (scope, 정규화 키, 타입) 정확 일치면 연결, 아니면 새 엔티티. 같은 잡 안에서는 메모리 캐시로 중복 생성을 막는다 | module-4에서 후보 검색과 Jev/LLM 판정으로 교체한다. 판정 기록 테이블(V089)도 module-4에서 만든다 |
+| M3-3 | 조문 엔티티 키 | 규칙 추출기가 `Mention.key="{document_id}::제N조"`를 직접 지정하고, 표시 이름은 "제N조"로 둔다 | 다른 문서의 같은 조문 번호와 섞이지 않게 한다. LLM 프롬프트는 조문을 뽑지 않도록 지시해 중복을 줄인다 |
+| M3-4 | 쓰기 | 청크 1개분(청크·새 엔티티·언급·RELATES·REFERS_TO)을 Neo4j **한 트랜잭션**으로 저장(`execute_write`) | 중간에 실패해도 청크 단위로 롤백된다. resume은 `Chunk.extractor_version`으로 판단한다 |
+| M3-5 | LLM 호출 상한 | 호출 전에 1회를 예약하고 상한에 닿으면 남은 청크를 건너뛰고 partial(`budget exhausted`) | 동시 실행 중에도 상한을 넘지 않는다. 실패한 호출도 1회로 센다 |
+| M3-6 | 실행 시점 store | 러너는 `RuntimeGraphStore`(현재 store로 매번 위임)를 받는다 | 기동 시 차원 불일치로 store가 꺼져도 러너가 이전 store를 붙잡지 않는다 |
+| M3-7 | 업로드 훅 조건 | 단계 off, 추출 off, 모델 미설정, 업로드 실패, 청크 0개, 엑셀(.xlsx·.xls·.csv)이면 건너뜀 | 섹션 요약 선례(엑셀 제외)와 같다 |
+| M3-8 | LLM 팩토리 | 섹션 요약 잡과 같은 `LLMFactory`(PII 가드 미적용) | 업로드 후 잡 선례를 따랐다. PoC 문서는 고객 정보가 없는 규정 문서로 제한한다(가이드 §5). 사내 도입 전 PII 가드 적용 여부를 다시 검토한다 |
+| M3-9 | 관리자 KB 문서 목록 | KB 권한 검사 없이 `document_metadata.find_by_kb_id` + 문서별 최근 잡 | 관리자 전용 API다(`require_role("admin")`) |
+
 ---
 
 ## Version History
@@ -916,3 +930,4 @@ idt_front/src/
 | 0.2 | 2026-11-16 | DDL V086~V089 사용자 승인 | 배상규 |
 | 0.3 | 2026-11-17 | module-1 구현 중 결정 M1-1~M1-7 (§11.5) | 배상규 |
 | 0.4 | 2026-11-17 | module-2 구현 중 결정 M2-1~M2-6 (§11.6), 마이그레이션 번호 재배치 | 배상규 |
+| 0.5 | 2026-11-17 | module-3 구현 중 결정 M3-1~M3-9 (§11.7), V1 가정 확인 | 배상규 |

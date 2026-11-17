@@ -13,6 +13,11 @@ from src.domain.graph_rag.exceptions import (
     GraphBackendUnavailableError,
     GraphEmbeddingDimMismatchError,
 )
+from src.domain.graph_rag.extraction import (
+    REL_REFERS_TO,
+    REL_RELATES,
+    ChunkGraphWrite,
+)
 from src.domain.graph_rag.interfaces import GraphStorePort
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.infrastructure.graph_rag.neo4j import cypher
@@ -92,3 +97,83 @@ class Neo4jGraphStore(GraphStorePort):
 
     async def aclose(self) -> None:
         await self._driver.close()
+
+    # ── module-3: 적재 ──────────────────────────────────────────────────────
+
+    async def extracted_chunk_ids(self, document_id: str, version: str) -> set[str]:
+        rows = await self._query(
+            cypher.EXTRACTED_CHUNKS, document_id=document_id, version=version
+        )
+        return {r["chunk_id"] for r in rows}
+
+    async def delete_document(self, document_id: str) -> None:
+        await self._query(cypher.DELETE_DOC_RELATES, document_id=document_id)
+        await self._query(cypher.DELETE_DOC_CHUNKS, document_id=document_id)
+        await self._query(cypher.DELETE_ORPHAN_ENTITIES)
+
+    async def find_entity_id(
+        self, scope_key: str, normalized_name: str, type_: str
+    ) -> str | None:
+        rows = await self._query(
+            cypher.FIND_ENTITY,
+            scope_key=scope_key,
+            normalized=normalized_name,
+            type=type_,
+        )
+        return rows[0]["id"] if rows else None
+
+    async def write_chunk_graph(self, write: ChunkGraphWrite) -> None:
+        params = _chunk_params(write)
+        try:
+            async with self._driver.session(database=self._database) as session:
+                await session.execute_write(_write_chunk_tx, params)
+        except Exception as e:  # noqa: BLE001
+            raise GraphBackendUnavailableError(f"{type(e).__name__}: {e}") from e
+
+
+def _chunk_params(write: ChunkGraphWrite) -> dict[str, Any]:
+    unit = write.unit
+
+    def _rels(kind: str) -> list[dict[str, Any]]:
+        return [
+            {
+                "id": r.id,
+                "source": r.source_entity_id,
+                "target": r.target_entity_id,
+                "type": r.type,
+                "evidence_text": r.evidence_text,
+                "source_decision_id": r.source_decision_id,
+                "target_decision_id": r.target_decision_id,
+            }
+            for r in write.relations
+            if r.kind == kind
+        ]
+
+    return {
+        "chunk_id": unit.chunk_id,
+        "document_id": unit.document_id,
+        "kb_id": unit.kb_id,
+        "collection_name": unit.collection_name,
+        "version": write.extractor_version,
+        "entities": [e.__dict__ for e in write.new_entities],
+        "mentions": [m.__dict__ for m in write.mentions],
+        "relates": _rels(REL_RELATES),
+        "refers": _rels(REL_REFERS_TO),
+    }
+
+
+async def _write_chunk_tx(tx: Any, p: dict[str, Any]) -> None:
+    """한 트랜잭션: 청크 → 새 엔티티 → 언급 → 관계. 실패하면 전체 롤백."""
+    base = {
+        k: p[k]
+        for k in ("chunk_id", "document_id", "kb_id", "collection_name", "version")
+    }
+    await tx.run(cypher.WRITE_CHUNK, **base)
+    if p["entities"]:
+        await tx.run(cypher.WRITE_ENTITIES, entities=p["entities"])
+    if p["mentions"]:
+        await tx.run(cypher.WRITE_MENTIONS, mentions=p["mentions"], **base)
+    if p["relates"]:
+        await tx.run(cypher.WRITE_RELATES, relations=p["relates"], **base)
+    if p["refers"]:
+        await tx.run(cypher.WRITE_REFERS_TO, relations=p["refers"], **base)

@@ -21,6 +21,7 @@ def _settings(**over):
         neo4j_password=None, neo4j_database="neo4j", neo4j_max_pool_size=10,
         neo4j_connect_timeout_s=5.0, graph_entity_embedding_dimensions=512,
         graph_aura_free_node_limit=200000, graph_aura_free_rel_limit=400000,
+        es_host="localhost", es_port=9200, es_scheme="http", es_index="documents",
     )
     base.update(over)
     return SimpleNamespace(**base)
@@ -43,10 +44,33 @@ def _paths(app):
 def test_off_registers_exposure_and_routes_without_store():
     app, hooks, _, runtime = _wire()
     assert hooks.exposure is not None
+    assert hooks.post_ingest is not None          # module-3 추출 훅
+    assert hooks.supplemental is None and hooks.deletion is None  # module-5
     assert runtime.store is None and runtime.backend == "off"
     paths = _paths(app)
     assert "/api/v1/admin/graph-rag/settings" in paths
     assert "/api/v1/graph-rag/capabilities" in paths
+    assert "/api/v1/admin/graph-rag/documents/{document_id}/extract" in paths
+    assert "/api/v1/admin/graph-rag/kbs/{kb_id}/documents" in paths
+    assert "/api/v1/admin/graph-rag/jobs/{job_id}" in paths
+
+
+@pytest.mark.asyncio
+async def test_start_marks_interrupted_jobs_even_without_store(monkeypatch):
+    calls = []
+
+    class _JobStore:
+        async def fail_interrupted(self, request_id):
+            calls.append(request_id)
+            return 2
+
+    runtime = graph_rag_di.GraphRagRuntime(
+        backend="off", store=None, reader=MagicMock(), logger=MagicMock(),
+        embedding_dimensions=512, job_store=_JobStore(),
+    )
+    monkeypatch.setattr(graph_rag_di, "_runtime", runtime)
+    await graph_rag_di.start_graph_rag()
+    assert calls == ["graph-rag-startup"]
 
 
 @pytest.mark.parametrize("over", [

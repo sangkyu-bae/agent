@@ -1,4 +1,5 @@
-"""SQLAlchemy ORM: graph_rag_setting (V086), graph_rag_stage_change (V087).
+"""SQLAlchemy ORM: graph_rag_setting (V086), graph_rag_stage_change (V087),
+graph_extraction_job (V088).
 
 Design Ref: graph-rag-foundation §3.3 — comment= 는 마이그레이션 COMMENT 와 같은 문구.
 """
@@ -6,7 +7,17 @@ Design Ref: graph-rag-foundation §3.3 — comment= 는 마이그레이션 COMME
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import JSON, Boolean, DateTime, Index, Integer, Numeric, String, func
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.infrastructure.persistence.models.base import Base
@@ -127,4 +138,76 @@ class GraphRagStageChangeModel(Base):
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now(), comment="변경 시각"
+    )
+
+
+def _count(comment: str) -> Mapped[int]:
+    return mapped_column(Integer, nullable=False, default=0, comment=comment)
+
+
+class GraphExtractionJobModel(Base):
+    __tablename__ = "graph_extraction_job"
+    __table_args__ = (
+        Index("idx_gej_document", "document_id", "created_at"),
+        Index("idx_gej_status", "status"),
+        {"comment": "그래프 추출 잡 — 문서 단위 실행 이력"},
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, comment="잡 식별자")
+    document_id: Mapped[str] = mapped_column(
+        String(36), nullable=False, comment="document_metadata.document_id 소프트 참조"
+    )
+    kb_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, comment="knowledge_base.id 소프트 참조"
+    )
+    collection_name: Mapped[str] = mapped_column(
+        String(255), nullable=False, comment="청크가 저장된 컬렉션"
+    )
+    status: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="pending",
+        comment="pending 또는 processing 또는 completed 또는 partial 또는 failed",
+    )
+    mode: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="resume",
+        comment="resume 완료 청크 건너뜀 또는 rebuild 문서 그래프 삭제 후 재추출",
+    )
+    trigger_source: Mapped[str] = mapped_column(
+        String(16), nullable=False, comment="upload 자동 또는 admin 수동"
+    )
+    extractor_version: Mapped[str] = mapped_column(
+        String(16), nullable=False, comment="추출기 버전 — 바뀌면 resume도 재추출"
+    )
+    total_chunks: Mapped[int] = _count("대상 청크 수")
+    processed_chunks: Mapped[int] = _count("처리 완료 청크 수")
+    failed_chunks: Mapped[int] = _count("처리 실패 청크 수")
+    llm_calls: Mapped[int] = _count("추출과 판정 LLM 호출 합계")
+    judge_calls: Mapped[int] = _count("Jev 호출 수")
+    entities_created: Mapped[int] = _count("새로 만든 엔티티 수")
+    entities_linked: Mapped[int] = _count("기존 엔티티에 연결한 언급 수")
+    relations_created: Mapped[int] = _count("저장한 관계 엣지 수")
+    error_message: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="실패 사유 요약"
+    )
+    requested_by: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, comment="요청 사용자 id 소프트 참조"
+    )
+    started_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True, comment="처리 시작 시각"
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True, comment="처리 종료 시각"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now(), comment="생성 시각"
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+        comment="수정 시각",
     )

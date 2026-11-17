@@ -8,6 +8,15 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
+from src.domain.graph_rag.extraction import (
+    ChunkGraphWrite,
+    ChunkUnit,
+    ExtractionContext,
+    ExtractionJob,
+    ExtractionResult,
+    JobCounters,
+    JobStatus,
+)
 from src.domain.graph_rag.value_objects import GraphRagSettings, StageChange
 
 
@@ -66,3 +75,82 @@ class GraphStorePort(ABC):
 
     @abstractmethod
     async def aclose(self) -> None: ...
+
+    # ── module-3: 적재 ──────────────────────────────────────────────────────
+    @abstractmethod
+    async def extracted_chunk_ids(self, document_id: str, version: str) -> set[str]:
+        """같은 추출기 버전으로 이미 저장된 청크 id (resume 용)."""
+
+    @abstractmethod
+    async def delete_document(self, document_id: str) -> None:
+        """문서의 청크·언급·관계 근거 삭제 + 고아 엔티티 정리 (rebuild·삭제 훅)."""
+
+    @abstractmethod
+    async def find_entity_id(
+        self, scope_key: str, normalized_name: str, type_: str
+    ) -> str | None:
+        """정규화 이름·타입 정확 일치 엔티티 id (module-3 임시 판정)."""
+
+    @abstractmethod
+    async def write_chunk_graph(self, write: ChunkGraphWrite) -> None:
+        """청크 1개의 엔티티·언급·관계를 한 트랜잭션으로 저장."""
+
+
+class ExtractionJobStorePort(ABC):
+    """앱 수명 싱글턴 — 호출마다 짧은 독립 세션(SessionScoped 선례)."""
+
+    @abstractmethod
+    async def create(self, job: ExtractionJob, request_id: str) -> ExtractionJob: ...
+
+    @abstractmethod
+    async def get(self, job_id: str, request_id: str) -> ExtractionJob | None: ...
+
+    @abstractmethod
+    async def find_active(
+        self, document_id: str, request_id: str
+    ) -> ExtractionJob | None: ...
+
+    @abstractmethod
+    async def latest_by_documents(
+        self, document_ids: list[str], request_id: str
+    ) -> dict[str, ExtractionJob]: ...
+
+    @abstractmethod
+    async def mark_processing(
+        self, job_id: str, total_chunks: int, request_id: str
+    ) -> None: ...
+
+    @abstractmethod
+    async def save_progress(
+        self, job_id: str, counters: JobCounters, request_id: str
+    ) -> None: ...
+
+    @abstractmethod
+    async def finish(
+        self,
+        job_id: str,
+        status: JobStatus,
+        counters: JobCounters,
+        error: str | None,
+        request_id: str,
+    ) -> None: ...
+
+    @abstractmethod
+    async def fail_interrupted(self, request_id: str) -> int:
+        """기동 시 pending·processing 잡을 failed(interrupted)로 — 바뀐 수."""
+
+
+class ChunkSourcePort(ABC):
+    @abstractmethod
+    async def list_units(
+        self, document_id: str, request_id: str
+    ) -> list[ChunkUnit]: ...
+
+
+class GraphExtractorPort(ABC):
+    """청크 1개 → 언급·관계 초안 (규칙 추출기·LLM 추출기 공통)."""
+
+    @abstractmethod
+    async def extract(
+        self, unit: ChunkUnit, context: ExtractionContext
+    ) -> ExtractionResult: ...
