@@ -1,8 +1,8 @@
 """Admin graph-rag router: /api/v1/admin/graph-rag/*.
 
 Design Ref: graph-rag-foundation §4.1·§6.1 — 라우터는 변환·오류 매핑만 한다.
-module-2 설정·단계·상태, module-3 추출 잡, module-4 검토 큐, module-4b 주제 목록.
-엔티티·검색 테스트·정합성 점검은 module-5.
+module-2 설정·단계·상태, module-3 추출 잡, module-4 검토 큐, module-4b 주제 목록,
+module-5b 엔티티·검색 테스트·정합성 점검.
 """
 
 from __future__ import annotations
@@ -10,6 +10,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from src.application.graph_rag.admin.health_use_case import GraphHealthUseCase
+from src.application.graph_rag.admin.inspect_use_case import InspectUseCase
 from src.application.graph_rag.admin.jobs_use_case import (
     DocumentNotFoundError,
     ExtractionJobsUseCase,
@@ -23,6 +24,7 @@ from src.application.graph_rag.admin.review_use_case import (
     GraphReviewTargetInvalidError,
     ReviewUseCase,
 )
+from src.application.graph_rag.admin.search_test_use_case import SearchTestUseCase
 from src.application.graph_rag.admin.settings_use_case import (
     GraphRagSettingsUpdate,
     GraphRagSettingsUseCase,
@@ -44,12 +46,16 @@ from src.domain.graph_rag.resolution import ReviewStatus
 from src.domain.graph_rag.value_objects import RolloutStage
 from src.interfaces.dependencies.auth import require_role
 from src.interfaces.schemas.graph_rag import (
+    EntityDetailResponse,
+    EntityItem,
+    EntityListResponse,
     ExtractAcceptedResponse,
     ExtractionJobResponse,
     ExtractRequest,
     GraphHealthResponse,
     GraphRagSettingsRequest,
     GraphRagSettingsResponse,
+    IntegrityResponse,
     KbDocumentJobItem,
     KbDocumentJobsResponse,
     ReviewApproveRequest,
@@ -57,6 +63,8 @@ from src.interfaces.schemas.graph_rag import (
     ReviewListResponse,
     ReviewRejectRequest,
     ReviewRejectResponse,
+    SearchTestRequest,
+    SearchTestResponse,
     StageChangeItem,
     StageChangeRequest,
     StageHistoryResponse,
@@ -93,6 +101,14 @@ def get_review_use_case() -> ReviewUseCase:
 
 def get_topics_use_case() -> TopicsUseCase:
     raise NotImplementedError("TopicsUseCase not wired (wire_graph_rag)")
+
+
+def get_inspect_use_case() -> InspectUseCase:
+    raise NotImplementedError("InspectUseCase not wired (wire_graph_rag)")
+
+
+def get_search_test_use_case() -> SearchTestUseCase:
+    raise NotImplementedError("SearchTestUseCase not wired (wire_graph_rag)")
 
 
 # Design §6.1 오류 코드 → HTTP 상태
@@ -378,3 +394,84 @@ async def topic_update(
     except GraphRagError as e:
         raise _mapped(e) from e
     return TopicItem.from_domain(topic)
+
+
+# ── module-5b: 엔티티·검색 테스트·정합성 (Design §4.1·§4.2) ─────────────────
+
+
+@router.get("/entities", response_model=EntityListResponse)
+async def entity_list(
+    q: str | None = Query(default=None, max_length=100),
+    type_: str | None = Query(default=None, alias="type", max_length=32),
+    page: int = Query(default=1, ge=1),
+    size: int = Query(default=20, ge=1, le=100),
+    current_user: User = Depends(require_role("admin")),
+    use_case: InspectUseCase = Depends(get_inspect_use_case),
+) -> EntityListResponse:
+    try:
+        items, total = await use_case.entities(
+            query=q, type_=type_, page=page, size=size
+        )
+    except GraphRagError as e:
+        raise _mapped(e) from e
+    return EntityListResponse(
+        items=[EntityItem.from_domain(e) for e in items],
+        total=total,
+        page=page,
+        size=size,
+    )
+
+
+@router.get("/entities/{entity_id}", response_model=EntityDetailResponse)
+async def entity_detail(
+    entity_id: str,
+    current_user: User = Depends(require_role("admin")),
+    use_case: InspectUseCase = Depends(get_inspect_use_case),
+) -> EntityDetailResponse:
+    try:
+        detail = await use_case.entity(entity_id, _request_id(current_user))
+    except GraphRagError as e:
+        raise _mapped(e) from e
+    if detail is None:
+        raise _error(
+            "GRAPH_ENTITY_NOT_FOUND",
+            f"entity not found: {entity_id}",
+            status.HTTP_404_NOT_FOUND,
+        )
+    return EntityDetailResponse.from_domain(detail)
+
+
+@router.post("/search-test", response_model=SearchTestResponse)
+async def search_test(
+    body: SearchTestRequest,
+    current_user: User = Depends(require_role("admin")),
+    use_case: SearchTestUseCase = Depends(get_search_test_use_case),
+) -> SearchTestResponse:
+    try:
+        result = await use_case.run(
+            query=body.query,
+            kb_id=body.kb_id,
+            collection_name=body.collection_name,
+            top_k=body.top_k,
+            max_hops=body.max_hops,
+            request_id=_request_id(current_user),
+        )
+    except GraphRagError as e:
+        raise _mapped(e) from e
+    return SearchTestResponse.from_result(result)
+
+
+@router.get("/integrity", response_model=IntegrityResponse)
+async def integrity(
+    kb_id: str | None = Query(default=None, max_length=36),
+    sample: int = Query(default=500, ge=1, le=2000),
+    current_user: User = Depends(require_role("admin")),
+    use_case: InspectUseCase = Depends(get_inspect_use_case),
+) -> IntegrityResponse:
+    try:
+        report = await use_case.integrity(
+            kb_id=kb_id, sample=sample, request_id=_request_id(current_user)
+        )
+    except GraphRagError as e:
+        raise _mapped(e) from e
+    return IntegrityResponse.from_domain(report)

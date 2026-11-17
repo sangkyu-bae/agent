@@ -21,8 +21,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.graph_rag_runtime_store import RuntimeGraphStore
 from src.application.graph_rag.admin.health_use_case import GraphHealthUseCase
+from src.application.graph_rag.admin.inspect_use_case import InspectUseCase
 from src.application.graph_rag.admin.jobs_use_case import ExtractionJobsUseCase
 from src.application.graph_rag.admin.review_use_case import ReviewUseCase
+from src.application.graph_rag.admin.search_test_use_case import SearchTestUseCase
 from src.application.graph_rag.admin.settings_use_case import GraphRagSettingsUseCase
 from src.application.graph_rag.admin.stage_use_case import ChangeStageUseCase
 from src.application.graph_rag.admin.topics_use_case import TopicsUseCase
@@ -353,11 +355,14 @@ def wire_graph_rag(
     logger: LoggerInterface,
     settings: Any,
     judgment_backend: Any = None,
+    hybrid_search_factory: Callable[[], Any] | None = None,
 ) -> GraphRagRuntime:
     """create_app() 에서 1회 호출. 실패해도 앱 기동을 막지 않는 값만 만든다.
 
     judgment_backend — main.py 의 판정 백엔드(JudgmentPort | None). None 이면
     엔티티 판정은 LLM 으로만 한다(Design D5). 관리자 Jev 토글은 실행 시점에 본다.
+    hybrid_search_factory — 관리자 검색 테스트의 비교용 하이브리드 검색
+    (처음 쓸 때 생성).
     """
     global _runtime
     reader = CachedGraphSettingsReader(
@@ -381,7 +386,16 @@ def wire_graph_rag(
             extraction.store, extraction.document_topics, logger
         ),
     )
-    _register_routes(app, get_session, reader, extraction, settings, logger)
+    _register_routes(
+        app,
+        get_session,
+        reader,
+        extraction,
+        settings,
+        logger,
+        retrieval=retrieval,
+        hybrid_search_factory=hybrid_search_factory,
+    )
     _runtime = GraphRagRuntime(
         backend=backend,
         store=store,
@@ -401,6 +415,9 @@ def _register_routes(
     extraction: _Extraction,
     settings: Any,
     logger: LoggerInterface,
+    *,
+    retrieval: GraphRetrievalSource,
+    hybrid_search_factory: Callable[[], Any] | None,
 ) -> None:
     from src.api.routes import admin_graph_rag_router as admin_routes
     from src.api.routes import graph_rag_router as public_routes
@@ -462,6 +479,17 @@ def _register_routes(
         document_topics=extraction.document_topics,
         logger=logger,
     )
+    fetcher = EsEvidenceFetcher(extraction.es_repo, settings.es_index, logger)
+    overrides[admin_routes.get_inspect_use_case] = lambda: InspectUseCase(
+        reader=reader, store=extraction.store, fetcher=fetcher, logger=logger
+    )
+    search_test = SearchTestUseCase(  # 하이브리드 lazy 캐시를 유지하려고 싱글턴
+        reader=reader,
+        source=retrieval,
+        hybrid_factory=hybrid_search_factory,
+        logger=logger,
+    )
+    overrides[admin_routes.get_search_test_use_case] = lambda: search_test
     overrides[public_routes.get_graph_settings_reader] = lambda: reader
     app.include_router(admin_routes.router)
     app.include_router(public_routes.router)

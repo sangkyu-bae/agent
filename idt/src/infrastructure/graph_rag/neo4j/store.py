@@ -19,6 +19,16 @@ from src.domain.graph_rag.extraction import (
     REL_RELATES,
     ChunkGraphWrite,
     EntityWrite,
+    NameNormalizer,
+)
+from src.domain.graph_rag.inspection import (
+    MAX_DETAIL_MENTIONS,
+    MAX_DETAIL_RELATIONS,
+    EntityDetail,
+    EntitySummary,
+    GraphChunkRef,
+    MentionView,
+    RelationView,
 )
 from src.domain.graph_rag.interfaces import GraphStorePort
 from src.domain.graph_rag.resolution import MIN_VECTOR_SIMILARITY, Candidate
@@ -290,6 +300,61 @@ class Neo4jGraphStore(GraphStorePort):
         )
         return {r["chunk_id"] for r in rows}
 
+    # ── module-5b: 관리자 점검 ──────────────────────────────────────────────
+
+    async def search_entities(
+        self, query: str | None, type_: str | None, skip: int, limit: int
+    ) -> tuple[list[EntitySummary], int]:
+        q = NameNormalizer.normalize(query) if query else None
+        params = {"q": q or None, "type": type_}
+        total, rows = await asyncio.gather(
+            self._query(cypher.COUNT_ENTITIES, **params),
+            self._query(cypher.SEARCH_ENTITIES, skip=skip, limit=limit, **params),
+        )
+        return [_summary(r) for r in rows], int(total[0]["c"]) if total else 0
+
+    async def entity_detail(self, entity_id: str) -> EntityDetail | None:
+        head = await self._query(cypher.ENTITY_SUMMARY, id=entity_id)
+        if not head:
+            return None
+        aliases, relations, mentions = await asyncio.gather(
+            self._query(cypher.ENTITY_ALIASES, id=entity_id),
+            self._query(
+                cypher.ENTITY_RELATIONS, id=entity_id, limit=MAX_DETAIL_RELATIONS
+            ),
+            self._query(
+                cypher.ENTITY_MENTIONS, id=entity_id, limit=MAX_DETAIL_MENTIONS
+            ),
+        )
+        return EntityDetail(
+            entity=_summary(head[0]),
+            aliases=[r["surface"] for r in aliases if r["surface"]],
+            relations=[
+                RelationView(
+                    id=r["id"] or "",
+                    direction=r["direction"],
+                    kind=r["kind"],
+                    type=r["type"],
+                    other_id=r["other_id"],
+                    other_name=r["other_name"],
+                    evidence_chunk_id=r["chunk_id"],
+                    evidence_text=r["evidence"],
+                    document_id=r["document_id"],
+                )
+                for r in relations
+            ],
+            mentions=[
+                MentionView(
+                    r["chunk_id"], r["document_id"] or "", r["decision_id"] or ""
+                )
+                for r in mentions
+            ],
+        )
+
+    async def sample_chunks(self, kb_id: str | None, limit: int) -> list[GraphChunkRef]:
+        rows = await self._query(cypher.SAMPLE_CHUNKS, kb_id=kb_id, limit=limit)
+        return [GraphChunkRef(r["chunk_id"], r["document_id"] or "") for r in rows]
+
 
 def _candidate(r: Any, match: str, similarity: float) -> Candidate:
     return Candidate(
@@ -358,3 +423,14 @@ async def _write_chunk_tx(tx: Any, p: dict[str, Any]) -> None:
         await tx.run(cypher.WRITE_REFERS_TO, relations=p["refers"], **base)
     if p["aliases"]:
         await tx.run(cypher.WRITE_ALIASES, aliases=p["aliases"])
+
+
+def _summary(r: Any) -> EntitySummary:
+    return EntitySummary(
+        id=r["id"],
+        name=r["name"],
+        type=r["type"],
+        description=r["description"] or "",
+        mention_count=int(r["mentions"]),
+        relation_count=int(r["rels"]),
+    )

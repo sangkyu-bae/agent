@@ -11,6 +11,11 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from src.domain.graph_rag.extraction import ExtractionJob
+from src.domain.graph_rag.inspection import (
+    EntityDetail,
+    EntitySummary,
+    IntegrityReport,
+)
 from src.domain.graph_rag.resolution import ResolutionDecision
 from src.domain.graph_rag.topic import Topic, is_topic_decision
 from src.domain.graph_rag.value_objects import (
@@ -288,3 +293,173 @@ class TopicUpdateRequest(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=64)
     description: str | None = Field(default=None, max_length=500)
     status: Literal["active", "retired"] | None = None
+
+
+# ── module-5b: 엔티티·검색 테스트·정합성 (Design §4.1·§4.2) ─────────────────
+
+
+class EntityItem(BaseModel):
+    id: str
+    name: str
+    type: str
+    description: str
+    mention_count: int
+    relation_count: int
+
+    @classmethod
+    def from_domain(cls, e: EntitySummary) -> EntityItem:
+        return cls(**e.__dict__)
+
+
+class EntityListResponse(BaseModel):
+    items: list[EntityItem]
+    total: int
+    page: int
+    size: int
+
+
+class EntityRelationItem(BaseModel):
+    id: str
+    direction: Literal["out", "in"]
+    kind: str
+    type: str
+    other_id: str
+    other_name: str
+    evidence_chunk_id: str
+    evidence_text: str
+    document_id: str
+
+
+class EntityMentionItem(BaseModel):
+    chunk_id: str
+    document_id: str
+    decision_id: str
+    preview: str
+
+
+class EntityDetailResponse(BaseModel):
+    entity: EntityItem
+    aliases: list[str]
+    relations: list[EntityRelationItem]
+    mentions: list[EntityMentionItem]
+
+    @classmethod
+    def from_domain(cls, d: EntityDetail) -> EntityDetailResponse:
+        return cls(
+            entity=EntityItem.from_domain(d.entity),
+            aliases=list(d.aliases),
+            relations=[EntityRelationItem(**r.__dict__) for r in d.relations],
+            mentions=[EntityMentionItem(**m.__dict__) for m in d.mentions],
+        )
+
+
+class SearchTestRequest(BaseModel):
+    query: str = Field(min_length=1, max_length=500)
+    kb_id: str | None = Field(default=None, max_length=36)
+    collection_name: str | None = Field(default=None, max_length=255)
+    top_k: int = Field(default=5, ge=1, le=20)
+    max_hops: int | None = Field(default=None, ge=1, le=3)
+
+
+class SearchScopeItem(BaseModel):
+    topic_ids: list[str] | None
+    topic_names: list[str]
+    decided_by: str
+    reason: str | None
+
+
+class LinkedEntityItem(BaseModel):
+    id: str
+    name: str
+    type: str
+    via: str
+    score: float
+
+
+class PathItem(BaseModel):
+    hops: int
+    path: list[str]
+    evidence_chunk_ids: list[str]
+
+
+class SearchHitItem(BaseModel):
+    chunk_id: str
+    document_id: str
+    filename: str
+    score: float
+    source: str
+    content_preview: str
+
+    @classmethod
+    def from_hit(cls, h) -> SearchHitItem:
+        meta = h.metadata or {}
+        return cls(
+            chunk_id=h.id,
+            document_id=str(meta.get("document_id", "")),
+            filename=str(meta.get("filename") or meta.get("source") or ""),
+            score=float(h.score),
+            source=h.source,
+            content_preview=(h.content or "")[:300],
+        )
+
+
+class SearchTestResponse(BaseModel):
+    scope: SearchScopeItem
+    linked_entities: list[LinkedEntityItem]
+    paths: list[PathItem]
+    graph_hits: list[SearchHitItem]
+    hybrid_hits: list[SearchHitItem]
+    fused_hits: list[SearchHitItem]
+    timings_ms: dict[str, int]
+    filtered_out: int
+    skip_reason: str | None
+    hybrid_error: str | None
+
+    @classmethod
+    def from_result(cls, r) -> SearchTestResponse:
+        t = r.trace
+        return cls(
+            scope=SearchScopeItem(
+                topic_ids=list(t.scope.topic_ids)
+                if t.scope.topic_ids is not None
+                else None,
+                topic_names=list(t.scope.topic_names),
+                decided_by=t.scope.decided_by,
+                reason=t.scope.reason,
+            ),
+            linked_entities=[LinkedEntityItem(**e.__dict__) for e in t.linked],
+            paths=[
+                PathItem(
+                    hops=p.hops,
+                    path=p.label(),
+                    evidence_chunk_ids=list(p.evidence_chunk_ids),
+                )
+                for p in t.paths[:_MAX_PATHS_SHOWN]
+            ],
+            graph_hits=[SearchHitItem.from_hit(h) for h in t.hits],
+            hybrid_hits=[SearchHitItem.from_hit(h) for h in r.hybrid_hits],
+            fused_hits=[SearchHitItem.from_hit(h) for h in r.fused_hits],
+            timings_ms=dict(t.timings_ms),
+            filtered_out=t.filtered_out,
+            skip_reason=t.skip_reason,
+            hybrid_error=r.hybrid_error,
+        )
+
+
+_MAX_PATHS_SHOWN = 50
+
+
+class IntegrityResponse(BaseModel):
+    checked: int
+    missing: int
+    missing_chunk_ids: list[str]
+    missing_document_ids: list[str]
+
+    @classmethod
+    def from_domain(cls, r: IntegrityReport) -> IntegrityResponse:
+        return cls(
+            checked=r.checked,
+            missing=r.missing,
+            missing_chunk_ids=list(r.missing_chunk_ids),
+            missing_document_ids=list(r.missing_document_ids),
+        )

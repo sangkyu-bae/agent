@@ -19,6 +19,11 @@ from src.domain.graph_rag.extraction import (
     JobStatus,
     Mention,
 )
+from src.domain.graph_rag.inspection import (
+    EntityDetail,
+    EntitySummary,
+    GraphChunkRef,
+)
 from src.domain.graph_rag.resolution import (
     Candidate,
     ChooserVerdict,
@@ -170,6 +175,23 @@ class GraphStorePort(ABC):
         self, chunk_ids: list[str], topic_ids: tuple[str, ...] | None
     ) -> set[str]:
         """주제 범위 안에 있는 청크 id (topic_ids None 이면 그래프에 있는 청크 전부)."""
+
+    # ── module-5b: 관리자 점검 ──────────────────────────────────────────────
+    @abstractmethod
+    async def search_entities(
+        self, query: str | None, type_: str | None, skip: int, limit: int
+    ) -> tuple[list[EntitySummary], int]:
+        """이름(정규화) 부분 일치·타입으로 엔티티 목록.
+
+        값 엔티티(청크 단위 키)는 제외한다.
+        """
+
+    @abstractmethod
+    async def entity_detail(self, entity_id: str) -> EntityDetail | None: ...
+
+    @abstractmethod
+    async def sample_chunks(self, kb_id: str | None, limit: int) -> list[GraphChunkRef]:
+        """정합성 점검용 그래프 청크 표본."""
 
 
 class EvidenceFetcherPort(ABC):

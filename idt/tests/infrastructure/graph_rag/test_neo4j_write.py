@@ -267,3 +267,60 @@ async def test_live_link_traverse_hub_and_scope():
         await store._query("MATCH (e:Entity {scope_key: $s}) DETACH DELETE e", s=scope)
         await store._query("MATCH (x:Alias {scope_key: $s}) DETACH DELETE x", s=scope)
         await store.aclose()
+
+
+@pytest.mark.neo4j
+@pytest.mark.skipif(not _URI, reason="NEO4J_URI not set")
+@pytest.mark.asyncio
+async def test_live_entity_search_detail_and_chunk_sample():
+    """module-5b: 엔티티 목록(값 엔티티 제외)·상세·정합성 표본."""
+    from src.domain.graph_rag.extraction import AliasWrite
+
+    driver = build_driver(
+        _URI, os.environ.get("NEO4J_USER", "neo4j"), os.environ["NEO4J_PASSWORD"],
+        max_pool_size=2, connect_timeout_s=10,
+    )
+    store = Neo4jGraphStore(driver, os.environ.get("NEO4J_DATABASE", "neo4j"),
+                            MagicMock())
+    tag = uuid.uuid4().hex[:8]
+    doc, kb = f"test-doc-{tag}", f"kb-{tag}"
+    unit = ChunkUnit(chunk_id=f"chunk-{tag}", document_id=doc, kb_id=kb,
+                     collection_name="c", content="x", chunk_index=0)
+    a, b, v = str(uuid.uuid4()), str(uuid.uuid4()), str(uuid.uuid4())
+    try:
+        await store.write_chunk_graph(ChunkGraphWrite(
+            unit=unit, extractor_version="v3",
+            new_entities=(
+                EntityWrite(a, "global", f"점검상품{tag}", f"점검상품{tag}", "상품", "설명"),
+                EntityWrite(b, "global", f"점검대상{tag}", f"점검대상{tag}", "대상", ""),
+                EntityWrite(v, "global", "30%", f"{unit.chunk_id}::점검{tag}", "기타", ""),
+            ),
+            mentions=(MentionWrite(a, "dec-a"), MentionWrite(v, "dec-v")),
+            relations=(RelationWrite(f"rel-{tag}", REL_RELATES, a, b, "적용대상", "근거문장",
+                                     "dec-a", "dec-b"),),
+            aliases=(AliasWrite(a, "global", f"별칭{tag}", f"별칭{tag}"),),
+        ))
+        items, total = await store.search_entities(f"점검", None, 0, 100)
+        names = {e.name for e in items}
+        assert f"점검상품{tag}" in names and "30%" not in names  # 값 엔티티 제외
+        only, n = await store.search_entities(f"점검상품{tag}", "상품", 0, 10)
+        assert n == 1 and only[0].mention_count == 1 and only[0].relation_count == 1
+
+        detail = await store.entity_detail(a)
+        assert detail.aliases == [f"별칭{tag}"]
+        rel = detail.relations[0]
+        assert (rel.direction, rel.type, rel.other_id, rel.evidence_chunk_id,
+                rel.evidence_text) == ("out", "적용대상", b, unit.chunk_id, "근거문장")
+        assert [m.chunk_id for m in detail.mentions] == [unit.chunk_id]
+        assert (await store.entity_detail(b)).relations[0].direction == "in"
+        assert await store.entity_detail("nope") is None
+
+        refs = await store.sample_chunks(kb, 10)
+        assert [(r.chunk_id, r.document_id) for r in refs] == [(unit.chunk_id, doc)]
+    finally:
+        await store.delete_document(doc)
+        await store._query("MATCH (e:Entity) WHERE e.id IN $ids DETACH DELETE e",
+                           ids=[a, b, v])
+        await store._query("MATCH (x:Alias {normalized: $n}) DETACH DELETE x",
+                           n=f"별칭{tag}")
+        await store.aclose()

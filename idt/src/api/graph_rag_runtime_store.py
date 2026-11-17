@@ -91,3 +91,13 @@ class RuntimeGraphStore(GraphStorePort):
 
     async def chunks_in_scope(self, chunk_ids, topic_ids):
         return await self._store().chunks_in_scope(chunk_ids, topic_ids)
+
+    # ── module-5b: 관리자 점검 ──────────────────────────────────────────────
+    async def search_entities(self, query, type_, skip, limit):
+        return await self._store().search_entities(query, type_, skip, limit)
+
+    async def entity_detail(self, entity_id):
+        return await self._store().entity_detail(entity_id)
+
+    async def sample_chunks(self, kb_id, limit):
+        return await self._store().sample_chunks(kb_id, limit)

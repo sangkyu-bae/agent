@@ -205,3 +205,48 @@ LINK_NAMES = (
     "WITH e, via WHERE " + _ENTITY_IN_SCOPE + " "
     "RETURN e.id AS id, e.name AS name, e.type AS type, via"
 )
+
+# ── module-5b: 관리자 점검 ─────────────────────────────────────────────────
+# 값 엔티티(청크 단위 키 '{chunk_id}::이름')는 목록에서 뺀다.
+_ENTITY_FILTER = (
+    "MATCH (e:Entity) WHERE NOT e.normalized_name CONTAINS '::' "
+    "AND ($q IS NULL OR e.normalized_name CONTAINS $q) "
+    "AND ($type IS NULL OR e.type = $type) "
+)
+COUNT_ENTITIES = _ENTITY_FILTER + "RETURN count(e) AS c"
+SEARCH_ENTITIES = (
+    _ENTITY_FILTER + "WITH e ORDER BY e.name SKIP $skip LIMIT $limit "
+    "RETURN e.id AS id, e.name AS name, e.type AS type, "
+    "coalesce(e.description, '') AS description, "
+    "COUNT { (e)-[:MENTIONED_IN]->() } AS mentions, "
+    "COUNT { (e)-[:RELATES|REFERS_TO]-() } AS rels"
+)
+ENTITY_ALIASES = (
+    "MATCH (a:Alias)-[:ALIAS_OF]->(:Entity {id: $id}) RETURN a.surface AS surface"
+)
+ENTITY_RELATIONS = (
+    "MATCH (e:Entity {id: $id})-[r:RELATES|REFERS_TO]-(o:Entity) "
+    "RETURN r.id AS id, type(r) AS kind, coalesce(r.type, '') AS type, "
+    "CASE WHEN startNode(r) = e THEN 'out' ELSE 'in' END AS direction, "
+    "o.id AS other_id, o.name AS other_name, "
+    "coalesce(r.evidence_chunk_id, '') AS chunk_id, "
+    "coalesce(r.evidence_text, '') AS evidence, "
+    "coalesce(r.document_id, '') AS document_id "
+    "ORDER BY kind, type, other_name LIMIT $limit"
+)
+ENTITY_MENTIONS = (
+    "MATCH (:Entity {id: $id})-[m:MENTIONED_IN]->(c:Chunk) "
+    "RETURN c.chunk_id AS chunk_id, c.document_id AS document_id, "
+    "m.decision_id AS decision_id LIMIT $limit"
+)
+SAMPLE_CHUNKS = (
+    "MATCH (c:Chunk) WHERE $kb_id IS NULL OR c.kb_id = $kb_id "
+    "RETURN c.chunk_id AS chunk_id, c.document_id AS document_id LIMIT $limit"
+)
+ENTITY_SUMMARY = (
+    "MATCH (e:Entity {id: $id}) "
+    "RETURN e.id AS id, e.name AS name, e.type AS type, "
+    "coalesce(e.description, '') AS description, "
+    "COUNT { (e)-[:MENTIONED_IN]->() } AS mentions, "
+    "COUNT { (e)-[:RELATES|REFERS_TO]-() } AS rels"
+)

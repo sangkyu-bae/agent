@@ -77,6 +77,9 @@ def _normalize_types(name: str, values: tuple[str, ...]) -> tuple[str, ...]:
     return cleaned
 
 
+MAX_RETRIEVAL_TIMEOUT_MS = 5000
+
+
 @dataclass(frozen=True)
 class GraphRagSettings:
     rollout_stage: RolloutStage
@@ -107,7 +110,12 @@ class GraphRagSettings:
         _require_range("candidate_top_k", self.candidate_top_k, 1, 8)
         _require_range("max_hops", self.max_hops, 1, 3)
         _require_range("graph_rrf_weight", self.graph_rrf_weight, 0.0, 1.0)
-        _require_range("retrieval_timeout_ms", self.retrieval_timeout_ms, 100, 5000)
+        _require_range(
+            "retrieval_timeout_ms",
+            self.retrieval_timeout_ms,
+            100,
+            MAX_RETRIEVAL_TIMEOUT_MS,
+        )
         object.__setattr__(
             self,
             "entity_types",

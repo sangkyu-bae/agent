@@ -6781,6 +6781,8 @@ def create_app() -> FastAPI:
         hooks=get_extension_hooks(), logger=get_app_logger(), settings=settings,
         # module-4: 엔티티 판정 Jev(None 이면 LLM 판정만)
         judgment_backend=get_judgment_backend(),
+        # module-5b: 관리자 검색 테스트의 비교용(처음 쓸 때 생성)
+        hybrid_search_factory=create_hybrid_search_use_case,
     )
     # golden-sample-blueprint: DI + /api/v1/admin/blueprints 라우터 (multimodal 레지스트리 재사용)
     from src.api.blueprint_di import wire_blueprint

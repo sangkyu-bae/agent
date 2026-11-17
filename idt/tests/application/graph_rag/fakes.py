@@ -260,6 +260,16 @@ class FakeStore(GraphStorePort):
     async def chunks_in_scope(self, chunk_ids, topic_ids):
         return set(chunk_ids)
 
+    # ── module-5b: 관리자 점검 ──────────────────────────────────────────────
+    async def search_entities(self, query, type_, skip, limit):
+        return [], 0
+
+    async def entity_detail(self, entity_id):
+        return None
+
+    async def sample_chunks(self, kb_id, limit):
+        return []
+
 
 class FakeTopics(TopicRepositoryPort):
     def __init__(self, topics=()):
