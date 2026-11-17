@@ -185,6 +185,15 @@ class Neo4jGraphStore(GraphStorePort):
         rows = await self._query(cypher.DELETE_ENTITY_IF_ORPHAN, id=entity_id)
         return bool(rows and rows[0]["deleted"])
 
+    # ── module-4b: 주제 ────────────────────────────────────────────────────
+
+    async def set_document_topics(self, document_id: str, topic_ids: list[str]) -> None:
+        await self._query(
+            cypher.SET_DOCUMENT_TOPICS,
+            document_id=document_id,
+            topic_ids=list(topic_ids),
+        )
+
 
 def _candidate(r: Any, match: str, similarity: float) -> Candidate:
     return Candidate(

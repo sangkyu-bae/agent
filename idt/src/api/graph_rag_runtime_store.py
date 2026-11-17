@@ -73,3 +73,6 @@ class RuntimeGraphStore(GraphStorePort):
 
     async def delete_entity_if_orphan(self, entity_id: str) -> bool:
         return await self._store().delete_entity_if_orphan(entity_id)
+
+    async def set_document_topics(self, document_id: str, topic_ids: list[str]) -> None:
+        await self._store().set_document_topics(document_id, topic_ids)

@@ -1,7 +1,7 @@
 """Admin graph-rag router: /api/v1/admin/graph-rag/*.
 
 Design Ref: graph-rag-foundation §4.1·§6.1 — 라우터는 변환·오류 매핑만 한다.
-module-2 설정·단계·상태, module-3 추출 잡, module-4 검토 큐.
+module-2 설정·단계·상태, module-3 추출 잡, module-4 검토 큐, module-4b 주제 목록.
 엔티티·검색 테스트·정합성 점검은 module-5.
 """
 
@@ -28,12 +28,16 @@ from src.application.graph_rag.admin.settings_use_case import (
     GraphRagSettingsUseCase,
 )
 from src.application.graph_rag.admin.stage_use_case import ChangeStageUseCase
+from src.application.graph_rag.admin.topics_use_case import TopicsUseCase
 from src.domain.auth.entities import User
 from src.domain.graph_rag.exceptions import (
     GraphBackendUnavailableError,
     GraphRagError,
     GraphStageEvalRequiredError,
     GraphStageOffError,
+    GraphTopicDuplicateError,
+    GraphTopicInvalidError,
+    GraphTopicNotFoundError,
 )
 from src.domain.graph_rag.extraction import JobMode
 from src.domain.graph_rag.resolution import ReviewStatus
@@ -56,6 +60,10 @@ from src.interfaces.schemas.graph_rag import (
     StageChangeItem,
     StageChangeRequest,
     StageHistoryResponse,
+    TopicCreateRequest,
+    TopicItem,
+    TopicListResponse,
+    TopicUpdateRequest,
 )
 
 router = APIRouter(prefix="/api/v1/admin/graph-rag", tags=["admin-graph-rag"])
@@ -83,6 +91,10 @@ def get_review_use_case() -> ReviewUseCase:
     raise NotImplementedError("ReviewUseCase not wired (wire_graph_rag)")
 
 
+def get_topics_use_case() -> TopicsUseCase:
+    raise NotImplementedError("TopicsUseCase not wired (wire_graph_rag)")
+
+
 # Design §6.1 오류 코드 → HTTP 상태
 _ERROR_STATUS: dict[type[GraphRagError], int] = {
     GraphStageOffError: status.HTTP_409_CONFLICT,
@@ -94,6 +106,9 @@ _ERROR_STATUS: dict[type[GraphRagError], int] = {
     GraphReviewNotFoundError: status.HTTP_404_NOT_FOUND,
     GraphReviewAlreadyDoneError: status.HTTP_409_CONFLICT,
     GraphReviewTargetInvalidError: 422,
+    GraphTopicInvalidError: 422,
+    GraphTopicNotFoundError: status.HTTP_404_NOT_FOUND,
+    GraphTopicDuplicateError: status.HTTP_409_CONFLICT,
 }
 
 
@@ -308,3 +323,58 @@ async def review_reject(
     except GraphRagError as e:
         raise _mapped(e) from e
     return ReviewRejectResponse(entity_id=entity_id)
+
+
+# ── module-4b: 주제 목록 (Design §11.9) ────────────────────────────────────
+
+
+@router.get("/topics", response_model=TopicListResponse)
+async def topic_list(
+    include_retired: bool = Query(default=False),
+    current_user: User = Depends(require_role("admin")),
+    use_case: TopicsUseCase = Depends(get_topics_use_case),
+) -> TopicListResponse:
+    rows = await use_case.list(
+        include_retired=include_retired, request_id=_request_id(current_user)
+    )
+    return TopicListResponse(items=[TopicItem.from_domain(t, n) for t, n in rows])
+
+
+@router.post("/topics", response_model=TopicItem, status_code=status.HTTP_201_CREATED)
+async def topic_create(
+    body: TopicCreateRequest,
+    current_user: User = Depends(require_role("admin")),
+    use_case: TopicsUseCase = Depends(get_topics_use_case),
+) -> TopicItem:
+    try:
+        topic = await use_case.create(
+            name=body.name,
+            level=body.level,
+            parent_id=body.parent_id,
+            description=body.description,
+            actor=str(current_user.id),
+            request_id=_request_id(current_user),
+        )
+    except GraphRagError as e:
+        raise _mapped(e) from e
+    return TopicItem.from_domain(topic)
+
+
+@router.patch("/topics/{topic_id}", response_model=TopicItem)
+async def topic_update(
+    topic_id: str,
+    body: TopicUpdateRequest,
+    current_user: User = Depends(require_role("admin")),
+    use_case: TopicsUseCase = Depends(get_topics_use_case),
+) -> TopicItem:
+    try:
+        topic = await use_case.update(
+            topic_id,
+            name=body.name,
+            description=body.description,
+            status=body.status,
+            request_id=_request_id(current_user),
+        )
+    except GraphRagError as e:
+        raise _mapped(e) from e
+    return TopicItem.from_domain(topic)

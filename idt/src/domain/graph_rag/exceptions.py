@@ -27,3 +27,21 @@ class GraphEmbeddingDimMismatchError(GraphRagError):
     """기존 벡터 인덱스 차원 ≠ 설정 차원 — 모듈을 켜지 않는다 (기동 로그)."""
 
     code = "GRAPH_EMBEDDING_DIM_MISMATCH"
+
+
+class GraphTopicInvalidError(GraphRagError):
+    """주제 이름·단계·상위 주제 규칙 위반 (422)."""
+
+    code = "GRAPH_TOPIC_INVALID"
+
+
+class GraphTopicNotFoundError(GraphRagError):
+    """주제 id 없음 (404)."""
+
+    code = "GRAPH_TOPIC_NOT_FOUND"
+
+
+class GraphTopicDuplicateError(GraphRagError):
+    """같은 상위 아래 같은 정규화 이름 (409)."""
+
+    code = "GRAPH_TOPIC_DUPLICATE"

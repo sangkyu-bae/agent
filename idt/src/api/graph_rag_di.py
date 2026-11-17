@@ -25,10 +25,13 @@ from src.application.graph_rag.admin.jobs_use_case import ExtractionJobsUseCase
 from src.application.graph_rag.admin.review_use_case import ReviewUseCase
 from src.application.graph_rag.admin.settings_use_case import GraphRagSettingsUseCase
 from src.application.graph_rag.admin.stage_use_case import ChangeStageUseCase
+from src.application.graph_rag.admin.topics_use_case import TopicsUseCase
 from src.application.graph_rag.extraction.launcher import GraphExtractionLauncher
 from src.application.graph_rag.extraction.use_case import ExtractGraphUseCase
 from src.application.graph_rag.hooks import GraphExposure, GraphIngestHook
 from src.application.graph_rag.resolution.resolver import EntityResolver
+from src.application.graph_rag.topic.classifier import DocumentTopicClassifier
+from src.application.graph_rag.topic.review import TopicReviewer
 from src.domain.extension_hooks import ExtensionHooks
 from src.domain.graph_rag.exceptions import GraphEmbeddingDimMismatchError
 from src.domain.graph_rag.interfaces import GraphSettingsReaderPort, GraphStorePort
@@ -48,6 +51,18 @@ from src.infrastructure.graph_rag.resolution.embedder import OpenAIEntityEmbedde
 from src.infrastructure.graph_rag.resolution.jev_chooser import JevEntityChooser
 from src.infrastructure.graph_rag.resolution.llm_chooser import LlmEntityChooser
 from src.infrastructure.graph_rag.settings_reader import CachedGraphSettingsReader
+from src.infrastructure.graph_rag.topic.prompts import (
+    JEV_TOPIC_INSTRUCTIONS,
+    JEV_TOPIC_NEW,
+    JEV_TOPIC_QID,
+    LLM_TOPIC_NEW_HINT,
+    LLM_TOPIC_SYSTEM,
+)
+from src.infrastructure.graph_rag.topic.proposer import LlmTopicProposer
+from src.infrastructure.graph_rag.topic_store import (
+    SessionScopedDocumentTopicStore,
+    SessionScopedTopicRepository,
+)
 
 _OWNER = "graph_rag"
 _BACKEND_OFF = "off"
@@ -124,6 +139,49 @@ class _Extraction:
     launcher: GraphExtractionLauncher
     store: RuntimeGraphStore
     decisions: SessionScopedDecisionStore
+    topics: SessionScopedTopicRepository
+    document_topics: SessionScopedDocumentTopicStore
+
+
+def _build_topic_classifier(
+    settings: Any,
+    topics: SessionScopedTopicRepository,
+    document_topics: SessionScopedDocumentTopicStore,
+    decisions: SessionScopedDecisionStore,
+    reader: CachedGraphSettingsReader,
+    llm_model_repo: Any,
+    llm_factory: Any,
+    judgment_backend: Any,
+    logger: LoggerInterface,
+) -> DocumentTopicClassifier:
+    """module-4b: 주제 제안(LLM) + 판정(Jev·LLM, 주제용 문구)."""
+    jev = (
+        JevEntityChooser(
+            judgment_backend,
+            timeout_seconds=settings.judgment_timeout_seconds,
+            qid=JEV_TOPIC_QID,
+            instructions=JEV_TOPIC_INSTRUCTIONS,
+            new_description=JEV_TOPIC_NEW,
+        )
+        if judgment_backend is not None
+        else None
+    )
+    return DocumentTopicClassifier(
+        topics=topics,
+        document_topics=document_topics,
+        decisions=decisions,
+        proposer=LlmTopicProposer(llm_model_repo, llm_factory, reader, logger),
+        llm_chooser=LlmEntityChooser(
+            llm_model_repo,
+            llm_factory,
+            reader,
+            logger,
+            system=LLM_TOPIC_SYSTEM,
+            new_hint=LLM_TOPIC_NEW_HINT,
+        ),
+        jev_chooser=jev,
+        logger=logger,
+    )
 
 
 def _build_resolver(
@@ -172,6 +230,8 @@ def _build_extraction(
 
     job_store = SessionScopedExtractionJobStore(session_factory, logger)
     decisions = SessionScopedDecisionStore(session_factory, logger)
+    topics = SessionScopedTopicRepository(session_factory, logger)
+    document_topics = SessionScopedDocumentTopicStore(session_factory, logger)
     store = RuntimeGraphStore(lambda: _runtime.store if _runtime else None)
     llm_model_repo = SessionScopedLlmModelRepository(session_factory, logger)
     llm_factory = LLMFactory()
@@ -195,10 +255,26 @@ def _build_extraction(
         ),
         decisions=decisions,
         logger=logger,
+        topic_classifier=_build_topic_classifier(
+            settings,
+            topics,
+            document_topics,
+            decisions,
+            reader,
+            llm_model_repo,
+            llm_factory,
+            judgment_backend,
+            logger,
+        ),
     )
     launcher = GraphExtractionLauncher(job_store, runner, logger)
     return _Extraction(
-        job_store=job_store, launcher=launcher, store=store, decisions=decisions
+        job_store=job_store,
+        launcher=launcher,
+        store=store,
+        decisions=decisions,
+        topics=topics,
+        document_topics=document_topics,
     )
 
 
@@ -300,7 +376,20 @@ def _register_routes(
     overrides[admin_routes.get_graph_health_use_case] = _health_uc
     overrides[admin_routes.get_extraction_jobs_use_case] = _jobs_uc
     overrides[admin_routes.get_review_use_case] = lambda: ReviewUseCase(
-        decisions=extraction.decisions, store=extraction.store, logger=logger
+        decisions=extraction.decisions,
+        store=extraction.store,
+        logger=logger,
+        topics=TopicReviewer(
+            topics=extraction.topics,
+            document_topics=extraction.document_topics,
+            store=extraction.store,
+            logger=logger,
+        ),
+    )
+    overrides[admin_routes.get_topics_use_case] = lambda: TopicsUseCase(
+        topics=extraction.topics,
+        document_topics=extraction.document_topics,
+        logger=logger,
     )
     overrides[public_routes.get_graph_settings_reader] = lambda: reader
     app.include_router(admin_routes.router)

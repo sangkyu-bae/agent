@@ -147,3 +147,10 @@ DELETE_ENTITY_IF_ORPHAN = (
     "OPTIONAL MATCH (a:Alias)-[:ALIAS_OF]->(e) "
     "DETACH DELETE a, e RETURN count(*) AS deleted"
 )
+
+# module-4b: 문서 청크에 주제 id 복사(검색 범위 필터).
+# 원본은 MySQL graph_document_topic.
+SET_DOCUMENT_TOPICS = (
+    "MATCH (c:Chunk {document_id: $document_id}) SET c.topic_ids = $topic_ids "
+    "RETURN count(c) AS updated"
+)

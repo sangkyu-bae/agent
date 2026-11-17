@@ -5,6 +5,8 @@ Design Ref: graph-rag-foundation §2.2(적재)·§3.4·§6.2, Plan FR-04~07·FR-
   (같은 새 엔티티를 두 청크가 동시에 만드는 경합 방지).
 - 청크 실패는 세고 계속 진행한다. 호출 상한에 닿으면 남은 청크는 건너뛰고 partial.
 - 판정은 EntityResolver(module-4: 후보 검색 + Jev 세 구간 + LLM 재판정·대체).
+- 주제 분류(module-4b, §11.9): rebuild 이거나 문서 주제가 없을 때 잡 시작에 1회.
+  실패해도 잡은 계속한다. 잡 끝에 문서의 모든 청크에 topic_ids 를 복사한다.
 """
 
 from __future__ import annotations
@@ -16,6 +18,7 @@ from src.application.graph_rag.resolution.resolver import (
     EntityResolver,
     ResolveRunState,
 )
+from src.application.graph_rag.topic.classifier import DocumentTopicClassifier
 from src.domain.graph_rag.exceptions import GraphBackendUnavailableError
 from src.domain.graph_rag.extraction import (
     EXTRACTOR_VERSION,
@@ -75,7 +78,9 @@ class ExtractGraphUseCase:
         resolver: EntityResolver,
         decisions: DecisionStorePort,
         logger: LoggerInterface,
+        topic_classifier: DocumentTopicClassifier | None = None,
     ) -> None:
+        self._topics = topic_classifier
         self._jobs = jobs
         self._chunks = chunks
         self._rules = rule_extractor
@@ -146,12 +151,62 @@ class ExtractGraphUseCase:
             ),
             counters=JobCounters(processed_chunks=len(units) - len(todo)),
         )
+        topic_ids = await self._classify_topics(job, units, state, request_id)
         semaphore = asyncio.Semaphore(settings.concurrency)
         await asyncio.gather(
             *(self._process(job.id, u, state, semaphore, request_id) for u in todo)
         )
+        if topic_ids is not None:
+            await self._copy_topics(job.document_id, topic_ids, request_id)
         status, error = self._final_status(state, len(todo))
         await self._jobs.finish(job.id, status, state.counters, error, request_id)
+
+    async def _classify_topics(
+        self,
+        job: ExtractionJob,
+        units: list[ChunkUnit],
+        state: _RunState,
+        request_id: str,
+    ) -> list[str] | None:
+        """주제 id 목록 — 분류기가 없으면 None(청크 복사도 안 함)."""
+        if self._topics is None:
+            return None
+        current = await self._topics.current(job.document_id, request_id)
+        if job.mode is not JobMode.REBUILD and current:
+            return current
+        try:
+            result = await self._topics.classify(
+                job_id=job.id,
+                document_id=job.document_id,
+                units=units,
+                settings=state.settings,
+                state=state.resolve,
+                request_id=request_id,
+            )
+        except Exception as e:  # noqa: BLE001 — 주제 실패가 추출을 막지 않는다
+            self._logger.warning(
+                "document topic classification failed",
+                exception=e,
+                request_id=request_id,
+                document_id=job.document_id,
+            )
+            return current
+        state.counters.llm_calls += result.llm_calls
+        state.counters.judge_calls += result.judge_calls
+        return result.topic_ids
+
+    async def _copy_topics(
+        self, document_id: str, topic_ids: list[str], request_id: str
+    ) -> None:
+        try:
+            await self._store.set_document_topics(document_id, topic_ids)  # type: ignore[union-attr]
+        except Exception as e:  # noqa: BLE001
+            self._logger.warning(
+                "copy topic ids to chunks failed",
+                exception=e,
+                request_id=request_id,
+                document_id=document_id,
+            )
 
     @staticmethod
     def _final_status(state: _RunState, todo: int) -> tuple[JobStatus, str | None]:

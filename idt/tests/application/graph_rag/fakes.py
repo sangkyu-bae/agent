@@ -3,9 +3,14 @@ from __future__ import annotations
 
 import dataclasses
 
-from src.domain.graph_rag.exceptions import GraphBackendUnavailableError
+from src.domain.graph_rag.exceptions import (
+    GraphBackendUnavailableError,
+    GraphTopicDuplicateError,
+)
 from src.domain.graph_rag.interfaces import (
     DecisionStorePort,
+    DocumentTopicStorePort,
+    TopicRepositoryPort,
     EvalEvidenceVerifierPort,
     GraphRagSettingsRepositoryPort,
     GraphSettingsReaderPort,
@@ -214,3 +219,73 @@ class FakeStore(GraphStorePort):
             return False
         g.entities.pop(entity_id, None)
         return True
+
+    # ── module-4b: 주제 ────────────────────────────────────────────────────
+    async def set_document_topics(self, document_id, topic_ids):
+        if not hasattr(self, "doc_topics"):
+            self.doc_topics = {}
+        self.doc_topics[document_id] = list(topic_ids)
+
+
+class FakeTopics(TopicRepositoryPort):
+    def __init__(self, topics=()):
+        self.rows = {t.id: t for t in topics}
+
+    async def list(self, request_id, *, level=None, parent_id=None,
+                   include_retired=False):
+        return [
+            t for t in self.rows.values()
+            if (level is None or t.level == level)
+            and (level is None or t.parent_id == parent_id)
+            and (include_retired or t.usable)
+        ]
+
+    async def get(self, topic_id, request_id):
+        return self.rows.get(topic_id)
+
+    async def find_by_name(self, parent_key, normalized_name, request_id):
+        for t in self.rows.values():
+            if (t.parent_key, t.normalized_name) == (parent_key, normalized_name):
+                return t
+        return None
+
+    async def create(self, topic, request_id):
+        if await self.find_by_name(topic.parent_key, topic.normalized_name, request_id):
+            raise GraphTopicDuplicateError("dup")
+        self.rows[topic.id] = topic
+        return topic
+
+    async def update(self, topic, request_id):
+        other = await self.find_by_name(topic.parent_key, topic.normalized_name,
+                                        request_id)
+        if other and other.id != topic.id:
+            raise GraphTopicDuplicateError("dup")
+        self.rows[topic.id] = topic
+        return topic
+
+
+class FakeDocumentTopics(DocumentTopicStorePort):
+    def __init__(self):
+        self.links = {}  # document_id -> list[DocumentTopic]
+
+    async def list_for_document(self, document_id, request_id):
+        return list(self.links.get(document_id, []))
+
+    async def replace(self, document_id, links, request_id):
+        self.links[document_id] = list(links)
+
+    async def move(self, decision_id, to_topic_id, request_id):
+        for doc, links in self.links.items():
+            for i, link in enumerate(links):
+                if link.decision_id == decision_id:
+                    links[i] = dataclasses.replace(link, topic_id=to_topic_id)
+                    return doc
+        return None
+
+    async def count_documents(self, topic_ids, request_id):
+        counts = dict.fromkeys(topic_ids, 0)
+        for links in self.links.values():
+            for link in links:
+                if link.topic_id in counts:
+                    counts[link.topic_id] += 1
+        return counts

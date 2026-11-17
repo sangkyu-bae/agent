@@ -25,6 +25,12 @@ from src.domain.graph_rag.resolution import (
     ResolutionDecision,
     ReviewStatus,
 )
+from src.domain.graph_rag.topic import (
+    DocumentTopic,
+    Topic,
+    TopicLevel,
+    TopicProposal,
+)
 from src.domain.graph_rag.value_objects import GraphRagSettings, StageChange
 
 
@@ -125,6 +131,74 @@ class GraphStorePort(ABC):
     @abstractmethod
     async def delete_entity_if_orphan(self, entity_id: str) -> bool:
         """언급이 하나도 남지 않으면 엔티티·별칭을 지운다."""
+
+    # ── module-4b: 주제 ────────────────────────────────────────────────────
+    @abstractmethod
+    async def set_document_topics(self, document_id: str, topic_ids: list[str]) -> None:
+        """문서의 모든 Chunk 노드 topic_ids 를 바꾼다(검색 범위 필터 복사본)."""
+
+
+class TopicRepositoryPort(ABC):
+    """V090 graph_topic — 앱 수명 싱글턴, 호출마다 짧은 세션."""
+
+    @abstractmethod
+    async def list(
+        self,
+        request_id: str,
+        *,
+        level: TopicLevel | None = None,
+        parent_id: str | None = None,
+        include_retired: bool = False,
+    ) -> list[Topic]: ...
+
+    @abstractmethod
+    async def get(self, topic_id: str, request_id: str) -> Topic | None: ...
+
+    @abstractmethod
+    async def find_by_name(
+        self, parent_key: str, normalized_name: str, request_id: str
+    ) -> Topic | None: ...
+
+    @abstractmethod
+    async def create(self, topic: Topic, request_id: str) -> Topic:
+        """같은 (parent_key, normalized_name) 이 있으면 GraphTopicDuplicateError."""
+
+    @abstractmethod
+    async def update(self, topic: Topic, request_id: str) -> Topic:
+        """이름·설명·상태 변경. 이름 충돌은 GraphTopicDuplicateError."""
+
+
+class DocumentTopicStorePort(ABC):
+    """V091 graph_document_topic."""
+
+    @abstractmethod
+    async def list_for_document(
+        self, document_id: str, request_id: str
+    ) -> list[DocumentTopic]: ...
+
+    @abstractmethod
+    async def replace(
+        self, document_id: str, links: list[DocumentTopic], request_id: str
+    ) -> None:
+        """문서의 연결을 통째로 바꾼다(재분류)."""
+
+    @abstractmethod
+    async def move(
+        self, decision_id: str, to_topic_id: str, request_id: str
+    ) -> str | None:
+        """판정 하나의 연결을 다른 주제로 옮긴다(검토 거절). 옮긴 문서 id."""
+
+    @abstractmethod
+    async def count_documents(
+        self, topic_ids: list[str], request_id: str
+    ) -> dict[str, int]: ...
+
+
+class TopicProposerPort(ABC):
+    """문서 앞부분 → 주제 제안(LLM)."""
+
+    @abstractmethod
+    async def propose(self, excerpt: str, request_id: str) -> TopicProposal: ...
 
 
 class EntityChooserPort(ABC):

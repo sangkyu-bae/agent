@@ -1,5 +1,6 @@
 """SQLAlchemy ORM: graph_rag_setting (V086), graph_rag_stage_change (V087),
-graph_extraction_job (V088), graph_resolution_decision (V089).
+graph_extraction_job (V088), graph_resolution_decision (V089),
+graph_topic (V090), graph_document_topic (V091).
 
 Design Ref: graph-rag-foundation §3.3 — comment= 는 마이그레이션 COMMENT 와 같은 문구.
 """
@@ -14,8 +15,10 @@ from sqlalchemy import (
     Index,
     Integer,
     Numeric,
+    SmallInteger,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column
@@ -290,6 +293,91 @@ class GraphResolutionDecisionModel(Base):
     )
     review_note: Mapped[str | None] = mapped_column(
         String(500), nullable=True, comment="검토 메모"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now(), comment="생성 시각"
+    )
+
+
+class GraphTopicModel(Base):
+    """V090 — 2단계 주제 목록 (module-4b, Design §11.9)."""
+
+    __tablename__ = "graph_topic"
+    __table_args__ = (
+        UniqueConstraint("parent_key", "normalized_name", name="uq_graph_topic_name"),
+        Index("idx_graph_topic_level", "level", "status"),
+        {"comment": "그래프 검색 범위용 문서 주제 목록 — 2단계"},
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, comment="주제 식별자")
+    name: Mapped[str] = mapped_column(String(64), nullable=False, comment="주제 이름")
+    normalized_name: Mapped[str] = mapped_column(
+        String(64), nullable=False, comment="정규화 이름 — 중복 검사용"
+    )
+    level: Mapped[int] = mapped_column(
+        SmallInteger, nullable=False, comment="1 대분류 또는 2 소분류"
+    )
+    parent_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, comment="소분류의 대분류 id 소프트 참조"
+    )
+    parent_key: Mapped[str] = mapped_column(
+        String(36),
+        nullable=False,
+        default="",
+        comment="유일성 검사용 — 대분류는 빈 값",
+    )
+    description: Mapped[str | None] = mapped_column(
+        String(500), nullable=True, comment="판정과 질문 라우팅에 쓰는 설명"
+    )
+    status: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="active",
+        comment="active 또는 pending 또는 retired",
+    )
+    origin: Mapped[str] = mapped_column(
+        String(16), nullable=False, comment="admin 또는 auto"
+    )
+    created_by: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, comment="만든 관리자 id — 자동 생성은 NULL"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now(), comment="생성 시각"
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+        comment="수정 시각",
+    )
+
+
+class GraphDocumentTopicModel(Base):
+    """V091 — 문서 ↔ 주제 연결 (module-4b)."""
+
+    __tablename__ = "graph_document_topic"
+    __table_args__ = (
+        Index("idx_gdt_topic", "topic_id"),
+        {"comment": "문서와 주제 연결 — 그래프 검색 범위"},
+    )
+
+    document_id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, comment="문서 id 소프트 참조"
+    )
+    topic_id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, comment="graph_topic.id 소프트 참조"
+    )
+    is_primary: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, comment="대표 주제 여부"
+    )
+    probability: Mapped[Decimal | None] = mapped_column(
+        Numeric(5, 4), nullable=True, comment="판정 확률 — rule과 LLM은 NULL"
+    )
+    decision_id: Mapped[str] = mapped_column(
+        String(36),
+        nullable=False,
+        comment="graph_resolution_decision.id 소프트 참조",
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now(), comment="생성 시각"

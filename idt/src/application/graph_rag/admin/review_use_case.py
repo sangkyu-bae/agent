@@ -12,10 +12,12 @@ from __future__ import annotations
 
 import uuid
 
+from src.application.graph_rag.topic.review import TopicReviewer
 from src.domain.graph_rag.exceptions import GraphRagError
 from src.domain.graph_rag.extraction import GLOBAL_SCOPE, EntityWrite, NameNormalizer
 from src.domain.graph_rag.interfaces import DecisionStorePort, GraphStorePort
 from src.domain.graph_rag.resolution import ResolutionDecision, ReviewStatus
+from src.domain.graph_rag.topic import is_topic_decision
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 
 
@@ -38,10 +40,19 @@ class ReviewUseCase:
         decisions: DecisionStorePort,
         store: GraphStorePort,
         logger: LoggerInterface,
+        topics: TopicReviewer | None = None,
     ) -> None:
         self._decisions = decisions
         self._store = store
         self._logger = logger
+        self._topics = topics
+
+    def _topic_reviewer(self, d: ResolutionDecision) -> TopicReviewer | None:
+        if not is_topic_decision(d.mention_type):
+            return None
+        if self._topics is None:
+            raise GraphReviewTargetInvalidError("topic review is not available")
+        return self._topics
 
     async def list(
         self, status: ReviewStatus, limit: int, offset: int, request_id: str
@@ -62,6 +73,9 @@ class ReviewUseCase:
         self, decision_id: str, *, reviewer: str, note: str | None, request_id: str
     ) -> None:
         d = await self._pending(decision_id, request_id)
+        topics = self._topic_reviewer(d)
+        if topics is not None:
+            await topics.approve(d, request_id)
         await self._decisions.mark_reviewed(
             d.id, ReviewStatus.APPROVED, reviewer, note, d.entity_id, request_id
         )
@@ -77,10 +91,17 @@ class ReviewUseCase:
     ) -> str:
         """거절 처리 후 언급이 연결된 엔티티 id 를 돌려준다."""
         d = await self._pending(decision_id, request_id)
-        to_id = await self._target(d, target_entity_id)
-        await self._store.reassign_decision(d.id, to_id)
-        if d.entity_id != to_id:
-            await self._store.delete_entity_if_orphan(d.entity_id)
+        topics = self._topic_reviewer(d)
+        if topics is not None:
+            to_id = self._checked_target(d, target_entity_id) or await topics.split(
+                d, reviewer, request_id
+            )
+            await topics.move(d, to_id, request_id)
+        else:
+            to_id = await self._target(d, target_entity_id)
+            await self._store.reassign_decision(d.id, to_id)
+            if d.entity_id != to_id:
+                await self._store.delete_entity_if_orphan(d.entity_id)
         await self._decisions.mark_reviewed(
             d.id, ReviewStatus.REJECTED, reviewer, note, to_id, request_id
         )
@@ -93,7 +114,9 @@ class ReviewUseCase:
         )
         return to_id
 
-    async def _target(self, d: ResolutionDecision, target: str | None) -> str:
+    @staticmethod
+    def _checked_target(d: ResolutionDecision, target: str | None) -> str | None:
+        """대상 검증 — 판정 당시 후보만. 대상 없음은 연결 판정일 때만 허용(분리)."""
         candidate_ids = {c.get("entity_id") for c in d.candidates}
         if target is not None:
             if target not in candidate_ids or target == d.entity_id:
@@ -105,6 +128,12 @@ class ReviewUseCase:
             raise GraphReviewTargetInvalidError(
                 "a newly created entity needs a candidate to merge into"
             )
+        return None
+
+    async def _target(self, d: ResolutionDecision, target: str | None) -> str:
+        checked = self._checked_target(d, target)
+        if checked is not None:
+            return checked
         entity = EntityWrite(
             id=str(uuid.uuid4()),
             scope_key=GLOBAL_SCOPE,

@@ -57,6 +57,8 @@ def test_off_registers_exposure_and_routes_without_store():
     assert "/api/v1/admin/graph-rag/jobs/{job_id}" in paths
     assert "/api/v1/admin/graph-rag/review" in paths
     assert "/api/v1/admin/graph-rag/review/{decision_id}/reject" in paths
+    assert "/api/v1/admin/graph-rag/topics" in paths
+    assert "/api/v1/admin/graph-rag/topics/{topic_id}" in paths
 
 
 def test_wire_accepts_judgment_backend():

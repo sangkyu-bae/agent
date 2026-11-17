@@ -353,3 +353,79 @@ async def test_no_units_completes_with_zero():
     await uc.run("j1", "r")
     assert jobs.finished[0] is JobStatus.COMPLETED
     assert jobs.job.total_chunks == 0
+
+
+# ── module-4b: 주제 분류 연결 ───────────────────────────────────────────────
+
+class _Topics:
+    """DocumentTopicClassifier 대역 — classify·current 호출만 기록."""
+
+    def __init__(self, ids=("t-loan",), current=(), exc=None, llm_calls=1):
+        self.ids, self._current, self.exc, self.llm_calls = list(ids), list(current), exc, llm_calls
+        self.classified = []
+
+    async def current(self, document_id, request_id):
+        return list(self._current)
+
+    async def classify(self, *, job_id, document_id, units, settings, state, request_id):
+        from src.application.graph_rag.topic.classifier import TopicRunResult
+
+        self.classified.append(document_id)
+        if self.exc:
+            raise self.exc
+        return TopicRunResult(topic_ids=list(self.ids), llm_calls=self.llm_calls,
+                              judge_calls=1)
+
+
+def _uc_topics(topics, mode=JobMode.RESUME):
+    uc, jobs, store = _uc([_unit("p1")], _Extractor({"p1": ([_m("A상품")], [])}),
+                          mode=mode)
+    uc._topics = topics
+    return uc, jobs, store
+
+
+@pytest.mark.asyncio
+async def test_rebuild_classifies_topics_and_copies_ids_to_chunks():
+    topics = _Topics(current=("t-old",))
+    uc, jobs, store = _uc_topics(topics, mode=JobMode.REBUILD)
+    await uc.run("j1", "r")
+    status, counters, _ = jobs.finished
+    assert status is JobStatus.COMPLETED
+    assert topics.classified == ["doc-1"]
+    assert store.doc_topics["doc-1"] == ["t-loan"]
+    assert (counters.llm_calls, counters.judge_calls) == (2, 1)  # 청크 1 + 주제 1
+
+
+@pytest.mark.asyncio
+async def test_resume_with_existing_topics_skips_classification():
+    topics = _Topics(current=("t-old",))
+    uc, _, store = _uc_topics(topics)
+    await uc.run("j1", "r")
+    assert topics.classified == []
+    assert store.doc_topics["doc-1"] == ["t-old"]
+
+
+@pytest.mark.asyncio
+async def test_resume_without_topics_classifies():
+    topics = _Topics()
+    uc, _, store = _uc_topics(topics)
+    await uc.run("j1", "r")
+    assert topics.classified == ["doc-1"] and store.doc_topics["doc-1"] == ["t-loan"]
+
+
+@pytest.mark.asyncio
+async def test_topic_failure_does_not_fail_job():
+    topics = _Topics(exc=RuntimeError("llm down"))
+    uc, jobs, store = _uc_topics(topics, mode=JobMode.REBUILD)
+    await uc.run("j1", "r")
+    status, counters, _ = jobs.finished
+    assert status is JobStatus.COMPLETED and counters.processed_chunks == 1
+    assert store.doc_topics["doc-1"] == []
+
+
+@pytest.mark.asyncio
+async def test_without_topic_classifier_nothing_changes():
+    uc, jobs, store = _uc([_unit("p1")], _Extractor({"p1": ([_m("A상품")], [])}))
+    await uc.run("j1", "r")
+    assert jobs.finished[0] is JobStatus.COMPLETED
+    assert not hasattr(store, "doc_topics")

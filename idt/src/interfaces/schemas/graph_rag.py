@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from src.domain.graph_rag.extraction import ExtractionJob
 from src.domain.graph_rag.resolution import ResolutionDecision
+from src.domain.graph_rag.topic import Topic, is_topic_decision
 from src.domain.graph_rag.value_objects import (
     GraphHealth,
     GraphRagSettings,
@@ -194,10 +195,12 @@ class ReviewItem(BaseModel):
     llm_reason: str | None
     review_status: str
     created_at: datetime | None
+    kind: Literal["entity", "topic"] = "entity"  # module-4b: entity_id 가 주제 id
 
     @classmethod
     def from_domain(cls, d: ResolutionDecision) -> ReviewItem:
         return cls(
+            kind="topic" if is_topic_decision(d.mention_type) else "entity",
             id=d.id,
             job_id=d.job_id,
             document_id=d.document_id,
@@ -235,3 +238,53 @@ class ReviewRejectRequest(BaseModel):
 
 class ReviewRejectResponse(BaseModel):
     entity_id: str
+
+
+# ── module-4b: 주제 (Design §11.9) ─────────────────────────────────────────
+
+
+class TopicItem(BaseModel):
+    id: str
+    name: str
+    level: int
+    parent_id: str | None
+    description: str
+    status: str
+    origin: str
+    created_by: str | None
+    document_count: int
+    created_at: datetime | None
+    updated_at: datetime | None
+
+    @classmethod
+    def from_domain(cls, t: Topic, document_count: int = 0) -> TopicItem:
+        return cls(
+            id=t.id,
+            name=t.name,
+            level=int(t.level),
+            parent_id=t.parent_id,
+            description=t.description or "",
+            status=t.status.value,
+            origin=t.origin.value,
+            created_by=t.created_by,
+            document_count=document_count,
+            created_at=t.created_at,  # type: ignore[arg-type]
+            updated_at=t.updated_at,  # type: ignore[arg-type]
+        )
+
+
+class TopicListResponse(BaseModel):
+    items: list[TopicItem]
+
+
+class TopicCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=64)
+    level: Literal[1, 2]
+    parent_id: str | None = Field(default=None, max_length=36)
+    description: str | None = Field(default=None, max_length=500)
+
+
+class TopicUpdateRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=64)
+    description: str | None = Field(default=None, max_length=500)
+    status: Literal["active", "retired"] | None = None

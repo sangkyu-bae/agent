@@ -33,9 +33,25 @@ def _describe(c: Candidate) -> str:
 
 
 class JevEntityChooser(EntityChooserPort):
-    def __init__(self, backend: JudgmentPort, *, timeout_seconds: float) -> None:
+    """질문 문구만 바꿔 주제 판정(module-4b)에도 쓴다.
+
+    qid·instructions·new_description 으로 바꾼다.
+    """
+
+    def __init__(
+        self,
+        backend: JudgmentPort,
+        *,
+        timeout_seconds: float,
+        qid: str = QID,
+        instructions: str = _INSTRUCTIONS,
+        new_description: str = _NEW_DESCRIPTION,
+    ) -> None:
         self._backend = backend
         self._timeout = timeout_seconds
+        self._qid = qid
+        self._instructions = instructions
+        self._new_description = new_description
 
     async def choose(
         self,
@@ -53,16 +69,16 @@ class JevEntityChooser(EntityChooserPort):
                 "context": context,
             },
             questions={
-                QID: ChoiceQuestion(
-                    instructions=_INSTRUCTIONS,
-                    criteria=criteria + ((NEW_LABEL, _NEW_DESCRIPTION),),
+                self._qid: ChoiceQuestion(
+                    instructions=self._instructions,
+                    criteria=criteria + ((NEW_LABEL, self._new_description),),
                 )
             },
         )
         response = await asyncio.wait_for(
             self._backend.judge(request), self._timeout + _OUTER_TIMEOUT_MARGIN
         )
-        answer = response.choice(QID)
+        answer = response.choice(self._qid)
         return ChooserVerdict(
             label=answer.choice, probabilities=dict(answer.probabilities)
         )

@@ -155,3 +155,37 @@ async def test_live_candidates_alias_reassign_and_orphan():
         await store._query("MATCH (e:Entity {scope_key: $s}) DETACH DELETE e", s=scope)
         await store._query("MATCH (x:Alias {scope_key: $s}) DETACH DELETE x", s=scope)
         await store.aclose()
+
+
+@pytest.mark.neo4j
+@pytest.mark.skipif(not _URI, reason="NEO4J_URI not set")
+@pytest.mark.asyncio
+async def test_live_set_document_topics_copies_ids_to_all_chunks():
+    """module-4b: 문서의 모든 청크에 topic_ids 복사, 다른 문서는 그대로."""
+    driver = build_driver(
+        _URI, os.environ.get("NEO4J_USER", "neo4j"), os.environ["NEO4J_PASSWORD"],
+        max_pool_size=2, connect_timeout_s=10,
+    )
+    store = Neo4jGraphStore(driver, os.environ.get("NEO4J_DATABASE", "neo4j"),
+                            MagicMock())
+    doc, other = f"test-doc-{uuid.uuid4()}", f"test-doc-{uuid.uuid4()}"
+
+    def _w(d, i):
+        unit = ChunkUnit(chunk_id=f"chunk-{uuid.uuid4()}", document_id=d, kb_id="kb",
+                         collection_name="c", content="x", chunk_index=i)
+        return ChunkGraphWrite(unit=unit, extractor_version="v3", new_entities=(),
+                               mentions=(), relations=())
+    try:
+        for w in (_w(doc, 0), _w(doc, 1), _w(other, 0)):
+            await store.write_chunk_graph(w)
+        await store.set_document_topics(doc, ["t-loan", "t-corp"])
+        rows = await store._query(
+            "MATCH (c:Chunk) WHERE c.document_id IN [$a, $b] "
+            "RETURN c.document_id AS d, c.topic_ids AS t", a=doc, b=other)
+        got = sorted((r["d"] == doc, tuple(r["t"] or ())) for r in rows)
+        assert got == [(False, ()), (True, ("t-loan", "t-corp")),
+                       (True, ("t-loan", "t-corp"))]
+    finally:
+        await store.delete_document(doc)
+        await store.delete_document(other)
+        await store.aclose()

@@ -36,33 +36,52 @@ class EntityChoiceOutput(BaseModel):
     reason: str = Field(default="", description="한 문장 근거")
 
 
-def _prompt(mention: Mention, context: str, candidates: dict[str, Candidate]):
+_NEW_HINT = "후보 중 같은 대상이 없음"
+
+
+def _prompt(
+    mention: Mention,
+    context: str,
+    candidates: dict[str, Candidate],
+    system: str = _SYSTEM,
+    new_hint: str = _NEW_HINT,
+):
     lines = [
         f"{label}: {c.name} (타입: {c.type})"
         + (f" — {c.description[:200]}" if c.description else "")
         for label, c in candidates.items()
     ]
+    mention_line = f"[언급] {mention.name} (타입: {mention.type})"
+    if mention.description:
+        mention_line += f" — {mention.description[:200]}"
     user = (
-        f"[언급] {mention.name} (타입: {mention.type})\n"
+        f"{mention_line}\n"
         f"[문맥] {context}\n\n[후보]\n"
         + "\n".join(lines)
-        + f"\n{NEW_LABEL}: 후보 중 같은 대상이 없음"
+        + f"\n{NEW_LABEL}: {new_hint}"
     )
-    return [("system", _SYSTEM), ("human", user)]
+    return [("system", system), ("human", user)]
 
 
 class LlmEntityChooser(EntityChooserPort):
+    """시스템 문구만 바꿔 주제 판정(module-4b)에도 쓴다 — system·new_hint."""
+
     def __init__(
         self,
         llm_model_repo: Any,
         llm_factory: Any,
         reader: GraphSettingsReaderPort,
         logger: LoggerInterface,
+        *,
+        system: str = _SYSTEM,
+        new_hint: str = _NEW_HINT,
     ) -> None:
         self._repo = llm_model_repo
         self._factory = llm_factory
         self._reader = reader
         self._logger = logger
+        self._system = system
+        self._new_hint = new_hint
         self._llms: dict[str, Any] = {}
 
     async def _structured(self, request_id: str) -> Any:
@@ -86,7 +105,7 @@ class LlmEntityChooser(EntityChooserPort):
     ) -> ChooserVerdict:
         structured = await self._structured(request_id)
         out: EntityChoiceOutput = await structured.ainvoke(
-            _prompt(mention, context, candidates)
+            _prompt(mention, context, candidates, self._system, self._new_hint)
         )
         label = (out.label or "").strip().upper()
         if label != NEW_LABEL and label not in candidates:
