@@ -1,5 +1,5 @@
 """SQLAlchemy ORM: graph_rag_setting (V086), graph_rag_stage_change (V087),
-graph_extraction_job (V088).
+graph_extraction_job (V088), graph_resolution_decision (V089).
 
 Design Ref: graph-rag-foundation §3.3 — comment= 는 마이그레이션 COMMENT 와 같은 문구.
 """
@@ -210,4 +210,87 @@ class GraphExtractionJobModel(Base):
         server_default=func.now(),
         onupdate=func.now(),
         comment="수정 시각",
+    )
+
+
+class GraphResolutionDecisionModel(Base):
+    __tablename__ = "graph_resolution_decision"
+    __table_args__ = (
+        Index("idx_grd_review", "review_status", "created_at"),
+        Index("idx_grd_document", "document_id"),
+        Index("idx_grd_entity", "entity_id"),
+        {"comment": "엔티티 동일성 판정 기록과 검토 큐"},
+    )
+
+    id: Mapped[str] = mapped_column(
+        String(36),
+        primary_key=True,
+        comment="판정 식별자 — Neo4j 엣지 decision_id와 동일",
+    )
+    job_id: Mapped[str] = mapped_column(
+        String(36), nullable=False, comment="graph_extraction_job.id 소프트 참조"
+    )
+    document_id: Mapped[str] = mapped_column(
+        String(36), nullable=False, comment="근거 문서"
+    )
+    chunk_id: Mapped[str] = mapped_column(
+        String(64), nullable=False, comment="근거 청크"
+    )
+    mention_text: Mapped[str] = mapped_column(
+        String(255), nullable=False, comment="언급 원문"
+    )
+    mention_type: Mapped[str] = mapped_column(
+        String(32), nullable=False, comment="언급 타입"
+    )
+    candidates: Mapped[list] = mapped_column(
+        JSON, nullable=False, comment="후보 목록 라벨 엔티티id 이름 유사도"
+    )
+    probabilities: Mapped[dict | None] = mapped_column(
+        JSON, nullable=True, comment="Jev 라벨별 확률"
+    )
+    chosen_label: Mapped[str] = mapped_column(
+        String(16), nullable=False, comment="선택 라벨 C1부터 또는 NEW"
+    )
+    entity_id: Mapped[str] = mapped_column(
+        String(36), nullable=False, comment="최종 연결 엔티티 id"
+    )
+    created_new: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, comment="새 엔티티 생성 여부"
+    )
+    decided_by: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        comment="rule 또는 jev 또는 llm_rejudge 또는 llm_fallback",
+    )
+    band: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        comment="auto_link 또는 auto_new 또는 rejudge 또는 fallback",
+    )
+    probability: Mapped[Decimal | None] = mapped_column(
+        Numeric(5, 4), nullable=True, comment="판정 확률 — rule은 NULL"
+    )
+    llm_confidence: Mapped[str | None] = mapped_column(
+        String(8), nullable=True, comment="LLM 판정 자기평가 high 또는 medium 또는 low"
+    )
+    llm_reason: Mapped[str | None] = mapped_column(
+        String(500), nullable=True, comment="LLM 판정 사유 요약"
+    )
+    review_status: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="none",
+        comment="none 또는 pending 또는 approved 또는 rejected",
+    )
+    reviewed_by: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, comment="검토자 id"
+    )
+    reviewed_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True, comment="검토 시각"
+    )
+    review_note: Mapped[str | None] = mapped_column(
+        String(500), nullable=True, comment="검토 메모"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now(), comment="생성 시각"
     )

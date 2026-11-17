@@ -10,8 +10,9 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from src.domain.graph_rag.exceptions import GraphBackendUnavailableError
-from src.domain.graph_rag.extraction import ChunkGraphWrite
+from src.domain.graph_rag.extraction import ChunkGraphWrite, EntityWrite
 from src.domain.graph_rag.interfaces import GraphStorePort
+from src.domain.graph_rag.resolution import Candidate
 
 
 class RuntimeGraphStore(GraphStorePort):
@@ -52,3 +53,23 @@ class RuntimeGraphStore(GraphStorePort):
 
     async def write_chunk_graph(self, write: ChunkGraphWrite) -> None:
         await self._store().write_chunk_graph(write)
+
+    async def find_candidates(
+        self,
+        scope_key: str,
+        normalized_name: str,
+        embedding: list[float] | None,
+        limit: int,
+    ) -> list[Candidate]:
+        return await self._store().find_candidates(
+            scope_key, normalized_name, embedding, limit
+        )
+
+    async def reassign_decision(self, decision_id: str, to_entity_id: str) -> None:
+        await self._store().reassign_decision(decision_id, to_entity_id)
+
+    async def create_entity(self, entity: EntityWrite) -> None:
+        await self._store().create_entity(entity)
+
+    async def delete_entity_if_orphan(self, entity_id: str) -> bool:
+        return await self._store().delete_entity_if_orphan(entity_id)

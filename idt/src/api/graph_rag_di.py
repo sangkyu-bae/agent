@@ -22,15 +22,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.graph_rag_runtime_store import RuntimeGraphStore
 from src.application.graph_rag.admin.health_use_case import GraphHealthUseCase
 from src.application.graph_rag.admin.jobs_use_case import ExtractionJobsUseCase
+from src.application.graph_rag.admin.review_use_case import ReviewUseCase
 from src.application.graph_rag.admin.settings_use_case import GraphRagSettingsUseCase
 from src.application.graph_rag.admin.stage_use_case import ChangeStageUseCase
 from src.application.graph_rag.extraction.launcher import GraphExtractionLauncher
 from src.application.graph_rag.extraction.use_case import ExtractGraphUseCase
 from src.application.graph_rag.hooks import GraphExposure, GraphIngestHook
+from src.application.graph_rag.resolution.resolver import EntityResolver
 from src.domain.extension_hooks import ExtensionHooks
 from src.domain.graph_rag.exceptions import GraphEmbeddingDimMismatchError
 from src.domain.graph_rag.interfaces import GraphSettingsReaderPort, GraphStorePort
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
+from src.infrastructure.graph_rag.decision_store import SessionScopedDecisionStore
 from src.infrastructure.graph_rag.es_chunk_reader import EsChunkSource
 from src.infrastructure.graph_rag.eval_evidence import UnverifiedEvalEvidence
 from src.infrastructure.graph_rag.extract.llm_extractor import LlmGraphExtractor
@@ -41,6 +44,9 @@ from src.infrastructure.graph_rag.repositories import (
     GraphRagSettingRepository,
     GraphRagStageChangeRepository,
 )
+from src.infrastructure.graph_rag.resolution.embedder import OpenAIEntityEmbedder
+from src.infrastructure.graph_rag.resolution.jev_chooser import JevEntityChooser
+from src.infrastructure.graph_rag.resolution.llm_chooser import LlmEntityChooser
 from src.infrastructure.graph_rag.settings_reader import CachedGraphSettingsReader
 
 _OWNER = "graph_rag"
@@ -117,39 +123,83 @@ class _Extraction:
     job_store: SessionScopedExtractionJobStore
     launcher: GraphExtractionLauncher
     store: RuntimeGraphStore
+    decisions: SessionScopedDecisionStore
+
+
+def _build_resolver(
+    settings: Any,
+    store: RuntimeGraphStore,
+    reader: CachedGraphSettingsReader,
+    llm_model_repo: Any,
+    llm_factory: Any,
+    judgment_backend: Any,
+    logger: LoggerInterface,
+) -> EntityResolver:
+    """module-4: 이름 임베딩 + Jev(조립됐을 때만) + LLM 재판정·대체."""
+    embedder = OpenAIEntityEmbedder(
+        settings.graph_entity_embedding_model or settings.openai_embedding_model,
+        settings.graph_entity_embedding_dimensions,
+        api_key=getattr(settings, "openai_api_key", None),
+    )
+    jev = (
+        JevEntityChooser(
+            judgment_backend, timeout_seconds=settings.judgment_timeout_seconds
+        )
+        if judgment_backend is not None
+        else None
+    )
+    return EntityResolver(
+        store=store,
+        embedder=embedder,
+        llm_chooser=LlmEntityChooser(llm_model_repo, llm_factory, reader, logger),
+        jev_chooser=jev,
+        logger=logger,
+    )
 
 
 def _build_extraction(
     settings: Any,
     session_factory: Callable[[], Any],
     reader: CachedGraphSettingsReader,
+    judgment_backend: Any,
     logger: LoggerInterface,
 ) -> _Extraction:
-    """module-3: ES 청크 → 규칙·LLM 추출 → Neo4j. LLM 은 섹션 요약과 같은 팩토리."""
+    """ES 청크 → 규칙·LLM 추출 → 판정 → Neo4j. LLM 은 섹션 요약과 같은 팩토리."""
     from src.infrastructure.llm.llm_factory import LLMFactory
     from src.infrastructure.llm_model.session_scoped_llm_model_repository import (
         SessionScopedLlmModelRepository,
     )
 
     job_store = SessionScopedExtractionJobStore(session_factory, logger)
+    decisions = SessionScopedDecisionStore(session_factory, logger)
     store = RuntimeGraphStore(lambda: _runtime.store if _runtime else None)
+    llm_model_repo = SessionScopedLlmModelRepository(session_factory, logger)
+    llm_factory = LLMFactory()
     runner = ExtractGraphUseCase(
         jobs=job_store,
         chunks=EsChunkSource(
             _build_es_repo(settings, logger), settings.es_index, logger
         ),
         rule_extractor=RuleGraphExtractor(),
-        llm_extractor=LlmGraphExtractor(
-            SessionScopedLlmModelRepository(session_factory, logger),
-            LLMFactory(),
-            logger,
-        ),
+        llm_extractor=LlmGraphExtractor(llm_model_repo, llm_factory, logger),
         store=store,
         reader=reader,
+        resolver=_build_resolver(
+            settings,
+            store,
+            reader,
+            llm_model_repo,
+            llm_factory,
+            judgment_backend,
+            logger,
+        ),
+        decisions=decisions,
         logger=logger,
     )
     launcher = GraphExtractionLauncher(job_store, runner, logger)
-    return _Extraction(job_store=job_store, launcher=launcher, store=store)
+    return _Extraction(
+        job_store=job_store, launcher=launcher, store=store, decisions=decisions
+    )
 
 
 def wire_graph_rag(
@@ -160,8 +210,13 @@ def wire_graph_rag(
     hooks: ExtensionHooks,
     logger: LoggerInterface,
     settings: Any,
+    judgment_backend: Any = None,
 ) -> GraphRagRuntime:
-    """create_app() 에서 1회 호출. 실패해도 앱 기동을 막지 않는 값만 만든다."""
+    """create_app() 에서 1회 호출. 실패해도 앱 기동을 막지 않는 값만 만든다.
+
+    judgment_backend — main.py 의 판정 백엔드(JudgmentPort | None). None 이면
+    엔티티 판정은 LLM 으로만 한다(Design D5). 관리자 Jev 토글은 실행 시점에 본다.
+    """
     global _runtime
     reader = CachedGraphSettingsReader(
         session_scope=_session_scope(session_factory),
@@ -170,7 +225,9 @@ def wire_graph_rag(
     )
     store = _build_store(settings, logger)
     backend = _BACKEND_NEO4J if store is not None else _BACKEND_OFF
-    extraction = _build_extraction(settings, session_factory, reader, logger)
+    extraction = _build_extraction(
+        settings, session_factory, reader, judgment_backend, logger
+    )
     # owner 지정 — create_app() 재호출(테스트·리로드) 시 교체, 다른 확장과는 충돌
     hooks.register(
         owner=_OWNER,
@@ -242,6 +299,9 @@ def _register_routes(
     overrides[admin_routes.get_change_stage_use_case] = _stage_uc
     overrides[admin_routes.get_graph_health_use_case] = _health_uc
     overrides[admin_routes.get_extraction_jobs_use_case] = _jobs_uc
+    overrides[admin_routes.get_review_use_case] = lambda: ReviewUseCase(
+        decisions=extraction.decisions, store=extraction.store, logger=logger
+    )
     overrides[public_routes.get_graph_settings_reader] = lambda: reader
     app.include_router(admin_routes.router)
     app.include_router(public_routes.router)

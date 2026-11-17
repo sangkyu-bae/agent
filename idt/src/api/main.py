@@ -6779,6 +6779,8 @@ def create_app() -> FastAPI:
     wire_graph_rag(
         app, get_session=get_session, session_factory=get_session_factory(),
         hooks=get_extension_hooks(), logger=get_app_logger(), settings=settings,
+        # module-4: 엔티티 판정 Jev(None 이면 LLM 판정만)
+        judgment_backend=get_judgment_backend(),
     )
     # golden-sample-blueprint: DI + /api/v1/admin/blueprints 라우터 (multimodal 레지스트리 재사용)
     from src.api.blueprint_di import wire_blueprint

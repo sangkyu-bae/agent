@@ -1,7 +1,7 @@
-"""graph_rag 도메인 포트 (module-2 범위).
+"""graph_rag 도메인 포트.
 
 Design Ref: graph-rag-foundation §3.1·§9.3 — 구현은 infrastructure/graph_rag/.
-GraphStorePort 는 module-3~5 에서 쓰기·탐색 메서드가 추가된다.
+module-2 설정·저장소, module-3 적재, module-4 판정·검토. 검색은 module-5.
 """
 
 from __future__ import annotations
@@ -11,11 +11,19 @@ from abc import ABC, abstractmethod
 from src.domain.graph_rag.extraction import (
     ChunkGraphWrite,
     ChunkUnit,
+    EntityWrite,
     ExtractionContext,
     ExtractionJob,
     ExtractionResult,
     JobCounters,
     JobStatus,
+    Mention,
+)
+from src.domain.graph_rag.resolution import (
+    Candidate,
+    ChooserVerdict,
+    ResolutionDecision,
+    ReviewStatus,
 )
 from src.domain.graph_rag.value_objects import GraphRagSettings, StageChange
 
@@ -94,6 +102,77 @@ class GraphStorePort(ABC):
     @abstractmethod
     async def write_chunk_graph(self, write: ChunkGraphWrite) -> None:
         """청크 1개의 엔티티·언급·관계를 한 트랜잭션으로 저장."""
+
+    # ── module-4: 판정·검토 ────────────────────────────────────────────────
+    @abstractmethod
+    async def find_candidates(
+        self,
+        scope_key: str,
+        normalized_name: str,
+        embedding: list[float] | None,
+        limit: int,
+    ) -> list[Candidate]:
+        """정규화 이름·별칭 정확 일치 + 이름 벡터 상위 후보(유사도 하한 적용)."""
+
+    @abstractmethod
+    async def reassign_decision(self, decision_id: str, to_entity_id: str) -> None:
+        """판정 하나에 붙은 언급·관계 끝점을 다른 엔티티로 옮긴다(검토 거절)."""
+
+    @abstractmethod
+    async def create_entity(self, entity: EntityWrite) -> None:
+        """검토 거절(분리)로 새 엔티티를 만든다."""
+
+    @abstractmethod
+    async def delete_entity_if_orphan(self, entity_id: str) -> bool:
+        """언급이 하나도 남지 않으면 엔티티·별칭을 지운다."""
+
+
+class EntityChooserPort(ABC):
+    """후보 중 같은 대상 고르기 — Jev(확률) 또는 LLM(라벨·확신도)."""
+
+    @abstractmethod
+    async def choose(
+        self,
+        mention: Mention,
+        context: str,
+        candidates: dict[str, Candidate],
+        request_id: str,
+    ) -> ChooserVerdict: ...
+
+
+class EntityEmbedderPort(ABC):
+    @abstractmethod
+    async def embed(self, texts: list[str]) -> list[list[float]]: ...
+
+
+class DecisionStorePort(ABC):
+    """V089 판정 기록 — 앱 수명 싱글턴, 호출마다 짧은 세션."""
+
+    @abstractmethod
+    async def upsert_many(
+        self, decisions: list[ResolutionDecision], request_id: str
+    ) -> None: ...
+
+    @abstractmethod
+    async def get(
+        self, decision_id: str, request_id: str
+    ) -> ResolutionDecision | None: ...
+
+    @abstractmethod
+    async def list_by_review_status(
+        self, status: ReviewStatus, limit: int, offset: int, request_id: str
+    ) -> tuple[list[ResolutionDecision], int]: ...
+
+    @abstractmethod
+    async def mark_reviewed(
+        self,
+        decision_id: str,
+        status: ReviewStatus,
+        reviewer: str,
+        note: str | None,
+        entity_id: str,
+        request_id: str,
+    ) -> None: ...
 
 
 class ExtractionJobStorePort(ABC):

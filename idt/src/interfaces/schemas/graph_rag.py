@@ -11,6 +11,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from src.domain.graph_rag.extraction import ExtractionJob
+from src.domain.graph_rag.resolution import ResolutionDecision
 from src.domain.graph_rag.value_objects import (
     GraphHealth,
     GraphRagSettings,
@@ -169,3 +170,68 @@ class KbDocumentJobItem(BaseModel):
 class KbDocumentJobsResponse(BaseModel):
     items: list[KbDocumentJobItem]
     total: int
+
+
+# ── module-4: 검토 큐 ──────────────────────────────────────────────────────
+
+
+class ReviewItem(BaseModel):
+    id: str
+    job_id: str
+    document_id: str
+    chunk_id: str
+    mention_text: str
+    mention_type: str
+    candidates: list[dict]
+    probabilities: dict[str, float] | None
+    chosen_label: str
+    entity_id: str
+    created_new: bool
+    decided_by: str
+    band: str
+    probability: float | None
+    llm_confidence: str | None
+    llm_reason: str | None
+    review_status: str
+    created_at: datetime | None
+
+    @classmethod
+    def from_domain(cls, d: ResolutionDecision) -> ReviewItem:
+        return cls(
+            id=d.id,
+            job_id=d.job_id,
+            document_id=d.document_id,
+            chunk_id=d.chunk_id,
+            mention_text=d.mention_text,
+            mention_type=d.mention_type,
+            candidates=list(d.candidates),
+            probabilities=d.probabilities,
+            chosen_label=d.chosen_label,
+            entity_id=d.entity_id,
+            created_new=d.created_new,
+            decided_by=d.decided_by.value,
+            band=d.band.value,
+            probability=d.probability,
+            llm_confidence=d.llm_confidence.value if d.llm_confidence else None,
+            llm_reason=d.llm_reason,
+            review_status=d.review_status.value,
+            created_at=d.created_at,
+        )
+
+
+class ReviewListResponse(BaseModel):
+    items: list[ReviewItem]
+    total: int
+
+
+class ReviewApproveRequest(BaseModel):
+    note: str | None = Field(default=None, max_length=500)
+
+
+class ReviewRejectRequest(BaseModel):
+    target_entity_id: str | None = Field(default=None, max_length=36)
+    note: str | None = Field(default=None, max_length=500)
+
+
+class ReviewRejectResponse(BaseModel):
+    entity_id: str

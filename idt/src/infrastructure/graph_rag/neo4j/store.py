@@ -17,8 +17,10 @@ from src.domain.graph_rag.extraction import (
     REL_REFERS_TO,
     REL_RELATES,
     ChunkGraphWrite,
+    EntityWrite,
 )
 from src.domain.graph_rag.interfaces import GraphStorePort
+from src.domain.graph_rag.resolution import MIN_VECTOR_SIMILARITY, Candidate
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.infrastructure.graph_rag.neo4j import cypher
 
@@ -130,6 +132,71 @@ class Neo4jGraphStore(GraphStorePort):
         except Exception as e:  # noqa: BLE001
             raise GraphBackendUnavailableError(f"{type(e).__name__}: {e}") from e
 
+    # ── module-4: 판정·검토 ────────────────────────────────────────────────
+
+    async def find_candidates(
+        self,
+        scope_key: str,
+        normalized_name: str,
+        embedding: list[float] | None,
+        limit: int,
+    ) -> list[Candidate]:
+        found: dict[str, Candidate] = {}
+        for statement, match in (
+            (cypher.CANDIDATES_EXACT, "exact"),
+            (cypher.CANDIDATES_ALIAS, "alias"),
+        ):
+            for r in await self._query(
+                statement, scope_key=scope_key, normalized=normalized_name
+            ):
+                found.setdefault(r["id"], _candidate(r, match, 1.0))
+        if embedding:
+            min_score = (1.0 + MIN_VECTOR_SIMILARITY) / 2.0  # 정규화 score 로 환산
+            for r in await self._query(
+                cypher.CANDIDATES_VECTOR,
+                scope_key=scope_key,
+                k=limit,
+                embedding=list(embedding),
+                min_score=min_score,
+            ):
+                found.setdefault(r["id"], _candidate(r, "vector", 2 * r["score"] - 1))
+        ranked = sorted(found.values(), key=lambda c: -c.similarity)
+        return ranked[:limit]
+
+    async def reassign_decision(self, decision_id: str, to_entity_id: str) -> None:
+        params = {"decision_id": decision_id, "to": to_entity_id}
+        await self._query(cypher.REASSIGN_MENTIONS, **params)
+        for rel in ("RELATES", "REFERS_TO"):
+            await self._query(cypher.REASSIGN_REL_SOURCES.format(rel=rel), **params)
+            await self._query(cypher.REASSIGN_REL_TARGETS.format(rel=rel), **params)
+
+    async def create_entity(self, entity: EntityWrite) -> None:
+        await self._query(
+            cypher.CREATE_ENTITY,
+            id=entity.id,
+            scope_key=entity.scope_key,
+            name=entity.name,
+            normalized_name=entity.normalized_name,
+            type=entity.type,
+            description=entity.description,
+        )
+
+    async def delete_entity_if_orphan(self, entity_id: str) -> bool:
+        rows = await self._query(cypher.DELETE_ENTITY_IF_ORPHAN, id=entity_id)
+        return bool(rows and rows[0]["deleted"])
+
+
+def _candidate(r: Any, match: str, similarity: float) -> Candidate:
+    return Candidate(
+        entity_id=r["id"],
+        name=r["name"],
+        type=r["type"],
+        description=r["description"],
+        aliases=(),
+        match=match,
+        similarity=similarity,
+    )
+
 
 def _chunk_params(write: ChunkGraphWrite) -> dict[str, Any]:
     unit = write.unit
@@ -155,10 +222,17 @@ def _chunk_params(write: ChunkGraphWrite) -> dict[str, Any]:
         "kb_id": unit.kb_id,
         "collection_name": unit.collection_name,
         "version": write.extractor_version,
-        "entities": [e.__dict__ for e in write.new_entities],
+        "entities": [
+            {
+                **e.__dict__,
+                "name_embedding": list(e.name_embedding) if e.name_embedding else None,
+            }
+            for e in write.new_entities
+        ],
         "mentions": [m.__dict__ for m in write.mentions],
         "relates": _rels(REL_RELATES),
         "refers": _rels(REL_REFERS_TO),
+        "aliases": [a.__dict__ for a in write.aliases],
     }
 
 
@@ -177,3 +251,5 @@ async def _write_chunk_tx(tx: Any, p: dict[str, Any]) -> None:
         await tx.run(cypher.WRITE_RELATES, relations=p["relates"], **base)
     if p["refers"]:
         await tx.run(cypher.WRITE_REFERS_TO, relations=p["refers"], **base)
+    if p["aliases"]:
+        await tx.run(cypher.WRITE_ALIASES, aliases=p["aliases"])

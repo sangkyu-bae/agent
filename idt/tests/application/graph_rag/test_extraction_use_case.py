@@ -28,7 +28,11 @@ from src.domain.graph_rag.interfaces import (
 )
 from src.domain.graph_rag.value_objects import GraphRagSettings, RolloutStage
 
-from tests.application.graph_rag.fakes import FakeReader, FakeStore
+from src.application.graph_rag.resolution.resolver import EntityResolver
+from src.domain.graph_rag.interfaces import EntityChooserPort, EntityEmbedderPort
+from src.domain.graph_rag.resolution import NEW_LABEL, ChooserVerdict, LlmConfidence
+
+from tests.application.graph_rag.fakes import FakeDecisions, FakeReader, FakeStore
 
 
 class _Jobs(ExtractionJobStorePort):
@@ -121,15 +125,38 @@ def _m(name, type_="상품·서비스", cid="p1"):
     return Mention(name=name, type=type_, description="", chunk_id=cid)
 
 
+class _Embedder(EntityEmbedderPort):
+    """이름마다 다른 단위 벡터 — 같은 이름만 유사도 1, 다른 이름은 0."""
+
+    async def embed(self, texts):
+        import hashlib
+
+        def one_hot(t):
+            i = int(hashlib.md5(t.encode()).hexdigest(), 16) % 256
+            return [1.0 if j == i else 0.0 for j in range(256)]
+
+        return [one_hot(t) for t in texts]
+
+
+class _NewChooser(EntityChooserPort):
+    async def choose(self, mention, context, candidates, request_id):
+        return ChooserVerdict(NEW_LABEL, confidence=LlmConfidence.HIGH)
+
+
 def _uc(units, extractor, *, store=None, settings=None, mode=JobMode.RESUME,
         rules=None):
     jobs = _Jobs(_job(mode))
     store = store or FakeStore()
+    resolver = EntityResolver(store=store, embedder=_Embedder(),
+                              llm_chooser=_NewChooser(), jev_chooser=None,
+                              logger=MagicMock())
     uc = ExtractGraphUseCase(
         jobs=jobs, chunks=_Chunks(units), rule_extractor=rules or _NoRules(),
         llm_extractor=extractor, store=store,
-        reader=FakeReader(settings or _settings()), logger=MagicMock(),
+        reader=FakeReader(settings or _settings()), resolver=resolver,
+        decisions=FakeDecisions(), logger=MagicMock(),
     )
+    uc.decisions = uc._decisions
     return uc, jobs, store
 
 
@@ -149,6 +176,10 @@ async def test_happy_path_writes_entities_mentions_relations():
     assert len(store.entities) == 2 and len(store.relations) == 1
     assert store.chunks["p1"] == ("doc-1", EXTRACTOR_VERSION)
     assert jobs.job.total_chunks == 1
+    # 판정 기록(V089)이 언급마다 남고, 그래프 언급 엣지의 decision_id 와 같다
+    decision_ids = set(uc.decisions.rows)
+    assert len(decision_ids) == 2
+    assert {m[2] for m in store.mentions} == decision_ids
 
 
 @pytest.mark.asyncio

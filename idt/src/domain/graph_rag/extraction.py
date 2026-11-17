@@ -17,7 +17,8 @@ from typing import Any
 
 # 추출 규칙·판정이 바뀌면 올린다 — resume 도 이전 버전 청크는 다시 추출한다.
 # v2 (2026-11-17): 조문 머리·제목 관계, 값 엔티티 청크 단위 키, LLM 언급 우선.
-EXTRACTOR_VERSION = "v2"
+# v3 (2026-11-17): module-4 판정(후보 검색·Jev·LLM), 이름 임베딩·별칭, 관계 방향 규칙.
+EXTRACTOR_VERSION = "v3"
 GLOBAL_SCOPE = "global"
 
 _NS = uuid.UUID("6f3c1a52-8e0b-4f7e-9a1d-0c5b2e9d4a11")
@@ -96,12 +97,23 @@ class EntityWrite:
     normalized_name: str
     type: str
     description: str
+    name_embedding: tuple[float, ...] | None = None  # module-4 후보 벡터 검색용
 
 
 @dataclass(frozen=True)
 class MentionWrite:
     entity_id: str
     decision_id: str
+
+
+@dataclass(frozen=True)
+class AliasWrite:
+    """기존 엔티티에 다른 표기로 연결될 때 남기는 별칭 (module-4)."""
+
+    entity_id: str
+    scope_key: str
+    normalized: str
+    surface: str
 
 
 @dataclass(frozen=True)
@@ -125,6 +137,7 @@ class ChunkGraphWrite:
     new_entities: tuple[EntityWrite, ...]
     mentions: tuple[MentionWrite, ...]
     relations: tuple[RelationWrite, ...]
+    aliases: tuple[AliasWrite, ...] = ()
 
 
 @dataclass(frozen=True)

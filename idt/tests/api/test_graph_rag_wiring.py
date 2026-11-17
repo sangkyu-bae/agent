@@ -22,6 +22,8 @@ def _settings(**over):
         neo4j_connect_timeout_s=5.0, graph_entity_embedding_dimensions=512,
         graph_aura_free_node_limit=200000, graph_aura_free_rel_limit=400000,
         es_host="localhost", es_port=9200, es_scheme="http", es_index="documents",
+        graph_entity_embedding_model=None, openai_embedding_model="text-embedding-3-small",
+        openai_api_key="test-key", judgment_timeout_seconds=3.0,
     )
     base.update(over)
     return SimpleNamespace(**base)
@@ -53,6 +55,17 @@ def test_off_registers_exposure_and_routes_without_store():
     assert "/api/v1/admin/graph-rag/documents/{document_id}/extract" in paths
     assert "/api/v1/admin/graph-rag/kbs/{kb_id}/documents" in paths
     assert "/api/v1/admin/graph-rag/jobs/{job_id}" in paths
+    assert "/api/v1/admin/graph-rag/review" in paths
+    assert "/api/v1/admin/graph-rag/review/{decision_id}/reject" in paths
+
+
+def test_wire_accepts_judgment_backend():
+    app, hooks, logger = FastAPI(), ExtensionHooks(), MagicMock()
+    runtime = graph_rag_di.wire_graph_rag(
+        app, get_session=lambda: None, session_factory=MagicMock(),
+        hooks=hooks, logger=logger, settings=_settings(), judgment_backend=MagicMock(),
+    )
+    assert runtime is not None and hooks.post_ingest is not None
 
 
 @pytest.mark.asyncio

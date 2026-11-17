@@ -5,6 +5,7 @@ import dataclasses
 
 from src.domain.graph_rag.exceptions import GraphBackendUnavailableError
 from src.domain.graph_rag.interfaces import (
+    DecisionStorePort,
     EvalEvidenceVerifierPort,
     GraphRagSettingsRepositoryPort,
     GraphSettingsReaderPort,
@@ -68,6 +69,33 @@ class FakeVerifier(EvalEvidenceVerifierPort):
         return self.ok
 
 
+class FakeDecisions(DecisionStorePort):
+    def __init__(self):
+        self.rows = {}
+        self.reviews = []
+
+    async def upsert_many(self, decisions, request_id):
+        for d in decisions:
+            self.rows[d.id] = d
+
+    async def get(self, decision_id, request_id):
+        return self.rows.get(decision_id)
+
+    async def list_by_review_status(self, status, limit, offset, request_id):
+        items = [d for d in self.rows.values() if d.review_status is status]
+        return items[offset:offset + limit], len(items)
+
+    async def mark_reviewed(self, decision_id, status, reviewer, note, entity_id,
+                            request_id):
+        import dataclasses as _dc
+
+        self.reviews.append((decision_id, status, reviewer, note, entity_id))
+        self.rows[decision_id] = _dc.replace(
+            self.rows[decision_id], review_status=status, reviewed_by=reviewer,
+            review_note=note, entity_id=entity_id,
+        )
+
+
 class FakeStore(GraphStorePort):
     def __init__(self, *, down=False, counts=(10, 20)):
         self.down = down
@@ -99,6 +127,7 @@ class FakeStore(GraphStorePort):
             self.relations = {}    # id -> (RelationWrite, document_id)
             self.writes = []
             self.fail_chunks = set()
+            self.aliases = {}
         return self
 
     async def extracted_chunk_ids(self, document_id, version):
@@ -137,3 +166,51 @@ class FakeStore(GraphStorePort):
             g.mentions.append((m.entity_id, write.unit.chunk_id, m.decision_id, doc))
         for r in write.relations:
             g.relations[r.id] = (r, doc)
+        for a in write.aliases:
+            g.aliases[(a.scope_key, a.normalized)] = a.entity_id
+
+    # ── module-4: 판정·검토 ────────────────────────────────────────────────
+    def _ensure4(self):
+        g = self._graph()
+        if not hasattr(g, "aliases"):
+            g.aliases = {}         # (scope, normalized) -> entity_id
+        return g
+
+    async def find_candidates(self, scope_key, normalized_name, embedding, limit):
+        from src.domain.graph_rag.resolution import Candidate
+
+        g = self._ensure4()
+        out = {}
+        for e in g.entities.values():
+            if e.scope_key != scope_key:
+                continue
+            if e.normalized_name == normalized_name:
+                out[e.id] = Candidate(e.id, e.name, e.type, e.description, (),
+                                      "exact", 1.0)
+            elif embedding is not None and e.name_embedding is not None:
+                sim = sum(a * b for a, b in zip(embedding, e.name_embedding))
+                if sim >= 0.75 and e.id not in out:
+                    out[e.id] = Candidate(e.id, e.name, e.type, e.description, (),
+                                          "vector", sim)
+        alias_id = g.aliases.get((scope_key, normalized_name))
+        if alias_id and alias_id not in out and alias_id in g.entities:
+            e = g.entities[alias_id]
+            out[e.id] = Candidate(e.id, e.name, e.type, e.description, (), "alias", 1.0)
+        return sorted(out.values(), key=lambda c: -c.similarity)[:limit]
+
+    async def reassign_decision(self, decision_id, to_entity_id):
+        g = self._ensure4()
+        g.mentions = [
+            (to_entity_id, c, d, doc) if d == decision_id else (e, c, d, doc)
+            for e, c, d, doc in g.mentions
+        ]
+
+    async def create_entity(self, entity):
+        self._ensure4().entities[entity.id] = entity
+
+    async def delete_entity_if_orphan(self, entity_id):
+        g = self._ensure4()
+        if any(m[0] == entity_id for m in g.mentions):
+            return False
+        g.entities.pop(entity_id, None)
+        return True

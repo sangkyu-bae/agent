@@ -4,23 +4,23 @@ Design Ref: graph-rag-foundation §2.2(적재)·§3.4·§6.2, Plan FR-04~07·FR-
 - LLM 추출은 동시 실행(설정 concurrency), 판정·쓰기는 잠금으로 직렬화한다
   (같은 새 엔티티를 두 청크가 동시에 만드는 경합 방지).
 - 청크 실패는 세고 계속 진행한다. 호출 상한에 닿으면 남은 청크는 건너뛰고 partial.
-- module-3 판정은 임시: (scope, 정규화 키, 타입) 정확 일치면 연결, 아니면 새 엔티티.
-  module-4 에서 후보 검색 + Jev/LLM 판정으로 바뀐다.
+- 판정은 EntityResolver(module-4: 후보 검색 + Jev 세 구간 + LLM 재판정·대체).
 """
 
 from __future__ import annotations
 
 import asyncio
-import uuid
 from dataclasses import dataclass, field
 
+from src.application.graph_rag.resolution.resolver import (
+    EntityResolver,
+    ResolveRunState,
+)
 from src.domain.graph_rag.exceptions import GraphBackendUnavailableError
 from src.domain.graph_rag.extraction import (
     EXTRACTOR_VERSION,
-    GLOBAL_SCOPE,
     ChunkGraphWrite,
     ChunkUnit,
-    EntityWrite,
     EvidencePolicy,
     ExtractionContext,
     ExtractionJob,
@@ -28,17 +28,15 @@ from src.domain.graph_rag.extraction import (
     JobCounters,
     JobMode,
     JobStatus,
-    LiteralValuePolicy,
-    Mention,
     MentionWrite,
     NameNormalizer,
     RelationDraft,
     RelationWrite,
-    decision_id_for,
     relation_id_for,
 )
 from src.domain.graph_rag.interfaces import (
     ChunkSourcePort,
+    DecisionStorePort,
     ExtractionJobStorePort,
     GraphExtractorPort,
     GraphSettingsReaderPort,
@@ -60,7 +58,7 @@ class _RunState:
     context: ExtractionContext
     counters: JobCounters
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
-    known: dict[tuple[str, str], str] = field(default_factory=dict)  # (key,type)->id
+    resolve: ResolveRunState = field(default_factory=ResolveRunState)
     budget_hit: bool = False
 
 
@@ -74,6 +72,8 @@ class ExtractGraphUseCase:
         llm_extractor: GraphExtractorPort,
         store: GraphStorePort | None,
         reader: GraphSettingsReaderPort,
+        resolver: EntityResolver,
+        decisions: DecisionStorePort,
         logger: LoggerInterface,
     ) -> None:
         self._jobs = jobs
@@ -82,6 +82,8 @@ class ExtractGraphUseCase:
         self._llm = llm_extractor
         self._store = store
         self._reader = reader
+        self._resolver = resolver
+        self._decisions = decisions
         self._logger = logger
 
     async def run(self, job_id: str, request_id: str) -> None:
@@ -181,7 +183,7 @@ class ExtractGraphUseCase:
                 return
         async with state.lock:
             try:
-                await self._write(unit, result, state)
+                await self._write(job_id, unit, result, state)
             except Exception as e:  # noqa: BLE001
                 self._chunk_failed(state, unit, e, request_id)
                 return
@@ -216,12 +218,29 @@ class ExtractGraphUseCase:
         )
 
     async def _write(
-        self, unit: ChunkUnit, result: ExtractionResult, state: _RunState
+        self, job_id: str, unit: ChunkUnit, result: ExtractionResult, state: _RunState
     ) -> None:
-        resolved, new_entities = await self._resolve_all(result.mentions, state)
+        """판정(module-4 EntityResolver) → 판정 기록(MySQL) → 그래프(Neo4j) 순서.
+
+        판정 기록을 먼저 남겨 Neo4j 쓰기가 실패해도 무엇을 판정했는지 감사할 수
+        있게 한다. 재실행 시 같은 decision_id(uuid5)로 덮어쓴다(Design §3.4).
+        """
+        outcomes = await self._resolver.resolve_chunk(
+            result.mentions,
+            unit,
+            job_id=job_id,
+            settings=state.settings,
+            state=state.resolve,
+            request_id=state.context.request_id,
+        )
+        resolved = {o.lookup_key: (o.entity_id, o.decision.id) for o in outcomes}
         relations = self._relations(unit, result.relations, resolved, state)
-        await self._store.write_chunk_graph(
-            ChunkGraphWrite(  # type: ignore[union-attr]
+        await self._decisions.upsert_many(
+            [o.decision for o in outcomes], state.context.request_id
+        )
+        new_entities = [o.new_entity for o in outcomes if o.new_entity]
+        await self._store.write_chunk_graph(  # type: ignore[union-attr]
+            ChunkGraphWrite(
                 unit=unit,
                 extractor_version=EXTRACTOR_VERSION,
                 new_entities=tuple(new_entities),
@@ -229,55 +248,15 @@ class ExtractGraphUseCase:
                     MentionWrite(eid, did) for eid, did in resolved.values()
                 ),
                 relations=tuple(relations),
+                aliases=tuple(o.alias for o in outcomes if o.alias),
             )
         )
-        state.counters.entities_created += len(new_entities)
-        state.counters.entities_linked += len(resolved) - len(new_entities)
-        state.counters.relations_created += len(relations)
-        for e in new_entities:
-            state.known[(e.normalized_name, e.type)] = e.id
-
-    def _type(self, mention: Mention, state: _RunState) -> str:
-        t = (mention.type or "").strip()
-        return t if t in state.settings.entity_types else OTHER_TYPE
-
-    async def _resolve_all(
-        self, mentions: tuple[Mention, ...], state: _RunState
-    ) -> tuple[dict[str, tuple[str, str]], list[EntityWrite]]:
-        """정규화 키 → (entity_id, decision_id). 같은 청크 안 중복 언급은 하나로.
-
-        값 이름(LiteralValuePolicy)은 저장 키를 청크 단위로 바꿔 청크 밖과 연결하지
-        않는다(2026-11-17 개선). 관계 끝점 조회용 키는 그대로 둔다.
-        """
-        resolved: dict[str, tuple[str, str]] = {}
-        new_entities: list[EntityWrite] = []
-        for m in mentions:
-            key, type_ = m.lookup_key, self._type(m, state)
-            if not key or key in resolved:
-                continue
-            if m.key is None and LiteralValuePolicy.is_literal(m.name):
-                key_in_store = f"{m.chunk_id}::{key}"
-            else:
-                key_in_store = key
-            entity_id = state.known.get(
-                (key_in_store, type_)
-            ) or await self._store.find_entity_id(  # type: ignore[union-attr]
-                GLOBAL_SCOPE, key_in_store, type_
-            )
-            if entity_id is None:
-                entity_id = str(uuid.uuid4())
-                new_entities.append(
-                    EntityWrite(
-                        id=entity_id,
-                        scope_key=GLOBAL_SCOPE,
-                        name=m.name,
-                        normalized_name=key_in_store,
-                        type=type_,
-                        description=m.description,
-                    )
-                )
-            resolved[key] = (entity_id, decision_id_for(m.chunk_id, key, type_))
-        return resolved, new_entities
+        c = state.counters
+        c.entities_created += len(new_entities)
+        c.entities_linked += len(outcomes) - len(new_entities)
+        c.relations_created += len(relations)
+        c.judge_calls += sum(o.judge_calls for o in outcomes)
+        c.llm_calls += sum(o.llm_calls for o in outcomes)
 
     @staticmethod
     def _relations(

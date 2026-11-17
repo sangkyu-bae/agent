@@ -59,8 +59,16 @@ WRITE_ENTITIES = (
     "MERGE (n:Entity {id: e.id}) "
     "ON CREATE SET n.scope_key = e.scope_key, n.name = e.name, "
     "n.normalized_name = e.normalized_name, n.type = e.type, "
-    "n.description = e.description, n.created_at = datetime() "
+    "n.description = e.description, n.created_at = datetime(), "
+    "n.name_embedding = e.name_embedding "
     "SET n.updated_at = datetime()"
+)
+WRITE_ALIASES = (
+    "UNWIND $aliases AS a "
+    "MATCH (e:Entity {id: a.entity_id}) "
+    "MERGE (x:Alias {scope_key: a.scope_key, normalized: a.normalized}) "
+    "SET x.surface = a.surface "
+    "MERGE (x)-[:ALIAS_OF]->(e)"
 )
 WRITE_MENTIONS = (
     "UNWIND $mentions AS m "
@@ -84,4 +92,58 @@ WRITE_REFERS_TO = (
     "UNWIND $relations AS r "
     "MATCH (a:Entity {id: r.source}), (b:Entity {id: r.target}) "
     "MERGE (a)-[x:REFERS_TO {id: r.id}]->(b) " + _REL_SET
+)
+
+# ── module-4: 판정·검토 (Design §2.2 판정) ──────────────────────────────────
+
+_CANDIDATE_RETURN = (
+    "e.id AS id, e.name AS name, e.type AS type, "
+    "coalesce(e.description, '') AS description"
+)
+CANDIDATES_EXACT = (
+    "MATCH (e:Entity {scope_key: $scope_key, normalized_name: $normalized}) "
+    "RETURN " + _CANDIDATE_RETURN
+)
+CANDIDATES_ALIAS = (
+    "MATCH (:Alias {scope_key: $scope_key, normalized: $normalized})"
+    "-[:ALIAS_OF]->(e:Entity) RETURN " + _CANDIDATE_RETURN
+)
+# Neo4j 벡터 인덱스의 cosine score 는 (1 + cos) / 2 로 정규화돼 [0, 1] 이다.
+CANDIDATES_VECTOR = (
+    "CALL db.index.vector.queryNodes('" + VECTOR_INDEX_NAME + "', $k, $embedding) "
+    "YIELD node AS e, score "
+    "WHERE e.scope_key = $scope_key AND score >= $min_score "
+    "RETURN " + _CANDIDATE_RETURN + ", score"
+)
+
+# 관계 시작점·끝점은 바꿀 수 없어 같은 속성으로 새로 만들고 지운다.
+REASSIGN_MENTIONS = (
+    "MATCH (:Entity)-[m:MENTIONED_IN {decision_id: $decision_id}]->(c:Chunk) "
+    "MATCH (n:Entity {id: $to}) "
+    "MERGE (n)-[m2:MENTIONED_IN {decision_id: $decision_id}]->(c) "
+    "SET m2.document_id = m.document_id DELETE m"
+)
+REASSIGN_REL_SOURCES = (
+    "MATCH (a:Entity)-[r:{rel}]->(b:Entity) "
+    "WHERE r.source_decision_id = $decision_id AND a.id <> $to "
+    "MATCH (n:Entity {{id: $to}}) "
+    "CREATE (n)-[r2:{rel}]->(b) SET r2 = properties(r) DELETE r"
+)
+REASSIGN_REL_TARGETS = (
+    "MATCH (a:Entity)-[r:{rel}]->(b:Entity) "
+    "WHERE r.target_decision_id = $decision_id AND b.id <> $to "
+    "MATCH (n:Entity {{id: $to}}) "
+    "CREATE (a)-[r2:{rel}]->(n) SET r2 = properties(r) DELETE r"
+)
+CREATE_ENTITY = (
+    "MERGE (n:Entity {id: $id}) "
+    "SET n.scope_key = $scope_key, n.name = $name, "
+    "n.normalized_name = $normalized_name, n.type = $type, "
+    "n.description = $description, n.created_at = datetime(), "
+    "n.updated_at = datetime()"
+)
+DELETE_ENTITY_IF_ORPHAN = (
+    "MATCH (e:Entity {id: $id}) WHERE NOT (e)-[:MENTIONED_IN]->() "
+    "OPTIONAL MATCH (a:Alias)-[:ALIAS_OF]->(e) "
+    "DETACH DELETE a, e RETURN count(*) AS deleted"
 )
