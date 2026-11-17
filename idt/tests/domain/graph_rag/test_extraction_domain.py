@@ -64,6 +64,16 @@ def test_deterministic_ids():
     assert r != relation_id_for("chunk-1", "개인사업자", "적용대상", "a상품")
 
 
+@pytest.mark.parametrize("filename, ok", [
+    ("여신업무규정.pdf", True), ("규정.HWP", True), ("지침.docx", True),
+    ("거래처정보.xlsx", False), ("요율표.XLS", False), ("목록.csv", False),
+])
+def test_extractable_filename(filename, ok):
+    from src.domain.graph_rag.extraction import DocumentEligibilityPolicy
+
+    assert DocumentEligibilityPolicy.is_extractable(filename) is ok
+
+
 def test_chunk_unit_is_frozen():
     u = ChunkUnit(chunk_id="p1", document_id="d", kb_id="kb", collection_name="c",
                   content="x", chunk_index=0)

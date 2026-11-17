@@ -15,13 +15,15 @@ from src.domain.extension_hooks import (
     FeatureExposurePort,
     PostIngestHook,
 )
-from src.domain.graph_rag.extraction import JobMode, TriggerSource
+from src.domain.graph_rag.extraction import (
+    DocumentEligibilityPolicy,
+    JobMode,
+    TriggerSource,
+)
 from src.domain.graph_rag.interfaces import GraphSettingsReaderPort
 from src.domain.graph_rag.policies import RolloutPolicy
 from src.domain.graph_rag.value_objects import RolloutStage
 
-# 엑셀은 조항 문서가 아니라 표 데이터라 추출하지 않는다(section_summary 선례).
-_SKIP_EXTENSIONS = (".xlsx", ".xls", ".csv")
 _FAILED = "failed"
 
 
@@ -45,7 +47,7 @@ class GraphIngestHook(PostIngestHook):
             or not settings.extraction_llm_model_id
             or event.status == _FAILED
             or event.chunk_count <= 0
-            or event.filename.lower().endswith(_SKIP_EXTENSIONS)
+            or not DocumentEligibilityPolicy.is_extractable(event.filename)
         ):
             return
         await self._launcher.launch(

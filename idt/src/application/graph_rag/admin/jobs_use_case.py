@@ -14,7 +14,12 @@ from src.domain.graph_rag.exceptions import (
     GraphRagError,
     GraphStageOffError,
 )
-from src.domain.graph_rag.extraction import ExtractionJob, JobMode, TriggerSource
+from src.domain.graph_rag.extraction import (
+    DocumentEligibilityPolicy,
+    ExtractionJob,
+    JobMode,
+    TriggerSource,
+)
 from src.domain.graph_rag.interfaces import (
     ExtractionJobStorePort,
     GraphSettingsReaderPort,
@@ -34,6 +39,12 @@ class GraphModelMissingError(GraphRagError):
 
 class DocumentNotFoundError(GraphRagError):
     code = "DOCUMENT_NOT_FOUND"
+
+
+class GraphUnsupportedDocumentError(GraphRagError):
+    """표 데이터(엑셀·CSV) 문서 — DocumentEligibilityPolicy (422)."""
+
+    code = "GRAPH_UNSUPPORTED_DOCUMENT"
 
 
 class _Documents(Protocol):
@@ -83,6 +94,10 @@ class ExtractionJobsUseCase:
         doc = await self._documents.find_by_document_id(document_id, request_id)
         if doc is None:
             raise DocumentNotFoundError(f"document not found: {document_id}")
+        if not DocumentEligibilityPolicy.is_extractable(doc.filename):
+            raise GraphUnsupportedDocumentError(
+                "spreadsheet documents are not extracted into the graph"
+            )
         active = await self._jobs.find_active(document_id, request_id)
         if active is not None or self._launcher.is_running(document_id):
             raise GraphJobBusyError("extraction already running for this document")

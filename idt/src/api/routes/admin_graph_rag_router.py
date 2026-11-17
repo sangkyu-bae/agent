@@ -14,6 +14,7 @@ from src.application.graph_rag.admin.jobs_use_case import (
     ExtractionJobsUseCase,
     GraphJobBusyError,
     GraphModelMissingError,
+    GraphUnsupportedDocumentError,
 )
 from src.application.graph_rag.admin.settings_use_case import (
     GraphRagSettingsUpdate,
@@ -70,6 +71,7 @@ _ERROR_STATUS: dict[type[GraphRagError], int] = {
     GraphStageOffError: status.HTTP_409_CONFLICT,
     GraphJobBusyError: status.HTTP_409_CONFLICT,
     GraphModelMissingError: 422,
+    GraphUnsupportedDocumentError: 422,
     DocumentNotFoundError: status.HTTP_404_NOT_FOUND,
     GraphBackendUnavailableError: status.HTTP_503_SERVICE_UNAVAILABLE,
 }

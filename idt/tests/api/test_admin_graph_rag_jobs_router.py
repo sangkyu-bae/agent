@@ -12,6 +12,7 @@ from src.application.graph_rag.admin.jobs_use_case import (
     DocumentNotFoundError,
     GraphJobBusyError,
     GraphModelMissingError,
+    GraphUnsupportedDocumentError,
 )
 from src.domain.auth.entities import UserRole
 from src.domain.graph_rag.exceptions import (
@@ -59,6 +60,7 @@ def test_extract_error_mapping():
         (GraphModelMissingError("m"), 422, "GRAPH_EXTRACTION_MODEL_MISSING"),
         (DocumentNotFoundError("x"), 404, "DOCUMENT_NOT_FOUND"),
         (GraphBackendUnavailableError("down"), 503, "GRAPH_BACKEND_UNAVAILABLE"),
+        (GraphUnsupportedDocumentError("xlsx"), 422, "GRAPH_UNSUPPORTED_DOCUMENT"),
     ]
     for exc, status_code, code in cases:
         uc = AsyncMock()

@@ -203,6 +203,20 @@ class EvidencePolicy:
         return ev in _WS.sub(" ", chunk_text)
 
 
+class DocumentEligibilityPolicy:
+    """그래프 추출 대상 문서인지 — 업로드 훅·관리자 수동 실행이 같은 규칙을 쓴다.
+
+    표 데이터(엑셀·CSV)는 '항목=값' 행이 값 자체를 엔티티로 만들어 그래프 품질을
+    떨어뜨린다(2026-11-17 실추출 확인). 표 분석은 기존 엑셀 분석 기능이 맡는다.
+    """
+
+    _TABULAR = (".xlsx", ".xls", ".csv")
+
+    @classmethod
+    def is_extractable(cls, filename: str | None) -> bool:
+        return not (filename or "").strip().lower().endswith(cls._TABULAR)
+
+
 class NameNormalizer:
     """정규화 키 — 표시 이름(원문)은 별도로 보존한다. 조사 제거는 module-4(Kiwi)."""
 

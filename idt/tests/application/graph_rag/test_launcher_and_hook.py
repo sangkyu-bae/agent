@@ -12,6 +12,7 @@ from src.application.graph_rag.admin.jobs_use_case import (
     ExtractionJobsUseCase,
     GraphJobBusyError,
     GraphModelMissingError,
+    GraphUnsupportedDocumentError,
 )
 from src.application.graph_rag.extraction.launcher import GraphExtractionLauncher
 from src.application.graph_rag.hooks import GraphIngestHook
@@ -172,3 +173,14 @@ async def test_trigger_errors():
     with pytest.raises(GraphJobBusyError):
         await _jobs_uc(active=_job())[0].trigger(
             "doc-1", JobMode.RESUME, actor_id="1", request_id="r")
+
+
+@pytest.mark.asyncio
+async def test_trigger_rejects_spreadsheet_documents():
+    # 2026-11-17 실추출에서 엑셀이 '값=엔티티' 그래프를 만들어 수동 실행도 막는다
+    docs = {"doc-x": SimpleNamespace(document_id="doc-x", kb_id="kb-1",
+                                     collection_name="col", filename="거래처.xlsx")}
+    uc, launcher = _jobs_uc(docs=docs)
+    with pytest.raises(GraphUnsupportedDocumentError):
+        await uc.trigger("doc-x", JobMode.REBUILD, actor_id="1", request_id="r")
+    assert launcher.calls == []
