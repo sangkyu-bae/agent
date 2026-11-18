@@ -269,8 +269,24 @@ class Neo4jGraphStore(GraphStorePort):
         )
         return {r["chunk_id"]: int(r["n"]) for r in rows}
 
+    async def entities_in_scope(
+        self, entity_ids: list[str], topic_ids: tuple[str, ...]
+    ) -> set[str]:
+        if not entity_ids:
+            return set()
+        rows = await self._query(
+            cypher.ENTITIES_IN_SCOPE, ids=entity_ids, topic_ids=list(topic_ids)
+        )
+        return {r["id"] for r in rows}
+
     async def find_paths(
-        self, seed_ids: list[str], max_hops: int, hub_limit: int, limit: int
+        self,
+        seed_ids: list[str],
+        max_hops: int,
+        hub_limit: int,
+        limit: int,
+        *,
+        topic_ids: tuple[str, ...] | None = None,
     ) -> list[PathHit]:
         hops = RetrievalPolicy.hops(max_hops)  # 문자열에 넣기 전 범위 검증
         rows = await self._query(
@@ -278,6 +294,7 @@ class Neo4jGraphStore(GraphStorePort):
             ids=seed_ids,
             hub_limit=hub_limit,
             limit=limit,
+            topic_ids=list(topic_ids) if topic_ids is not None else None,
         )
         return [
             PathHit(

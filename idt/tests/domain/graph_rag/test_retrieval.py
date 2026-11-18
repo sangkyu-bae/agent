@@ -54,3 +54,30 @@ def test_path_label_alternates_names_and_relations():
     p = PathHit(names=("A상품", "개인사업자"), rel_types=("적용대상",),
                 evidence_chunk_ids=("c1",))
     assert p.label() == ["A상품", "적용대상→", "개인사업자"]
+
+
+# ── 범위 우선 씨앗 선택(①) ─────────────────────────────────────────────────
+def _le(i, score=1.0):
+    from src.domain.graph_rag.retrieval import LinkedEntity
+
+    return LinkedEntity(f"e{i}", f"n{i}", "용어", "exact", score)
+
+
+def test_pick_seeds_prefers_in_scope_then_fills_in_original_order():
+    from src.domain.graph_rag.retrieval import MAX_SEEDS
+
+    cands = [_le(i) for i in range(10)]
+    seeds = RetrievalPolicy.pick_seeds(cands, {"e7", "e8"}, MAX_SEEDS)
+    assert [s.id for s in seeds] == ["e7", "e8", "e0", "e1", "e2"]
+
+
+def test_pick_seeds_without_scope_keeps_top_n():
+    cands = [_le(i) for i in range(10)]
+    assert [s.id for s in RetrievalPolicy.pick_seeds(cands, None, 3)] == [
+        "e0", "e1", "e2"]
+
+
+def test_link_candidates_is_wider_than_seeds():
+    from src.domain.graph_rag.retrieval import LINK_CANDIDATES, MAX_SEEDS
+
+    assert LINK_CANDIDATES >= MAX_SEEDS * 4

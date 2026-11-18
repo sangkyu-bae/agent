@@ -141,7 +141,7 @@ class GraphStorePort(ABC):
     # ── module-4b: 주제 ────────────────────────────────────────────────────
     @abstractmethod
     async def set_document_topics(self, document_id: str, topic_ids: list[str]) -> None:
-        """문서의 모든 Chunk 노드 topic_ids 를 바꾼다(검색 범위 필터 복사본)."""
+        """문서의 Chunk 노드·관계 topic_ids 를 바꾼다(검색 범위 필터 복사본)."""
 
     # ── module-5: 검색 ─────────────────────────────────────────────────────
     @abstractmethod
@@ -166,9 +166,24 @@ class GraphStorePort(ABC):
 
     @abstractmethod
     async def find_paths(
-        self, seed_ids: list[str], max_hops: int, hub_limit: int, limit: int
+        self,
+        seed_ids: list[str],
+        max_hops: int,
+        hub_limit: int,
+        limit: int,
+        *,
+        topic_ids: tuple[str, ...] | None = None,
     ) -> list[PathHit]:
-        """씨앗에서 최대 max_hops 단계 경로. 관계가 hub_limit 넘는 노드는 경유 금지."""
+        """씨앗에서 최대 max_hops 단계 경로. 관계가 hub_limit 넘는 노드는 경유 금지.
+
+        topic_ids 가 있으면 그 주제 문서에서 나온 관계만 따라간다.
+        """
+
+    @abstractmethod
+    async def entities_in_scope(
+        self, entity_ids: list[str], topic_ids: tuple[str, ...]
+    ) -> set[str]:
+        """주제 범위 청크에 언급된 엔티티 id."""
 
     @abstractmethod
     async def chunks_in_scope(

@@ -86,8 +86,13 @@ class RuntimeGraphStore(GraphStorePort):
     async def seed_mentions(self, entity_ids, topic_ids):
         return await self._store().seed_mentions(entity_ids, topic_ids)
 
-    async def find_paths(self, seed_ids, max_hops, hub_limit, limit):
-        return await self._store().find_paths(seed_ids, max_hops, hub_limit, limit)
+    async def find_paths(self, seed_ids, max_hops, hub_limit, limit, *, topic_ids=None):
+        return await self._store().find_paths(
+            seed_ids, max_hops, hub_limit, limit, topic_ids=topic_ids
+        )
+
+    async def entities_in_scope(self, entity_ids, topic_ids):
+        return await self._store().entities_in_scope(entity_ids, topic_ids)
 
     async def chunks_in_scope(self, chunk_ids, topic_ids):
         return await self._store().chunks_in_scope(chunk_ids, topic_ids)

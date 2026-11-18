@@ -44,13 +44,16 @@ def _hit(cid):
 
 
 def _make(settings=None, scope=None, linked=None, paths=(), mentions=None,
-          in_scope=None, fetched=None):
+          in_scope=None, fetched=None, entities_in_scope=None):
     store = MagicMock()
     linked = [LinkedEntity("e1", "운전자금대출 한도", "용어", "exact", 1.0)] \
         if linked is None else linked
     store.link_entities = AsyncMock(return_value=linked)
     store.seed_mentions = AsyncMock(return_value=mentions or {"c1": 1})
     store.find_paths = AsyncMock(return_value=list(paths))
+    store.entities_in_scope = AsyncMock(
+        side_effect=lambda ids, topics: set(ids) if entities_in_scope is None
+        else entities_in_scope)
     store.chunks_in_scope = AsyncMock(
         side_effect=lambda ids, topics: set(ids) if in_scope is None else in_scope)
     fetcher = MagicMock()
@@ -105,10 +108,54 @@ async def test_stage_gate(stage, admin, reason):
 
 @pytest.mark.asyncio
 async def test_no_evidence_in_scope_falls_back_to_unscoped():
-    src, *_ = _make(scope=QueryScope(("t-x",), ("x",), "jev"), in_scope=set())
+    src, store, *_ = _make(scope=QueryScope(("t-x",), ("x",), "jev"), in_scope=set())
     trace = await src.search_trace(_query(), _settings())
     assert trace.scope.topic_ids is None and trace.scope.reason == "no_chunk_in_scope"
     assert [h.id for h in trace.hits] == ["c1"]
+    # 범위 안에서 탐색한 경로는 버리고 범위 없이 다시 탐색한다
+    scopes = [c.kwargs.get("topic_ids") for c in store.find_paths.call_args_list]
+    assert scopes == [("t-x",), None]
+
+
+def _cands(n):
+    return [LinkedEntity(f"e{i}", f"n{i}", "용어", "exact", 1.0) for i in range(n)]
+
+
+@pytest.mark.asyncio
+async def test_links_wide_then_prefers_seeds_in_scope():
+    from src.domain.graph_rag.retrieval import LINK_CANDIDATES, MAX_SEEDS
+
+    src, store, *_ = _make(linked=_cands(12), entities_in_scope={"e9", "e11"},
+                           scope=QueryScope(("t-loan",), ("여신",), "jev"))
+    trace = await src.search_trace(_query(), _settings())
+    assert store.link_entities.call_args.args[4] == LINK_CANDIDATES
+    assert store.entities_in_scope.call_args.args[1] == ("t-loan",)
+    assert [e.id for e in trace.linked][:2] == ["e9", "e11"]
+    assert len(trace.linked) == MAX_SEEDS
+    # 탐색도 범위 안 관계만(②)
+    assert store.find_paths.call_args.kwargs["topic_ids"] == ("t-loan",)
+    assert trace.scope.topic_ids == ("t-loan",)
+
+
+@pytest.mark.asyncio
+async def test_no_seed_in_scope_drops_scope_before_traversal():
+    src, store, *_ = _make(linked=_cands(3), entities_in_scope=set(),
+                           scope=QueryScope(("t-loan",), ("여신",), "jev"))
+    trace = await src.search_trace(_query(), _settings())
+    assert trace.scope.topic_ids is None
+    assert trace.scope.reason == "no_entity_in_scope"
+    assert store.find_paths.call_count == 1
+    assert store.find_paths.call_args.kwargs["topic_ids"] is None
+    store.chunks_in_scope.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_without_scope_skips_entity_scope_lookup():
+    src, store, *_ = _make(linked=_cands(8))
+    trace = await src.search_trace(_query(), _settings())
+    store.entities_in_scope.assert_not_called()
+    assert [e.id for e in trace.linked] == ["e0", "e1", "e2", "e3", "e4"]
+    assert store.find_paths.call_args.kwargs["topic_ids"] is None
 
 
 @pytest.mark.asyncio

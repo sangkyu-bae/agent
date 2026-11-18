@@ -3,9 +3,10 @@
 Design Ref: graph-rag-foundation §2.2 검색·§11.9 질문 주제, Plan FR-12~14·FR-29.
   단계 검사(RolloutPolicy × 호출자 grant)
   → [동시] 질문 주제(범위, 시간 상한의 절반)
-          / 씨앗 엔티티(Kiwi 명사 묶음 정확·별칭 + 질문 벡터)
-  → 최대 N단계 경로(허브 노드 경유 금지) → 근거 청크 점수 → 주제 범위로 거르기
-    (범위 안 근거가 0이면 범위 없이)
+          / 후보 엔티티 20개(Kiwi 명사 묶음 정확·별칭 + 질문 벡터, 범위 없이)
+  → 범위 안 후보를 우선해 씨앗 5개(범위 안 후보가 없으면 범위를 풀고 진행)
+  → 범위 안 관계만 따라 최대 N단계 경로(허브 노드 경유 금지)
+  → 근거 청크 점수 → 주제 범위로 거르기(범위 안 근거가 0이면 범위 없이 다시 탐색)
   → ES 권한 재조회(도구의 hard/lenient 필터·컬렉션 그대로) → 상위 top_k.
 실패·시간 초과·미실행은 예외 대신 skip_reason 으로 돌려준다(도구는 기존 결과만 쓴다).
 """
@@ -29,6 +30,7 @@ from src.domain.graph_rag.interfaces import (
 from src.domain.graph_rag.policies import RolloutPolicy
 from src.domain.graph_rag.retrieval import (
     HUB_DEGREE_LIMIT,
+    LINK_CANDIDATES,
     MAX_PATHS,
     MAX_SEEDS,
     GraphSearchTrace,
@@ -110,21 +112,26 @@ class GraphRetrievalSource(SupplementalRetrievalSource):
         trace = GraphSearchTrace()
         clock = _Clock(trace)
         # 주제 판정(LLM 이면 수 초)과 씨앗 연결을 동시에 — 범위는 근거 청크에서 건다.
-        trace.scope, trace.linked = await asyncio.gather(
+        trace.scope, candidates = await asyncio.gather(
             self._route(query, settings), self._link(query)
         )
         clock.lap("route_link")
-        if not trace.linked:
+        if not candidates:
             trace.skip_reason = "no_entity"
             return trace
 
-        seed_ids = [e.id for e in trace.linked]
+        # ① 범위 안 후보를 씨앗으로 우선. 하나도 없으면 범위를 풀고 진행한다.
+        in_scope: set[str] | None = None
+        if trace.scope.topic_ids is not None:
+            in_scope = await self._store.entities_in_scope(
+                [c.id for c in candidates], trace.scope.topic_ids
+            )
+            if not in_scope:
+                trace.scope = QueryScope(reason="no_entity_in_scope")
+        trace.linked = RetrievalPolicy.pick_seeds(candidates, in_scope, MAX_SEEDS)
+
         hops = RetrievalPolicy.hops(max_hops or settings.max_hops)
-        mentions, trace.paths = await asyncio.gather(
-            self._store.seed_mentions(seed_ids, None),
-            self._store.find_paths(seed_ids, hops, HUB_DEGREE_LIMIT, MAX_PATHS),
-        )
-        scores = RetrievalPolicy.chunk_scores(mentions, trace.paths)
+        scores = await self._traverse(trace, hops)
         allowed = set(scores)
         if trace.scope.topic_ids is not None:
             allowed = await self._store.chunks_in_scope(
@@ -132,6 +139,7 @@ class GraphRetrievalSource(SupplementalRetrievalSource):
             )
             if not allowed:  # 범위 안 근거가 없으면 범위 없이(FR-29: 놓치지 않기)
                 trace.scope = QueryScope(reason="no_chunk_in_scope")
+                scores = await self._traverse(trace, hops)
                 allowed = set(scores)
         trace.chunk_scores = RetrievalPolicy.ranked(
             {c: s for c, s in scores.items() if c in allowed}
@@ -156,6 +164,21 @@ class GraphRetrievalSource(SupplementalRetrievalSource):
         trace.hits = ordered[: query.top_k]
         clock.lap("fetch")
         return trace
+
+    async def _traverse(self, trace: GraphSearchTrace, hops: int) -> dict[str, float]:
+        """씨앗 언급 청크 + 경로 근거 청크 점수. ② 범위가 있으면 범위 안 관계만 탄다."""
+        seed_ids = [e.id for e in trace.linked]
+        mentions, trace.paths = await asyncio.gather(
+            self._store.seed_mentions(seed_ids, None),
+            self._store.find_paths(
+                seed_ids,
+                hops,
+                HUB_DEGREE_LIMIT,
+                MAX_PATHS,
+                topic_ids=trace.scope.topic_ids,
+            ),
+        )
+        return RetrievalPolicy.chunk_scores(mentions, trace.paths)
 
     async def _route(
         self, query: SupplementalQuery, settings: GraphRagSettings
@@ -183,7 +206,7 @@ class GraphRetrievalSource(SupplementalRetrievalSource):
                 "graph query embedding failed", exception=e, request_id=query.request_id
             )
         return await self._store.link_entities(
-            GLOBAL_SCOPE, phrases, embedding, None, MAX_SEEDS
+            GLOBAL_SCOPE, phrases, embedding, None, LINK_CANDIDATES
         )
 
 

@@ -244,7 +244,10 @@ class FakeStore(GraphStorePort):
                 out[c] = out.get(c, 0) + 1
         return out
 
-    async def find_paths(self, seed_ids, max_hops, hub_limit, limit):
+    async def entities_in_scope(self, entity_ids, topic_ids):
+        return set(entity_ids)
+
+    async def find_paths(self, seed_ids, max_hops, hub_limit, limit, *, topic_ids=None):
         from src.domain.graph_rag.retrieval import PathHit
 
         g = self._graph()

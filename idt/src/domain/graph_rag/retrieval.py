@@ -12,6 +12,8 @@ from dataclasses import dataclass, field
 from src.domain.graph_rag.extraction import NameNormalizer
 
 MAX_SEEDS = 5
+# 주제 판정과 동시에 범위 없이 넉넉히 연결해 두고, 범위가 정해지면 범위 안을 우선한다.
+LINK_CANDIDATES = 20
 MAX_GRAPH_CHUNKS = 50
 MAX_PATHS = 200
 MAX_HOPS_LIMIT = 3
@@ -112,3 +114,14 @@ class RetrievalPolicy:
     @staticmethod
     def ranked(scores: dict[str, float]) -> list[tuple[str, float]]:
         return sorted(scores.items(), key=lambda kv: (-kv[1], kv[0]))[:MAX_GRAPH_CHUNKS]
+
+    @staticmethod
+    def pick_seeds(
+        candidates: list[LinkedEntity], in_scope: set[str] | None, limit: int
+    ) -> list[LinkedEntity]:
+        """범위 안 엔티티를 먼저(원래 순서 유지), 남는 자리는 나머지로 채운다."""
+        if not in_scope:
+            return list(candidates[:limit])
+        first = [c for c in candidates if c.id in in_scope]
+        rest = [c for c in candidates if c.id not in in_scope]
+        return (first + rest)[:limit]

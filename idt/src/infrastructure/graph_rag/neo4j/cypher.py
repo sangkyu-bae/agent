@@ -150,9 +150,13 @@ DELETE_ENTITY_IF_ORPHAN = (
 
 # module-4b: 문서 청크에 주제 id 복사(검색 범위 필터).
 # 원본은 MySQL graph_document_topic.
+# 청크와 그 문서에서 나온 관계 모두에 복사한다(관계 쪽은 탐색 범위 필터용, module-5 ②).
 SET_DOCUMENT_TOPICS = (
     "MATCH (c:Chunk {document_id: $document_id}) SET c.topic_ids = $topic_ids "
-    "RETURN count(c) AS updated"
+    "WITH count(c) AS updated "
+    "CALL { MATCH ()-[r:RELATES|REFERS_TO {document_id: $document_id}]->() "
+    "SET r.topic_ids = $topic_ids RETURN count(r) AS rels } "
+    "RETURN updated, rels"
 )
 
 # ── module-5: 검색 (Design §2.2 검색) ──────────────────────────────────────
@@ -182,10 +186,17 @@ FIND_PATHS = (
     "MATCH p = (s)-[:RELATES|REFERS_TO*1..{hops}]-(:Entity) "
     "WHERE all(n IN nodes(p)[1..-1] "
     "WHERE COUNT {{ (n)-[:RELATES|REFERS_TO]-() }} <= $hub_limit) "
+    "AND ($topic_ids IS NULL OR all(r IN relationships(p) "
+    "WHERE any(t IN coalesce(r.topic_ids, []) WHERE t IN $topic_ids))) "
     "RETURN [n IN nodes(p) | n.name] AS names, "
     "[r IN relationships(p) | r.type] AS types, "
     "[r IN relationships(p) | r.evidence_chunk_id] AS chunks "
     "LIMIT $limit"
+)
+ENTITIES_IN_SCOPE = (
+    "MATCH (e:Entity) WHERE e.id IN $ids AND EXISTS { "
+    "MATCH (e)-[:MENTIONED_IN]->(c:Chunk) WHERE " + _IN_SCOPE_CHUNK + " } "
+    "RETURN e.id AS id"
 )
 CHUNKS_IN_SCOPE = (
     "MATCH (c:Chunk) WHERE c.chunk_id IN $ids AND " + _IN_SCOPE_CHUNK + " "

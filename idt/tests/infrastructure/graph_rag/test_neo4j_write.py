@@ -262,6 +262,22 @@ async def test_live_link_traverse_hub_and_scope():
         assert await store.chunks_in_scope([unit.chunk_id, "nope"], ("t-loan",)) == {
             unit.chunk_id}
         assert await store.chunks_in_scope([unit.chunk_id], ("t-other",)) == set()
+
+        # ① 범위 안 씨앗 고르기 — 범위 청크에 언급된 엔티티만
+        assert await store.entities_in_scope(
+            [ids["a"], ids["b"], ids["far"]], ("t-loan",)) == {ids["a"]}
+        assert await store.entities_in_scope([ids["a"]], ("t-other",)) == set()
+        # ② 관계에도 문서 주제가 복사되고, 범위 밖 관계는 타지 않는다
+        tagged = await store._query(
+            "MATCH ()-[r:RELATES {document_id: $d}]->() "
+            "RETURN count(r) AS n, all(x IN collect(r.topic_ids) "
+            "WHERE x = ['t-loan']) AS ok", d=doc)
+        assert tagged[0]["n"] == len(rels) and tagged[0]["ok"]
+        scoped = await store.find_paths([ids["a"]], 2, HUB_DEGREE_LIMIT, 200,
+                                        topic_ids=("t-loan",))
+        assert {p.names[-1] for p in scoped} == ends
+        assert await store.find_paths([ids["a"]], 2, HUB_DEGREE_LIMIT, 200,
+                                       topic_ids=("t-other",)) == []
     finally:
         await store.delete_document(doc)
         await store._query("MATCH (e:Entity {scope_key: $s}) DETACH DELETE e", s=scope)
