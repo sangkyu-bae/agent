@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 
 from src.domain.graph_rag.interfaces import DecisionStorePort
 from src.domain.graph_rag.resolution import (
@@ -153,3 +153,17 @@ class SessionScopedDecisionStore(DecisionStorePort):
             decision_id=decision_id,
             status=status.value,
         )
+
+    async def delete_for_document(self, document_id: str, request_id: str) -> int:
+        async with self._session_factory() as session, session.begin():
+            result = await session.execute(
+                delete(Row).where(Row.document_id == document_id)
+            )
+        count = int(result.rowcount or 0)
+        self._logger.info(
+            "graph decisions deleted with document",
+            request_id=request_id,
+            document_id=document_id,
+            count=count,
+        )
+        return count

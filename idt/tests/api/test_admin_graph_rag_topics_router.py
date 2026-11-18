@@ -102,3 +102,17 @@ def test_review_item_kind_marks_topic_decisions():
     ], 2)
     r = _client(AsyncMock(), review=review).get(f"{_BASE}/review")
     assert [i["kind"] for i in r.json()["items"]] == ["entity", "topic"]
+
+
+def test_stage_off_list_endpoints_return_409():
+    """Check G-2: 노출 단계 off 이면 주제·검토 목록도 409 GRAPH_STAGE_OFF."""
+    from src.domain.graph_rag.exceptions import GraphStageOffError
+
+    uc, review = AsyncMock(), AsyncMock()
+    uc.list.side_effect = GraphStageOffError("off")
+    review.list.side_effect = GraphStageOffError("off")
+    client = _client(uc, review=review)
+    for path in ("topics", "review"):
+        r = client.get(f"{_BASE}/{path}")
+        assert r.status_code == 409
+        assert r.json()["detail"]["code"] == "GRAPH_STAGE_OFF"

@@ -383,7 +383,10 @@ def wire_graph_rag(
         post_ingest=GraphIngestHook(extraction.launcher, reader),
         supplemental=retrieval,
         deletion=GraphDeletionHook(
-            extraction.store, extraction.document_topics, logger
+            extraction.store,
+            extraction.document_topics,
+            logger,
+            decisions=extraction.decisions,
         ),
     )
     _register_routes(
@@ -473,11 +476,13 @@ def _register_routes(
             store=extraction.store,
             logger=logger,
         ),
+        reader=reader,
     )
     overrides[admin_routes.get_topics_use_case] = lambda: TopicsUseCase(
         topics=extraction.topics,
         document_topics=extraction.document_topics,
         logger=logger,
+        reader=reader,
     )
     fetcher = EsEvidenceFetcher(extraction.es_repo, settings.es_index, logger)
     overrides[admin_routes.get_inspect_use_case] = lambda: InspectUseCase(

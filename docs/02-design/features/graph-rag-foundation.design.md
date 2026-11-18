@@ -1063,6 +1063,18 @@ V7 확인: `evaluation_run.status`의 완료 값은 `completed`이고, 실행 �
 - SC-3: 별칭 라벨셋 정밀도. 청크가 많은 문서(예: 27청크 `최선집행기준설명서.pdf`)를 추출해 Jev·LLM 판정이 생긴 뒤 라벨을 붙인다.
 - 튜닝: `MIN_VECTOR_SIMILARITY` 0.75, `HUB_DEGREE_LIMIT` 15, parent/child 겹침(M5-8)은 위 측정값을 보고 정한다.
 
+### 11.13 Check 결정 (2026-11-18, `docs/03-analysis/graph-rag-foundation.analysis.md`)
+
+사용자는 G-2와 M-1만 코드로 고치고, G-1은 Plan 문구를 고쳐 결정으로 기록하기로 했다.
+
+| # | 발견 | 처리 |
+|---|------|------|
+| C-1 (G-1) | FR-21의 미적용 사유가 실행 기록이 아니라 구조화 로그에만 남는다 | **결정**: 구조화 로그(request_id)를 기록 위치로 확정한다(Plan v0.5). 실행 기록(tracker)에 필드를 넣으려면 코어 관측 구조를 바꿔야 하므로 이번 사이클에서 제외한다 |
+| C-2 (G-2) | 단계 off에서도 검토 목록·승인·거절, 주제 목록·추가·수정 API가 동작했다 | **수정**: `ReviewUseCase`·`TopicsUseCase`에 `reader`를 주입하고 `ensure_stage_on`을 건다. off이면 409 `GRAPH_STAGE_OFF`. 목록 라우트 2개도 오류를 409로 바꾸도록 감쌌다 |
+| C-3 (M-1) | 문서를 지워도 판정 기록이 남아 검토 큐에 나타났다 | **수정**: `DecisionStorePort.delete_for_document`를 추가했다. 삭제 훅이 주제 연결과 함께 그 문서의 판정 기록을 지운다 |
+| C-4 (M-4·M-5) | §4.2 search-test 예시, §6.1 오류 코드 목록이 코드보다 뒤처져 있다 | 코드 기준으로 본다. search-test 응답은 `scope`·`linked_entities`·`paths{hops,path,evidence_chunk_ids}`·`graph_hits`·`hybrid_hits`·`fused_hits`(카드의 출처 필드는 `source`)·`timings_ms`·`filtered_out`·`skip_reason`·`hybrid_error`다. 추가된 오류 코드는 `GRAPH_UNSUPPORTED_DOCUMENT`·`GRAPH_REVIEW_NOT_FOUND`·`GRAPH_REVIEW_TARGET_INVALID`·`GRAPH_TOPIC_INVALID/NOT_FOUND/DUPLICATE`·`GRAPH_ENTITY_NOT_FOUND`·`JOB_NOT_FOUND`다 |
+| — (M-2·M-3) | 고아 엔티티 정리 쿼리가 전체를 훑는다 / off여도 의존 객체를 미리 만든다 | 이월. 그래프 규모 측정(module-7 이월분) 때 같이 본다 |
+
 DDL은 2026-11-17 사용자가 승인했다: V090 `graph_topic`(이름·정규화 이름·level 1/2·parent_id·parent_key·설명·status·origin·created_by, `UNIQUE(parent_key, normalized_name)`), V091 `graph_document_topic`(document_id·topic_id PK, is_primary, probability, decision_id). 실제 DDL은 `idt/db/migration/V090·V091`.
 
 ---
@@ -1083,3 +1095,4 @@ DDL은 2026-11-17 사용자가 승인했다: V090 `graph_topic`(이름·정규�
 | 0.10 | 2026-11-18 | module-5 결정 M5-1~11(§11.10), 범위 보강 M5-12·13(§11.10.1) | 배상규 |
 | 0.11 | 2026-11-18 | module-6 관리자 화면·빌더 토글 결정 M6-1~6(§11.11) | 배상규 |
 | 0.12 | 2026-11-18 | module-7 평가 opt-in·전환 근거 검증 M7-1~4(§11.12), V7 확인, 측정 이월 | 배상규 |
+| 0.13 | 2026-11-18 | Check 결정 C-1~C-4(§11.13): 단계 off 409 확대, 문서 삭제 시 판정 정리, FR-21 기록 위치 확정 | 배상규 |

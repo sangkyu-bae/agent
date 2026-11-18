@@ -96,3 +96,27 @@ async def test_already_reviewed_and_missing():
         await uc.approve("d1", reviewer="99", note=None, request_id="r")
     with pytest.raises(GraphReviewNotFoundError):
         await uc.approve("nope", reviewer="99", note=None, request_id="r")
+
+
+@pytest.mark.asyncio
+async def test_stage_off_blocks_review_actions():
+    """Check G-2: 노출 단계 off 이면 검토 목록·승인·거절 모두 409."""
+    import dataclasses
+
+    from src.domain.graph_rag.exceptions import GraphStageOffError
+    from src.domain.graph_rag.value_objects import GraphRagSettings, RolloutStage
+
+    from tests.application.graph_rag.fakes import FakeReader
+
+    _, store, decisions = _setup(_decision())
+    off = FakeReader(dataclasses.replace(GraphRagSettings.defaults(),
+                                         rollout_stage=RolloutStage.OFF))
+    uc = ReviewUseCase(decisions=decisions, store=store, logger=MagicMock(), reader=off)
+    with pytest.raises(GraphStageOffError):
+        await uc.list(ReviewStatus.PENDING, 20, 0, "r")
+    with pytest.raises(GraphStageOffError):
+        await uc.approve("d1", reviewer="1", note=None, request_id="r")
+    with pytest.raises(GraphStageOffError):
+        await uc.reject("d1", reviewer="1", note=None, target_entity_id=None,
+                        request_id="r")
+    assert decisions.reviews == []

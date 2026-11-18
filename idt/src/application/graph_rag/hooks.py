@@ -24,6 +24,7 @@ from src.domain.graph_rag.extraction import (
     TriggerSource,
 )
 from src.domain.graph_rag.interfaces import (
+    DecisionStorePort,
     DocumentTopicStorePort,
     GraphSettingsReaderPort,
     GraphStorePort,
@@ -115,15 +116,20 @@ class GraphDeletionHook(DocumentDeletionHook):
         store: GraphStorePort | None,
         document_topics: DocumentTopicStorePort,
         logger: LoggerInterface,
+        *,
+        decisions: DecisionStorePort | None = None,
     ) -> None:
         self._store = store
         self._links = document_topics
         self._logger = logger
+        self._decisions = decisions
 
     async def on_document_deleted(
         self, event: DocumentDeletedEvent, request_id: str
     ) -> None:
         await self._links.replace(event.document_id, [], request_id)
+        if self._decisions is not None:  # Check M-1: 검토 큐에 남지 않게
+            await self._decisions.delete_for_document(event.document_id, request_id)
         if self._store is None:
             return
         try:

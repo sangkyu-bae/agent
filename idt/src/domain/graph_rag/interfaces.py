@@ -335,6 +335,10 @@ class DecisionStorePort(ABC):
         request_id: str,
     ) -> None: ...
 
+    @abstractmethod
+    async def delete_for_document(self, document_id: str, request_id: str) -> int:
+        """문서 삭제 시 그 문서의 판정 기록을 지운다(검토 큐에 남지 않게). 지운 수."""
+
 
 class ExtractionJobStorePort(ABC):
     """앱 수명 싱글턴 — 호출마다 짧은 독립 세션(SessionScoped 선례)."""

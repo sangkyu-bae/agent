@@ -295,9 +295,12 @@ async def review_list(
         review_status = ReviewStatus(status_)
     except ValueError as e:
         raise _error("GRAPH_SETTINGS_INVALID", str(e), 422) from e
-    items, total = await use_case.list(
-        review_status, limit, offset, _request_id(current_user)
-    )
+    try:
+        items, total = await use_case.list(
+            review_status, limit, offset, _request_id(current_user)
+        )
+    except GraphRagError as e:  # 단계 off → 409 (Check G-2)
+        raise _mapped(e) from e
     return ReviewListResponse(
         items=[ReviewItem.from_domain(d) for d in items], total=total
     )
@@ -350,9 +353,12 @@ async def topic_list(
     current_user: User = Depends(require_role("admin")),
     use_case: TopicsUseCase = Depends(get_topics_use_case),
 ) -> TopicListResponse:
-    rows = await use_case.list(
-        include_retired=include_retired, request_id=_request_id(current_user)
-    )
+    try:
+        rows = await use_case.list(
+            include_retired=include_retired, request_id=_request_id(current_user)
+        )
+    except GraphRagError as e:  # 단계 off → 409 (Check G-2)
+        raise _mapped(e) from e
     return TopicListResponse(items=[TopicItem.from_domain(t, n) for t, n in rows])
 
 

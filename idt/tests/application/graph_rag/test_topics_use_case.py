@@ -96,3 +96,27 @@ async def test_list_returns_tree_order_with_document_counts():
     assert [(t.id, n) for t, n in items] == [("t-loan", 1), ("t-m", 1)]
     items = await uc.list(include_retired=True, request_id="r")
     assert {t.id for t, _ in items} == {"t-loan", "t-m", "t-old"}
+
+
+@pytest.mark.asyncio
+async def test_stage_off_blocks_topic_api():
+    """Check G-2: 노출 단계 off 이면 주제 목록·추가·수정 모두 409."""
+    import dataclasses
+
+    from src.domain.graph_rag.exceptions import GraphStageOffError
+    from src.domain.graph_rag.value_objects import GraphRagSettings, RolloutStage
+
+    from tests.application.graph_rag.fakes import FakeReader
+
+    off = FakeReader(dataclasses.replace(GraphRagSettings.defaults(),
+                                         rollout_stage=RolloutStage.OFF))
+    uc = TopicsUseCase(topics=FakeTopics([_major()]), document_topics=FakeDocumentTopics(),
+                       logger=MagicMock(), reader=off)
+    with pytest.raises(GraphStageOffError):
+        await uc.list(include_retired=False, request_id="r")
+    with pytest.raises(GraphStageOffError):
+        await uc.create(name="고객", level=1, parent_id=None, description=None,
+                        actor="1", request_id="r")
+    with pytest.raises(GraphStageOffError):
+        await uc.update("t-loan", name=None, description=None, status="retired",
+                        request_id="r")

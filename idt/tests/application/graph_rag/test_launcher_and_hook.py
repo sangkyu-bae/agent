@@ -222,3 +222,19 @@ async def test_deletion_hook_without_backend_still_clears_topics():
     down.delete_document = AsyncMock(side_effect=GraphBackendUnavailableError("x"))
     await GraphDeletionHook(down, links, MagicMock()).on_document_deleted(
         DocumentDeletedEvent("doc-1", "kb", "col"), "r")  # 예외 없이 끝난다
+
+
+@pytest.mark.asyncio
+async def test_deletion_hook_removes_decisions_of_document():
+    """Check M-1: 문서 삭제 시 판정 기록도 지운다(검토 큐에 남지 않게)."""
+    from src.application.graph_rag.hooks import GraphDeletionHook
+    from src.domain.extension_hooks import DocumentDeletedEvent
+
+    from tests.application.graph_rag.fakes import FakeDocumentTopics
+
+    decisions = MagicMock()
+    decisions.delete_for_document = AsyncMock(return_value=3)
+    await GraphDeletionHook(None, FakeDocumentTopics(), MagicMock(),
+                            decisions=decisions).on_document_deleted(
+        DocumentDeletedEvent("doc-1", "kb", "col"), "r")
+    decisions.delete_for_document.assert_awaited_once_with("doc-1", "r")

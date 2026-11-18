@@ -93,3 +93,12 @@ async def test_mark_reviewed_sets_reviewer_and_entity(store):
     assert got.review_status is ReviewStatus.REJECTED
     assert (got.reviewed_by, got.review_note, got.entity_id) == ("99", "다름", "e7")
     assert got.reviewed_at is not None
+
+
+@pytest.mark.asyncio
+async def test_delete_for_document_removes_only_that_document(store):
+    """Check M-1: 지운 문서의 판정이 검토 큐에 남지 않게."""
+    await store.upsert_many([_d("d1"), _d("d2"), _d("d3", document_id="other")], "r")
+    assert await store.delete_for_document("doc", "r") == 2
+    items, total = await store.list_by_review_status(ReviewStatus.PENDING, 10, 0, "r")
+    assert total == 1 and items[0].id == "d3"

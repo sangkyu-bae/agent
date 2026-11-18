@@ -15,7 +15,12 @@ import uuid
 from src.application.graph_rag.topic.review import TopicReviewer
 from src.domain.graph_rag.exceptions import GraphRagError
 from src.domain.graph_rag.extraction import GLOBAL_SCOPE, EntityWrite, NameNormalizer
-from src.domain.graph_rag.interfaces import DecisionStorePort, GraphStorePort
+from src.application.graph_rag.admin.inspect_use_case import ensure_stage_on
+from src.domain.graph_rag.interfaces import (
+    DecisionStorePort,
+    GraphSettingsReaderPort,
+    GraphStorePort,
+)
 from src.domain.graph_rag.resolution import ResolutionDecision, ReviewStatus
 from src.domain.graph_rag.topic import is_topic_decision
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
@@ -41,11 +46,18 @@ class ReviewUseCase:
         store: GraphStorePort,
         logger: LoggerInterface,
         topics: TopicReviewer | None = None,
+        reader: GraphSettingsReaderPort | None = None,
     ) -> None:
         self._decisions = decisions
         self._store = store
         self._logger = logger
         self._topics = topics
+        self._reader = reader
+
+    async def _ensure_on(self) -> None:
+        """Design §4: 노출 단계 off 이면 설정·health 외 관리자 API 는 409 (Check G-2)."""
+        if self._reader is not None:
+            await ensure_stage_on(self._reader)
 
     def _topic_reviewer(self, d: ResolutionDecision) -> TopicReviewer | None:
         if not is_topic_decision(d.mention_type):
@@ -57,11 +69,13 @@ class ReviewUseCase:
     async def list(
         self, status: ReviewStatus, limit: int, offset: int, request_id: str
     ) -> tuple[list[ResolutionDecision], int]:
+        await self._ensure_on()
         return await self._decisions.list_by_review_status(
             status, limit, offset, request_id
         )
 
     async def _pending(self, decision_id: str, request_id: str) -> ResolutionDecision:
+        await self._ensure_on()
         d = await self._decisions.get(decision_id, request_id)
         if d is None:
             raise GraphReviewNotFoundError(f"decision not found: {decision_id}")

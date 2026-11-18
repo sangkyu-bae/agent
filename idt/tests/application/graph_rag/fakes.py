@@ -100,6 +100,12 @@ class FakeDecisions(DecisionStorePort):
             review_note=note, entity_id=entity_id,
         )
 
+    async def delete_for_document(self, document_id, request_id):
+        gone = [k for k, d in self.rows.items() if d.document_id == document_id]
+        for k in gone:
+            del self.rows[k]
+        return len(gone)
+
 
 class FakeStore(GraphStorePort):
     def __init__(self, *, down=False, counts=(10, 20)):
