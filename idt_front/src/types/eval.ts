@@ -76,6 +76,8 @@ export interface BatchEvalPayload {
   llm_model?: string;
   agent_id?: string;
   collection_name?: string;
+  /** graph-rag-foundation module-7: 보조 검색(그래프) 켜고 평가 — 관리자만(아니면 403) */
+  allow_supplemental?: boolean;
 }
 
 export interface BatchEvalResponse {

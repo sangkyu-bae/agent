@@ -252,3 +252,46 @@ describe('단계 변경 (L2 #7)', () => {
     expect(within(dialog).getByRole('button', { name: '변경' })).toBeEnabled();
   });
 });
+
+describe('단계 변경 — 평가 근거 목록 (module-7)', () => {
+  const run = (id: string, on: boolean, extra: Record<string, unknown> = {}) => ({
+    id, eval_type: 'batch', target_type: 'agent', status: 'completed', total_cases: 3,
+    created_at: '2026-11-18T09:00:00', completed_at: '2026-11-18T09:05:00', summary: {},
+    error_message: null, config: { allow_supplemental: on, testset_id: 'ts-1' }, ...extra,
+  });
+
+  it('기준 평가에는 그래프 끈 실행만, 비교 평가에는 켠 실행만 나오고 둘 다 고르면 "변경"이다', async () => {
+    let body: Record<string, unknown> | null = null;
+    server.use(
+      http.get('*/api/ragas/runs', () =>
+        HttpResponse.json({
+          items: [run('off-1', false), run('on-1', true), run('rag-1', false,
+            { target_type: 'rag' }), run('run-x', true, { status: 'running' })],
+          total: 4, limit: 50, offset: 0,
+        })
+      ),
+      http.post(`*${API_ENDPOINTS.ADMIN_GRAPH_RAG_STAGE}`, async ({ request }) => {
+        body = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json(mockGraphSettings({ rollout_stage: 'general' }));
+      })
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await user.selectOptions(await screen.findByLabelText('노출 단계'), 'general');
+    const dialog = await screen.findByRole('dialog');
+    const baseline = within(dialog).getByLabelText('기준 평가(그래프 끔)');
+    const graph = within(dialog).getByLabelText('비교 평가(그래프 켬)');
+    await waitFor(() => expect(within(baseline).getAllByRole('option')).toHaveLength(2));
+    expect(within(baseline).getAllByRole('option').map((o) => o.getAttribute('value')))
+      .toEqual(['', 'off-1']);
+    expect(within(graph).getAllByRole('option').map((o) => o.getAttribute('value')))
+      .toEqual(['', 'on-1']);
+    await user.selectOptions(baseline, 'off-1');
+    await user.selectOptions(graph, 'on-1');
+    await user.click(within(dialog).getByRole('button', { name: '변경' }));
+    await waitFor(() => expect(body).toMatchObject({
+      to_stage: 'general', eval_baseline_run_id: 'off-1', eval_graph_run_id: 'on-1',
+      force_reason: null,
+    }));
+  });
+});

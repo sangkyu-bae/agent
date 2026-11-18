@@ -47,7 +47,7 @@ from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.infrastructure.graph_rag.decision_store import SessionScopedDecisionStore
 from src.infrastructure.graph_rag.es_chunk_reader import EsChunkSource
 from src.infrastructure.graph_rag.es_evidence_fetcher import EsEvidenceFetcher
-from src.infrastructure.graph_rag.eval_evidence import UnverifiedEvalEvidence
+from src.infrastructure.graph_rag.eval_evidence import RagasEvalEvidence
 from src.infrastructure.graph_rag.extract.llm_extractor import LlmGraphExtractor
 from src.infrastructure.graph_rag.extract.rule_extractor import RuleGraphExtractor
 from src.infrastructure.graph_rag.job_store import SessionScopedExtractionJobStore
@@ -434,7 +434,7 @@ def _register_routes(
         return ChangeStageUseCase(
             GraphRagSettingRepository(session, logger),
             GraphRagStageChangeRepository(session, logger),
-            UnverifiedEvalEvidence(logger),
+            RagasEvalEvidence(session, logger),
             reader,
             logger,
         )

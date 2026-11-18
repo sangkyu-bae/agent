@@ -489,7 +489,7 @@ from src.infrastructure.search_decision.judgment_adapter import (
     JudgmentSearchDecisionAdapter,
 )
 from src.domain.judgment.interfaces import JudgmentPort
-from src.domain.extension_hooks import ExtensionHooks
+from src.domain.extension_hooks import ExtensionHooks, SupplementalGrant
 from src.infrastructure.persistence.database import (
     get_engine,
     get_session,
@@ -4236,9 +4236,13 @@ def create_ragas_factories(build_run_agent_uc=None):
         llm_model_id_override: str | None = None,
         temperature_override: float | None = None,
         persist_conversation: bool = True,
+        allow_supplemental: bool = False,
     ) -> AgentRunOutcome:
         """agent-model-benchmark module-4: 오버라이드를 실행 경로로 전달하고,
-        도구 호출·관측 run_id를 함께 회수한다 (D1/D2/D6/D10)."""
+        도구 호출·관측 run_id를 함께 회수한다 (D1/D2/D6/D10).
+
+        graph-rag-foundation module-7: allow_supplemental 은 관리자가 켠 평가에서만
+        True 다(라우터 403 검사). 그때만 관리자 grant 로 보조 검색을 허용한다."""
         if build_run_agent_uc is None:
             raise ValueError("agent 대상 평가 실행기가 구성되지 않았습니다")
         async with session_factory() as session:
@@ -4255,6 +4259,11 @@ def create_ragas_factories(build_run_agent_uc=None):
                     ),
                     request_id,
                     viewer_user_id=user_id,
+                    supplemental_grant=(
+                        SupplementalGrant(caller_is_admin=True)
+                        if allow_supplemental
+                        else None
+                    ),
                 )
                 return AgentRunOutcome(
                     answer=resp.answer,

@@ -38,7 +38,12 @@ class BatchEvaluationUseCase:
             llm_model=request.llm_model,
             agent_id=request.agent_id,
             collection_name=request.collection_name,
+            allow_supplemental=request.allow_supplemental,
         )
+        if request.allow_supplemental and request.target_type != "agent":
+            raise ValueError(
+                "보조 검색(allow_supplemental)은 agent 대상 평가에만 쓸 수 있습니다"
+            )
 
         errors = EvaluationPolicy.validate_config(config)
         errors += EvaluationPolicy.validate_metrics_for_target(
@@ -85,6 +90,8 @@ class BatchEvaluationUseCase:
                 "agent_id": request.agent_id,
                 "collection_name": request.collection_name,
                 "sample_ratio": request.sample_ratio,
+                # graph-rag-foundation module-7: general 전환 근거 구분(끔/켬)
+                "allow_supplemental": request.allow_supplemental,
             },
             created_at=datetime.now(timezone.utc),
         )

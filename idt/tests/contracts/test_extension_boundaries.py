@@ -84,13 +84,28 @@ def test_C3_non_conversation_callers_never_grant():
         assert "SupplementalGrant" not in src, f"{rel} 가 grant 를 만든다"
 
 
-def test_C3b_ragas_headless_runner_in_main_never_grants():
+def test_C3b_ragas_headless_runner_grants_only_on_admin_opt_in():
+    """module-7: RAGAS 실행기는 관리자가 켠 평가에서만 grant 를 만든다.
+
+    grant 키워드 값은 반드시 `... if allow_supplemental else None` 조건식이어야 한다.
+    관리자 여부 검사는 라우터(POST /api/ragas/batch, 비관리자 403)가 맡는다.
+    """
     tree = ast.parse((_SRC / "api/main.py").read_text(encoding="utf-8"))
     fn = next(
         n for n in ast.walk(tree)
         if isinstance(n, ast.AsyncFunctionDef) and n.name == "_run_agent_headless"
     )
-    assert "supplemental_grant" not in ast.unparse(fn)
+    grants = [
+        k.value for n in ast.walk(fn) if isinstance(n, ast.Call)
+        for k in n.keywords if k.arg == "supplemental_grant"
+    ]
+    assert len(grants) == 1, "grant 전달 지점은 하나여야 한다"
+    value = grants[0]
+    assert isinstance(value, ast.IfExp), "grant 는 조건식으로만 만든다"
+    assert ast.unparse(value.test) == "allow_supplemental"
+    assert isinstance(value.orelse, ast.Constant) and value.orelse.value is None
+    router_src = (_SRC / "api/routes/ragas_router.py").read_text(encoding="utf-8")
+    assert "allow_supplemental" in router_src and "403" in router_src
 
 
 def test_C4_keyword_chain_is_connected():

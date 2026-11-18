@@ -15,7 +15,13 @@ interface StageChangeDialogProps {
 const StageChangeDialog = ({ current, target, onClose }: StageChangeDialogProps) => {
   const toGeneral = target === 'general';
   const { data: runs } = useEvalRuns({ limit: 50 });
-  const completed = (runs?.items ?? []).filter((r) => r.status === 'completed');
+  // module-7: 완료된 agent 평가만. 끔/켬은 실행 설정 allow_supplemental 로 나눈다
+  const completed = (runs?.items ?? []).filter(
+    (r) => r.status === 'completed' && r.target_type === 'agent'
+  );
+  const graphOnRun = (r: (typeof completed)[number]) => r.config?.allow_supplemental === true;
+  const offRuns = completed.filter((r) => !graphOnRun(r));
+  const onRuns = completed.filter(graphOnRun);
   const [baseline, setBaseline] = useState('');
   const [graph, setGraph] = useState('');
   const [reason, setReason] = useState('');
@@ -36,7 +42,12 @@ const StageChangeDialog = ({ current, target, onClose }: StageChangeDialogProps)
       { onSuccess: onClose }
     );
 
-  const runSelect = (label: string, value: string, set: (v: string) => void) => (
+  const runSelect = (
+    label: string,
+    value: string,
+    set: (v: string) => void,
+    options: typeof completed
+  ) => (
     <label className="block text-[13px] text-zinc-700">
       {label}
       <select
@@ -46,7 +57,7 @@ const StageChangeDialog = ({ current, target, onClose }: StageChangeDialogProps)
         className="mt-1 w-full rounded-lg border border-zinc-300 px-2 py-1.5 text-[13px]"
       >
         <option value="">— 선택 안 함 —</option>
-        {completed.map((r) => (
+        {options.map((r) => (
           <option key={r.id} value={r.id}>
             {r.created_at.slice(0, 16).replace('T', ' ')} · {r.eval_type} · {r.total_cases}건
           </option>
@@ -75,8 +86,8 @@ const StageChangeDialog = ({ current, target, onClose }: StageChangeDialogProps)
               전체 공개는 그래프 끄기·켜기 RAGAS 평가 두 건이 근거로 필요합니다. 고르지 않으면
               사유를 남기고 강제로 전환합니다.
             </p>
-            {runSelect('기준 평가(그래프 끔)', baseline, setBaseline)}
-            {runSelect('비교 평가(그래프 켬)', graph, setGraph)}
+            {runSelect('기준 평가(그래프 끔)', baseline, setBaseline, offRuns)}
+            {runSelect('비교 평가(그래프 켬)', graph, setGraph, onRuns)}
             {forced && (
               <label className="block text-[13px] text-zinc-700">
                 강제 전환 사유

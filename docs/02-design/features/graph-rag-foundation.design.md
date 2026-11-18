@@ -1047,6 +1047,22 @@ M5-1은 범위를 마지막 근거 청크에서만 걸었다. 이 방식에는 �
 
 - 화면 확인은 브라우저로 하지 못했다. 이 PC에서 kiwipiepy DLL이 차단돼 백엔드가 기동되지 않기 때문이다. Vitest+MSW 테스트(L2 #1~#9, 주제·엔티티 포함 19건)로 동작을 확인했다.
 
+### 11.12 module-7 평가·전환 게이트 구현 중 결정 (2026-11-18)
+
+V7 확인: `evaluation_run.status`의 완료 값은 `completed`이고, 실행 설정은 `config` JSON에 있다(`docs/wiki/backend/db/erd-evaluation.md`).
+
+| # | Design 원안 | 구현 | 이유 |
+|---|------------|------|------|
+| M7-1 | RAGAS on/off 비교(관리자 요청 시에만 grant) | 배치 평가 요청에 `allow_supplemental`을 추가했다(기본 false). **관리자가 아니면 403**이고, agent 대상이 아니면 422다. 값은 실행 `config.allow_supplemental`에 기록한다. 대상 실행기는 이 값이 true일 때만 헤드리스 실행기에 넘긴다. `main.py`의 `_run_agent_headless`는 그때만 `SupplementalGrant(caller_is_admin=True)`를 만든다 | 비교 평가의 "켬" 쪽은 그래프가 실제로 실행되어야 한다. 그래프 실행 여부는 여전히 에이전트의 `use_graph`와 노출 단계가 함께 정한다 |
+| M7-2 | 계약 C3b(RAGAS는 grant 없음) | 계약을 "grant는 `... if allow_supplemental else None` 조건식 한 곳에서만 만든다 + 라우터에 403 검사가 있다"로 바꿨다(AST 검사). 웹훅·백그라운드·스케줄·승인 실행 경로의 C3 계약은 그대로다 | 승인된 Design 항목(§11.2-7)이다. 열리는 범위는 관리자가 명시적으로 켠 평가 하나뿐이다 |
+| M7-3 | StageTransitionPolicy 실평가 연결 | `UnverifiedEvalEvidence`(항상 거절)를 `RagasEvalEvidence`로 바꿨다. 근거로 인정하는 조건: 두 실행이 모두 있고, 서로 다르고, 둘 다 `completed`, 둘 다 agent 대상, 같은 에이전트, 같은 테스트셋, 기준 실행은 끔, 비교 실행은 켬. 규칙은 도메인 `EvalEvidencePolicy`에 있고, 거절 사유는 로그로 남긴다 | §4.2 stage. `allow_supplemental` 값이 없는 예전 실행은 끔으로 본다 |
+| M7-4 | 화면 | 평가 실행 창에 관리자에게만 "그래프 보조 검색 켜고 평가" 옵션을 보인다(capabilities 응답에 `stage`가 있을 때만). 단계 변경 창은 완료된 agent 실행을 끔/켬 목록으로 나눠 보여 준다 | 관리자가 DB나 Swagger 없이 근거 2건을 만들고 고를 수 있다(SC-5) |
+
+**측정 이월(환경):** 2026-11-18부터 이 PC의 애플리케이션 제어가 kiwipiepy·asyncmy DLL을 막아 백엔드를 기동할 수 없다. 그래서 다음 항목은 환경이 복구된 뒤 실행한다.
+- SC-4: 같은 에이전트·테스트셋으로 RAGAS를 그래프 끔·켬으로 한 번씩 실행해 비교하고, 그 두 건으로 general 전환을 확인한다.
+- SC-3: 별칭 라벨셋 정밀도. 청크가 많은 문서(예: 27청크 `최선집행기준설명서.pdf`)를 추출해 Jev·LLM 판정이 생긴 뒤 라벨을 붙인다.
+- 튜닝: `MIN_VECTOR_SIMILARITY` 0.75, `HUB_DEGREE_LIMIT` 15, parent/child 겹침(M5-8)은 위 측정값을 보고 정한다.
+
 DDL은 2026-11-17 사용자가 승인했다: V090 `graph_topic`(이름·정규화 이름·level 1/2·parent_id·parent_key·설명·status·origin·created_by, `UNIQUE(parent_key, normalized_name)`), V091 `graph_document_topic`(document_id·topic_id PK, is_primary, probability, decision_id). 실제 DDL은 `idt/db/migration/V090·V091`.
 
 ---
@@ -1066,3 +1082,4 @@ DDL은 2026-11-17 사용자가 승인했다: V090 `graph_topic`(이름·정규�
 | 0.9 | 2026-11-17 | module-4b 주제 분류(§11.9), DDL V090·V091 승인, 질문 주제 Jev→LLM 결정 | 배상규 |
 | 0.10 | 2026-11-18 | module-5 결정 M5-1~11(§11.10), 범위 보강 M5-12·13(§11.10.1) | 배상규 |
 | 0.11 | 2026-11-18 | module-6 관리자 화면·빌더 토글 결정 M6-1~6(§11.11) | 배상규 |
+| 0.12 | 2026-11-18 | module-7 평가 opt-in·전환 근거 검증 M7-1~4(§11.12), V7 확인, 측정 이월 | 배상규 |
