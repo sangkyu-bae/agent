@@ -9,11 +9,11 @@ from __future__ import annotations
 import uuid
 from dataclasses import replace
 
+from src.application.graph_rag.admin.inspect_use_case import ensure_stage_on
 from src.domain.graph_rag.exceptions import (
     GraphTopicInvalidError,
     GraphTopicNotFoundError,
 )
-from src.application.graph_rag.admin.inspect_use_case import ensure_stage_on
 from src.domain.graph_rag.interfaces import (
     DocumentTopicStorePort,
     GraphSettingsReaderPort,

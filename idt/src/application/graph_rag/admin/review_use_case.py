@@ -12,10 +12,10 @@ from __future__ import annotations
 
 import uuid
 
+from src.application.graph_rag.admin.inspect_use_case import ensure_stage_on
 from src.application.graph_rag.topic.review import TopicReviewer
 from src.domain.graph_rag.exceptions import GraphRagError
 from src.domain.graph_rag.extraction import GLOBAL_SCOPE, EntityWrite, NameNormalizer
-from src.application.graph_rag.admin.inspect_use_case import ensure_stage_on
 from src.domain.graph_rag.interfaces import (
     DecisionStorePort,
     GraphSettingsReaderPort,
@@ -55,7 +55,7 @@ class ReviewUseCase:
         self._reader = reader
 
     async def _ensure_on(self) -> None:
-        """Design §4: 노출 단계 off 이면 설정·health 외 관리자 API 는 409 (Check G-2)."""
+        """Design §4: 단계 off 이면 설정·health 외 관리자 API 는 409 (Check G-2)."""
         if self._reader is not None:
             await ensure_stage_on(self._reader)
 
