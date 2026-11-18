@@ -18,6 +18,7 @@ from src.application.unified_upload.schemas import (
 from src.application.unified_upload.use_case import UnifiedUploadUseCase
 from src.domain.auth.entities import User
 from src.domain.department.interfaces import DepartmentRepositoryInterface
+from src.domain.extension_hooks import DocumentIngestedEvent, ExtensionHooks
 from src.domain.knowledge_base.entities import KnowledgeBase
 from src.domain.knowledge_base.interfaces import (
     KnowledgeBaseRepositoryInterface,
@@ -40,7 +41,10 @@ class KnowledgeBaseUploadUseCase:
         logger: LoggerInterface,
         chunking_resolver: ChunkingSettingsResolver | None = None,
         summary_launcher: SectionSummaryLauncher | None = None,
+        extension_hooks: ExtensionHooks | None = None,
     ) -> None:
+        # graph-rag-foundation §2.2: 업로드 후 확장 훅(그래프 추출 등). 미등록 = 무동작.
+        self._extension_hooks = extension_hooks
         self._kb_repo = kb_repo
         self._policy = policy
         self._dept_repo = dept_repo
@@ -97,7 +101,39 @@ class KnowledgeBaseUploadUseCase:
         summary_launch = await self._launch_summary(
             kb, result, request_id, is_excel=is_excel
         )
+        await self._notify_post_ingest(kb, result, user, filename, request_id)
         return result, kb, summary_launch
+
+    async def _notify_post_ingest(
+        self,
+        kb: KnowledgeBase,
+        result: UnifiedUploadResult,
+        user: User,
+        filename: str,
+        request_id: str,
+    ) -> None:
+        """확장 훅 통지 — 실패는 로그만 남기고 업로드 결과를 바꾸지 않는다 (§6.2)."""
+        hook = self._extension_hooks.post_ingest if self._extension_hooks else None
+        if hook is None:
+            return
+        event = DocumentIngestedEvent(
+            document_id=result.document_id,
+            kb_id=kb.id,
+            collection_name=kb.collection_name,
+            filename=filename,
+            user_id=str(user.id),
+            chunk_count=result.chunk_count,
+            status=result.status,
+        )
+        try:
+            await hook.on_document_ingested(event, request_id)
+        except Exception as e:
+            self._logger.error(
+                "Post-ingest hook failed (upload unaffected)",
+                request_id=request_id,
+                document_id=result.document_id,
+                exception=e,
+            )
 
     async def _launch_summary(
         self,

@@ -38,6 +38,9 @@ _DECLARED_CONSUMERS = {
     "src/api/main.py",
     # module-4: 첫 소비 지점 — 포트만 의존(구현 직접 참조 금지는 아래 별도 테스트)
     "src/infrastructure/search_decision/judgment_adapter.py",
+    # graph-rag-foundation module-4 (Design §7.2 D3): 엔티티 동일성 판정 ChoiceQuestion.
+    # 포트(JudgmentPort)와 값 객체만 의존 — 구현 조립은 main.py 가 넘긴다.
+    "src/infrastructure/graph_rag/resolution/jev_chooser.py",
 }
 
 

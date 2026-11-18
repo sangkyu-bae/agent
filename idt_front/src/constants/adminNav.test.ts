@@ -45,6 +45,8 @@ describe('adminNav 상수 — 그룹 구조', () => {
       '/admin/kb-defaults',
       // multimodal-extractor: 멀티모달 추출 (docs-quality)
       '/admin/multimodal',
+      // graph-rag-foundation: 그래프 RAG (docs-quality)
+      '/admin/graph-rag',
       // golden-sample-blueprint: 발표자료 양식 (docs-quality)
       '/admin/blueprints',
       '/admin/mcp-servers',
@@ -70,6 +72,7 @@ describe('adminNav 상수 — 그룹 구조', () => {
     expect(findAdminGroupByPath('/admin/users')?.key).toBe('org');
     expect(findAdminGroupByPath('/admin/multimodal')?.key).toBe('docs-quality');
     expect(findAdminGroupByPath('/admin/blueprints')?.key).toBe('docs-quality');
+    expect(findAdminGroupByPath('/admin/graph-rag')?.key).toBe('docs-quality');
     expect(findAdminGroupByPath('/admin/ragas')?.key).toBe('docs-quality');
     expect(findAdminGroupByPath('/admin/wiki')?.key).toBe('agent-resources');
   });

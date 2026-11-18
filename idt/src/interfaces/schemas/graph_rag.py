@@ -1,0 +1,465 @@
+"""graph-rag-foundation API 스키마 (Design §4).
+
+형식 검증만 한다 — 값 범위 검증은 도메인 VO GraphRagSettings 가 단일 출처.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Literal
+
+from pydantic import BaseModel, Field
+
+from src.domain.graph_rag.extraction import ExtractionJob
+from src.domain.graph_rag.inspection import (
+    EntityDetail,
+    EntitySummary,
+    IntegrityReport,
+)
+from src.domain.graph_rag.resolution import ResolutionDecision
+from src.domain.graph_rag.topic import Topic, is_topic_decision
+from src.domain.graph_rag.value_objects import (
+    GraphHealth,
+    GraphRagSettings,
+    StageChange,
+)
+
+
+class GraphRagSettingsRequest(BaseModel):
+    extraction_enabled: bool
+    jev_enabled: bool
+    link_threshold: float
+    new_threshold: float
+    extraction_llm_model_id: str | None = None
+    rejudge_llm_model_id: str | None = None
+    concurrency: int
+    max_llm_calls_per_doc: int
+    candidate_top_k: int
+    max_hops: int
+    graph_rrf_weight: float
+    retrieval_timeout_ms: int
+    entity_types: list[str]
+    relation_types: list[str]
+
+
+class GraphRagSettingsResponse(GraphRagSettingsRequest):
+    rollout_stage: str
+    updated_at: datetime | None = None
+
+    @classmethod
+    def from_domain(cls, s: GraphRagSettings) -> GraphRagSettingsResponse:
+        return cls(
+            rollout_stage=s.rollout_stage.value,
+            extraction_enabled=s.extraction_enabled,
+            jev_enabled=s.jev_enabled,
+            link_threshold=s.link_threshold,
+            new_threshold=s.new_threshold,
+            extraction_llm_model_id=s.extraction_llm_model_id,
+            rejudge_llm_model_id=s.rejudge_llm_model_id,
+            concurrency=s.concurrency,
+            max_llm_calls_per_doc=s.max_llm_calls_per_doc,
+            candidate_top_k=s.candidate_top_k,
+            max_hops=s.max_hops,
+            graph_rrf_weight=s.graph_rrf_weight,
+            retrieval_timeout_ms=s.retrieval_timeout_ms,
+            entity_types=list(s.entity_types),
+            relation_types=list(s.relation_types),
+            updated_at=s.updated_at,
+        )
+
+
+class StageChangeRequest(BaseModel):
+    to_stage: str
+    eval_baseline_run_id: str | None = Field(default=None, max_length=36)
+    eval_graph_run_id: str | None = Field(default=None, max_length=36)
+    force_reason: str | None = Field(default=None, max_length=500)
+
+
+class StageChangeItem(BaseModel):
+    id: str
+    from_stage: str
+    to_stage: str
+    changed_by: str
+    eval_baseline_run_id: str | None
+    eval_graph_run_id: str | None
+    force_reason: str | None
+    created_at: datetime
+
+    @classmethod
+    def from_domain(cls, c: StageChange) -> StageChangeItem:
+        return cls(
+            id=c.id,
+            from_stage=c.from_stage.value,
+            to_stage=c.to_stage.value,
+            changed_by=c.changed_by,
+            eval_baseline_run_id=c.eval_baseline_run_id,
+            eval_graph_run_id=c.eval_graph_run_id,
+            force_reason=c.force_reason,
+            created_at=c.created_at,
+        )
+
+
+class StageHistoryResponse(BaseModel):
+    items: list[StageChangeItem]
+
+
+class GraphHealthResponse(BaseModel):
+    backend: str
+    connected: bool
+    external: bool
+    node_count: int | None = None
+    relationship_count: int | None = None
+    node_limit: int | None = None
+    relationship_limit: int | None = None
+    error: str | None = None
+
+    @classmethod
+    def from_domain(cls, h: GraphHealth) -> GraphHealthResponse:
+        return cls(**h.__dict__)
+
+
+class CapabilitiesResponse(BaseModel):
+    visible: bool
+    stage: str | None = None
+
+
+# ── module-3: 추출 잡 ──────────────────────────────────────────────────────
+
+
+class ExtractRequest(BaseModel):
+    mode: Literal["resume", "rebuild"] = "resume"
+
+
+class ExtractAcceptedResponse(BaseModel):
+    job_id: str
+    status: str
+
+
+class ExtractionJobResponse(BaseModel):
+    id: str
+    document_id: str
+    kb_id: str | None
+    collection_name: str
+    status: str
+    mode: str
+    trigger_source: str
+    extractor_version: str
+    total_chunks: int
+    processed_chunks: int
+    failed_chunks: int
+    llm_calls: int
+    judge_calls: int
+    entities_created: int
+    entities_linked: int
+    relations_created: int
+    error_message: str | None
+    requested_by: str | None
+    started_at: datetime | None
+    finished_at: datetime | None
+    created_at: datetime | None
+
+    @classmethod
+    def from_domain(cls, j: ExtractionJob) -> ExtractionJobResponse:
+        data = {k: getattr(j, k) for k in cls.model_fields}
+        for k in ("status", "mode", "trigger_source"):
+            data[k] = getattr(j, k).value
+        return cls(**data)
+
+
+class KbDocumentJobItem(BaseModel):
+    document_id: str
+    filename: str
+    chunk_count: int
+    job: ExtractionJobResponse | None
+
+
+class KbDocumentJobsResponse(BaseModel):
+    items: list[KbDocumentJobItem]
+    total: int
+
+
+# ── module-4: 검토 큐 ──────────────────────────────────────────────────────
+
+
+class ReviewItem(BaseModel):
+    id: str
+    job_id: str
+    document_id: str
+    chunk_id: str
+    mention_text: str
+    mention_type: str
+    candidates: list[dict]
+    probabilities: dict[str, float] | None
+    chosen_label: str
+    entity_id: str
+    created_new: bool
+    decided_by: str
+    band: str
+    probability: float | None
+    llm_confidence: str | None
+    llm_reason: str | None
+    review_status: str
+    created_at: datetime | None
+    kind: Literal["entity", "topic"] = "entity"  # module-4b: entity_id 가 주제 id
+
+    @classmethod
+    def from_domain(cls, d: ResolutionDecision) -> ReviewItem:
+        return cls(
+            kind="topic" if is_topic_decision(d.mention_type) else "entity",
+            id=d.id,
+            job_id=d.job_id,
+            document_id=d.document_id,
+            chunk_id=d.chunk_id,
+            mention_text=d.mention_text,
+            mention_type=d.mention_type,
+            candidates=list(d.candidates),
+            probabilities=d.probabilities,
+            chosen_label=d.chosen_label,
+            entity_id=d.entity_id,
+            created_new=d.created_new,
+            decided_by=d.decided_by.value,
+            band=d.band.value,
+            probability=d.probability,
+            llm_confidence=d.llm_confidence.value if d.llm_confidence else None,
+            llm_reason=d.llm_reason,
+            review_status=d.review_status.value,
+            created_at=d.created_at,
+        )
+
+
+class ReviewListResponse(BaseModel):
+    items: list[ReviewItem]
+    total: int
+
+
+class ReviewApproveRequest(BaseModel):
+    note: str | None = Field(default=None, max_length=500)
+
+
+class ReviewRejectRequest(BaseModel):
+    target_entity_id: str | None = Field(default=None, max_length=36)
+    note: str | None = Field(default=None, max_length=500)
+
+
+class ReviewRejectResponse(BaseModel):
+    entity_id: str
+
+
+# ── module-4b: 주제 (Design §11.9) ─────────────────────────────────────────
+
+
+class TopicItem(BaseModel):
+    id: str
+    name: str
+    level: int
+    parent_id: str | None
+    description: str
+    status: str
+    origin: str
+    created_by: str | None
+    document_count: int
+    created_at: datetime | None
+    updated_at: datetime | None
+
+    @classmethod
+    def from_domain(cls, t: Topic, document_count: int = 0) -> TopicItem:
+        return cls(
+            id=t.id,
+            name=t.name,
+            level=int(t.level),
+            parent_id=t.parent_id,
+            description=t.description or "",
+            status=t.status.value,
+            origin=t.origin.value,
+            created_by=t.created_by,
+            document_count=document_count,
+            created_at=t.created_at,  # type: ignore[arg-type]
+            updated_at=t.updated_at,  # type: ignore[arg-type]
+        )
+
+
+class TopicListResponse(BaseModel):
+    items: list[TopicItem]
+
+
+class TopicCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=64)
+    level: Literal[1, 2]
+    parent_id: str | None = Field(default=None, max_length=36)
+    description: str | None = Field(default=None, max_length=500)
+
+
+class TopicUpdateRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=64)
+    description: str | None = Field(default=None, max_length=500)
+    status: Literal["active", "retired"] | None = None
+
+
+# ── module-5b: 엔티티·검색 테스트·정합성 (Design §4.1·§4.2) ─────────────────
+
+
+class EntityItem(BaseModel):
+    id: str
+    name: str
+    type: str
+    description: str
+    mention_count: int
+    relation_count: int
+
+    @classmethod
+    def from_domain(cls, e: EntitySummary) -> EntityItem:
+        return cls(**e.__dict__)
+
+
+class EntityListResponse(BaseModel):
+    items: list[EntityItem]
+    total: int
+    page: int
+    size: int
+
+
+class EntityRelationItem(BaseModel):
+    id: str
+    direction: Literal["out", "in"]
+    kind: str
+    type: str
+    other_id: str
+    other_name: str
+    evidence_chunk_id: str
+    evidence_text: str
+    document_id: str
+
+
+class EntityMentionItem(BaseModel):
+    chunk_id: str
+    document_id: str
+    decision_id: str
+    preview: str
+
+
+class EntityDetailResponse(BaseModel):
+    entity: EntityItem
+    aliases: list[str]
+    relations: list[EntityRelationItem]
+    mentions: list[EntityMentionItem]
+
+    @classmethod
+    def from_domain(cls, d: EntityDetail) -> EntityDetailResponse:
+        return cls(
+            entity=EntityItem.from_domain(d.entity),
+            aliases=list(d.aliases),
+            relations=[EntityRelationItem(**r.__dict__) for r in d.relations],
+            mentions=[EntityMentionItem(**m.__dict__) for m in d.mentions],
+        )
+
+
+class SearchTestRequest(BaseModel):
+    query: str = Field(min_length=1, max_length=500)
+    kb_id: str | None = Field(default=None, max_length=36)
+    collection_name: str | None = Field(default=None, max_length=255)
+    top_k: int = Field(default=5, ge=1, le=20)
+    max_hops: int | None = Field(default=None, ge=1, le=3)
+
+
+class SearchScopeItem(BaseModel):
+    topic_ids: list[str] | None
+    topic_names: list[str]
+    decided_by: str
+    reason: str | None
+
+
+class LinkedEntityItem(BaseModel):
+    id: str
+    name: str
+    type: str
+    via: str
+    score: float
+
+
+class PathItem(BaseModel):
+    hops: int
+    path: list[str]
+    evidence_chunk_ids: list[str]
+
+
+class SearchHitItem(BaseModel):
+    chunk_id: str
+    document_id: str
+    filename: str
+    score: float
+    source: str
+    content_preview: str
+
+    @classmethod
+    def from_hit(cls, h) -> SearchHitItem:
+        meta = h.metadata or {}
+        return cls(
+            chunk_id=h.id,
+            document_id=str(meta.get("document_id", "")),
+            filename=str(meta.get("filename") or meta.get("source") or ""),
+            score=float(h.score),
+            source=h.source,
+            content_preview=(h.content or "")[:300],
+        )
+
+
+class SearchTestResponse(BaseModel):
+    scope: SearchScopeItem
+    linked_entities: list[LinkedEntityItem]
+    paths: list[PathItem]
+    graph_hits: list[SearchHitItem]
+    hybrid_hits: list[SearchHitItem]
+    fused_hits: list[SearchHitItem]
+    timings_ms: dict[str, int]
+    filtered_out: int
+    skip_reason: str | None
+    hybrid_error: str | None
+
+    @classmethod
+    def from_result(cls, r) -> SearchTestResponse:
+        t = r.trace
+        return cls(
+            scope=SearchScopeItem(
+                topic_ids=list(t.scope.topic_ids)
+                if t.scope.topic_ids is not None
+                else None,
+                topic_names=list(t.scope.topic_names),
+                decided_by=t.scope.decided_by,
+                reason=t.scope.reason,
+            ),
+            linked_entities=[LinkedEntityItem(**e.__dict__) for e in t.linked],
+            paths=[
+                PathItem(
+                    hops=p.hops,
+                    path=p.label(),
+                    evidence_chunk_ids=list(p.evidence_chunk_ids),
+                )
+                for p in t.paths[:_MAX_PATHS_SHOWN]
+            ],
+            graph_hits=[SearchHitItem.from_hit(h) for h in t.hits],
+            hybrid_hits=[SearchHitItem.from_hit(h) for h in r.hybrid_hits],
+            fused_hits=[SearchHitItem.from_hit(h) for h in r.fused_hits],
+            timings_ms=dict(t.timings_ms),
+            filtered_out=t.filtered_out,
+            skip_reason=t.skip_reason,
+            hybrid_error=r.hybrid_error,
+        )
+
+
+_MAX_PATHS_SHOWN = 50
+
+
+class IntegrityResponse(BaseModel):
+    checked: int
+    missing: int
+    missing_chunk_ids: list[str]
+    missing_document_ids: list[str]
+
+    @classmethod
+    def from_domain(cls, r: IntegrityReport) -> IntegrityResponse:
+        return cls(
+            checked=r.checked,
+            missing=r.missing,
+            missing_chunk_ids=list(r.missing_chunk_ids),
+            missing_document_ids=list(r.missing_document_ids),
+        )

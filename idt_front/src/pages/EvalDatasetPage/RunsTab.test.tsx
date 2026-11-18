@@ -157,3 +157,52 @@ describe('평가 실행 탭', () => {
     expect(payload).not.toHaveProperty('agent_id');
   });
 });
+
+// graph-rag-foundation module-7: 그래프 끔/켬 비교 평가 — 관리자(노출 단계 응답에 stage 포함)에게만
+describe('평가 실행 폼 — 그래프 보조 검색 옵션', () => {
+  const agents = {
+    agents: [{ agent_id: 'ag-1', name: '여신 상담', description: '', status: 'active' }],
+    total: 1, page: 1, size: 20,
+  };
+
+  const openAgentForm = async () => {
+    server.use(
+      http.get('*/api/ragas/runs', () => HttpResponse.json(emptyPage)),
+      http.get('*/api/v1/agents', () => HttpResponse.json(agents)),
+    );
+    renderTab();
+    await userEvent.click(await screen.findByText('+ 평가 실행'));
+  };
+
+  it('관리자에게 노출되지 않으면 옵션이 없다', async () => {
+    stubFormApis();
+    await openAgentForm();
+    await screen.findByLabelText('테스트셋');
+    expect(screen.queryByRole('checkbox', { name: /그래프 보조 검색/ })).toBeNull();
+  });
+
+  it('관리자가 켜고 제출하면 allow_supplemental=true 로 보낸다', async () => {
+    let payload: Record<string, unknown> | null = null;
+    stubFormApis();
+    server.use(
+      http.get('*/api/v1/graph-rag/capabilities', () =>
+        HttpResponse.json({ visible: true, stage: 'admin_only' }),
+      ),
+      http.post('*/api/ragas/batch', async ({ request }) => {
+        payload = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json(
+          { run_id: 'r', status: 'pending', total_cases: 2, message: 'ok' }, { status: 202 },
+        );
+      }),
+    );
+    await openAgentForm();
+    await userEvent.selectOptions(await screen.findByLabelText('에이전트'), 'ag-1');
+    await userEvent.selectOptions(screen.getByLabelText('테스트셋'), 'ts-1');
+    await userEvent.click(await screen.findByRole('checkbox', { name: /답변 관련성/ }));
+    await userEvent.click(await screen.findByRole('checkbox', { name: /그래프 보조 검색/ }));
+    await userEvent.click(screen.getByRole('button', { name: '평가 시작' }));
+    await waitFor(() => expect(payload).toMatchObject({
+      target_type: 'agent', agent_id: 'ag-1', allow_supplemental: true,
+    }));
+  });
+});

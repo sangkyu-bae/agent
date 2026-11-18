@@ -14,6 +14,8 @@ class BatchEvalRequest:
     llm_model: str = "gpt-4o-mini"
     agent_id: str | None = None
     collection_name: str | None = None
+    # graph-rag-foundation module-7: 보조 검색 opt-in (라우터가 관리자만 허용)
+    allow_supplemental: bool = False
 
 
 @dataclass(frozen=True)

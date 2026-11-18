@@ -28,6 +28,7 @@ from src.domain.agent_attachment.exceptions import (
 )
 from src.domain.agent_run.auth_context import AuthContext
 from src.domain.auth.entities import User
+from src.domain.extension_hooks import SupplementalGrant
 from src.domain.auth.interfaces import JWTAdapterInterface, UserRepositoryInterface
 from src.domain.general_chat.interfaces import ChatStreamCacheInterface
 from src.domain.general_chat.schemas import GeneralChatRequest
@@ -294,6 +295,8 @@ async def ws_agent_run(
             include_sources=True,
             # agent-run-tool-trace §4.3: 답변별 도구 실행 내역도 이 경로만 조회.
             include_tool_trace=True,
+            # graph-rag-foundation FR-20: 대화 라우트만 보조 검색 허용값을 만든다.
+            supplemental_grant=SupplementalGrant.for_role(auth_ctx.role),
         ):
             ws_msg = AgentRunEventWsAdapter.to_ws_message(event)
             await manager.send_to_room(

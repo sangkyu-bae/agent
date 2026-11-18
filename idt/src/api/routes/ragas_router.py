@@ -25,7 +25,7 @@ from src.application.eval_sweep.schemas import (
     SweepEstimateRequest,
     SweepEstimateResponse,
 )
-from src.domain.auth.entities import User
+from src.domain.auth.entities import User, UserRole
 from src.domain.ragas.policies import (
     METRICS_REQUIRING_GROUND_TRUTH,
     TARGET_METRICS,
@@ -102,6 +102,8 @@ class BatchEvalRequestBody(BaseModel):
     llm_model: str = "gpt-4o-mini"
     agent_id: str | None = None
     collection_name: str | None = None
+    # graph-rag-foundation module-7: 보조 검색(그래프) 켜고 평가 — 관리자만(아니면 403)
+    allow_supplemental: bool = False
 
 
 class BatchEvalResponseBody(BaseModel):
@@ -305,6 +307,10 @@ async def create_batch_evaluation(
 ) -> BatchEvalResponseBody:
     from src.application.ragas.schemas import BatchEvalRequest
 
+    if body.allow_supplemental and user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=403, detail="보조 검색을 켠 평가는 관리자만 실행할 수 있습니다"
+        )
     request_id = str(uuid.uuid4())
     request = BatchEvalRequest(
         target_type=body.target_type,
@@ -316,6 +322,7 @@ async def create_batch_evaluation(
         llm_model=body.llm_model,
         agent_id=body.agent_id,
         collection_name=body.collection_name,
+        allow_supplemental=body.allow_supplemental,
     )
     try:
         response = await use_case.execute(

@@ -6,6 +6,7 @@ import { useEvalMetrics, useStartBatchEval, useTestsets } from '@/hooks/useEval'
 import { useMyBuilderAgents } from '@/hooks/useAgentBuilder';
 import { useKnowledgeBases } from '@/hooks/useKnowledgeBases';
 import { useLlmModels } from '@/hooks/useLlmModels';
+import { useGraphRagCapabilities } from '@/hooks/useGraphRag';
 import type { EvalTargetType } from '@/types/eval';
 
 const TARGETS: { key: EvalTargetType; label: string; hint: string }[] = [
@@ -49,6 +50,7 @@ const CreateRunModal = ({ onClose, prefill }: CreateRunModalProps) => {
     String(prefill?.sample_ratio ?? 1),
   );
   const [error, setError] = useState('');
+  const [graphOn, setGraphOn] = useState(false);
 
   const { data: testsets } = useTestsets();
   const { data: metrics } = useEvalMetrics();
@@ -56,6 +58,9 @@ const CreateRunModal = ({ onClose, prefill }: CreateRunModalProps) => {
   const { data: knowledgeBases } = useKnowledgeBases();
   const { data: llmModels } = useLlmModels();
   const startMutation = useStartBatchEval();
+  // graph-rag-foundation module-7: stage 는 관리자 응답에만 온다 → 관리자에게만 옵션 노출
+  const { data: graphCaps } = useGraphRagCapabilities();
+  const canUseGraph = !!graphCaps?.visible && !!graphCaps.stage && targetType === 'agent';
 
   const targetMetrics = (metrics ?? []).filter((m) =>
     m.target_types.includes(targetType),
@@ -97,6 +102,7 @@ const CreateRunModal = ({ onClose, prefill }: CreateRunModalProps) => {
         ...(targetType === 'agent'
           ? { agent_id: agentId }
           : { collection_name: collectionName }),
+        ...(canUseGraph && graphOn ? { allow_supplemental: true } : {}),
       },
       { onSuccess: onClose, onError: (e) => setError(e.message) },
     );
@@ -264,6 +270,23 @@ const CreateRunModal = ({ onClose, prefill }: CreateRunModalProps) => {
               />
             </div>
           </div>
+
+          {canUseGraph && (
+            <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-amber-200 bg-amber-50/50 px-3 py-2">
+              <input
+                type="checkbox"
+                checked={graphOn}
+                onChange={(e) => setGraphOn(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span className="text-[12.5px]">
+                <span className="font-medium text-zinc-800">그래프 보조 검색 켜고 평가 (관리자)</span>
+                <span className="mt-0.5 block text-[11.5px] text-zinc-500">
+                  같은 에이전트·테스트셋을 끄고 한 번, 켜고 한 번 실행하면 그래프 RAG 전체 공개 근거로 쓸 수 있습니다
+                </span>
+              </span>
+            </label>
+          )}
 
           {error && (
             <p role="alert" className="text-[12.5px] text-red-500">{error}</p>

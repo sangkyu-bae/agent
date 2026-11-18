@@ -51,6 +51,7 @@ from src.domain.agent_attachment.interfaces import ImageBlockBuilderPort
 from src.domain.agent_attachment.policies import ImageAttachmentPolicy
 from src.domain.llm_model.entity import LlmModel
 from src.domain.agent_run.auth_context import AuthContext
+from src.domain.extension_hooks import SupplementalGrant
 from src.application.agent_run.step_tracking import (
     _INPUT_SUMMARY_MAX_CHARS,
     track_step,
@@ -370,8 +371,13 @@ class RunAgentUseCase:
         inject_memory: bool = False,
         include_sources: bool = False,
         include_tool_trace: bool = False,
+        supplemental_grant: SupplementalGrant | None = None,
     ) -> AsyncIterator[AgentRunEvent]:
         """transport-독립 SSE/WS용 이벤트 스트림 (Design §5.2.2).
+
+        supplemental_grant — graph-rag-foundation FR-20: 보조 검색(그래프) 실행 허용값.
+        inject_memory 와 같은 이유로 **대화 라우트만** 만든다. 기본 None(닫힘) —
+        웹훅·백그라운드·스케줄·RAGAS 는 넘기지 않는다(tests/contracts 고정).
 
         inject_memory — agent-memory-injection Act-1 (Analysis G1): 사용자 메모리
         주입은 **대화 라우트(WS·REST·SSE)만 True 로 opt-in** 한다. 웹훅·백그라운드
@@ -455,6 +461,7 @@ class RunAgentUseCase:
                 auth_ctx=auth_ctx, inject_memory=inject_memory,
                 pii_scope=pii_scope,
                 excluded_sink=state.excluded_workers,
+                supplemental_grant=supplemental_grant,
             )
             node_names = _collect_node_names(agent.to_workflow_definition())
 
@@ -576,6 +583,7 @@ class RunAgentUseCase:
         *,
         auth_ctx: AuthContext | None = None,
         inject_memory: bool = False,
+        supplemental_grant: SupplementalGrant | None = None,
     ) -> RunAgentResponse:
         """기존 시그니처. stream()을 내부 소비하여 RunAgentResponse 조립.
 
@@ -597,6 +605,7 @@ class RunAgentUseCase:
             agent_id, request, request_id,
             viewer_user_id, viewer_department_ids,
             auth_ctx=auth_ctx, inject_memory=inject_memory,
+            supplemental_grant=supplemental_grant,
         ):
             if ev.event_type == AgentRunEventType.RUN_STARTED:
                 run_id_str = ev.payload.get("run_id")
@@ -1023,6 +1032,7 @@ class RunAgentUseCase:
         inject_memory: bool = False,
         pii_scope: Optional[PiiRunScope] = None,
         excluded_sink: list | None = None,
+        supplemental_grant: SupplementalGrant | None = None,
     ) -> tuple[Any, dict, dict]:
         """llm_model 로드 + messages 빌드 + compile + initial_state + graph_config."""
         # agent-model-benchmark D1: 모델·temperature 오버라이드 해석 단일 지점.
@@ -1080,6 +1090,11 @@ class RunAgentUseCase:
             memory_block=memory_block,
             # 해제 시에는 인자 자체를 넘기지 않는다 — 기존 compile 호출 형태 보존.
             **({"pii_scope": pii_scope} if pii_scope is not None else {}),
+            # graph-rag-foundation FR-20: grant 도 같은 방식(None 이면 미전달).
+            **(
+                {"supplemental_grant": supplemental_grant}
+                if supplemental_grant is not None else {}
+            ),
             # tool-access-control §0 F1: auth_ctx 있으면 그것으로, 없으면(스케줄·RAGAS)
             # request.user_id 로 판정. 조회 실패는 도구 없이 실행(Fail-Closed).
             tool_access=await self._resolve_tool_access(

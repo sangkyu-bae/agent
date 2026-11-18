@@ -87,6 +87,9 @@ class RagToolConfig:
     #   None = 미사용(기존 동작). 존재/권한 검증은 저장 UseCase 책임이라
     #   여기서는 형식 검증을 하지 않는다.
     kb_id: str | None = None
+    # graph-rag-foundation M0/FR-20: 그래프(보조) 검색 opt-in. 실제 실행은 노출 단계
+    # AND 호출자 grant 가 함께 열려야 한다 — 이 값만으로는 아무것도 하지 않는다.
+    use_graph: bool = False
 
     def __post_init__(self) -> None:
         if not 1 <= self.top_k <= 20:

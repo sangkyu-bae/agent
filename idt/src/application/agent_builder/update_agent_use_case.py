@@ -35,6 +35,8 @@ from src.application.agent_builder.schemas import (
     UpdateAgentResponse,
 )
 from src.application.agent_builder.sub_agent_worker_builder import SubAgentWorkerBuilder
+from src.application.agent_builder.supplemental_flag import strip_unexposed_graph_flag
+from src.domain.extension_hooks import ExtensionHooks
 from src.application.agent_builder.gated_worker_validation import (
     validate_gated_workers,
 )
@@ -143,8 +145,11 @@ class UpdateAgentUseCase:
         mcp_server_repo=None,
         opener_repo: AgentOpenerRepositoryInterface | None = None,
         tool_access_resolver: "ToolAccessResolver | None" = None,
+        extension_hooks: ExtensionHooks | None = None,
     ) -> None:
         self._repository = repository
+        # graph-rag-foundation §7: 노출되지 않은 use_graph 는 저장 시 조용히 False.
+        self._extension_hooks = extension_hooks
         # Design Ref: tool-access-control §2.2 (FR-06·07) — 신규 도구만 검증.
         # 미주입 = 판정 없음(기존 동작). 프로덕션 주입은 배선 계약 테스트가 고정한다.
         self._tool_access_resolver = tool_access_resolver
@@ -359,6 +364,12 @@ class UpdateAgentUseCase:
                 previous_tool_ids=previous.keys(),
             )
         self._inherit_tool_configs(skeleton.workers, previous)
+        # graph-rag-foundation §7: 승계분 포함 정리 — 이후 단계가 같은 리스트를 쓴다.
+        skeleton.workers[:] = await strip_unexposed_graph_flag(
+            skeleton.workers, self._extension_hooks,
+            caller_is_admin=(viewer_role == UserRole.ADMIN.value),
+            logger=self._logger, request_id=request_id,
+        )
 
         # 정책은 사용자 선택분 기준 (빌트인은 상한에서 제외 — builtin-tools D6)
         subs = [w for w in agent.workers if w.worker_type == "sub_agent"]

@@ -2,7 +2,9 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeAll, afterEach, afterAll, describe, it, expect, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { http, HttpResponse } from 'msw';
 import { server } from '@/__tests__/mocks/server';
+import { API_ENDPOINTS } from '@/constants/api';
 import { DEFAULT_RAG_CONFIG } from '@/types/ragToolConfig';
 import type { RagToolConfig } from '@/types/ragToolConfig';
 import type { ReactNode } from 'react';
@@ -314,5 +316,50 @@ describe('RagConfigPanel — 고급 설정 접기 (agent-kb-quick-setup FR-10)',
     expect(screen.getByText('5')).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: /위키 우선 검색/ })).not.toBeChecked();
     expect(screen.getByDisplayValue('내부 문서 검색')).toBeInTheDocument();
+  });
+});
+
+describe('RagConfigPanel — 그래프 검색(테스트) 토글 (graph-rag-foundation L2 #8·#9)', () => {
+  const capabilities = (res: Parameters<typeof HttpResponse.json>[0] | null, status = 200) =>
+    server.use(
+      http.get(`*${API_ENDPOINTS.GRAPH_RAG_CAPABILITIES}`, () =>
+        res === null ? new HttpResponse(null, { status }) : HttpResponse.json(res)
+      )
+    );
+
+  it('visible=false 이면 토글 DOM 이 없다', async () => {
+    capabilities({ visible: false });
+    renderWithQuery(<RagConfigPanel config={{ ...DEFAULT_RAG_CONFIG }} onChange={vi.fn()} />);
+    await openAdvanced();
+    await screen.findByRole('checkbox', { name: /라우팅 검색/ });
+    expect(screen.queryByRole('checkbox', { name: /그래프 검색/ })).toBeNull();
+  });
+
+  it('모듈 미등록(404)이면 토글 DOM 이 없다', async () => {
+    capabilities(null, 404);
+    renderWithQuery(<RagConfigPanel config={{ ...DEFAULT_RAG_CONFIG }} onChange={vi.fn()} />);
+    await openAdvanced();
+    await screen.findByRole('checkbox', { name: /라우팅 검색/ });
+    expect(screen.queryByRole('checkbox', { name: /그래프 검색/ })).toBeNull();
+  });
+
+  it('visible=true 이면 토글과 안내가 보이고 켜면 use_graph=true 로 바뀐다', async () => {
+    capabilities({ visible: true, stage: 'admin_only' });
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    renderWithQuery(<RagConfigPanel config={{ ...DEFAULT_RAG_CONFIG }} onChange={onChange} />);
+    await openAdvanced();
+    const toggle = await screen.findByRole('checkbox', { name: /그래프 검색\(테스트\)/ });
+    expect(screen.getByText(/관리자 테스트 중인 기능/)).toBeInTheDocument();
+    await user.click(toggle);
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ use_graph: true }));
+  });
+
+  it('use_graph=true 로 저장된 설정은 고급 설정이 처음부터 펼쳐진다', async () => {
+    capabilities({ visible: true, stage: 'admin_only' });
+    renderWithQuery(
+      <RagConfigPanel config={{ ...DEFAULT_RAG_CONFIG, use_graph: true }} onChange={vi.fn()} />
+    );
+    expect(await screen.findByRole('checkbox', { name: /그래프 검색\(테스트\)/ })).toBeChecked();
   });
 });

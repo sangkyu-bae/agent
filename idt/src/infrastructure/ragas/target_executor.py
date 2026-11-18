@@ -53,6 +53,7 @@ class AgentRunner(Protocol):
         llm_model_id_override: str | None = None,
         temperature_override: float | None = None,
         persist_conversation: bool = True,
+        allow_supplemental: bool = False,
     ) -> AgentRunOutcome: ...
 
 _RAG_PROMPT = ChatPromptTemplate.from_messages([
@@ -124,6 +125,8 @@ class DefaultTargetExecutor(TargetExecutorInterface):
             llm_model_id_override=config.llm_model_id_override,
             temperature_override=config.temperature_override,
             persist_conversation=config.persist_conversation,
+            # graph-rag-foundation module-7: 켰을 때만 넘긴다(기존 실행기 호환)
+            **({"allow_supplemental": True} if config.allow_supplemental else {}),
         )
         return TargetExecution(
             answer=outcome.answer,

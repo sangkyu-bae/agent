@@ -61,6 +61,9 @@ class EvalConfig:
     judge_llm_model: str | None = None
     # D2: 평가 실행이 conversation_message를 남기지 않게 한다.
     persist_conversation: bool = True
+    # graph-rag-foundation module-7: 관리자가 요청한 agent 평가에서만 True.
+    # 보조 검색(그래프 등) 실행 허용 — 그래프 끔/켬 비교 평가의 "켬" 쪽.
+    allow_supplemental: bool = False
 
 
 @dataclass(frozen=True)

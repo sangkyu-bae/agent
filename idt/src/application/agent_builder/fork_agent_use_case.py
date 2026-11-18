@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from src.application.agent_builder.schemas import ForkAgentResponse, WorkerInfo
+from src.application.agent_builder.supplemental_flag import strip_unexposed_graph_flag
 from src.application.agent_builder.update_agent_use_case import sync_tool_guidelines
 from src.application.tool_access.validation import (
     excluded_info,
@@ -13,6 +14,7 @@ from src.domain.agent_builder.interfaces import AgentDefinitionRepositoryInterfa
 from src.domain.agent_builder.policies import AccessCheckInput, ForkPolicy
 from src.domain.agent_builder.schemas import AgentDefinition
 from src.domain.agent_opener.interfaces import AgentOpenerRepositoryInterface
+from src.domain.extension_hooks import ExtensionHooks
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 
 if TYPE_CHECKING:
@@ -26,9 +28,12 @@ class ForkAgentUseCase:
         logger: LoggerInterface,
         opener_repo: AgentOpenerRepositoryInterface | None = None,
         tool_access_resolver: "ToolAccessResolver | None" = None,
+        extension_hooks: ExtensionHooks | None = None,
     ) -> None:
         self._agent_repo = agent_repo
         self._logger = logger
+        # graph-rag-foundation §7: 노출되지 않은 use_graph 는 저장 시 조용히 False.
+        self._extension_hooks = extension_hooks
         # Design Ref: tool-access-control §2.2 (FR-08) — 포크하는 사용자에게 허용되지
         # 않은 도구는 빼고 복제. 미주입 = 전체 복사(기존 동작).
         self._tool_access_resolver = tool_access_resolver
@@ -77,6 +82,13 @@ class ForkAgentUseCase:
                     user_id, request_id
                 )
                 workers, excluded = partition_tool_workers(access, workers)
+            # graph-rag-foundation §7: 포크 경로엔 역할 정보가 없어 일반 사용자
+            # 기준으로 정리한다(사본만 바꾸고 원본 워커는 그대로).
+            # 관리자 포크도 use_graph 가 꺼진다.
+            workers = await strip_unexposed_graph_flag(
+                workers, self._extension_hooks, caller_is_admin=False,
+                logger=self._logger, request_id=request_id,
+            )
 
             now = datetime.now(timezone.utc)
             forked_name = custom_name or f"{source.name} (사본)"

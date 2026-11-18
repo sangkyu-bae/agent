@@ -489,6 +489,7 @@ from src.infrastructure.search_decision.judgment_adapter import (
     JudgmentSearchDecisionAdapter,
 )
 from src.domain.judgment.interfaces import JudgmentPort
+from src.domain.extension_hooks import ExtensionHooks, SupplementalGrant
 from src.infrastructure.persistence.database import (
     get_engine,
     get_session,
@@ -846,6 +847,15 @@ _doc_chunk_use_case: Optional[DocChunkUseCase] = None
 _auto_build_use_case: Optional[AutoBuildUseCase] = None
 _auto_build_reply_use_case: Optional[AutoBuildReplyUseCase] = None
 _auto_build_session_repository: Optional[AutoBuildSessionRepository] = None
+
+# graph-rag-foundation §3.1 / D11: 코어 확장 지점 단일 레지스트리. 확장 모듈은 기동 시
+# 한 번 등록하고, 아무것도 등록하지 않으면 모든 슬롯이 None(기존 동작과 동일).
+_extension_hooks: ExtensionHooks = ExtensionHooks()
+
+
+def get_extension_hooks() -> ExtensionHooks:
+    return _extension_hooks
+
 
 # Global LLM factory and default model (initialized on startup)
 _llm_factory: LLMFactory = LLMFactory()
@@ -3136,6 +3146,8 @@ def create_agent_builder_factories():
         wiki_repo_builder=_wiki_repo_builder,
         # ★ wiki-folder-summaries: wiki_list 도구용 폴더 요약 저장소
         wiki_folder_repo_builder=_wiki_folder_repo_builder,
+        # ★ graph-rag-foundation §2.1: 보조 검색 소스(create 시점에 읽음)
+        extension_hooks=get_extension_hooks(),
     )
     # document-template-extractor Design §6: 합성 노드 의존(싱글톤).
     # 컴파일러/컴포저는 앱 싱글톤이라 per-request 세션 대신 session-scoped 어댑터 사용.
@@ -3400,6 +3412,8 @@ def create_agent_builder_factories():
             opener_repo=_make_agent_opener_repo(session),
             # tool-access-control FR-06·07: 저장 시 도구 권한 판정
             tool_access_resolver=make_tool_access_resolver(session, app_logger),
+            # graph-rag-foundation §7: 노출되지 않은 use_graph 저장 시 정리
+            extension_hooks=get_extension_hooks(),
         )
 
     def update_uc_factory(session: AsyncSession = Depends(get_session)):
@@ -3435,6 +3449,8 @@ def create_agent_builder_factories():
             opener_repo=_make_agent_opener_repo(session),
             # tool-access-control FR-06·07: 신규 도구만 권한 판정
             tool_access_resolver=make_tool_access_resolver(session, app_logger),
+            # graph-rag-foundation §7: 노출되지 않은 use_graph 저장 시 정리
+            extension_hooks=get_extension_hooks(),
         )
 
     # agent-schedule Design §6.2: RunAgentUseCase 조립 본문을 함수로 추출해
@@ -3562,6 +3578,8 @@ def create_agent_builder_factories():
             opener_repo=_make_agent_opener_repo(session),
             # tool-access-control FR-08: 권한 없는 도구 제외 복제
             tool_access_resolver=make_tool_access_resolver(session, app_logger),
+            # graph-rag-foundation §7: 포크 사본의 use_graph 정리
+            extension_hooks=get_extension_hooks(),
         )
 
     def list_my_uc_factory(session: AsyncSession = Depends(get_session)):
@@ -4218,9 +4236,13 @@ def create_ragas_factories(build_run_agent_uc=None):
         llm_model_id_override: str | None = None,
         temperature_override: float | None = None,
         persist_conversation: bool = True,
+        allow_supplemental: bool = False,
     ) -> AgentRunOutcome:
         """agent-model-benchmark module-4: 오버라이드를 실행 경로로 전달하고,
-        도구 호출·관측 run_id를 함께 회수한다 (D1/D2/D6/D10)."""
+        도구 호출·관측 run_id를 함께 회수한다 (D1/D2/D6/D10).
+
+        graph-rag-foundation module-7: allow_supplemental 은 관리자가 켠 평가에서만
+        True 다(라우터 403 검사). 그때만 관리자 grant 로 보조 검색을 허용한다."""
         if build_run_agent_uc is None:
             raise ValueError("agent 대상 평가 실행기가 구성되지 않았습니다")
         async with session_factory() as session:
@@ -4237,6 +4259,11 @@ def create_ragas_factories(build_run_agent_uc=None):
                     ),
                     request_id,
                     viewer_user_id=user_id,
+                    supplemental_grant=(
+                        SupplementalGrant(caller_is_admin=True)
+                        if allow_supplemental
+                        else None
+                    ),
                 )
                 return AgentRunOutcome(
                     answer=resp.answer,
@@ -4615,6 +4642,8 @@ def create_knowledge_base_factories(
             logger=app_logger,
             chunking_resolver=resolver,
             summary_launcher=summary_launcher,
+            # graph-rag-foundation §2.2: 업로드 후 확장 훅
+            extension_hooks=get_extension_hooks(),
         )
 
     def kb_documents_factory(session: AsyncSession = Depends(get_session)):
@@ -4800,6 +4829,8 @@ def create_kb_document_delete_factory(kb_use_case_factory):
             activity_log_service=ActivityLogService(log_repo, app_logger),
             policy=DocumentDeletePolicy(),
             logger=StructuredLogger("kb_document_delete.deleter"),
+            # graph-rag-foundation §6.2: 삭제 후 확장 훅
+            extension_hooks=get_extension_hooks(),
         )
 
     def delete_factory(session: AsyncSession = Depends(get_session)):
@@ -5917,6 +5948,11 @@ async def lifespan(app: FastAPI):
     if _background_job_worker is not None:
         _background_job_worker.start()
 
+    # graph-rag-foundation §2.1: Neo4j 스키마 멱등 생성 (wire 안 했으면 no-op)
+    from src.api.graph_rag_di import close_graph_rag, start_graph_rag
+
+    await start_graph_rag()
+
     yield
 
     # background-jobs D7: 루프·활성 job 취소 + failed 마킹 시도 (reconcile 이중 방어)
@@ -5925,6 +5961,8 @@ async def lifespan(app: FastAPI):
 
     # judgment-backend D15: 판정 백엔드 HTTP 클라이언트 정리 (best-effort)
     await _close_judgment_backend()
+    # graph-rag-foundation: Neo4j 드라이버 정리 (best-effort, wire 안 했으면 no-op)
+    await close_graph_rag()
 
     # Shutdown: Cleanup (if needed)
     _document_processor = None
@@ -6647,6 +6685,8 @@ def create_app() -> FastAPI:
             activity_log_service=log_service,
             policy=DocumentDeletePolicy(),
             logger=StructuredLogger("doc_browse.delete"),
+            # graph-rag-foundation §6.2: 삭제 후 확장 훅
+            extension_hooks=get_extension_hooks(),
         )
 
     app.dependency_overrides[get_list_documents_use_case] = _list_documents_uc_factory
@@ -6740,6 +6780,18 @@ def create_app() -> FastAPI:
 
     wire_multimodal(
         app, get_session=get_session, llm_factory=_llm_factory, logger=get_app_logger()
+    )
+    # graph-rag-foundation D11: 그래프 RAG 모듈 — 이 호출을 지우면 코어 훅은
+    # 비고 기능이 사라진다 (Plan SC-9).
+    from src.api.graph_rag_di import wire_graph_rag
+
+    wire_graph_rag(
+        app, get_session=get_session, session_factory=get_session_factory(),
+        hooks=get_extension_hooks(), logger=get_app_logger(), settings=settings,
+        # module-4: 엔티티 판정 Jev(None 이면 LLM 판정만)
+        judgment_backend=get_judgment_backend(),
+        # module-5b: 관리자 검색 테스트의 비교용(처음 쓸 때 생성)
+        hybrid_search_factory=create_hybrid_search_use_case,
     )
     # golden-sample-blueprint: DI + /api/v1/admin/blueprints 라우터 (multimodal 레지스트리 재사용)
     from src.api.blueprint_di import wire_blueprint
