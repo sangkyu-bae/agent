@@ -23,6 +23,7 @@ import AdminMcpServersPage from '@/pages/AdminMcpServersPage';
 import AdminLlmModelsPage from '@/pages/AdminLlmModelsPage';
 import AdminChunkingProfilesPage from '@/pages/AdminChunkingProfilesPage';
 import AdminMultimodalPage from '@/pages/AdminMultimodalPage';
+import AdminGraphRagPage from '@/pages/AdminGraphRagPage';
 import AdminKbDefaultsPage from '@/pages/AdminKbDefaultsPage';
 import AdminBlueprintsPage from '@/pages/AdminBlueprintsPage';
 import AdminSkillsPage from '@/pages/AdminSkillsPage';
@@ -104,6 +105,7 @@ const App = () => (
           <Route path="/admin/llm-models" element={<AdminLlmModelsPage />} />
           <Route path="/admin/chunking-profiles" element={<AdminChunkingProfilesPage />} />
           <Route path="/admin/multimodal" element={<AdminMultimodalPage />} />
+          <Route path="/admin/graph-rag" element={<AdminGraphRagPage />} />
           <Route path="/admin/kb-defaults" element={<AdminKbDefaultsPage />} />
           <Route path="/admin/blueprints" element={<AdminBlueprintsPage />} />
           <Route path="/admin/skills" element={<AdminSkillsPage />} />

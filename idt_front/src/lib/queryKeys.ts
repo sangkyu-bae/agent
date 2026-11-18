@@ -93,6 +93,22 @@ export const queryKeys = {
   },
 
   // ── Multimodal extraction (admin) ─────────────────────
+  // ── Graph RAG (graph-rag-foundation, admin) ───────────
+  graphRag: {
+    all: ['graphRag'] as const,
+    capabilities: () => [...queryKeys.graphRag.all, 'capabilities'] as const,
+    settings: () => [...queryKeys.graphRag.all, 'settings'] as const,
+    health: () => [...queryKeys.graphRag.all, 'health'] as const,
+    kbDocuments: (kbId: string) =>
+      [...queryKeys.graphRag.all, 'kbDocuments', kbId] as const,
+    review: (status: string) => [...queryKeys.graphRag.all, 'review', status] as const,
+    topics: (includeRetired: boolean) =>
+      [...queryKeys.graphRag.all, 'topics', includeRetired] as const,
+    entities: (params: Record<string, unknown>) =>
+      [...queryKeys.graphRag.all, 'entities', params] as const,
+    entity: (id: string) => [...queryKeys.graphRag.all, 'entity', id] as const,
+  },
+
   multimodal: {
     all: ['multimodal'] as const,
     settings: () => [...queryKeys.multimodal.all, 'settings'] as const,

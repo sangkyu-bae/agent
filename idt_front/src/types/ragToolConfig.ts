@@ -11,6 +11,8 @@ export interface RagToolConfig {
   use_wiki_first?: boolean;
   /** rag-routed-integration: 3계층 요약 라우팅 검색 opt-in — 실패 시 위 검색 모드로 자동 전환 (교차검증용) */
   use_routed_search?: boolean;
+  /** graph-rag-foundation: 그래프 보조 검색 opt-in — 노출 단계·관리자 호출일 때만 실행, 비노출이면 서버가 저장 시 false 로 바꿈 */
+  use_graph?: boolean;
   /** kb-rag-filter: 논리 지식베이스 필터 opt-in — 설정 시 컬렉션은 KB의 것으로 자동 고정 */
   kb_id?: string;
   /** action-category-compose-node: action 워커의 초안 인자 키 (미지정 시 body/content 등 관례 키 자동 탐색). RAG 도구는 무시 — 입력 폼은 후속 사이클 */

@@ -46,6 +46,7 @@ const ragConfigLabels = (config: Record<string, unknown> | null): string[] => {
   }
   if (config.use_wiki_first === true) labels.push('위키 우선 검색');
   if (config.use_routed_search === true) labels.push('라우팅 검색');
+  if (config.use_graph === true) labels.push('그래프 검색(테스트)');
   return labels;
 };
 

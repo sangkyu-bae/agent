@@ -9,4 +9,5 @@ export const hasAdvancedRagConfig = (config: RagToolConfig): boolean =>
   config.top_k !== DEFAULT_RAG_CONFIG.top_k ||
   !!config.use_wiki_first ||
   !!config.use_routed_search ||
+  !!config.use_graph ||
   config.tool_name !== DEFAULT_RAG_CONFIG.tool_name;

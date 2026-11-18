@@ -1,5 +1,6 @@
 import { useCollections, useMetadataKeys } from '@/hooks/useRagToolConfig';
 import { useKnowledgeBases } from '@/hooks/useKnowledgeBases';
+import { useGraphRagCapabilities } from '@/hooks/useGraphRag';
 import type { RagToolConfig, CollectionScope } from '@/types/ragToolConfig';
 import { SEARCH_MODES } from '@/types/ragToolConfig';
 import Dropdown from '@/components/common/Dropdown';
@@ -24,6 +25,8 @@ const MAX_TOOL_DESCRIPTION = 500;
 const RagConfigPanel = ({ config, onChange }: RagConfigPanelProps) => {
   const { data: collections, isLoading: isCollLoading, isError: isCollError, refetch: refetchColl } = useCollections();
   const { data: knowledgeBases } = useKnowledgeBases();
+  // graph-rag-foundation §5.4: 노출 대상(관리자 테스트 단계의 관리자 등)에게만 토글을 그린다
+  const { data: graphCapabilities } = useGraphRagCapabilities();
   // kb-rag-filter D2: KB 선택 시 물리 컬렉션은 KB의 것 — 메타데이터 키도 KB 컬렉션 기준
   const selectedKb = knowledgeBases?.find((kb) => kb.kb_id === config.kb_id);
   const { data: metadataKeys } = useMetadataKeys(
@@ -335,6 +338,29 @@ const RagConfigPanel = ({ config, onChange }: RagConfigPanelProps) => {
             </span>
           </label>
         </div>
+
+        {/* 그래프 보조 검색 토글 (graph-rag-foundation) — 노출 대상이 아니면 DOM 없음 */}
+        {graphCapabilities?.visible && (
+          <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50/60 p-3">
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                checked={config.use_graph ?? false}
+                onChange={(e) => onChange({ ...config, use_graph: e.target.checked })}
+                className="mt-0.5 h-4 w-4 accent-violet-600"
+              />
+              <span>
+                <span className="block text-[13px] font-semibold text-zinc-700">
+                  그래프 검색(테스트)
+                </span>
+                <span className="mt-0.5 block text-[12px] text-zinc-500">
+                  관리자 테스트 중인 기능입니다. 문서에서 뽑은 용어·관계를 따라 근거를 더 찾아
+                  기존 검색 결과와 합칩니다. 관리자가 대화할 때만 실행됩니다
+                </span>
+              </span>
+            </label>
+          </div>
+        )}
       </div>
 
       {/* Section 4: 도구 이름 (설명은 간단 모드로 이동) */}

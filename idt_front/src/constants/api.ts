@@ -159,6 +159,26 @@ export const API_ENDPOINTS = {
   ADMIN_MULTIMODAL_SETTINGS: '/api/v1/admin/multimodal/settings',
   ADMIN_MULTIMODAL_TEST: '/api/v1/admin/multimodal/test',
   PREVIEW_MULTIMODAL: '/api/v1/preview/multimodal',
+  // graph-rag-foundation (Design §4.1) — 모듈 미등록이면 전부 404
+  GRAPH_RAG_CAPABILITIES: '/api/v1/graph-rag/capabilities',
+  ADMIN_GRAPH_RAG_SETTINGS: '/api/v1/admin/graph-rag/settings',
+  ADMIN_GRAPH_RAG_STAGE: '/api/v1/admin/graph-rag/stage',
+  ADMIN_GRAPH_RAG_HEALTH: '/api/v1/admin/graph-rag/health',
+  ADMIN_GRAPH_RAG_KB_DOCUMENTS: (kbId: string) =>
+    `/api/v1/admin/graph-rag/kbs/${kbId}/documents`,
+  ADMIN_GRAPH_RAG_EXTRACT: (documentId: string) =>
+    `/api/v1/admin/graph-rag/documents/${documentId}/extract`,
+  ADMIN_GRAPH_RAG_REVIEW: '/api/v1/admin/graph-rag/review',
+  ADMIN_GRAPH_RAG_REVIEW_APPROVE: (id: string) =>
+    `/api/v1/admin/graph-rag/review/${id}/approve`,
+  ADMIN_GRAPH_RAG_REVIEW_REJECT: (id: string) =>
+    `/api/v1/admin/graph-rag/review/${id}/reject`,
+  ADMIN_GRAPH_RAG_TOPICS: '/api/v1/admin/graph-rag/topics',
+  ADMIN_GRAPH_RAG_TOPIC: (id: string) => `/api/v1/admin/graph-rag/topics/${id}`,
+  ADMIN_GRAPH_RAG_ENTITIES: '/api/v1/admin/graph-rag/entities',
+  ADMIN_GRAPH_RAG_ENTITY: (id: string) => `/api/v1/admin/graph-rag/entities/${id}`,
+  ADMIN_GRAPH_RAG_SEARCH_TEST: '/api/v1/admin/graph-rag/search-test',
+  ADMIN_GRAPH_RAG_INTEGRITY: '/api/v1/admin/graph-rag/integrity',
   // golden-sample-blueprint (Design §4.1)
   ADMIN_BLUEPRINTS: '/api/v1/admin/blueprints',
   ADMIN_BLUEPRINTS_EXTRACT: '/api/v1/admin/blueprints/extract',
