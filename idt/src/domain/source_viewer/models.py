@@ -1,7 +1,7 @@
 """원문 뷰어 값 객체 (Design §3.1). 외부 의존 없음."""
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Optional
+from typing import Any, Optional
 
 
 class OriginalKind(StrEnum):
@@ -30,3 +30,20 @@ class ViewerRef:
     kb_id: str
     original: Optional[OriginalKind]
     passages: tuple[Passage, ...]
+
+    def to_payload(self) -> dict[str, Any]:
+        """프론트 `SourceViewerRef` 형태 (Design §3.3). rank 는 순서로 표현해 싣지 않는다."""
+        return {
+            "document_id": self.document_id,
+            "kb_id": self.kb_id,
+            "original": self.original.value if self.original else None,
+            "passages": [
+                {
+                    "chunk_id": p.chunk_id,
+                    "parent_id": p.parent_id,
+                    "page": p.page,
+                    "excerpt": p.excerpt,
+                }
+                for p in self.passages
+            ],
+        }

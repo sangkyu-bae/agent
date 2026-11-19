@@ -1,6 +1,6 @@
 """검색 기록 → 뷰어 구절 정책, 저장 키 규칙 (Design §3.1). 순수 함수."""
 import re
-from typing import Any, Iterable, Optional
+from typing import Any, Iterable, Mapping, Optional
 
 from src.domain.agent_run.entities import RetrievalSource
 from src.domain.source_viewer.models import OriginalKind, Passage
@@ -87,6 +87,22 @@ class PassagePolicy:
             if kb_id:
                 return kb_id
         return None
+
+    @staticmethod
+    def filename_of(
+        document_id: str,
+        retrievals: Iterable[RetrievalSource],
+        filenames: Mapping[str, str],
+    ) -> str:
+        """검색 메타데이터의 filename → document_metadata 조회 결과 → "" 순.
+
+        칩 라벨(RunSourceItem.label)은 clause_title·kb_name 으로 대체될 수 있어 쓰지 않는다.
+        """
+        for r in _of_document(document_id, retrievals):
+            name = _text(r.metadata_json, "filename")
+            if name:
+                return name
+        return filenames.get(document_id, "")
 
     @staticmethod
     def original_kind(filename: str) -> Optional[OriginalKind]:

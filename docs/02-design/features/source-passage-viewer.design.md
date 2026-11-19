@@ -429,7 +429,8 @@ idt_front/src/components/sourceViewer/{SourceViewerButton,SourceViewerPanel,Sour
 | 2 | `idt/src/application/agent_run/run_sources.py` | `viewer_enricher=None` 인자 + 호출부 try/except | 인자·호출 삭제 |
 | 3 | `idt/src/application/unified_upload/use_case.py` | `original_sink=None` 인자 + 인덱싱 성공 후 호출 | 인자·호출 삭제 |
 | 4 | `idt/src/application/doc_browse/delete_document_use_case.py` (KB 삭제·일반 삭제 공용) | `original_sink=None` 인자 + 삭제 성공 후 호출 | 인자·호출 삭제 |
-| 5 | `idt/src/api/main.py` | `get_source_viewer()` 조립 + 위 3곳 주입 + 조건부 include_router | 해당 블록 삭제 |
+| 5 | `idt/src/api/main.py` | `source_viewer_di` import 1개 + `wire_source_viewer(...)` 1줄 + 주입 4곳(`original_sink` 3: 업로드 1·삭제 2, `viewer_enricher` 1: `_make_run_sources_service`) | import·wire·주입 삭제 |
+| 5a | `idt/src/api/source_viewer_di.py` (신규) | 조립 전부 — 접근자 `source_viewer_sink()`·`source_viewer_enricher()`·`wire_source_viewer()` | 파일 삭제 |
 | 6 | `idt/src/config.py` | `source_viewer_enabled=False`, `document_original_storage_dir=""` | 2키 삭제 |
 | 7 | `idt/src/interfaces/schemas/agent_run_response.py` | `SourceItemDto.viewer: dict | None = None` | 필드 삭제 |
 | F1 | `idt_front/src/types/chat.ts` | `DocumentSource.viewer?: SourceViewerRef` | 필드 삭제 |
@@ -483,3 +484,9 @@ idt_front/src/components/sourceViewer/{SourceViewerButton,SourceViewerPanel,Sour
 | M4 | 원본 쓰기는 임시 파일 → `os.replace` | 쓰다 만 파일이 원본으로 노출되지 않게 |
 | M5 | 경계 테스트 #16은 module-1·2 시점에 "선언 목록의 부분집합"으로 검사, module-4에서 main.py 연결 후 "정확히 일치"로 강화 | 조립 전에는 소비자가 0개라 일치 검사가 불가능 |
 | M6 | `domain/source_viewer/policy.py`는 웹 컬렉션 이름(`tavily_web`)을 복제 상수로 둔다 | domain 경계(agent_run.entities만 허용) 유지. 값이 바뀌면 `test_filters_document_dedups_and_orders`가 잡는다 |
+| M7 | 조립을 `main.py`가 아니라 `src/api/source_viewer_di.py`에 둔다(`graph_rag_di` 선례). 경계 테스트: source_viewer 소비자 = {di, 라우터} 정확히 일치, di 소비자 = {main.py} | 기능 제거 시 main.py 수정이 import·wire·주입 4곳으로 줄어든다 |
+| M8 | 원본 API 검사 순서를 권한 → **형식(415)** → 원본(404)으로 바꿨다(Design §4.2는 원본 → 형식) | 형식은 파일명만으로 판정되므로 디스크를 읽기 전에 거른다 |
+| M9 | 원본 저장 경로가 비어 있으면(텍스트 전용) 원본 API 라우터를 등록하지 않는다 | 저장소가 없으면 항상 404 — 라우트를 둘 이유가 없다. 텍스트 뷰어는 기존 청크 API를 쓴다 |
+| M10 | UUID가 아닌 옛 document_id로 원본을 요청하면 `OriginalNotAvailableError`(404) | 보관 대상이 될 수 없었던 문서 — 프론트는 텍스트 뷰어로 내려간다 |
+| M11 | 재진입 API DTO는 문서 외 칩에도 `viewer: null`을 싣는다 | Pydantic 기본 직렬화. 프론트는 `viewer` truthy 여부로만 분기하므로 동작 차이 없음 |
+| M12 | 스모크(2026-11-19, 인프로세스 `TestClient(app)`): off → 라우트 없음 404 / on → 부품 3종 조립, 무토큰 401, 없는 KB 404(실DB 경유) | 배선 직후 실런 1회 DoD. 업로드→질문→원본 200 전 구간은 module-7 실측으로 이월 |

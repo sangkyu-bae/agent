@@ -3,7 +3,7 @@
 Design Ref: agent-run-source-citations §2.1 — 실시간과 재진입이 공유하는 단일 경로.
 Design Ref: §6.1 — 근거는 부가 정보이므로 실패는 여기서 흡수하고 답변을 막지 않는다.
 """
-from typing import Iterable
+from typing import Any, Iterable
 
 from src.application.agent_run.tool_catalog_lookup import (
     MCP_RUNTIME_PREFIX,
@@ -34,6 +34,7 @@ class RunSourcesService:
         logger: LoggerInterface,
         *,
         max_items: int,
+        viewer_enricher: Any | None = None,
     ) -> None:
         self._agent_run_repo = agent_run_repo
         self._document_repo = document_repo
@@ -41,6 +42,8 @@ class RunSourcesService:
         self._catalog = ToolCatalogLookup(tool_catalog_repo, logger)
         self._logger = logger
         self._max_items = max_items
+        # source-passage-viewer §11.2 #2 — duck typing(enrich). None = 원문 뷰어 없음.
+        self._viewer_enricher = viewer_enricher
 
     async def build_for_runs(
         self, run_ids: list[RunId], request_id: str,
@@ -68,9 +71,25 @@ class RunSourcesService:
                 mcp_tools=mcp_tools,
             )
             items = RunSourcePolicy.build(evidence, max_items=self._max_items)
+            items = await self._enrich(items, evidence, request_id)
             if items:
                 built[run_id.value] = items
         return built
+
+    async def _enrich(
+        self, items: list[RunSourceItem], evidence: RunEvidence, request_id: str,
+    ) -> list[RunSourceItem]:
+        """원문 뷰어 정보를 덧붙인다 — 실패하면 덧붙이기 전 목록 (source-passage-viewer §6)."""
+        if self._viewer_enricher is None or not items:
+            return items
+        try:
+            return await self._viewer_enricher.enrich(items, evidence, request_id)
+        except Exception as e:
+            self._logger.warning(
+                "run sources viewer enrich failed (sources unaffected)",
+                exception=e, request_id=request_id,
+            )
+            return items
 
     async def _filenames(
         self, retrievals: list[RetrievalSource], request_id: str,
