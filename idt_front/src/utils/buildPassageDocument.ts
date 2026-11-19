@@ -53,6 +53,23 @@ const resolve = (text: string, blocks: Block[], passage: SourceViewerPassage): T
   return passage.excerpt ? findPassage(text, passage.excerpt) : null;
 };
 
+/**
+ * 원본 매칭에 쓸 구절 텍스트 — 칩 excerpt 는 잘려 있어 청크 전문을 우선한다.
+ * 청크 조회가 아직이거나 실패했으면 excerpt 를 쓴다.
+ */
+export const passageTexts = (
+  data: KbDocumentChunksResponse | undefined,
+  passages: SourceViewerPassage[],
+): string[] => {
+  const contents = new Map<string, string>();
+  data?.chunks.forEach((c) => contents.set(c.chunk_id, c.content));
+  data?.parents?.forEach((p) => {
+    contents.set(p.chunk_id, p.content);
+    p.children.forEach((c) => contents.set(c.chunk_id, c.content));
+  });
+  return passages.map((p) => contents.get(p.chunk_id) ?? p.excerpt);
+};
+
 export interface TextSegment {
   text: string;
   /** 이 조각을 덮는 구절 번호들. 빈 배열이면 일반 텍스트 */

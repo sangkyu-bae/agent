@@ -432,4 +432,11 @@ export const queryKeys = {
     blob: (fileId: string) =>
       [...queryKeys.generatedFile.all, 'blob', fileId] as const,
   },
+
+  // ── Source Viewer Original (source-passage-viewer §11.2 F5) ──
+  sourceViewer: {
+    all: ['sourceViewer'] as const,
+    original: (kbId: string, documentId: string) =>
+      [...queryKeys.sourceViewer.all, 'original', kbId, documentId] as const,
+  },
 } as const;

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef } from 'react';
 
 import { useKbDocumentChunks } from '@/hooks/useKnowledgeBases';
 import { ApiError } from '@/services/api/ApiError';
-import type { SourceViewerRef } from '@/types/sourceViewer';
+import { SOURCE_VIEWER_CHUNK_PARAMS, type SourceViewerRef } from '@/types/sourceViewer';
 import { buildPassageDocument, toSegments } from '@/utils/buildPassageDocument';
 import { cn } from '@/utils/cn';
 
@@ -12,8 +12,6 @@ interface TextPassageViewerProps {
   viewer: SourceViewerRef;
   index: number;
 }
-
-const CHUNK_PARAMS = { source: 'qdrant', include_parent: true } as const;
 
 const errorMessage = (error: unknown) => {
   const status = error instanceof ApiError ? error.status : undefined;
@@ -27,7 +25,7 @@ const Notice = ({ children }: { children: string }) => (
 );
 
 const TextPassageViewer = ({ viewer, index }: TextPassageViewerProps) => {
-  const { data, isLoading, error } = useKbDocumentChunks(viewer.kb_id, viewer.document_id, CHUNK_PARAMS);
+  const { data, isLoading, error } = useKbDocumentChunks(viewer.kb_id, viewer.document_id, SOURCE_VIEWER_CHUNK_PARAMS);
   const currentRef = useRef<HTMLElement>(null);
   const doc = useMemo(
     () => (data ? buildPassageDocument(data, viewer.passages) : null),

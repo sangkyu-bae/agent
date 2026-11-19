@@ -1,12 +1,12 @@
-// Design Ref: source-passage-viewer §5.1·§5.5 — 헤더·구절 이동·본문. 원본 뷰어 전환은 module-6.
+// Design Ref: source-passage-viewer §5.1·§5.5 — 헤더·구절 이동·본문(텍스트/원본 전환은 SourceViewerBody).
 import { useEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 import IconButton from '@/components/ui/IconButton';
 import { useSourceViewerStore } from '@/store/sourceViewerStore';
 
+import SourceViewerBody from './SourceViewerBody';
 import SourceViewerShell from './SourceViewerShell';
-import TextPassageViewer from './TextPassageViewer';
 
 const useEscapeToClose = (close: () => void) => {
   useEffect(() => {
@@ -46,7 +46,8 @@ const SourceViewerPanel = () => {
           <ChevronRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
         </IconButton>
       </div>
-      <TextPassageViewer viewer={target.viewer} index={index} />
+      {/* 문서가 바뀌면 모드·대체 안내를 초기화한다 */}
+      <SourceViewerBody key={target.viewer.document_id} viewer={target.viewer} index={index} />
     </SourceViewerShell>
   );
 };

@@ -4,7 +4,31 @@ import { describe, expect, it } from 'vitest';
 import type { KbDocumentChunksResponse } from '@/types/knowledgeBase';
 import type { SourceViewerPassage } from '@/types/sourceViewer';
 
-import { buildPassageDocument, toSegments } from './buildPassageDocument';
+import { buildPassageDocument, passageTexts, toSegments } from './buildPassageDocument';
+
+describe('passageTexts', () => {
+  const data = (): KbDocumentChunksResponse => ({
+    source: 'qdrant', search_mode: null, document_id: 'doc-1', filename: 'a.pdf',
+    chunk_strategy: 'parent_child', total_chunks: 2, chunks: [],
+    parents: [
+      {
+        chunk_id: 'p1', chunk_index: 0, chunk_type: 'parent', content: '부모 전문',
+        children: [{ chunk_id: 'c1', chunk_index: 0, chunk_type: 'child', content: '자식 전문', metadata: {} }],
+      },
+    ],
+  });
+  const p = (chunk_id: string, excerpt = '발췌'): SourceViewerPassage => ({
+    chunk_id, parent_id: null, page: null, excerpt,
+  });
+
+  it('청크 전문을 우선하고 없으면 excerpt', () => {
+    expect(passageTexts(data(), [p('c1'), p('p1'), p('zz')])).toEqual(['자식 전문', '부모 전문', '발췌']);
+  });
+
+  it('청크 데이터가 없으면 excerpt', () => {
+    expect(passageTexts(undefined, [p('c1', '잘린 발췌')])).toEqual(['잘린 발췌']);
+  });
+});
 
 describe('toSegments', () => {
   it('겹치는 구절은 경계에서 잘라 각 조각에 구절 번호를 단다', () => {
