@@ -13,7 +13,7 @@ from src.domain.policies.analysis_policy import (
 )
 from src.domain.hallucination.value_objects import HallucinationEvaluationResult
 from src.domain.search_decision.schemas import WebSearchDecision
-from src.infrastructure.llm.schemas import ClaudeResponse
+from tests.support.fake_utility_llm import FakeUtilityLLM
 
 
 def _make_search_decision(needs: bool = False) -> Mock:
@@ -46,16 +46,6 @@ def _base_state(**overrides) -> ExcelAnalysisState:
     return state
 
 
-def _claude_response(content: str) -> ClaudeResponse:
-    return ClaudeResponse(
-        content=content,
-        model="claude-sonnet-4-5-20250929",
-        stop_reason="end_turn",
-        input_tokens=100,
-        output_tokens=50,
-        request_id="test-123",
-        latency_ms=500,
-    )
 
 
 class TestExcelAnalysisWorkflowNodes:
@@ -64,7 +54,7 @@ class TestExcelAnalysisWorkflowNodes:
     def _create_workflow(self, **overrides) -> ExcelAnalysisWorkflow:
         defaults = {
             "excel_parser": Mock(),
-            "claude_client": Mock(),
+            "llm_provider": FakeUtilityLLM("분석"),
             "tavily_search": Mock(),
             "hallucination_evaluator": Mock(),
             "search_decision": _make_search_decision(),
@@ -96,28 +86,24 @@ class TestExcelAnalysisWorkflowNodes:
 
     @pytest.mark.asyncio
     async def test_analyze_node(self):
-        mock_claude = Mock()
-        mock_claude.complete = AsyncMock(
-            return_value=_claude_response("분석 결과입니다.")
-        )
+        fake_llm = FakeUtilityLLM("분석 결과입니다.")
 
-        workflow = self._create_workflow(claude_client=mock_claude)
+        workflow = self._create_workflow(llm_provider=fake_llm)
 
         state = _base_state(user_query="데이터 요약")
         result = await workflow._analyze_node(state)
 
         assert result["analysis_text"] == "분석 결과입니다."
         assert result["current_attempt"] == 1
-        mock_claude.complete.assert_called_once()
+        fake_llm.llm.ainvoke.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_analyze_node_sanitizes_leaked_chart_json(self):
         """LLM이 분석+차트 JSON을 함께 내보내도 analysis_text는 자연어만 남는다."""
         leaked = '사용자별 남은 휴가 — 배상규 5일.\n```json\n{"type": "bar"}\n```'
-        mock_claude = Mock()
-        mock_claude.complete = AsyncMock(return_value=_claude_response(leaked))
+        fake_llm = FakeUtilityLLM(leaked)
 
-        workflow = self._create_workflow(claude_client=mock_claude)
+        workflow = self._create_workflow(llm_provider=fake_llm)
 
         result = await workflow._analyze_node(_base_state(user_query="휴가 그래프"))
 
@@ -140,12 +126,11 @@ class TestExcelAnalysisWorkflowNodes:
     @pytest.mark.asyncio
     async def test_analyze_node_sets_needs_web_search(self):
         """검색 결정이 True면 needs_web_search 반영."""
-        mock_claude = Mock()
-        mock_claude.complete = AsyncMock(return_value=_claude_response("분석"))
+        fake_llm = FakeUtilityLLM("분석")
         search_decision = _make_search_decision(needs=True)
 
         workflow = self._create_workflow(
-            claude_client=mock_claude, search_decision=search_decision
+            llm_provider=fake_llm, search_decision=search_decision
         )
 
         state = _base_state(web_search_results="")
@@ -157,12 +142,11 @@ class TestExcelAnalysisWorkflowNodes:
     @pytest.mark.asyncio
     async def test_analyze_node_skips_decision_after_search(self):
         """이미 웹 검색을 했으면(web_search_results 존재) 결정 호출을 건너뛴다."""
-        mock_claude = Mock()
-        mock_claude.complete = AsyncMock(return_value=_claude_response("분석"))
+        fake_llm = FakeUtilityLLM("분석")
         search_decision = _make_search_decision(needs=True)
 
         workflow = self._create_workflow(
-            claude_client=mock_claude, search_decision=search_decision
+            llm_provider=fake_llm, search_decision=search_decision
         )
 
         state = _base_state(web_search_results="이전 검색 결과")
@@ -229,7 +213,7 @@ class TestExcelAnalysisWorkflowRouting:
     def _create_workflow(self, **overrides) -> ExcelAnalysisWorkflow:
         defaults = {
             "excel_parser": Mock(),
-            "claude_client": Mock(),
+            "llm_provider": FakeUtilityLLM("분석"),
             "tavily_search": Mock(),
             "hallucination_evaluator": Mock(),
             "search_decision": _make_search_decision(),
@@ -292,10 +276,7 @@ class TestExcelAnalysisWorkflowIntegration:
         }
         mock_parser.parse.return_value = mock_excel_data
 
-        mock_claude = Mock()
-        mock_claude.complete = AsyncMock(
-            return_value=_claude_response("분석 결과입니다.")
-        )
+        fake_llm = FakeUtilityLLM("분석 결과입니다.")
 
         mock_evaluator = Mock()
         mock_evaluator.evaluate = AsyncMock(
@@ -304,7 +285,7 @@ class TestExcelAnalysisWorkflowIntegration:
 
         workflow = ExcelAnalysisWorkflow(
             excel_parser=mock_parser,
-            claude_client=mock_claude,
+            llm_provider=fake_llm,
             tavily_search=Mock(),
             hallucination_evaluator=mock_evaluator,
             search_decision=_make_search_decision(),
@@ -325,7 +306,7 @@ class TestExcelAnalysisWorkflowIntegration:
         # complete 경로가 chart_router를 거쳐 viz_decision을 기록했는지
         assert result["viz_decision"] in ("visualize", "text")
         mock_parser.parse.assert_called_once()
-        mock_claude.complete.assert_called_once()
+        fake_llm.llm.ainvoke.assert_called_once()
         mock_evaluator.evaluate.assert_called_once()
 
     @pytest.mark.asyncio
@@ -336,13 +317,7 @@ class TestExcelAnalysisWorkflowIntegration:
         mock_excel_data.to_dict.return_value = {"sheets": {}}
         mock_parser.parse.return_value = mock_excel_data
 
-        mock_claude = Mock()
-        mock_claude.complete = AsyncMock(
-            side_effect=[
-                _claude_response("할루시네이션 결과"),
-                _claude_response("개선된 분석"),
-            ]
-        )
+        fake_llm = FakeUtilityLLM("할루시네이션 결과", "개선된 분석")
 
         mock_search = Mock()
         mock_search.get_search_context.return_value = "웹 검색 결과"
@@ -357,7 +332,7 @@ class TestExcelAnalysisWorkflowIntegration:
 
         workflow = ExcelAnalysisWorkflow(
             excel_parser=mock_parser,
-            claude_client=mock_claude,
+            llm_provider=fake_llm,
             tavily_search=mock_search,
             hallucination_evaluator=mock_evaluator,
             search_decision=_make_search_decision(needs=False),
@@ -377,6 +352,63 @@ class TestExcelAnalysisWorkflowIntegration:
         assert result["analysis_text"] == "개선된 분석"
         assert len(result["attempts_history"]) == 2
         assert result["confidence_score"] == 1.0
-        assert mock_claude.complete.call_count == 2
+        assert fake_llm.llm.ainvoke.call_count == 2
         assert mock_search.get_search_context.call_count == 1
         assert result["viz_decision"] in ("visualize", "text")
+
+
+class TestAnalyzeNodeUtilityLLM:
+    """excel-analysis-llm-provider: 분석 노드는 관리자 유틸리티 LLM을 런타임에 해석한다.
+
+    고정 ClaudeClient(Sonnet 4.5)는 PII 마스킹(PiiGuardedLLMFactory)·관리자 모델 교체를
+    우회했다. 이제 UtilityLLMProviderPort.get()으로 호출 시점마다 모델을 얻는다.
+    """
+
+    def _workflow(self, provider, **overrides) -> ExcelAnalysisWorkflow:
+        search_decision = _make_search_decision()
+        base = dict(
+            excel_parser=Mock(),
+            llm_provider=provider,
+            tavily_search=Mock(),
+            hallucination_evaluator=Mock(),
+            search_decision=search_decision,
+            logger=Mock(),
+            retry_policy=AnalysisRetryPolicy(max_retries=3),
+            quality_threshold=AnalysisQualityThreshold(
+                min_confidence_score=0.7, max_hallucination_score=0.3,
+            ),
+        )
+        base.update(overrides)
+        return ExcelAnalysisWorkflow(**base)
+
+    @pytest.mark.asyncio
+    async def test_uses_configured_temperature(self):
+        provider = FakeUtilityLLM("분석")
+        wf = self._workflow(provider, analysis_temperature=0.42)
+        await wf._analyze_node(_base_state())
+        assert provider.temperatures == [0.42]
+
+    @pytest.mark.asyncio
+    async def test_passes_run_name_and_request_id(self):
+        provider = FakeUtilityLLM("분석")
+        await self._workflow(provider)._analyze_node(_base_state())
+        config = provider.llm.ainvoke.call_args.kwargs["config"]
+        assert config["run_name"] == "excel_analysis"
+        assert config["metadata"]["request_id"] == _base_state()["request_id"]
+
+    @pytest.mark.asyncio
+    async def test_block_list_content_is_coerced(self):
+        provider = FakeUtilityLLM([
+            {"type": "thinking", "thinking": "", "signature": "s"},
+            {"type": "text", "text": "블록 분석 결과"},
+        ])
+        result = await self._workflow(provider)._analyze_node(_base_state())
+        assert result["analysis_text"] == "블록 분석 결과"
+
+    @pytest.mark.asyncio
+    async def test_unresolved_model_raises_clear_error(self):
+        from src.domain.llm.exceptions import UtilityLLMUnavailableError
+
+        provider = FakeUtilityLLM(available=False)
+        with pytest.raises(UtilityLLMUnavailableError):
+            await self._workflow(provider)._analyze_node(_base_state())

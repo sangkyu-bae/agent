@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     # 미설정(None)이면 관리자가 지정한 기본 모델(is_default=True)을 따라간다
     # — NPU 등 self-host 전면 테스트 시 비워둘 것.
     utility_llm_model_name: str | None = None
+    # excel-analysis-llm-provider: 엑셀 분석 노드 temperature (유틸리티 LLM 경유).
+    # temperature를 받지 않는 최신 Claude 모델에는 LLMFactory가 전달하지 않는다.
+    excel_analysis_temperature: float = 0.3
     # L1 값 캐시 TTL(초). 다중 워커 전환 시 무효화 미전파 구간의 안전장치.
     llm_model_cache_ttl_seconds: float = 60.0
     # L2 인스턴스 캐시 상한. (model_id, updated_at, temperature) 키 기준.
