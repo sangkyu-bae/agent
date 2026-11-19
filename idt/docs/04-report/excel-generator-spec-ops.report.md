@@ -1,6 +1,6 @@
 # excel-generator-spec-ops Completion Report
 
-> **Status**: Complete (실제 LLM 스모크 이월)
+> **Status**: Complete (실 LLM 스모크 통과 — Claude Opus 5.5)
 >
 > **Project**: sangplusbot (idt 백엔드)
 > **Version**: idt 0.1.x
@@ -29,7 +29,8 @@
 ├─────────────────────────────────────────────┤
 │  ✅ FR 완료:      10 / 11  (FR-08 설계 변경)  │
 │  ✅ SC 충족:       6 / 6                      │
-│  ⏳ 이월:          실 LLM 스모크·성능·커버리지  │
+│  ✅ 실 LLM 스모크: Claude Opus 5.5 통과       │
+│  ⏳ 이월:          성능·커버리지               │
 └─────────────────────────────────────────────┘
 ```
 
@@ -134,7 +135,6 @@
 
 | Item | Reason | Priority |
 |------|--------|----------|
-| 실제 LLM 스모크 (새 프롬프트로 ops·column_types 계획이 나오는지) | OpenAI `429 insufficient_quota`. 다른 provider 키 확인은 권한 정책에서 거부 | **High** — PR 머지 전 또는 직후 |
 | 성능 NFR 측정 (1만 행) | 측정 테스트 없음 | Medium |
 | 커버리지 측정 | 미실행 | Low |
 | ③ Excel 수식·합계 행 | Plan Out of Scope (미리보기 계산값 처리 필요) | 다음 사이클 후보 |
@@ -176,6 +176,21 @@
 
 ---
 
+## 5.3 실 LLM 스모크 (2026-11-19, Claude Opus 5.5)
+
+OpenAI 크레딧 소진으로 gpt-4o-mini 대신 `ChatAnthropic(model="claude-opus-5-5")`로 실행했습니다.
+
+- 입력: 800행 원천(고객명·지점·잔액 `"1,010,000원"` 문자열·연체일수), 요청 "연체일수 30일 이상인 고객만 연체일수 큰 순서로, 지점별 잔액 합계 시트도, 금액은 원 단위로 보기 좋게"
+- 결과: 재시도 없이 1회 성공, 시트 2개
+  - 연체 30일 이상: **546행** (원천에서 직접 센 값과 일치, 300행 절단 없음), 연체일수 내림차순, 잔액은 숫자 + `#,##0`, 틀 고정 `A2`
+  - 지점별 잔액 합계: 강남 1,104,000,000 / 서초 1,097,000,000 / 분당 1,092,000,000 / 송파 — 원천 직접 합산과 일치
+- **발견한 결함 (수정함)**: thinking이 항상 켜진 모델은 응답 `content`가 문자열이 아니라 블록 리스트(thinking + text)라서 `_parse_plan`의 `.strip()`에서 `AttributeError`가 났습니다. 이 예외는 노드가 잡는 `ExcelGenerateError`·`ValueError`가 아니어서 그래프가 멈춥니다. master에도 있던 기존 결함입니다. domain 공용 헬퍼 `coerce_message_text`로 text 블록만 이어 붙이도록 고치고 테스트(`TestBlockListContent`)를 추가했습니다.
+- 같은 패턴이 남은 곳 (이번 범위 밖, 미수정):
+  - `src/infrastructure/document_generator/generator.py:152` — `getattr(response, "content", ...)`를 그대로 사용
+  - `LLMFactory._create_anthropic`는 항상 `temperature`를 넘깁니다. Claude Opus 5.5 등 최신 모델은 `temperature`를 400으로 거부하므로, 모델 레지스트리에 이 모델을 등록하면 호출이 실패할 수 있습니다 (실호출로는 확인하지 않음).
+
+---
+
 ## 6. Lessons Learned
 
 ### 6.1 Keep
@@ -198,9 +213,9 @@
 
 ## 7. Next Steps
 
-1. 커밋·PR (`/commit`, `/pr`) — PR 설명에 실 LLM 스모크 이월을 적는다
-2. 크레딧 충전 후 스모크 실행: scratchpad `smoke_excel_gen.py` (800행 원천, "연체 30일 이상 + 지점별 합계")
-3. `/pdca archive excel-generator-spec-ops`
+1. PR #117 머지
+2. `/pdca archive excel-generator-spec-ops`
+3. 별도 수정 후보: document_generator 블록 리스트 응답, `LLMFactory._create_anthropic`의 temperature
 4. 다음 사이클 후보: ③ 수식·합계 행 (미리보기 계산값 처리 포함), ⑤ 사내 양식 채우기
 
 ---
@@ -210,3 +225,4 @@
 | Version | Date | Changes | Author |
 |---------|------|---------|--------|
 | 1.0 | 2026-11-19 | 완료 보고서 | 배상규 |
+| 1.1 | 2026-11-19 | 실 LLM 스모크(Claude Opus 5.5) 통과, 블록 리스트 응답 결함 수정 | 배상규 |
