@@ -19,6 +19,8 @@ export interface LlmModel {
   model_kind?: LlmModelKind;
   // image-generation-tool: 장당 단가 USD — 백엔드 Decimal 이 JSON 문자열 ("0.0400"), 미설정 null
   price_per_image_usd?: string | null;
+  // claude-agent-e2e-fixes §3.3 (V092): 응답 출력 한도 — null 이면 provider 기본(Anthropic 16000)
+  max_output_tokens?: number | null;
 }
 
 export interface LlmModelListResponse {
@@ -47,6 +49,7 @@ export interface CreateLlmModelRequest {
   // image-generation-tool: 종류(기본 chat)·장당 단가(전송은 number, 수신은 string)
   model_kind?: LlmModelKind;
   price_per_image_usd?: number | null;
+  max_output_tokens?: number | null;
 }
 
 /** PATCH /api/v1/llm-models/{id} — provider/model_name/api_key_env는 수정 불가(식별자 성격) */
@@ -61,6 +64,8 @@ export interface UpdateLlmModelRequest {
   // image-generation-tool: undefined = 변경 안 함
   model_kind?: LlmModelKind;
   price_per_image_usd?: number | null;
+  // null 을 보내면 기본값으로 되돌림, 생략하면 유지
+  max_output_tokens?: number | null;
 }
 
 /** PATCH /api/v1/llm-models/{id}/pricing — 전송은 number(≥0), 수신은 string */

@@ -109,3 +109,8 @@ class SupervisorState(TypedDict):
     generated_image_count: int
     # D-09: 이 그래프의 턴당 상한. None 이면 컴파일러 설정값. 서브 그래프엔 절반.
     image_generation_max_per_turn: int | None
+
+    # claude-agent-e2e-fixes Design §3.4: 같은 워커 연속 라우팅 추적.
+    # 수퍼바이저가 라우팅할 때마다 갱신(워커 라우팅·강제 라우팅), 종료는 ("", 0).
+    repeat_worker_id: str
+    repeat_worker_count: int

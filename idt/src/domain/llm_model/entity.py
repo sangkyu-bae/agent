@@ -53,6 +53,9 @@ class LlmModel:
     # image-generation-tool Design §3.3 (V081): 모델 종류. additive(기본 'chat').
     model_kind: str = "chat"
     price_per_image_usd: Decimal | None = None
+    # claude-agent-e2e-fixes Design §3.2 (V092): 응답 출력 한도.
+    # None 이면 provider 기본.
+    max_output_tokens: int | None = None
 
     @property
     def is_chat_model(self) -> bool:

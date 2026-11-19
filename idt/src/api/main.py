@@ -857,7 +857,9 @@ def get_extension_hooks() -> ExtensionHooks:
 
 
 # Global LLM factory and default model (initialized on startup)
-_llm_factory: LLMFactory = LLMFactory()
+_llm_factory: LLMFactory = LLMFactory(
+        anthropic_default_max_output_tokens=settings.anthropic_default_max_output_tokens
+    )
 _default_llm_model: Optional[LlmModel] = None
 # pii-masking-integration §11.1: 앱 싱글턴 보조 LLM 소비자용.
 # 만드는 모델을 GuardedLlm 으로 감싼다. masker 는 호출 시점에 조회한다.
@@ -3298,6 +3300,8 @@ def create_agent_builder_factories():
         blueprint_repository=_bp_runtime_repo,
         # ★ excel-generator-node §2.1: 엑셀 생성 노드 의존
         excel_generator=_eg_generator,
+        # claude-agent-e2e-fixes §5.4: 같은 워커 연속 호출 상한
+        max_consecutive_worker_calls=settings.supervisor_max_consecutive_worker_calls,
         # ★ wiki-agentic-navigation D1: wiki_read 에이전트 목차 블록 주입
         wiki_toc_provider=_wiki_toc_provider,
         # ★ builtin-middleware D6: 스냅샷 ∪ enforced 미들웨어 조립
@@ -5017,7 +5021,9 @@ def create_section_summary_components():
 
     section_source = QdrantSectionSource(qdrant_client, app_logger)
     llm_model_repo = SessionScopedLlmModelRepository(session_factory, app_logger)
-    llm_factory = LLMFactory()
+    llm_factory = LLMFactory(
+        anthropic_default_max_output_tokens=settings.anthropic_default_max_output_tokens
+    )
     embedding_factory = EmbeddingFactory()
     # document-summary-routing D1/D2: 섹션 요약 완료 직후 문서 요약 자동 체이닝
     document_summary_step = DocumentSummaryStep(

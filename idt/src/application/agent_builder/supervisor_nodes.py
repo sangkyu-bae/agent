@@ -2,6 +2,7 @@
 from langchain_core.language_models import BaseChatModel
 from pydantic import BaseModel, Field
 
+from src.application.agent_builder.message_content import message_text
 from src.application.agent_builder.message_normalization import ensure_user_tail
 from src.application.agent_builder.search_pipeline import (
     QUALITY_FEEDBACK_PREFIX,
@@ -11,11 +12,14 @@ from src.application.agent_builder.search_pipeline import (
 from src.application.agent_builder.supervisor_hooks import SupervisorHooks
 from src.application.agent_builder.supervisor_state import SupervisorState
 from src.application.agent_run.context import get_current_run_context
-from src.application.agent_builder.message_content import message_text
 from src.domain.agent_builder.policies import GatedWorkerHintPolicy, QualityGatePolicy
-from src.domain.conversation.analysis_snapshot_policy import AnalysisSnapshotPolicy
 from src.domain.agent_builder.schemas import SupervisorConfig, WorkerDefinition
+from src.domain.agent_builder.worker_repeat_policy import (
+    next_repeat_state,
+    repeat_exhausted,
+)
 from src.domain.agent_run.value_objects import RunPurpose
+from src.domain.conversation.analysis_snapshot_policy import AnalysisSnapshotPolicy
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.domain.visualization.policies import VisualizationRoutingPolicy
 
@@ -184,10 +188,46 @@ def _render_capability_denial_block(state: SupervisorState) -> str:
     ])
 
 
+def _render_repeat_block(state, limit: int) -> str:
+    """같은 워커 연속 호출 안내 (claude-agent-e2e-fixes §5.4). 상한 전이면 ''."""
+    worker = state.get("repeat_worker_id", "") or ""
+    count = state.get("repeat_worker_count", 0) or 0
+    if not repeat_exhausted(worker, worker, count, limit):
+        return ""
+    return "\n".join([
+        "\n\n[반복 호출 주의]",
+        f"- {worker}를 방금 {count}회 연속 수행했습니다. 같은 워커를 다시 호출해도 "
+        "결과가 달라지지 않을 가능성이 큽니다.",
+        "- 지금까지 결과로 다음 단계(다른 워커)로 넘어가거나, 충분하면 FINISH하세요.",
+        "- 같은 워커를 다시 고르면 지금까지 결과로 최종 답변을 작성합니다.",
+    ])
+
+
+def _routing_repeat_state(state, routed_worker: str) -> dict:
+    worker, count = next_repeat_state(
+        state.get("repeat_worker_id", "") or "",
+        state.get("repeat_worker_count", 0) or 0,
+        routed_worker,
+    )
+    return {"repeat_worker_id": worker, "repeat_worker_count": count}
+
+
+def _guard_repeat(state, next_worker: str, limit: int, logger, summary: str):
+    """상한 넘은 같은 워커 재선택이면 종료로 바꾼다 → (next_worker, summary)."""
+    worker = state.get("repeat_worker_id", "") or ""
+    count = state.get("repeat_worker_count", 0) or 0
+    if not repeat_exhausted(next_worker, worker, count, limit):
+        return next_worker, summary
+    logger.warning("worker repeat limit reached", worker=next_worker, count=count)
+    prefix = f"[반복 상한] {next_worker} {count}회 연속 — 최종 답변으로 종료. "
+    return "__end__", (prefix + summary)[:1024]
+
+
 def _select_guidance_block(
     state: SupervisorState,
     wiki_worker_id: str,
     logger: LoggerInterface | None = None,
+    repeat_limit: int = 0,
 ) -> tuple[str, str]:
     """안내 블록은 결정 1회에 최대 1개. 우선순위: 오류 > 빈 결과 > 능력 부정 > 재진입.
 
@@ -204,6 +244,10 @@ def _select_guidance_block(
     block = _render_worker_error_block(state, wiki_worker_id)
     if block:
         return block, "error"
+    # claude-agent-e2e-fixes §5.4: 반복 안내는 오류 다음 우선 (limit 0 이면 '')
+    block = _render_repeat_block(state, repeat_limit)
+    if block:
+        return block, "repeat"
     kind = ""
     block = _render_empty_result_block(state)
     if block:
@@ -367,6 +411,9 @@ def build_initial_state(
         "generated_images": [],
         "generated_image_count": 0,
         "image_generation_max_per_turn": image_generation_max_per_turn,
+        # claude-agent-e2e-fixes §3.4
+        "repeat_worker_id": "",
+        "repeat_worker_count": 0,
     }
 
 
@@ -423,6 +470,8 @@ def create_supervisor_node(
     wiki_worker_id: str = "",
     # approval-gate-run-termination §4.2 (Plan FR-06): 빈 집합이면 바이트 동일.
     gated_worker_ids: frozenset[str] = frozenset(),
+    # claude-agent-e2e-fixes §5.4: 같은 워커 연속 호출 상한. 0 이면 비활성(바이트 동일).
+    max_consecutive_worker_calls: int = 0,
 ):
     worker_descriptions = "\n".join(
         f"- {w.worker_id}: "
@@ -478,6 +527,7 @@ def create_supervisor_node(
                 "worker_task": "",
                 "iteration_count": state["iteration_count"] + 1,
                 **_challenge_reset(),
+                **_routing_repeat_state(state, forced),
             }
 
         skipped = hooks.skip_workers(state)
@@ -493,7 +543,7 @@ def create_supervisor_node(
         # supervisor-early-finish-fix §6.1 / worker-capability-denial-guard D-06:
         # 안내 블록은 결정 1회에 최대 1개 (오류 > 빈 결과 > 능력 부정).
         guidance_block, guidance_kind = _select_guidance_block(
-            state, wiki_worker_id, logger,
+            state, wiki_worker_id, logger, max_consecutive_worker_calls,
         )
         # 되물음 대상은 빈 결과·능력 부정만 — 오류·재진입 블록은 제외.
         challenge_kind = guidance_kind if guidance_kind in ("empty", "denial") else ""
@@ -561,6 +611,9 @@ def create_supervisor_node(
         # M3 (AGENT-OBS-003): reasoning을 step output_summary로 노출.
         # SupervisorDecision.reasoning은 이미 required 필드라 추가 LLM 토큰 비용 없음.
         step_summary = (decision.reasoning or f"next={next_worker}")[:1024]
+        next_worker, step_summary = _guard_repeat(
+            state, next_worker, max_consecutive_worker_calls, logger, step_summary,
+        )
 
         if next_worker == "FINISH":
             next_worker = "__end__"
@@ -607,6 +660,7 @@ def create_supervisor_node(
             "finish_challenge_pending": bool(challenge_kind),
             # Act-1 Gap-03: 재진입 리마인더용 사유 종류 — pending과 함께 소진.
             "finish_challenge_kind": challenge_kind,
+            **_routing_repeat_state(state, next_worker),
         }
 
     return supervisor_node

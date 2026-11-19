@@ -96,6 +96,7 @@ def _build_model(request: CreateLlmModelRequest) -> LlmModel:
         supports_vision=request.supports_vision,
         model_kind=request.model_kind,
         price_per_image_usd=request.price_per_image_usd,
+        max_output_tokens=request.max_output_tokens,
     )
     # image-generation-tool D-05: 기본 모델은 chat 만
     LlmModelPolicy.validate_default_is_chat(model)

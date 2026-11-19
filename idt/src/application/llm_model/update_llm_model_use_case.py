@@ -107,4 +107,7 @@ def _apply_field_updates(
         model.model_kind = request.model_kind
     if request.price_per_image_usd is not None:
         model.price_per_image_usd = request.price_per_image_usd
+    # claude-agent-e2e-fixes §3.2: 명시적 null 은 기본값으로 되돌림 (미지정이면 보존)
+    if "max_output_tokens" in request.model_fields_set:
+        model.max_output_tokens = request.max_output_tokens
     LlmModelPolicy.validate_default_is_chat(model)

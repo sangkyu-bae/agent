@@ -34,6 +34,15 @@ class LlmModelModel(Base):
     description: Mapped[str | None] = mapped_column(Text)
     api_key_env: Mapped[str] = mapped_column(String(100), nullable=False)
     max_tokens: Mapped[int | None] = mapped_column(Integer)
+    # claude-agent-e2e-fixes Design §3.1: V092 매핑.
+    # 응답 출력 한도 (max_tokens 는 컨텍스트 크기).
+    max_output_tokens: Mapped[int | None] = mapped_column(
+        Integer, nullable=True,
+        comment=(
+            "응답 최대 출력 토큰 수 — NULL이면 provider 기본값 사용 "
+            "(Anthropic은 서버 설정 기본값)"
+        ),
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

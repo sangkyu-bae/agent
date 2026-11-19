@@ -49,11 +49,12 @@ def _compiler(generator=None) -> WorkflowCompiler:
     )
 
 
-def _result(truncated=False) -> ExcelGenerateResult:
+def _result(truncated=False, empty_columns=()) -> ExcelGenerateResult:
     return ExcelGenerateResult(
         file_id="e" * 32, filename="수집결과.xlsx",
         sheet_count=2, total_rows=120,
         truncated=truncated, used_raw_source=True,
+        empty_columns=empty_columns,
     )
 
 
@@ -171,6 +172,32 @@ class TestNode:
         assert "행 상한" in content  # Design §4.3 truncated 안내
 
     @pytest.mark.asyncio
+    async def test_empty_columns_warned_in_summary(self):
+        # claude-agent-e2e-fixes Design §5.6 (SC-7): 답변이 빈 값을 감추지 않게
+        generator = MagicMock()
+        generator.generate = AsyncMock(
+            return_value=_result(empty_columns=("지점별/평균 금리",))
+        )
+        compiler = _compiler(generator=generator)
+        node = compiler._create_excel_generator_node(
+            MagicMock(), _worker(), auth_ctx=None, request_id="req",
+        )
+        content = (await node(_state()))["messages"][0].content
+        assert "지점별/평균 금리" in content
+        assert "비어 있습니다" in content
+
+    @pytest.mark.asyncio
+    async def test_no_empty_columns_no_warning(self):
+        generator = MagicMock()
+        generator.generate = AsyncMock(return_value=_result())
+        compiler = _compiler(generator=generator)
+        node = compiler._create_excel_generator_node(
+            MagicMock(), _worker(), auth_ctx=None, request_id="req",
+        )
+        content = (await node(_state()))["messages"][0].content
+        assert "비어 있습니다" not in content
+
+    @pytest.mark.asyncio
     async def test_no_data_returns_guidance_not_raise(self):
         generator = MagicMock()
         generator.generate = AsyncMock(side_effect=NoExcelDataError("데이터 없음"))
@@ -191,3 +218,28 @@ class TestNode:
         )
         result = await node(_state())
         assert "엑셀 생성 실패" in result["messages"][0].content
+
+
+class TestRepeatLimitWiring:
+    """claude-agent-e2e-fixes Design §5.4: 컴파일러가 연속 호출 상한을 수퍼바이저에 넘긴다."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("limit", [0, 2])
+    async def test_limit_forwarded_to_supervisor(self, limit):
+        tool_factory = MagicMock()
+        llm_factory = MagicMock(spec=LLMFactoryInterface)
+        llm_factory.create.return_value = MagicMock()
+        kwargs = dict(
+            tool_factory=tool_factory, llm_factory=llm_factory, logger=MagicMock(),
+            hooks=DefaultHooks(), excel_generator=MagicMock(),
+        )
+        if limit:
+            kwargs["max_consecutive_worker_calls"] = limit
+        compiler = WorkflowCompiler(**kwargs)
+        workflow = WorkflowDefinition(supervisor_prompt="p", workers=[_worker()], flow_hint="f")
+        from src.application.agent_builder import workflow_compiler as wc
+
+        with patch.object(wc, "create_supervisor_node", wraps=wc.create_supervisor_node) as sup, \
+                patch("src.application.agent_builder.workflow_compiler.create_agent"):
+            await compiler.compile(workflow, _llm_model(), "req")
+        assert sup.call_args.kwargs["max_consecutive_worker_calls"] == limit

@@ -38,7 +38,10 @@ from src.domain.policies.analysis_policy import (
 from src.domain.search_decision.interfaces import SearchDecisionInterface
 from src.domain.visualization.interfaces import ChartBuilderInterface
 from src.domain.visualization.policies import VisualizationRoutingPolicy
-from src.domain.llm.exceptions import UtilityLLMUnavailableError
+from src.domain.llm.exceptions import (
+    EmptyLLMResponseError,
+    UtilityLLMUnavailableError,
+)
 from src.domain.llm.interfaces import UtilityLLMProviderPort
 from src.domain.llm.message_content import coerce_message_text
 
@@ -231,6 +234,11 @@ class ExcelAnalysisWorkflow:
         response_text = ANALYSIS_OUTPUT_SANITIZER.strip(
             coerce_message_text(response.content)
         )
+        # claude-agent-e2e-fixes Check G-1: 빈 답은 검색 판단·환각 검사 전에 원인을
+        # 담아 실패한다 (재시도해도 같은 한도에서 다시 비므로 그래프를 멈춘다).
+        if not response_text.strip():
+            metadata = getattr(response, "response_metadata", None) or {}
+            raise EmptyLLMResponseError.from_stop_reason(metadata.get("stop_reason"))
 
         needs_search = False
         if not web_results:

@@ -565,6 +565,10 @@ class WorkflowCompiler:
         tool_catalog_repository=None,
         *,
         agent_timezone: str | None = None,
+        # claude-agent-e2e-fixes §5.4: 같은 워커 연속 호출 상한.
+        # main.py 가 설정에서 주입.
+        # 0(미주입)이면 비활성 — 수퍼바이저 프롬프트·라우팅 바이트 동일.
+        max_consecutive_worker_calls: int = 0,
         # supervisor-early-finish-fix D-07: 빈 결과 판정 보조 문구.
         # config를 직접 import하지 않고 main.py가 정규화해 주입한다
         # (agent_timezone과 동일 규약). None이면 구조적 신호만 동작한다.
@@ -626,6 +630,7 @@ class WorkflowCompiler:
         self._blueprint_repository = blueprint_repository
         # excel-generator-node §2.1: 엑셀 생성 노드 의존 (미주입 시 안내 노옵).
         self._excel_generator = excel_generator
+        self._max_consecutive_worker_calls = max_consecutive_worker_calls
         # Design Ref: mcp-tool-category-routing §5 D-08 — 도구 카테고리·호출
         # 상한 조회용 카탈로그 저장소. 미주입(None)이면 카탈로그 단계를 통째로
         # 건너뛰어 이 사이클 이전과 동일한 2단계 해석이 된다 (FR-14).
@@ -1220,6 +1225,7 @@ class WorkflowCompiler:
                 ),
                 # approval-gate-run-termination §4.2: 게이트 워커 안내 (빈 집합=바이트 동일)
                 gated_worker_ids=gated_worker_ids,
+                max_consecutive_worker_calls=self._max_consecutive_worker_calls,
             )
             quality_gate_fn = create_quality_gate_node(
                 policy=policy, logger=self._logger,
@@ -2495,6 +2501,14 @@ class WorkflowCompiler:
             lines.append(
                 f"⚠️ 일부 데이터가 행 상한({MAX_LLM_STRUCTURED_ROWS}행)으로 "
                 "축약되었습니다."
+            )
+        # claude-agent-e2e-fixes §5.6 (SC-7): 빈 컬럼을 final_answer에 알려
+        # "서식 적용됨"처럼 사실과 다른 답변을 막는다
+        empty = getattr(result, "empty_columns", ())
+        if empty:
+            lines.append(
+                "⚠️ 다음 컬럼은 원천 값으로 계산할 수 없어 비어 있습니다: "
+                + ", ".join(empty)
             )
         return "\n".join(lines)
 

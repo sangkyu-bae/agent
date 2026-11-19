@@ -244,3 +244,86 @@ class TestRecordLlmCallFailureIsSwallowed:
         )
         # 예외 전파 X
         await cb.on_llm_end(result, run_id=lc_run_id)
+
+
+def _streaming_result(response_metadata: dict, usage: dict) -> LLMResult:
+    """스트리밍 경로의 on_llm_end 입력 — llm_output 없음, 메시지에만 메타·사용량.
+
+    2026-11-19 실측(langchain-anthropic 1.6.1 astream): llm_output=None,
+    invocation_params 빈 dict, message.response_metadata={"model_name": ...}.
+    """
+    from langchain_core.messages import AIMessageChunk
+    from langchain_core.outputs import ChatGenerationChunk
+
+    message = AIMessageChunk(
+        content="ok", response_metadata=response_metadata, usage_metadata=usage or None,
+    )
+    return LLMResult(generations=[[ChatGenerationChunk(message=message)]], llm_output=None)
+
+
+class TestStreamingExtraction:
+    """claude-agent-e2e-fixes Design §5.5 (U1~U3, SC-6)."""
+
+    @pytest.mark.asyncio
+    async def test_model_and_tokens_from_message_metadata(self) -> None:  # U1
+        cb, tracker = _make_callback()
+        lc_run_id = uuid.uuid4()
+        await cb.on_chat_model_start({}, [[]], run_id=lc_run_id)
+        result = _streaming_result(
+            {"model_name": "claude-opus-5-5", "stop_reason": "end_turn"},
+            {"input_tokens": 120, "output_tokens": 30, "total_tokens": 150},
+        )
+        await cb.on_llm_end(result, run_id=lc_run_id)
+
+        kwargs = tracker.record_llm_call.await_args.kwargs
+        assert kwargs["provider"] == "anthropic"
+        assert kwargs["model_name"] == "claude-opus-5-5"
+        usage: TokenUsage = kwargs["token_usage"]
+        assert (usage.prompt_tokens, usage.completion_tokens, usage.total_tokens) == (120, 30, 150)
+
+    @pytest.mark.asyncio
+    async def test_model_from_start_invocation_params(self) -> None:  # U3
+        cb, tracker = _make_callback()
+        lc_run_id = uuid.uuid4()
+        await cb.on_chat_model_start(
+            {}, [[]], run_id=lc_run_id, invocation_params={"model": "claude-sonnet-4-6"},
+        )
+        result = _streaming_result({}, {"input_tokens": 5, "output_tokens": 2, "total_tokens": 7})
+        await cb.on_llm_end(result, run_id=lc_run_id)
+
+        kwargs = tracker.record_llm_call.await_args.kwargs
+        assert kwargs["model_name"] == "claude-sonnet-4-6"
+        assert kwargs["provider"] == "anthropic"
+        assert kwargs["token_usage"].prompt_tokens == 5
+
+    @pytest.mark.asyncio
+    async def test_token_keys_decide_normalization_without_provider(self) -> None:
+        cb, tracker = _make_callback()
+        lc_run_id = uuid.uuid4()
+        await cb.on_llm_start({}, [], run_id=lc_run_id)
+        result = _streaming_result({}, {"input_tokens": 9, "output_tokens": 1, "total_tokens": 10})
+        await cb.on_llm_end(result, run_id=lc_run_id)
+
+        usage: TokenUsage = tracker.record_llm_call.await_args.kwargs["token_usage"]
+        assert (usage.prompt_tokens, usage.completion_tokens) == (9, 1)
+
+    @pytest.mark.asyncio
+    async def test_start_model_cleared_after_end(self) -> None:
+        cb, _ = _make_callback()
+        lc_run_id = uuid.uuid4()
+        await cb.on_chat_model_start({}, [[]], run_id=lc_run_id, invocation_params={"model": "m"})
+        await cb.on_llm_end(_streaming_result({}, {}), run_id=lc_run_id)
+        assert lc_run_id not in cb._start_models
+
+
+class TestErrorPathModelName:
+    @pytest.mark.asyncio
+    async def test_error_uses_start_model(self) -> None:
+        # E2E 실측: 400으로 실패한 수퍼바이저 호출도 model_name=unknown 이었다
+        cb, tracker = _make_callback()
+        lc_run_id = uuid.uuid4()
+        await cb.on_chat_model_start({}, [[]], run_id=lc_run_id, invocation_params={"model": "claude-opus-5-5"})
+        await cb.on_llm_error(RuntimeError("400"), run_id=lc_run_id)
+        kwargs = tracker.record_llm_call.await_args.kwargs
+        assert kwargs["model_name"] == "claude-opus-5-5"
+        assert kwargs["provider"] == "anthropic"

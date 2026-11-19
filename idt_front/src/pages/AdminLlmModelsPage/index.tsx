@@ -25,6 +25,17 @@ const MODEL_KIND_LABELS: Record<LlmModelKind, string> = {
 };
 
 /** 장당 단가 문자열 → number|null (빈 값 = 미설정). 음수·비숫자는 undefined 로 거부. */
+// claude-agent-e2e-fixes §3.3: 백엔드 검증(ge=1, le=128000)과 같은 범위
+const MAX_OUTPUT_TOKENS_LIMIT = 128000;
+
+/** 빈 값 = null(기본값), 1~128000 정수 = 값, 그 외 = undefined(오류) */
+const parseMaxOutputTokens = (raw: string): number | null | undefined => {
+  if (!raw.trim()) return null;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 1 || value > MAX_OUTPUT_TOKENS_LIMIT) return undefined;
+  return value;
+};
+
 const parsePerImagePrice = (raw: string): number | null | undefined => {
   if (!raw.trim()) return null;
   const value = parseFloat(raw);
@@ -50,6 +61,7 @@ interface FormState {
   api_key_env: string;
   description: string;
   max_tokens: string;
+  max_output_tokens: string; // claude-agent-e2e-fixes: 응답 출력 한도 (빈 값 = 기본)
   base_url: string;
   is_active: boolean;
   is_default: boolean;
@@ -65,6 +77,7 @@ const emptyForm: FormState = {
   api_key_env: '',
   description: '',
   max_tokens: '',
+  max_output_tokens: '',
   base_url: '',
   is_active: true,
   is_default: false,
@@ -80,6 +93,7 @@ const fromModel = (m: LlmModel): FormState => ({
   api_key_env: '', // write-only — 응답에 노출되지 않음
   description: m.description ?? '',
   max_tokens: m.max_tokens != null ? String(m.max_tokens) : '',
+  max_output_tokens: m.max_output_tokens != null ? String(m.max_output_tokens) : '',
   base_url: m.base_url ?? '',
   is_active: m.is_active,
   is_default: m.is_default,
@@ -144,6 +158,11 @@ const LlmModelFormModal = ({
       setError('최대 토큰 수는 양의 정수여야 합니다.');
       return;
     }
+    const maxOutputTokens = parseMaxOutputTokens(form.max_output_tokens);
+    if (maxOutputTokens === undefined) {
+      setError(`최대 출력 토큰은 1~${MAX_OUTPUT_TOKENS_LIMIT} 사이 정수여야 합니다.`);
+      return;
+    }
     const baseUrl = form.base_url.trim() || null;
 
     // image-generation-tool Design §5.1: 이미지 종류는 비전 플래그를 내리고 장당 단가를 받는다.
@@ -158,6 +177,7 @@ const LlmModelFormModal = ({
       return;
     }
     const kindFields = {
+      max_output_tokens: maxOutputTokens,
       supports_vision: isImage ? false : form.supports_vision,
       model_kind: form.model_kind,
       price_per_image_usd: pricePerImage,
@@ -310,7 +330,7 @@ const LlmModelFormModal = ({
 
         <div className="flex gap-4">
           <div className="flex-1">
-            <label className={labelCls}>최대 토큰 수</label>
+            <label className={labelCls}>컨텍스트 크기 (최대 토큰)</label>
             <input
               type="number"
               value={form.max_tokens}
@@ -334,6 +354,25 @@ const LlmModelFormModal = ({
               self-host(vLLM 등) 엔드포인트. 비우면 provider 기본값.
             </p>
           </div>
+        </div>
+
+        <div>
+          <label htmlFor="llm-max-output-tokens" className={labelCls}>
+            최대 출력 토큰
+          </label>
+          <input
+            id="llm-max-output-tokens"
+            type="number"
+            value={form.max_output_tokens}
+            onChange={(e) => set('max_output_tokens', e.target.value)}
+            placeholder="예: 16000"
+            min={1}
+            max={MAX_OUTPUT_TOKENS_LIMIT}
+            className={inputCls}
+          />
+          <p className="mt-1 text-[12px] text-zinc-500">
+            응답 한 번에 생성할 최대 토큰 수입니다. 비우면 기본값(Anthropic 16000, 그 외 provider 기본)을 씁니다.
+          </p>
         </div>
 
         <div className="flex items-center gap-6">

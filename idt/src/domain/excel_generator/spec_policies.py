@@ -179,7 +179,11 @@ def validate_column_types(column_types: Any, columns: list[str]) -> list[str]:
 
 # ── 셀 값 해석·변환 (Design §3.3, §6.3) ─────────────────────────────────────
 def clean_numeric_text(value: Any) -> float | None:
-    """숫자·숫자 문자열 → float. 천 단위 ','·통화 기호·접미 '원' 제거. 실패 시 None."""
+    """숫자·숫자 문자열 → float. 천 단위 ','·통화 기호·접미 '원' 제거. 실패 시 None.
+
+    claude-agent-e2e-fixes Design §4.3: 접미 '%'는 비율로 읽는다("8.9%" → 0.089).
+    percent 서식(0.0%)·coerce_cell(percent)과 같은 기준이라 집계 결과가 서식과 맞는다.
+    """
     if isinstance(value, bool) or value is None:
         return None
     if isinstance(value, (int, float)):
@@ -190,9 +194,11 @@ def clean_numeric_text(value: Any) -> float | None:
     for mark in _CURRENCY_MARKS:
         text = text.replace(mark, "")
     text = text.removesuffix("원").strip()
+    is_percent = text.endswith("%")
+    text = text.removesuffix("%").strip()
     if not _NUMERIC_RE.fullmatch(text):
         return None
-    return float(text)
+    return float(text) / 100 if is_percent else float(text)
 
 
 def parse_date_text(value: Any) -> datetime.datetime | None:
@@ -231,17 +237,10 @@ def _to_integer_like(value: Any) -> int | float | None:
     return int(number) if number.is_integer() else number
 
 
-def _to_percent(value: Any) -> float | None:
-    if isinstance(value, str) and value.strip().endswith("%"):
-        number = clean_numeric_text(value.strip()[:-1])
-        return None if number is None else number / 100
-    return clean_numeric_text(value)
-
-
 _CONVERTERS: dict[str, Callable[[Any], Any]] = {
     "integer": _to_integer_like,
     "currency": _to_integer_like,
     "number": clean_numeric_text,
-    "percent": _to_percent,
+    "percent": clean_numeric_text,  # % 접미는 clean_numeric_text가 비율로 처리
     "date": parse_date_text,
 }

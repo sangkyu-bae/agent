@@ -5,6 +5,8 @@ groupby 결과 컬럼은 이후 참조 가능. 셀 변환은 실패 시 원값�
 """
 import datetime
 
+import pytest
+
 from src.domain.excel_generator.spec_policies import (
     MAX_OPS_PER_SHEET,
     NUMBER_FORMATS,
@@ -280,3 +282,20 @@ class TestAct1Validation:
             [{"op": "select", "columns": ["잔액", "잔액"]}], COLS
         )
         assert any("중복" in v for v in violations)
+
+
+class TestPercentText:
+    """claude-agent-e2e-fixes Design §4.3 (D8·D9): 퍼센트 문자열은 비율로 읽는다."""
+
+    def test_percent_suffix_is_ratio(self):  # D8
+        assert clean_numeric_text("8.9%") == pytest.approx(0.089)
+        assert clean_numeric_text("-5%") == pytest.approx(-0.05)
+        assert clean_numeric_text(" 1,234.5% ") == pytest.approx(12.345)
+
+    def test_bare_percent_is_none(self):
+        assert clean_numeric_text("%") is None
+        assert clean_numeric_text("abc%") is None
+
+    def test_coerce_percent_unchanged(self):  # D9
+        assert coerce_cell("12.5%", "percent") == pytest.approx(0.125)
+        assert coerce_cell(0.3, "percent") == 0.3

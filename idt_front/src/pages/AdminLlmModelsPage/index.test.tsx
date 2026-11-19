@@ -390,3 +390,93 @@ describe('AdminLlmModelsPage 이미지 생성 모델 (image-generation-tool)', (
     expect(captured).toMatchObject({ price_per_image_usd: 0.08 });
   });
 });
+
+describe('AdminLlmModelsPage 최대 출력 토큰 (claude-agent-e2e-fixes §3.3)', () => {
+  const openCreateForm = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.click(screen.getByRole('button', { name: '모델 등록' }));
+    await user.type(screen.getByPlaceholderText('예: gpt-4o'), 'claude-opus-5-5');
+    await user.type(screen.getByPlaceholderText('예: GPT-4o'), 'Opus 5.5');
+    await user.type(screen.getByPlaceholderText('예: OPENAI_API_KEY'), 'ANTHROPIC_API_KEY');
+  };
+
+  it('FE3: 컨텍스트 크기와 최대 출력 토큰을 구분해 표시한다', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('GPT-4o');
+    await user.click(screen.getByRole('button', { name: '모델 등록' }));
+    expect(screen.getByText('컨텍스트 크기 (최대 토큰)')).toBeInTheDocument();
+    expect(screen.getByLabelText('최대 출력 토큰')).toBeInTheDocument();
+    expect(screen.getByText(/비우면 기본값/)).toBeInTheDocument();
+  });
+
+  it('FE1: 등록 시 최대 출력 토큰이 POST 바디에 실린다', async () => {
+    let captured: Record<string, unknown> | null = null;
+    server.use(
+      http.post('*/api/v1/llm-models', async ({ request }) => {
+        captured = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ ...captured, id: 'n1', max_tokens: null }, { status: 201 });
+      }),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('GPT-4o');
+    await openCreateForm(user);
+    await user.type(screen.getByLabelText('최대 출력 토큰'), '32000');
+    await user.click(screen.getByRole('button', { name: '등록' }));
+
+    await waitFor(() => expect(captured).not.toBeNull());
+    expect(captured).toMatchObject({ max_output_tokens: 32000 });
+  });
+
+  it('FE1: 수정 폼은 기존 값을 채우고, 비우고 저장하면 null 을 보낸다', async () => {
+    let patched: Record<string, unknown> | null = null;
+    server.use(
+      http.get('*/api/v1/llm-models', () =>
+        HttpResponse.json({
+          models: [{
+            id: 'uuid-9', provider: 'anthropic', model_name: 'claude-opus-5-5',
+            display_name: 'Opus 5.5', description: null, max_tokens: null,
+            max_output_tokens: 64000, is_active: true, is_default: false, base_url: null,
+            supports_vision: true, model_kind: 'chat', price_per_image_usd: null,
+            input_price_per_1k_usd: null, output_price_per_1k_usd: null, pricing_updated_at: null,
+          }],
+        }),
+      ),
+      http.patch('*/api/v1/llm-models/:id', async ({ request }) => {
+        patched = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ id: 'uuid-9', ...patched });
+      }),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Opus 5.5');
+    await user.click(screen.getByRole('button', { name: 'Opus 5.5 수정' }));
+
+    const input = screen.getByLabelText('최대 출력 토큰');
+    expect(input).toHaveValue(64000);
+    await user.clear(input);
+    await user.click(screen.getByRole('button', { name: '저장' }));
+
+    await waitFor(() => expect(patched).not.toBeNull());
+    expect(patched).toHaveProperty('max_output_tokens', null);
+  });
+
+  it.each(['0', '128001', '1.5'])('FE2: 범위 밖 값(%s)은 인라인 에러로 막고 전송하지 않는다', async (value) => {
+    let called = false;
+    server.use(
+      http.post('*/api/v1/llm-models', () => {
+        called = true;
+        return HttpResponse.json({}, { status: 201 });
+      }),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('GPT-4o');
+    await openCreateForm(user);
+    fireEvent.change(screen.getByLabelText('최대 출력 토큰'), { target: { value } });
+    await user.click(screen.getByRole('button', { name: '등록' }));
+
+    expect(await screen.findByText(/최대 출력 토큰은 1~128000/)).toBeInTheDocument();
+    expect(called).toBe(false);
+  });
+});

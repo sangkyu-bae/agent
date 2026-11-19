@@ -12,13 +12,17 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 SRC = ROOT / "src"
 MAIN = SRC / "api" / "main.py"
-_CHAT_MODELS = {"ChatOpenAI", "ChatAnthropic", "ChatOllama"}
+_CHAT_MODELS = {
+    "ChatOpenAI", "ChatAnthropic", "ChatOllama",
+    # claude-agent-e2e-fixes §5.2: 강제 tool_choice 거부 모델용 하위 클래스도 직접 생성으로 센다
+    "JsonSchemaStructuredChatAnthropic",
+}
 
 # 경로 → (생성 횟수, 사유). 대화 경로는 모두 guard 경유이거나,
 # provider 주입 시 쓰지 않는 폴백이다.
 ALLOWED_DIRECT_CONSTRUCTION: dict[str, tuple[int, str]] = {
     "infrastructure/llm/llm_factory.py": (
-        3,
+        4,
         "팩토리 본체 — PiiGuardedLLMFactory·compiler가 감싼다",
     ),
     "infrastructure/conversation/langchain_llm.py": (1, "llm_guard 주입 (main.py)"),

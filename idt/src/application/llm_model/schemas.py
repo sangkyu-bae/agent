@@ -7,6 +7,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field, field_validator
 
+from src.domain.llm.sampling_policy import MAX_OUTPUT_TOKENS_LIMIT
 from src.domain.llm_model.entity import LlmModel
 from src.domain.llm_model.policies import LlmModelPolicy
 
@@ -27,6 +28,9 @@ class CreateLlmModelRequest(BaseModel):
     # image-generation-tool Design §4.1 (V081): 종류·장당 단가 (additive).
     model_kind: str = "chat"
     price_per_image_usd: Decimal | None = Field(None, ge=0)
+    # claude-agent-e2e-fixes Design §3.2 (V092): 응답 출력 한도.
+    # None 이면 provider 기본.
+    max_output_tokens: int | None = Field(None, ge=1, le=MAX_OUTPUT_TOKENS_LIMIT)
 
     @field_validator("model_kind")
     @classmethod
@@ -45,6 +49,10 @@ class UpdateLlmModelRequest(BaseModel):
     supports_vision: bool | None = None
     model_kind: str | None = None
     price_per_image_usd: Decimal | None = Field(None, ge=0)
+    # claude-agent-e2e-fixes §3.2: 필드가 요청에 있으면 null 도 반영
+    # (기본값으로 되돌림).
+    # 유스케이스가 model_fields_set 으로 "미지정"과 "명시적 null"을 구분한다.
+    max_output_tokens: int | None = Field(None, ge=1, le=MAX_OUTPUT_TOKENS_LIMIT)
 
     @field_validator("model_kind")
     @classmethod
@@ -82,6 +90,8 @@ class LlmModelResponse(BaseModel):
     # image-generation-tool: additive
     model_kind: str = "chat"
     price_per_image_usd: Decimal | None = None
+    # claude-agent-e2e-fixes: additive
+    max_output_tokens: int | None = None
 
     @classmethod
     def from_domain(cls, model: LlmModel) -> "LlmModelResponse":
@@ -101,6 +111,7 @@ class LlmModelResponse(BaseModel):
             supports_vision=model.supports_vision,
             model_kind=model.model_kind,
             price_per_image_usd=model.price_per_image_usd,
+            max_output_tokens=model.max_output_tokens,
         )
 
 

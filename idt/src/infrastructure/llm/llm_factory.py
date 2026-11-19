@@ -7,12 +7,30 @@ from langchain_ollama import ChatOllama
 from langchain_openai import ChatOpenAI
 
 from src.domain.llm.interfaces import LLMFactoryInterface
-from src.domain.llm.sampling_policy import anthropic_accepts_temperature
+from src.domain.llm.sampling_policy import (
+    anthropic_accepts_temperature,
+    anthropic_supports_forced_tool_choice,
+    resolve_max_output_tokens,
+)
 from src.domain.llm_model.entity import LlmModel
+from src.infrastructure.llm.structured_chat_anthropic import (
+    JsonSchemaStructuredChatAnthropic,
+)
 
 
 class LLMFactory(LLMFactoryInterface):
     """LlmModel 엔티티의 provider 필드에 따라 적절한 LLM 인스턴스를 생성한다."""
+
+    def __init__(self, anthropic_default_max_output_tokens: int = 16000) -> None:
+        # claude-agent-e2e-fixes §5.1: llm_model.max_output_tokens
+        # 미설정 시 Anthropic 기본값
+        self._anthropic_default_max_output_tokens = anthropic_default_max_output_tokens
+
+    def _max_output_tokens(self, llm_model: LlmModel) -> int | None:
+        return resolve_max_output_tokens(
+            llm_model.provider, llm_model.max_output_tokens,
+            self._anthropic_default_max_output_tokens,
+        )
 
     def create(
         self,
@@ -42,6 +60,9 @@ class LLMFactory(LLMFactoryInterface):
             temperature=temperature,
             stream_usage=True,
         )
+        max_out = self._max_output_tokens(llm_model)
+        if max_out is not None:  # 저장값이 있을 때만 (기본은 무변경)
+            kwargs["max_tokens"] = max_out
         if llm_model.base_url:
             kwargs["base_url"] = llm_model.base_url
         return ChatOpenAI(**kwargs)
@@ -54,12 +75,20 @@ class LLMFactory(LLMFactoryInterface):
         # Claude Opus 4.7 이후 모델은 temperature를 400으로 거부 — 구형 모델에만 전달
         if anthropic_accepts_temperature(llm_model.model_name):
             kwargs["temperature"] = temperature
-        return ChatAnthropic(**kwargs)
+        kwargs["max_tokens"] = self._max_output_tokens(llm_model)
+        # claude-agent-e2e-fixes §5.1: 강제 tool_choice 거부 모델은
+        # 구조화 출력을 json_schema 로 받는 하위 클래스
+        if anthropic_supports_forced_tool_choice(llm_model.model_name):
+            return ChatAnthropic(**kwargs)
+        return JsonSchemaStructuredChatAnthropic(**kwargs)
 
     def _create_ollama(
         self, llm_model: LlmModel, temperature: float
     ) -> ChatOllama:
         kwargs = dict(model=llm_model.model_name, temperature=temperature)
+        max_out = self._max_output_tokens(llm_model)
+        if max_out is not None:  # 저장값이 있을 때만 (기본은 무변경)
+            kwargs["num_predict"] = max_out
         # LLM-MODEL-REG-002: 원격/self-host Ollama 엔드포인트 지원.
         if llm_model.base_url:
             kwargs["base_url"] = llm_model.base_url
