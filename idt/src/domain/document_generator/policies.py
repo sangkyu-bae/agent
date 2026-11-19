@@ -119,4 +119,7 @@ GENERATE_GUIDELINES = """당신은 등록된 문서 유형의 아웃라인에 �
    명시한다.
 5. 허용 태그: h1 h2 h3, p, ul ol li, table thead tbody tr th td, strong em, br.
    script·style·iframe·이미지·외부 리소스는 사용하지 않는다.
+6. 여러 항목을 같은 기준으로 비교하거나 수치·금액·기간·날짜가 3개 이상 나열되면
+   문단 대신 <table>로 작성한다. 첫 행은 <thead>의 <th>로 열 제목을 두고,
+   값은 <tbody>의 <td>에 넣는다. 셀을 병합하지 않는다(colspan·rowspan 금지).
 """

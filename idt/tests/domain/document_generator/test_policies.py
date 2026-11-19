@@ -111,3 +111,14 @@ class TestSectionCoveragePolicy:
     def test_body_text_does_not_count_as_heading(self):
         html = "<p>개요</p>"
         assert SectionCoveragePolicy.missing_titles(html, _sections("개요")) == ["개요"]
+
+
+class TestGenerateGuidelines:
+    """작성 지침에 표 사용 기준이 있어야 LLM이 비교·수치 내용을 표로 쓴다."""
+
+    def test_instructs_when_to_use_table(self):
+        from src.domain.document_generator.policies import GENERATE_GUIDELINES
+
+        assert "<table>" in GENERATE_GUIDELINES
+        assert "<thead>" in GENERATE_GUIDELINES
+        assert "3개 이상" in GENERATE_GUIDELINES
