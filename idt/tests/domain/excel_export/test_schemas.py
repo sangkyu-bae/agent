@@ -37,6 +37,18 @@ class TestExcelSheetData:
         assert sheet.sheet_name == "Sheet1"
 
 
+class TestExcelSheetDataColumnTypes:
+    """excel-generator-spec-ops Design §3.4 — 선택 필드, 기본 None."""
+
+    def test_default_none(self):
+        sheet = ExcelSheetData(columns=["a"], rows=[[1]])
+        assert sheet.column_types is None
+
+    def test_column_types_kept(self):
+        sheet = ExcelSheetData(columns=["a"], rows=[[1]], column_types={"a": "integer"})
+        assert sheet.column_types == {"a": "integer"}
+
+
 class TestExcelExportRequest:
     def _valid_sheet(self) -> ExcelSheetData:
         return ExcelSheetData(columns=["Col1"], rows=[["val1"]])

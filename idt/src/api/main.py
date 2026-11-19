@@ -3196,13 +3196,15 @@ def create_agent_builder_factories():
 
     # excel-generator-node §2.1: 엑셀 생성 노드 의존 (문서생성기와 저장소 공유).
     from src.infrastructure.excel.pandas_excel_parser import PandasExcelParser
-    from src.infrastructure.excel_export.pandas_excel_exporter import (
-        PandasExcelExporter as _EgExporter,
+    # excel-generator-spec-ops §2.1: column_types 서식은 생성 노드 전용 exporter에서만
+    # (REST /excel-export·ExcelExportTool은 PandasExcelExporter 유지)
+    from src.infrastructure.excel_export.styled_excel_exporter import (
+        StyledExcelExporter as _EgExporter,
     )
     from src.infrastructure.excel_generator.generator import ExcelGenerator
 
     _eg_generator = ExcelGenerator(
-        exporter=_EgExporter(),
+        exporter=_EgExporter(app_logger),
         attachment_store=_attachment_store or create_attachment_store(),
         logger=app_logger,
         excel_parser=PandasExcelParser(),

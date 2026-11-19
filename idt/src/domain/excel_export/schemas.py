@@ -13,6 +13,9 @@ class ExcelSheetData(BaseModel):
     sheet_name: str = "Sheet1"
     columns: list[str]
     rows: list[list[Any]] = []
+    # excel-generator-spec-ops Design §3.4: {컬럼명: 의미 타입}.
+    # 기본 None → 기존 소비자(REST·ExcelExportTool) 무영향
+    column_types: dict[str, str] | None = None
 
     @field_validator("columns")
     @classmethod

@@ -273,3 +273,214 @@ class TestFailureBoundaries:
         assert gen._safe_filename("결과") == "결과.xlsx"
         assert gen._safe_filename("결과.xlsx") == "결과.xlsx"
         assert gen._safe_filename("") == "output.xlsx"
+
+
+# ── excel-generator-spec-ops (Design §8.5) ──────────────────────────────────
+class _SeqLLM:
+    """호출마다 준비된 응답을 차례로 반환. 재시도 메시지 검증용."""
+
+    def __init__(self, *contents: str) -> None:
+        self.contents = list(contents)
+        self.calls: list = []
+        self.configs: list = []
+
+    async def ainvoke(self, messages, config=None):
+        self.calls.append(messages)
+        self.configs.append(config)
+        return SimpleNamespace(content=self.contents[len(self.calls) - 1])
+
+
+def _styled_generator(tmp_path):
+    from src.infrastructure.excel_export.styled_excel_exporter import (
+        StyledExcelExporter,
+    )
+
+    store = AgentAttachmentStore(str(tmp_path / "attachments"))
+    logger = MagicMock()
+    gen = ExcelGenerator(
+        exporter=StyledExcelExporter(logger), attachment_store=store, logger=logger,
+    )
+    return gen, store, logger
+
+
+class TestSpecOps:
+    @pytest.mark.asyncio
+    async def test_raw_ops_not_capped(self, tmp_path):  # G1 / Plan SC-1
+        gen, store = _generator(tmp_path)
+        llm = _FakeLLM(_plan([{
+            "source": "raw:0", "sheet_name": "절반",
+            "ops": [
+                {"op": "filter", "col": "값", "cmp": ">=", "value": 500},
+                {"op": "sort", "by": [{"col": "값", "desc": True}]},
+            ],
+        }]))
+        result = await _generate(gen, llm, analysis_source=_raw_source(1000))
+
+        assert len(llm.calls) == 1
+        assert result.total_rows == 500 > MAX_LLM_STRUCTURED_ROWS
+        assert result.truncated is False
+        df = _read_sheet(store, result.file_id)
+        assert len(df) == 500
+        assert df.iloc[0]["값"] == 999  # 원천 값 그대로, 내림차순
+
+    @pytest.mark.asyncio
+    async def test_raw_groupby_sheet(self, tmp_path):
+        gen, store = _generator(tmp_path)
+        llm = _FakeLLM(_plan([{
+            "source": "raw:0", "sheet_name": "합계",
+            "ops": [{"op": "groupby", "by": ["이름"],
+                     "agg": [{"col": "값", "fn": "sum", "as": "합계"}]},
+                    {"op": "top", "n": 3}],
+        }]))
+        result = await _generate(gen, llm, analysis_source=_raw_source(10))
+        df = _read_sheet(store, result.file_id)
+        assert list(df.columns) == ["이름", "합계"]
+        assert len(df) == 3
+
+    @pytest.mark.asyncio
+    async def test_catalog_exposes_dtypes(self, tmp_path):  # G6
+        gen, _ = _generator(tmp_path)
+        source = _raw_source(3)
+        source[0]["excel"]["sheets"]["Sheet1"]["dtypes"] = {"이름": "object", "값": "int64"}
+        llm = _FakeLLM(_plan([{"source": "raw:0", "sheet_name": "원본"}]))
+        await _generate(gen, llm, analysis_source=source)
+        assert "int64" in llm.prompt_text()
+
+    @pytest.mark.asyncio
+    async def test_prompt_mentions_ops_rules(self, tmp_path):
+        gen, _ = _generator(tmp_path)
+        llm = _FakeLLM(_plan([{"source": "raw:0", "sheet_name": "원본"}]))
+        await _generate(gen, llm, analysis_source=_raw_source(3))
+        prompt = llm.prompt_text()
+        assert "ops" in prompt and "column_types" in prompt and "groupby" in prompt
+
+
+class TestPlanRetry:
+    @pytest.mark.asyncio
+    async def test_invalid_column_then_valid(self, tmp_path):  # G2 / Plan SC-5
+        gen, _ = _generator(tmp_path)
+        bad = _plan([{"source": "raw:0", "sheet_name": "상위",
+                      "ops": [{"op": "sort", "by": [{"col": "없는컬럼"}]}]}])
+        good = _plan([{"source": "raw:0", "sheet_name": "상위",
+                       "ops": [{"op": "top", "n": 5}]}])
+        llm = _SeqLLM(bad, good)
+        result = await _generate(gen, llm, analysis_source=_raw_source(20))
+
+        assert len(llm.calls) == 2
+        assert result.total_rows == 5
+        retry_messages = llm.calls[1]
+        assert retry_messages[2]["role"] == "assistant"
+        assert "없는컬럼" in retry_messages[-1]["content"]
+
+    @pytest.mark.asyncio
+    async def test_non_json_then_valid(self, tmp_path):  # G3
+        gen, _ = _generator(tmp_path)
+        llm = _SeqLLM("표를 못 만듭니다", _plan([
+            {"source": "llm", "sheet_name": "s", "columns": ["a"], "rows": [["v"]]},
+        ]))
+        result = await _generate(gen, llm)
+        assert len(llm.calls) == 2
+        assert result.sheet_count == 1
+        assert "JSON" in llm.calls[1][-1]["content"]
+
+    @pytest.mark.asyncio
+    async def test_two_failures_raise(self, tmp_path):  # G4
+        gen, _ = _generator(tmp_path)
+        bad = _plan([{"source": "raw:9", "sheet_name": "x"}])
+        llm = _SeqLLM(bad, bad)
+        with pytest.raises(ExcelGenerateError, match="raw"):
+            await _generate(gen, llm, analysis_source=_raw_source(3))
+        assert len(llm.calls) == 2
+
+    @pytest.mark.asyncio
+    async def test_empty_plan_not_retried(self, tmp_path):  # G5
+        gen, _ = _generator(tmp_path)
+        llm = _SeqLLM(_plan([], filename=""), "unused")
+        with pytest.raises(NoExcelDataError):
+            await _generate(gen, llm)
+        assert len(llm.calls) == 1
+
+    @pytest.mark.asyncio
+    async def test_retry_logged(self, tmp_path):
+        gen, _ = _generator(tmp_path)
+        llm = _SeqLLM("not json", _plan([
+            {"source": "llm", "sheet_name": "s", "columns": ["a"], "rows": [["v"]]},
+        ]))
+        await _generate(gen, llm)
+        warning_messages = [c.args[0] for c in gen._logger.warning.call_args_list]
+        assert "ExcelGenerator plan retry" in warning_messages
+        done = [c for c in gen._logger.info.call_args_list if c.args[0] == "ExcelGenerator done"]
+        assert done[0].kwargs["retried"] is True
+
+
+class TestColumnTypes:
+    @pytest.mark.asyncio
+    async def test_column_types_applied(self, tmp_path):  # G7 / Plan SC-3
+        from openpyxl import load_workbook
+
+        gen, store, _ = _styled_generator(tmp_path)
+        llm = _FakeLLM(_plan([
+            {"source": "raw:0", "sheet_name": "원본", "column_types": {"값": "currency"}},
+            {"source": "llm", "sheet_name": "요약", "columns": ["금액"],
+             "rows": [["1,500원"]], "column_types": {"금액": "currency"}},
+        ]))
+        result = await _generate(gen, llm, analysis_source=_raw_source(3))
+        stored = store.load(result.file_id)
+        wb = load_workbook(stored.file_path)
+        assert wb["원본"]["B2"].number_format == "#,##0"
+        assert wb["원본"].freeze_panes == "A2"
+        assert wb["요약"]["A2"].value == 1500
+
+    @pytest.mark.asyncio
+    async def test_invalid_column_type_retried(self, tmp_path):
+        gen, _, _ = _styled_generator(tmp_path)
+        bad = _plan([{"source": "raw:0", "sheet_name": "원본", "column_types": {"값": "money"}}])
+        good = _plan([{"source": "raw:0", "sheet_name": "원본"}])
+        llm = _SeqLLM(bad, good)
+        await _generate(gen, llm, analysis_source=_raw_source(3))
+        assert len(llm.calls) == 2
+
+
+class TestAct1Generator:
+    """Check M-5 (analysis §3): ops 실행 실패 경로·로그 필드·재시도 run_name."""
+
+    @pytest.mark.asyncio
+    async def test_ops_runtime_failure_is_wrapped_and_logged(self, tmp_path, monkeypatch):
+        from src.infrastructure.excel_generator import generator as generator_module
+
+        def _boom(*args, **kwargs):
+            raise KeyError("boom")
+
+        monkeypatch.setattr(generator_module, "apply_ops", _boom)
+        gen, _ = _generator(tmp_path)
+        llm = _FakeLLM(_plan([{"source": "raw:0", "sheet_name": "상위",
+                               "ops": [{"op": "top", "n": 1}]}]))
+        with pytest.raises(ExcelGenerateError, match="상위.*연산 실패"):
+            await _generate(gen, llm, analysis_source=_raw_source(3))
+        error_call = gen._logger.error.call_args
+        assert error_call.args[0] == "ExcelGenerator ops failed"
+        assert error_call.kwargs["request_id"] == "req-1"
+        assert isinstance(error_call.kwargs["exception"], KeyError)
+
+    @pytest.mark.asyncio
+    async def test_done_log_counts_ops_sheets(self, tmp_path):
+        gen, _ = _generator(tmp_path)
+        llm = _FakeLLM(_plan([
+            {"source": "raw:0", "sheet_name": "a", "ops": [{"op": "top", "n": 1}]},
+            {"source": "raw:0", "sheet_name": "b"},
+        ]))
+        await _generate(gen, llm, analysis_source=_raw_source(3))
+        done = [c for c in gen._logger.info.call_args_list if c.args[0] == "ExcelGenerator done"]
+        assert done[0].kwargs["ops_sheet_count"] == 1
+        assert done[0].kwargs["retried"] is False
+
+    @pytest.mark.asyncio
+    async def test_retry_uses_separate_run_name(self, tmp_path):
+        gen, _ = _generator(tmp_path)
+        llm = _SeqLLM("not json", _plan([
+            {"source": "llm", "sheet_name": "s", "columns": ["a"], "rows": [["v"]]},
+        ]))
+        await _generate(gen, llm)
+        assert [c["run_name"] for c in llm.configs] == [
+            "excel_generator_plan", "excel_generator_plan_retry",
+        ]
