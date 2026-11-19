@@ -6,7 +6,7 @@
 > **Author**: 배상규
 > **Date**: 2026-11-16
 > **Status**: Draft
-> **Planning Doc**: [document-file-preview.plan.md](../../01-plan/features/document-file-preview.plan.md)
+> **Planning Doc**: [document-file-preview.plan.md](document-file-preview.plan.md)
 > **Architecture**: Option C — Pragmatic Balance (사용자 선택)
 
 ---

@@ -10,6 +10,7 @@
 | pii-masking-integration | completed | 95.8% (Check 89.4% → Act-1) | 2026-11-06 | [pii-masking-integration/](pii-masking-integration/) |
 | wizard-template-request | completed | 95% (Check 92% → Act-1) | 2026-11-06 | [wizard-template-request/](wizard-template-request/) |
 | extractor-template-preview | completed | 98.6% (Check, Minor 5건 즉시 반영) | 2026-11-09 | [extractor-template-preview/](extractor-template-preview/) |
+| document-file-preview | completed | 96.5% (Check 95.3% → Act-1) | 2026-11-19 | [document-file-preview/](document-file-preview/) |
 
 > 백엔드·프론트 전용 사이클은 `idt/docs/archive/2026-11/`, `idt_front/docs/archive/2026-11/` 에 있다.
 
@@ -61,3 +62,8 @@
 | extractor-template-preview | 실데이터 미확인 3건: 타 사용자 403, 포크 사용자 화면(예시값 숨김·"포크로 받은 양식"), 교체 후 업로드·확정·저장 E2E (단위 테스트로만 확인) | 확인 | 포크·두 번째 계정 준비 시 |
 | extractor-template-preview | DOCX 미리보기가 좁은 화면에서 축소되지 않음 (pt 페이지 폭 없음, 기존 업로드 패널과 동일) | 화면 소형 | 해당 파일 수정 시 |
 | extractor-template-preview | 스토어 상세·채팅 화면 양식 미리보기 (Plan 범위 밖) | 스코프 후보 | 요청 시 |
+| **document-file-preview** | **PDF 미리보기 실브라우저 확인** (Chrome·Edge, 가능하면 iOS Safari) — 헤드리스 Chromium엔 내장 PDF 뷰어가 없어 단위 테스트로만 확인 | 확인 | **운영 노출 전** |
+| document-file-preview | 외부 이미지가 링크된 docx에서 외부 리소스 미로딩 확인, 실백엔드 에이전트 실행 → 채팅 버튼 → 모달 흐름, 1MB 이상 docx 렌더 시간 | 확인 | 다음 채팅 화면 작업 시 |
+| document-file-preview | docx-preview가 단일 줄 간격을 100%로 그려 표 칸 글자가 Word보다 빽빽함 — 렌더 결과에 CSS 보정 | 화면 소형 | 요청 시 |
+| document-file-preview | 배포·CSP: CSP 헤더를 넣을 때 `frame-src blob:` 허용 필요 (지금은 CSP 없음) | 배포 의존 | CSP 도입 시 |
+| document-file-preview | 실행 내역·워크스페이스 등 채팅 외 화면 미리보기 진입점, 형식이 늘면 엑셀까지 공통 셸(Design Option B)로 통합 | 스코프 후보 | 요청 시 |

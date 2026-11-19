@@ -69,9 +69,9 @@
 
 | 단계 | 문서 |
 |------|------|
-| Plan | [document-file-preview.plan.md](../01-plan/features/document-file-preview.plan.md) (v0.2) |
-| Design | [document-file-preview.design.md](../02-design/features/document-file-preview.design.md) (v0.2) |
-| Analysis | [document-file-preview.analysis.md](../03-analysis/document-file-preview.analysis.md) (v0.2) |
+| Plan | [document-file-preview.plan.md](document-file-preview.plan.md) (v0.2) |
+| Design | [document-file-preview.design.md](document-file-preview.design.md) (v0.2) |
+| Analysis | [document-file-preview.analysis.md](document-file-preview.analysis.md) (v0.2) |
 
 ---
 

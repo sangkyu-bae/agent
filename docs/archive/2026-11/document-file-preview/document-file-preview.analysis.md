@@ -5,7 +5,7 @@
 > **Project**: sangplusbot (Agent Builder)
 > **Analyst**: 배상규 (gap-detector 정적 분석 + 헤드리스 브라우저 확인)
 > **Date**: 2026-11-16
-> **Design Doc**: [document-file-preview.design.md](../02-design/features/document-file-preview.design.md)
+> **Design Doc**: [document-file-preview.design.md](document-file-preview.design.md)
 > **Implementation**: worktree `wt/document-file-preview`, 브랜치 `feature/document-file-preview` (미커밋)
 
 ---
