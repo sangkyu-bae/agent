@@ -1,6 +1,6 @@
 """Excel Analysis Workflow using LangGraph.
 
-엑셀 파일을 파싱하여 Claude AI로 분석하고,
+엑셀 파일을 파싱하여 관리자 유틸리티 LLM으로 분석하고,
 할루시네이션 검증 후 최대 N회 재시도하는 Self-Corrective 워크플로우.
 
 시각화는 분리된 chart_router로 일원화하며(viz_decision 기록), 웹 검색 필요 판단은
@@ -38,7 +38,8 @@ from src.domain.policies.analysis_policy import (
 from src.domain.search_decision.interfaces import SearchDecisionInterface
 from src.domain.visualization.interfaces import ChartBuilderInterface
 from src.domain.visualization.policies import VisualizationRoutingPolicy
-from src.infrastructure.llm.schemas import ClaudeModel, ClaudeRequest
+from src.domain.llm.exceptions import UtilityLLMUnavailableError
+from src.domain.llm.interfaces import UtilityLLMProviderPort
 from src.domain.llm.message_content import coerce_message_text
 
 
@@ -82,7 +83,7 @@ class ExcelAnalysisWorkflow:
     def __init__(
         self,
         excel_parser,
-        claude_client,
+        llm_provider: UtilityLLMProviderPort,
         tavily_search,
         hallucination_evaluator,
         search_decision: SearchDecisionInterface,
@@ -93,11 +94,15 @@ class ExcelAnalysisWorkflow:
         enable_visualization: bool = True,
         *,
         agent_timezone: str | None = None,
+        analysis_temperature: float = 0.3,
     ) -> None:
         # runtime-datetime-context D3/D10: None이면 [현재 날짜] 블록 생략 — 무회귀.
         self._agent_timezone = agent_timezone
         self._excel_parser = excel_parser
-        self._claude = claude_client
+        # excel-analysis-llm-provider: 고정 ClaudeClient(Sonnet 4.5) 대신 관리자
+        # 유틸리티 LLM을 호출 시점마다 해석 — PII 마스킹·모델 교체를 따라간다.
+        self._llm_provider = llm_provider
+        self._analysis_temperature = analysis_temperature
         self._search = tavily_search
         self._evaluator = hallucination_evaluator
         self._search_decision = search_decision
@@ -188,7 +193,7 @@ class ExcelAnalysisWorkflow:
         }
 
     async def _analyze_node(self, state: ExcelAnalysisState) -> dict:
-        """Claude 분석 노드.
+        """LLM 분석 노드.
 
         답변은 자연어 텍스트(analysis_text)로 받고, 웹 검색 필요 여부는
         아직 검색 전(web_search_results 미존재)일 때만 1회 structured 결정으로 판단한다.
@@ -198,7 +203,7 @@ class ExcelAnalysisWorkflow:
         attempt = state["current_attempt"] + 1
 
         self._logger.info(
-            f"Analyzing with Claude (attempt {attempt})",
+            f"Analyzing with utility LLM (attempt {attempt})",
             request_id=request_id,
         )
 
@@ -220,14 +225,7 @@ class ExcelAnalysisWorkflow:
             user_block=datetime_block + user_block,
         )
 
-        claude_request = ClaudeRequest(
-            model=ClaudeModel.SONNET_4_5,
-            messages=[{"role": "user", "content": prompt}],
-            request_id=request_id,
-            temperature=0.3,
-        )
-
-        response = await self._claude.complete(claude_request)
+        response = await self._invoke_llm(prompt, request_id)
         # 분석 노드는 자연어 텍스트만 유지. 새어 나온 코드블록/JSON을 제거해
         # 하류(evaluate_hallucination / chart_router)가 깨끗한 텍스트만 받게 한다.
         response_text = ANALYSIS_OUTPUT_SANITIZER.strip(
@@ -246,6 +244,16 @@ class ExcelAnalysisWorkflow:
             "current_attempt": attempt,
             "needs_web_search": needs_search,
         }
+
+    async def _invoke_llm(self, prompt: str, request_id: str):
+        llm = await self._llm_provider.get(self._analysis_temperature)
+        if llm is None:
+            raise UtilityLLMUnavailableError(
+                "엑셀 분석에 사용할 LLM을 찾지 못했습니다 "
+                "(관리자 기본·보조 모델 설정 확인)"
+            )
+        config = {"run_name": "excel_analysis", "metadata": {"request_id": request_id}}
+        return await llm.ainvoke([{"role": "user", "content": prompt}], config=config)
 
     async def _web_search_node(self, state: ExcelAnalysisState) -> dict:
         """웹 검색 노드."""

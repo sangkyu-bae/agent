@@ -70,7 +70,6 @@ ALLOWED_DIRECT_CONSTRUCTION: dict[str, tuple[int, str]] = {
     ),
     "infrastructure/research_agent/router_adapter.py": (1, "research agent 독립 API"),
     "infrastructure/llm_adapter.py": (1, "레거시 어댑터"),
-    "infrastructure/llm/claude_client.py": (1, "독립 Claude 클라이언트 API"),
     "infrastructure/llm/ollama/ollama_client.py": (1, "독립 Ollama 클라이언트 API"),
     "api/main.py": (
         1,
