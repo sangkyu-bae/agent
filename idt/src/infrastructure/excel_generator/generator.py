@@ -27,6 +27,7 @@ from src.domain.excel_generator.schemas import (
     RawSourceRef,
     SheetPlanItem,
 )
+from src.domain.llm.message_content import coerce_message_text
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.infrastructure.excel_generator.ops_executor import apply_ops
 
@@ -251,7 +252,9 @@ class ExcelGenerator:
             response = await llm.ainvoke(messages, config=config)
         except Exception as e:  # noqa: BLE001 — LLM 계층 예외 전부 안내 노옵 대상 (§6.1)
             raise ExcelGenerateError(f"시트 계획 생성 오류: {e}") from e
-        return getattr(response, "content", str(response))
+        # thinking 상시 모델(Claude Opus 5.5 등)은 content가 블록 리스트.
+        # text 블록만 이어 붙인다 (thinking 블록 제외)
+        return coerce_message_text(getattr(response, "content", str(response)))
 
     def _check_plan(
         self, content: str, catalog_columns: list[list[str]],
