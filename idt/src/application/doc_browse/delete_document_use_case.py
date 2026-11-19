@@ -48,10 +48,13 @@ class DeleteDocumentUseCase:
         policy: DocumentDeletePolicy,
         logger: LoggerInterface,
         extension_hooks: ExtensionHooks | None = None,
+        original_sink: Any | None = None,
     ) -> None:
         # graph-rag-foundation §6.2: 저장소 삭제 뒤 확장 훅(그래프 정리 등).
         # 미등록 = 무동작.
         self._extension_hooks = extension_hooks
+        # source-passage-viewer §11.2 #4 — duck typing(delete). None = 원본 보관 없음.
+        self._original_sink = original_sink
         self._metadata_repo = document_metadata_repo
         self._qdrant_client = qdrant_client
         self._es_repo = es_repo
@@ -288,6 +291,7 @@ class DeleteDocumentUseCase:
         request_id: str,
     ) -> None:
         """확장 훅 통지 — 실패는 로그만 남기고 삭제 결과를 바꾸지 않는다 (§6.2)."""
+        await self._delete_original(document_id, request_id)
         hook = self._extension_hooks.deletion if self._extension_hooks else None
         if hook is None:
             return
@@ -302,6 +306,21 @@ class DeleteDocumentUseCase:
                 request_id=request_id,
                 document_id=document_id,
                 exception=e,
+            )
+
+    async def _delete_original(self, document_id: str, request_id: str) -> None:
+        """보관 원본 삭제 (source-passage-viewer §2.2) — 저장소 삭제가 끝난 뒤에만 온다.
+
+        단건·검증·일괄 삭제가 모두 _notify_deleted 를 지나므로 이 한 지점에서 처리한다.
+        """
+        if self._original_sink is None:
+            return
+        try:
+            await self._original_sink.delete(document_id, request_id)
+        except Exception as e:
+            self._logger.warning(
+                "Original sink delete raised (delete unaffected)",
+                request_id=request_id, document_id=document_id, exception=e,
             )
 
     async def _delete_qdrant_chunks(
