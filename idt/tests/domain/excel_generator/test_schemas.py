@@ -41,3 +41,33 @@ class TestExcelGenerateResult:
         )
         assert result.filename == "output.xlsx"
         assert result.used_raw_source is True
+
+
+class TestSpecFields:
+    """excel-generator-spec-ops Design §3.4 — 선택 필드, 기본값 None/빈 dict."""
+
+    def test_raw_source_ref_dtypes_default_empty(self):
+        ref = RawSourceRef(
+            catalog_idx=0, origin="o", sheet_name="s", columns=["a"], row_count=1,
+        )
+        assert ref.column_dtypes == {}
+
+    def test_raw_source_ref_dtypes(self):
+        ref = RawSourceRef(
+            catalog_idx=0, origin="o", sheet_name="s", columns=["a"],
+            row_count=1, column_dtypes={"a": "int64"},
+        )
+        assert ref.column_dtypes == {"a": "int64"}
+
+    def test_sheet_plan_item_spec_defaults(self):
+        item = SheetPlanItem(source="raw:0", sheet_name="원본")
+        assert item.ops is None
+        assert item.column_types is None
+
+    def test_sheet_plan_item_spec_fields(self):
+        item = SheetPlanItem(
+            source="raw:0", sheet_name="상위",
+            ops=[{"op": "top", "n": 3}], column_types={"a": "integer"},
+        )
+        assert item.ops == [{"op": "top", "n": 3}]
+        assert item.column_types == {"a": "integer"}

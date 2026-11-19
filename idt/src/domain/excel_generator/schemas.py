@@ -2,7 +2,7 @@
 
 ⚠️ 외부 의존(pandas·LangChain·파일 I/O) 금지 — 순수 값/규칙만.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
@@ -18,6 +18,8 @@ class RawSourceRef:
     sheet_name: str
     columns: list[str]
     row_count: int
+    # excel-generator-spec-ops Design §3.4: SheetData.dtypes — 카탈로그 타입 노출용
+    column_dtypes: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -28,6 +30,9 @@ class SheetPlanItem:
     sheet_name: str
     columns: list[str] | None = None  # llm 시트 전용
     rows: list[list] | None = None    # llm 시트 전용
+    # excel-generator-spec-ops Design §3.2~§3.4 (선택 필드, 없으면 기존 동작)
+    ops: list[dict] | None = None   # raw 시트 전용 연산 명세
+    column_types: dict[str, str] | None = None  # raw·llm 공통 의미 타입
 
 
 @dataclass(frozen=True)

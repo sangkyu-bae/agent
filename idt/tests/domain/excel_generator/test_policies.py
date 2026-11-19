@@ -57,3 +57,79 @@ class TestValidatePlan:
         # 행 상한 초과는 위반이 아니라 절단 대상 (Design §6.1 #4)
         items = [_llm_item(rows=[["v"]] * (MAX_LLM_STRUCTURED_ROWS + 50))]
         assert validate_plan(items, catalog_size=0) == []
+
+
+class TestValidatePlanSpecs:
+    """excel-generator-spec-ops Design §3.5 — ops·column_types 검증 위임."""
+
+    CATALOG = [["지점", "잔액"]]
+
+    def test_raw_ops_valid(self):
+        items = [SheetPlanItem(
+            source="raw:0", sheet_name="합계",
+            ops=[{"op": "groupby", "by": ["지점"],
+                  "agg": [{"col": "잔액", "fn": "sum", "as": "합계"}]}],
+            column_types={"합계": "currency"},
+        )]
+        assert validate_plan(items, 1, catalog_columns=self.CATALOG) == []
+
+    def test_raw_ops_unknown_column_mentions_sheet(self):
+        items = [SheetPlanItem(
+            source="raw:0", sheet_name="상위",
+            ops=[{"op": "sort", "by": [{"col": "없음"}]}],
+        )]
+        violations = validate_plan(items, 1, catalog_columns=self.CATALOG)
+        assert any("상위" in v and "없음" in v for v in violations)
+
+    def test_column_types_checked_against_ops_result(self):
+        # groupby 이후 '잔액'은 사라지고 '합계'만 남는다
+        items = [SheetPlanItem(
+            source="raw:0", sheet_name="합계",
+            ops=[{"op": "groupby", "by": ["지점"],
+                  "agg": [{"col": "잔액", "fn": "sum", "as": "합계"}]}],
+            column_types={"잔액": "currency"},
+        )]
+        assert validate_plan(items, 1, catalog_columns=self.CATALOG) != []
+
+    def test_raw_column_types_without_ops(self):
+        items = [SheetPlanItem(
+            source="raw:0", sheet_name="원본", column_types={"잔액": "money"},
+        )]
+        assert validate_plan(items, 1, catalog_columns=self.CATALOG) != []
+
+    def test_llm_sheet_with_ops_is_violation(self):  # D9
+        items = [SheetPlanItem(
+            source="llm", sheet_name="정리", columns=["a"], rows=[["v"]],
+            ops=[{"op": "top", "n": 1}],
+        )]
+        violations = validate_plan(items, 0, catalog_columns=[])
+        assert any("ops" in v for v in violations)
+
+    def test_llm_column_types_checked_against_columns(self):
+        ok = [SheetPlanItem(
+            source="llm", sheet_name="정리", columns=["a"], rows=[["1"]],
+            column_types={"a": "integer"},
+        )]
+        bad = [SheetPlanItem(
+            source="llm", sheet_name="정리", columns=["a"], rows=[["1"]],
+            column_types={"b": "integer"},
+        )]
+        assert validate_plan(ok, 0, catalog_columns=[]) == []
+        assert validate_plan(bad, 0, catalog_columns=[]) != []
+
+    def test_specs_without_catalog_columns_is_violation(self):
+        items = [SheetPlanItem(
+            source="raw:0", sheet_name="상위", ops=[{"op": "top", "n": 1}],
+        )]
+        assert validate_plan(items, 1) != []
+
+    def test_legacy_plan_without_catalog_columns_unchanged(self):  # D15
+        items = [SheetPlanItem(source="raw:0", sheet_name="원본"), _llm_item()]
+        assert validate_plan(items, 1) == []
+
+    def test_out_of_range_raw_with_ops_reports_index_only(self):
+        items = [SheetPlanItem(
+            source="raw:5", sheet_name="x", ops=[{"op": "top", "n": 1}],
+        )]
+        violations = validate_plan(items, 1, catalog_columns=self.CATALOG)
+        assert len(violations) == 1 and "raw" in violations[0]
