@@ -1,13 +1,14 @@
 """Adapter for answer generation using LLM."""
 
-from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
 
-from src.infrastructure.research_agent.prompts import (
-    GENERATOR_SYSTEM_PROMPT,
-    GENERATOR_HUMAN_TEMPLATE,
-)
+from src.domain.llm.message_content import coerce_message_text
 from src.infrastructure.logging import get_logger
+from src.infrastructure.research_agent.prompts import (
+    GENERATOR_HUMAN_TEMPLATE,
+    GENERATOR_SYSTEM_PROMPT,
+)
 
 
 class GeneratorAdapter:
@@ -71,7 +72,7 @@ class GeneratorAdapter:
                 "context": context,
             })
 
-            answer = response.content
+            answer = coerce_message_text(response.content)
 
             self._logger.info(
                 "Answer generated",

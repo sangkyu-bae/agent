@@ -6,6 +6,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 
 from src.application.conversation.interfaces import ConversationLLMInterface
+from src.domain.llm.message_content import coerce_message_text
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 
 
@@ -47,7 +48,7 @@ class LangChainConversationLLM(ConversationLLMInterface):
         try:
             lc_messages = [_to_lc_message(m) for m in messages]
             response = await self._llm.ainvoke(lc_messages)
-            answer = response.content
+            answer = coerce_message_text(response.content)
             self._logger.info(
                 "LangChainConversationLLM generate completed",
                 request_id=request_id,

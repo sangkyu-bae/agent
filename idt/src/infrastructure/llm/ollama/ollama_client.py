@@ -14,6 +14,7 @@ from src.infrastructure.llm.ollama.exceptions import (
     OllamaTimeoutError,
 )
 from src.infrastructure.llm.ollama.schemas import OllamaModel, OllamaRequest, OllamaResponse
+from src.domain.llm.message_content import coerce_message_text
 
 
 class OllamaClient:
@@ -134,7 +135,7 @@ class OllamaClient:
         usage = ai_message.usage_metadata or {}
 
         result = OllamaResponse(
-            content=ai_message.content,
+            content=coerce_message_text(ai_message.content),
             model=ai_message.response_metadata.get("model", model_name),
             stop_reason=ai_message.response_metadata.get("done_reason", "unknown"),
             input_tokens=usage.get("input_tokens", 0),

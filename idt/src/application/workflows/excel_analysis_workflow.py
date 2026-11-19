@@ -39,6 +39,7 @@ from src.domain.search_decision.interfaces import SearchDecisionInterface
 from src.domain.visualization.interfaces import ChartBuilderInterface
 from src.domain.visualization.policies import VisualizationRoutingPolicy
 from src.infrastructure.llm.schemas import ClaudeModel, ClaudeRequest
+from src.domain.llm.message_content import coerce_message_text
 
 
 class ExcelAnalysisState(TypedDict):
@@ -229,7 +230,9 @@ class ExcelAnalysisWorkflow:
         response = await self._claude.complete(claude_request)
         # 분석 노드는 자연어 텍스트만 유지. 새어 나온 코드블록/JSON을 제거해
         # 하류(evaluate_hallucination / chart_router)가 깨끗한 텍스트만 받게 한다.
-        response_text = ANALYSIS_OUTPUT_SANITIZER.strip(response.content)
+        response_text = ANALYSIS_OUTPUT_SANITIZER.strip(
+            coerce_message_text(response.content)
+        )
 
         needs_search = False
         if not web_results:

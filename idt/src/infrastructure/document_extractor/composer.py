@@ -19,6 +19,7 @@ from src.domain.document_extractor.policies import (
 )
 from src.domain.document_extractor.schemas import DocumentTemplate, TemplateSlot
 from src.domain.document_extractor.tool_config import DocumentExtractorToolConfig
+from src.domain.llm.message_content import coerce_message_text
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.infrastructure.langsmith.langsmith import (
     DOCUMENT_EXTRACTOR_PROJECT_NAME,
@@ -167,7 +168,7 @@ class DocumentComposer:
         last_error = ""
         for attempt in (1, 2):
             response = await llm.ainvoke(messages, config=config)
-            content = getattr(response, "content", str(response))
+            content = coerce_message_text(getattr(response, "content", str(response)))
             values, error = self._parse_values(content, required_keys)
             if values is not None:
                 # 규칙 7 의 결정적 후처리 — 년/월/일 묶음이 반쪽만 채워지지 않게

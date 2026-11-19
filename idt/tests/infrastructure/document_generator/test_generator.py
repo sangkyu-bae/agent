@@ -246,3 +246,26 @@ class TestOutputFormat:
         )
         assert adapter.to_document.call_args.args[1] == "pdf"
         assert store.save.call_args.kwargs["filename"] == "시장조사 보고서.pdf"
+
+
+class TestBlockListContent:
+    """thinking 상시 모델(Claude Opus 5.5 등)은 content가 블록 리스트."""
+
+    @pytest.mark.asyncio
+    async def test_thinking_and_text_blocks_are_used_as_html(self):
+        generator, adapter, _ = _generator()
+        llm = MagicMock()
+        llm.ainvoke = AsyncMock(return_value=MagicMock(content=[
+            {"type": "thinking", "thinking": "", "signature": "sig"},
+            {"type": "text", "text": _GOOD_HTML},
+        ]))
+
+        await generator.generate(
+            llm, _gen_type(), _tool_config(),
+            evidence_block="근거 자료", conversation_block="대화",
+            owner_user_id="7", request_id="req",
+        )
+
+        html = adapter.to_document.call_args.args[0]
+        assert "<h2>개요</h2>" in html
+        assert "thinking" not in html
