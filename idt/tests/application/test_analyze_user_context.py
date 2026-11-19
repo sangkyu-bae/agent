@@ -9,12 +9,11 @@ Design §5 (테스트 설계) 4개 그룹:
 from unittest.mock import AsyncMock, Mock
 
 import pytest
-
+from src.application.agent_builder.workflow_compiler import WorkflowCompiler
 from src.application.agent_run.auth_context import (
     reset_current_auth_context,
     set_current_auth_context,
 )
-from src.application.agent_builder.workflow_compiler import WorkflowCompiler
 from src.application.use_cases.analyze_excel_use_case import AnalyzeExcelUseCase
 from src.application.workflows.excel_analysis_workflow import ExcelAnalysisWorkflow
 from src.domain.agent_run.auth_context import AuthContext
@@ -23,7 +22,8 @@ from src.domain.policies.analysis_policy import (
     AnalysisRetryPolicy,
 )
 from src.domain.search_decision.schemas import WebSearchDecision
-from src.infrastructure.llm.schemas import ClaudeResponse
+
+from tests.support.fake_utility_llm import FakeUtilityLLM
 
 
 def _auth(name: str = "배상규", dept: str = "여신관리부", role: str = "user") -> AuthContext:
@@ -39,26 +39,16 @@ def _auth(name: str = "배상규", dept: str = "여신관리부", role: str = "u
     )
 
 
-def _claude_response(content: str) -> ClaudeResponse:
-    return ClaudeResponse(
-        content=content,
-        model="claude-sonnet-4-5-20250929",
-        stop_reason="end_turn",
-        input_tokens=10,
-        output_tokens=5,
-        request_id="t",
-        latency_ms=1,
-    )
 
 
-def _make_workflow(mock_claude: Mock) -> ExcelAnalysisWorkflow:
+def _make_workflow(fake_llm: FakeUtilityLLM) -> ExcelAnalysisWorkflow:
     search_decision = Mock()
     search_decision.decide = AsyncMock(
         return_value=WebSearchDecision(needs_web_search=False)
     )
     return ExcelAnalysisWorkflow(
         excel_parser=Mock(),
-        claude_client=mock_claude,
+        llm_provider=fake_llm,
         tavily_search=Mock(),
         hallucination_evaluator=Mock(),
         search_decision=search_decision,
@@ -93,10 +83,9 @@ def _base_state(**overrides) -> dict:
     return state
 
 
-def _captured_prompt(mock_claude: Mock) -> str:
-    """_analyze_node가 claude.complete에 넘긴 프롬프트 본문 추출."""
-    request = mock_claude.complete.call_args.args[0]
-    return request.messages[0]["content"]
+def _captured_prompt(fake_llm: FakeUtilityLLM) -> str:
+    """_analyze_node가 LLM에 넘긴 프롬프트 본문 추출."""
+    return fake_llm.prompt()
 
 
 # ── 5-1 프롬프트 회귀 ────────────────────────────────────────────────
@@ -128,9 +117,8 @@ class TestBuildAnalysisPromptUserBlock:
 class TestAnalyzeNodeBlockResolution:
     @pytest.mark.asyncio
     async def test_state_block_takes_precedence(self):
-        mock_claude = Mock()
-        mock_claude.complete = AsyncMock(return_value=_claude_response("분석"))
-        wf = _make_workflow(mock_claude)
+        fake_llm = FakeUtilityLLM("분석")
+        wf = _make_workflow(fake_llm)
 
         # 가이드 예시 텍스트(배상규/김철수/이영희)와 겹치지 않는 고유 토큰 사용.
         token = set_current_auth_context(_auth(name="CTXVARONLY"))
@@ -141,15 +129,14 @@ class TestAnalyzeNodeBlockResolution:
         finally:
             reset_current_auth_context(token)
 
-        prompt = _captured_prompt(mock_claude)
+        prompt = _captured_prompt(fake_llm)
         assert "BLOCK_S" in prompt
         assert "CTXVARONLY" not in prompt  # ContextVar 블록은 무시됨
 
     @pytest.mark.asyncio
     async def test_contextvar_fallback_when_state_empty(self):
-        mock_claude = Mock()
-        mock_claude.complete = AsyncMock(return_value=_claude_response("분석"))
-        wf = _make_workflow(mock_claude)
+        fake_llm = FakeUtilityLLM("분석")
+        wf = _make_workflow(fake_llm)
 
         token = set_current_auth_context(_auth(name="배상규", dept="여신관리부"))
         try:
@@ -157,20 +144,19 @@ class TestAnalyzeNodeBlockResolution:
         finally:
             reset_current_auth_context(token)
 
-        prompt = _captured_prompt(mock_claude)
+        prompt = _captured_prompt(fake_llm)
         assert "[현재 사용자 정보]" in prompt
         assert "배상규" in prompt
         assert "여신관리부" in prompt
 
     @pytest.mark.asyncio
     async def test_no_block_when_both_absent(self):
-        mock_claude = Mock()
-        mock_claude.complete = AsyncMock(return_value=_claude_response("분석"))
-        wf = _make_workflow(mock_claude)
+        fake_llm = FakeUtilityLLM("분석")
+        wf = _make_workflow(fake_llm)
 
         await wf._analyze_node(_base_state())  # state 없음 + ContextVar 없음
 
-        prompt = _captured_prompt(mock_claude)
+        prompt = _captured_prompt(fake_llm)
         assert "[현재 사용자 정보]" not in prompt
 
 
@@ -298,14 +284,14 @@ class TestSupervisorAnalysisUserBlock:
 # ── runtime-datetime-context D10 (FR-09) ─────────────────────────────
 
 
-def _make_workflow_with_tz(mock_claude: Mock, tz: str | None) -> ExcelAnalysisWorkflow:
+def _make_workflow_with_tz(fake_llm: FakeUtilityLLM, tz: str | None) -> ExcelAnalysisWorkflow:
     search_decision = Mock()
     search_decision.decide = AsyncMock(
         return_value=WebSearchDecision(needs_web_search=False)
     )
     return ExcelAnalysisWorkflow(
         excel_parser=Mock(),
-        claude_client=mock_claude,
+        llm_provider=fake_llm,
         tavily_search=Mock(),
         hallucination_evaluator=Mock(),
         search_decision=search_decision,
@@ -324,24 +310,22 @@ class TestAnalyzeNodeDatetimeBlock:
     @pytest.mark.asyncio
     async def test_prompt_starts_with_datetime_then_user_block(self):
         """state 키 추가 없이 analysis 노드에서 날짜 → 사용자 순으로 prepend."""
-        mock_claude = Mock()
-        mock_claude.complete = AsyncMock(return_value=_claude_response("분석"))
-        wf = _make_workflow_with_tz(mock_claude, "Asia/Seoul")
+        fake_llm = FakeUtilityLLM("분석")
+        wf = _make_workflow_with_tz(fake_llm, "Asia/Seoul")
 
         await wf._analyze_node(
             _base_state(user_context_block="[현재 사용자 정보]\nBLOCK_S\n---\n\n")
         )
 
-        prompt = _captured_prompt(mock_claude)
+        prompt = _captured_prompt(fake_llm)
         assert prompt.startswith(self._MARK)
         assert prompt.index(self._MARK) < prompt.index("BLOCK_S")
 
     @pytest.mark.asyncio
     async def test_no_tz_keeps_prompt_without_datetime(self):
-        mock_claude = Mock()
-        mock_claude.complete = AsyncMock(return_value=_claude_response("분석"))
-        wf = _make_workflow_with_tz(mock_claude, None)
+        fake_llm = FakeUtilityLLM("분석")
+        wf = _make_workflow_with_tz(fake_llm, None)
 
         await wf._analyze_node(_base_state())
 
-        assert self._MARK not in _captured_prompt(mock_claude)
+        assert self._MARK not in _captured_prompt(fake_llm)

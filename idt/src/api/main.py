@@ -470,7 +470,6 @@ from src.infrastructure.logging.middleware import (
 )
 from src.infrastructure.config.analysis_config import AnalysisConfig
 from src.infrastructure.excel.pandas_excel_parser import PandasExcelParser
-from src.infrastructure.llm.claude_client import ClaudeClient
 from src.infrastructure.llm.llm_factory import LLMFactory
 from src.application.pii_masking.guarded_llm_factory import PiiGuardedLLMFactory
 from src.infrastructure.tool_selection.adapters.langchain_filter import (
@@ -1342,8 +1341,9 @@ def create_analyze_excel_use_case() -> AnalyzeExcelUseCase:
 
     excel_parser = PandasExcelParser()
 
-    anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    claude_client = ClaudeClient(api_key=anthropic_api_key, logger=app_logger)
+    # excel-analysis-llm-provider: 고정 ClaudeClient(Sonnet 4.5) 대신 관리자 유틸리티
+    # LLM — PII 마스킹(PiiGuardedLLMFactory)과 재시작 없는 모델 교체를 따라간다.
+    excel_llm_provider = get_utility_llm_provider()
 
     tavily_search = TavilySearchTool()
 
@@ -1376,7 +1376,8 @@ def create_analyze_excel_use_case() -> AnalyzeExcelUseCase:
     # Standalone(analysis_router) 경로 — 차트 ON. 최종 답변+차트를 화면에 렌더.
     workflow = ExcelAnalysisWorkflow(
         excel_parser=excel_parser,
-        claude_client=claude_client,
+        llm_provider=excel_llm_provider,
+        analysis_temperature=settings.excel_analysis_temperature,
         tavily_search=tavily_search,
         hallucination_evaluator=hallucination_evaluator,
         search_decision=search_decision,
@@ -1393,7 +1394,8 @@ def create_analyze_excel_use_case() -> AnalyzeExcelUseCase:
     # 의존성은 공유(stateless)하되 차트 서브그래프를 등록하지 않아 상위 노드와의 중복 제거.
     _supervisor_excel_workflow = ExcelAnalysisWorkflow(
         excel_parser=excel_parser,
-        claude_client=claude_client,
+        llm_provider=excel_llm_provider,
+        analysis_temperature=settings.excel_analysis_temperature,
         tavily_search=tavily_search,
         hallucination_evaluator=hallucination_evaluator,
         search_decision=search_decision,

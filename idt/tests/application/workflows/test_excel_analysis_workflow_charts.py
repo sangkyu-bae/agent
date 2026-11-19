@@ -17,6 +17,8 @@ from src.domain.visualization.chart_schemas import (
 )
 from src.domain.visualization.interfaces import ChartBuilderInterface
 
+from tests.support.fake_utility_llm import FakeUtilityLLM
+
 
 class _FakeBuilder(ChartBuilderInterface):
     async def build(self, question, analysis_text, context=""):
@@ -35,7 +37,7 @@ def _make_workflow(
 ) -> ExcelAnalysisWorkflow:
     return ExcelAnalysisWorkflow(
         excel_parser=MagicMock(),
-        claude_client=MagicMock(),
+        llm_provider=FakeUtilityLLM("분석"),
         tavily_search=MagicMock(),
         hallucination_evaluator=MagicMock(),
         search_decision=MagicMock(),
