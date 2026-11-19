@@ -11,6 +11,7 @@
 | wizard-template-request | completed | 95% (Check 92% → Act-1) | 2026-11-06 | [wizard-template-request/](wizard-template-request/) |
 | extractor-template-preview | completed | 98.6% (Check, Minor 5건 즉시 반영) | 2026-11-09 | [extractor-template-preview/](extractor-template-preview/) |
 | document-file-preview | completed | 96.5% (Check 95.3% → Act-1) | 2026-11-19 | [document-file-preview/](document-file-preview/) |
+| claude-agent-e2e-fixes | completed | 97% (Check 96% → Act-1) | 2026-11-19 | [claude-agent-e2e-fixes/](claude-agent-e2e-fixes/) |
 
 > 백엔드·프론트 전용 사이클은 `idt/docs/archive/2026-11/`, `idt_front/docs/archive/2026-11/` 에 있다.
 
@@ -67,3 +68,7 @@
 | document-file-preview | docx-preview가 단일 줄 간격을 100%로 그려 표 칸 글자가 Word보다 빽빽함 — 렌더 결과에 CSS 보정 | 화면 소형 | 요청 시 |
 | document-file-preview | 배포·CSP: CSP 헤더를 넣을 때 `frame-src blob:` 허용 필요 (지금은 CSP 없음) | 배포 의존 | CSP 도입 시 |
 | document-file-preview | 실행 내역·워크스페이스 등 채팅 외 화면 미리보기 진입점, 형식이 늘면 엑셀까지 공통 셸(Design Option B)로 통합 | 스코프 후보 | 요청 시 |
+| **claude-agent-e2e-fixes** | **분석 워커가 첨부 원문(600행, 입력 약 5.8만 토큰)을 프롬프트에 그대로 받아, 항상 추론하는 모델(Opus 5.5)은 출력 16000을 추론에 다 써 빈 답이 된다** — 원문 대신 요약·통계 입력 또는 effort 조절 | 결함 후속 | 다음 엑셀 분석 작업 시 |
+| claude-agent-e2e-fixes | 엑셀 생성이 끝난 뒤 실패했던 분석 워커를 다시 호출하는 비연속 재호출(분석 → 엑셀 → 분석) — 연속 상한으로는 막히지 않음 | 라우팅 | 수퍼바이저 작업 시 |
+| claude-agent-e2e-fixes | 수퍼바이저 결정 실패 종료 경로에서 반복 상태(repeat_worker_*) 미리셋 — 런이 끝나 실영향 없음 | 경미 | 수퍼바이저 리팩터 시 |
+| claude-agent-e2e-fixes | 운영 배포 시 V092 적용 + Opus 5.5 등 항상 추론하는 모델의 "최대 출력 토큰" 설정, 구형 Anthropic 기본 출력이 16000으로 바뀐 영향 확인 | 배포 의존 | 운영 배포 시 |
