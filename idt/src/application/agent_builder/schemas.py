@@ -89,6 +89,9 @@ class RagToolConfigRequest(BaseModel):
     use_wiki_first: bool = False
     # rag-routed-integration D1: 라우팅 검색 opt-in (기존 search_mode와 독립)
     use_routed_search: bool = False
+    # graph-rag-foundation: 그래프 보조 검색 opt-in. 노출 대상이 아니면 저장 UseCase 가
+    # 조용히 False 로 바꾼다(strip_unexposed_graph_flag). 이 필드가 없으면 값이 버려진다.
+    use_graph: bool = False
     # kb-rag-filter: 논리 지식베이스 필터 opt-in — 지정 시 저장 UseCase가
     # 존재 검증 + 물리 컬렉션 고정(D1) + scope clamp(D7)를 수행한다.
     kb_id: str | None = None

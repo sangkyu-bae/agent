@@ -298,3 +298,21 @@ async def test_build_from_tool_ids_carries_draft_arg_key_to_tool_config():
 
 def test_rag_tool_config_request_draft_arg_key_defaults_to_none():
     assert RagToolConfigRequest().draft_arg_key is None
+
+
+# --- graph-rag-foundation: use_graph 가 저장 경로에서 버려지지 않아야 한다 -----------
+
+
+def test_rag_tool_config_request_keeps_use_graph():
+    """빌더 토글이 보낸 use_graph 를 요청 스키마가 버리면 그래프가 절대 켜지지 않는다."""
+    assert RagToolConfigRequest().use_graph is False
+    assert RagToolConfigRequest(use_graph=True).model_dump()["use_graph"] is True
+
+
+@pytest.mark.asyncio
+async def test_build_from_tool_ids_stores_use_graph_in_worker_config():
+    configs = {"internal_document_search": RagToolConfigRequest(use_graph=True)}
+    skeleton = await _builder().build_from_tool_ids(
+        ["internal_document_search"], configs, "req-1"
+    )
+    assert skeleton.workers[0].tool_config["use_graph"] is True
