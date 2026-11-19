@@ -140,6 +140,9 @@ export const API_ENDPOINTS = {
     `/api/v1/knowledge-bases/${kbId}/documents/${docId}/section-summaries`,
   KNOWLEDGE_BASE_DOCUMENT_CHUNKS: (kbId: string, docId: string) =>
     `/api/v1/knowledge-bases/${kbId}/documents/${docId}/chunks`,
+  /** source-passage-viewer §4 — 원문 뷰어 원본(pdf/docx). 서버 킬스위치 off 면 404 */
+  SOURCE_VIEWER_ORIGINAL: (kbId: string, docId: string) =>
+    `/api/v1/source-viewer/kb/${kbId}/documents/${docId}/original`,
   KNOWLEDGE_BASE_SECTION_SUMMARY_STATUS: (kbId: string, docId: string) =>
     `/api/v1/knowledge-bases/${kbId}/documents/${docId}/section-summary`,
   KNOWLEDGE_BASE_SECTION_SUMMARY_RETRY: (kbId: string, docId: string) =>

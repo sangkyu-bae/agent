@@ -490,3 +490,7 @@ idt_front/src/components/sourceViewer/{SourceViewerButton,SourceViewerPanel,Sour
 | M10 | UUID가 아닌 옛 document_id로 원본을 요청하면 `OriginalNotAvailableError`(404) | 보관 대상이 될 수 없었던 문서 — 프론트는 텍스트 뷰어로 내려간다 |
 | M11 | 재진입 API DTO는 문서 외 칩에도 `viewer: null`을 싣는다 | Pydantic 기본 직렬화. 프론트는 `viewer` truthy 여부로만 분기하므로 동작 차이 없음 |
 | M12 | 스모크(2026-11-19, 인프로세스 `TestClient(app)`): off → 라우트 없음 404 / on → 부품 3종 조립, 무토큰 401, 없는 KB 404(실DB 경유) | 배선 직후 실런 1회 DoD. 업로드→질문→원본 200 전 구간은 module-7 실측으로 이월 |
+| M13 | 패널은 채팅 위에 **겹쳐 띄운다**(md 이상 오른쪽 480px, 모바일 전체 화면). ChatPage 여백 조정 없음 — 사용자 결정(2026-11-19) | ChatPage 연결 지점이 마운트 1줄로 끝난다. 좁은 화면에서는 답변 일부가 가려진다 |
+| M14 | ChatPage 는 `SourceViewerMount` 1줄만 둔다. Mount 가 스토어 구독·`lazy(SourceViewerPanel)`·ErrorBoundary 를 맡는다 | 패널 코드는 별도 청크(빌드 실측 4.7KB)로 처음 열 때만 로드. 패널 오류 시 같은 외곽(`SourceViewerShell`)에 안내 + 닫기 |
+| M15 | 텍스트 뷰어는 기존 `useKbDocumentChunks(kb, doc, {source:'qdrant', include_parent:true})` 를 재사용하고, 문서 구성·구절 해석·조각 분할은 `utils/buildPassageDocument.ts`(순수 함수)로 분리 | 캐시 키가 KB 화면과 같아 재조회가 줄고, 해석 규칙을 컴포넌트 없이 테스트한다 |
+| M16 | `SourceViewerButton` 은 `viewer` truthy 일 때만 렌더 — 재진입 API 의 `viewer: null`(M11)도 버튼 없음 | 서버 스위치 off 면 프론트 변경 없이 기존 화면과 같다 |

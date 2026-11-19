@@ -1,4 +1,5 @@
 import type { ChartPayload } from './chart';
+import type { SourceViewerRef } from './sourceViewer';
 import type { ToolTrace } from './toolTrace';
 
 export type MessageRole = 'user' | 'assistant' | 'tool';
@@ -24,6 +25,8 @@ export interface DocumentSource {
   kind?: SourceKind;
   /** kind=web 전용 원문 링크 */
   url?: string;
+  /** source-passage-viewer §3.3 — 원문 뷰어 진입 정보(KB 문서 칩 전용). 재진입 API 는 null 을 싣는다 */
+  viewer?: SourceViewerRef | null;
 }
 
 /** GET /api/v1/conversations/agents/{agent_id}/sessions/{session_id}/sources 응답 */
