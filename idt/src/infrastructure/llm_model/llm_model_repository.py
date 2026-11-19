@@ -117,6 +117,7 @@ class LlmModelRepository(LlmModelRepositoryInterface):
             row.description = model.description
             row.api_key_env = model.api_key_env
             row.max_tokens = model.max_tokens
+            row.max_output_tokens = model.max_output_tokens
             row.is_active = model.is_active
             row.is_default = model.is_default
             row.base_url = model.base_url
@@ -169,6 +170,7 @@ class LlmModelRepository(LlmModelRepositoryInterface):
             supports_vision=model.supports_vision,
             model_kind=model.model_kind,
             price_per_image_usd=model.price_per_image_usd,
+            max_output_tokens=model.max_output_tokens,
         )
 
     def _to_domain(self, row: LlmModelModel) -> LlmModel:
@@ -191,4 +193,5 @@ class LlmModelRepository(LlmModelRepositoryInterface):
             supports_vision=bool(row.supports_vision),
             model_kind=row.model_kind or "chat",
             price_per_image_usd=row.price_per_image_usd,
+            max_output_tokens=row.max_output_tokens,
         )

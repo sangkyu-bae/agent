@@ -56,6 +56,9 @@ class Settings(BaseSettings):
 
     # Anthropic
     anthropic_api_key: str = ""
+    # claude-agent-e2e-fixes §5.1: llm_model.max_output_tokens 미설정
+    # Anthropic 모델의 출력 한도
+    anthropic_default_max_output_tokens: int = 16000
 
     # LlamaParse
     llama_parse_api_key: str = ""
@@ -111,6 +114,10 @@ class Settings(BaseSettings):
     #   → src/application/agent_run/prompt_rendering.py:render_datetime_block(tz)
     # application 레이어는 이 설정을 직접 import하지 않는다 (kwarg 주입만).
     agent_timezone: str = "Asia/Seoul"
+
+    # claude-agent-e2e-fixes §5.4: 수퍼바이저가 같은 워커를 연속 호출할 수 있는 횟수.
+    # 상한에서 안내하고, 그래도 같은 워커를 고르면 최종 답변으로 종료한다. 0이면 비활성.
+    supervisor_max_consecutive_worker_calls: int = 2
 
     # Supervisor Early Finish (supervisor-early-finish-fix Design §3.3, D-07)
     # 수집 워커 산출의 '빈 결과' 판정 보조 문구 (콤마 구분).

@@ -215,3 +215,20 @@ async def test_seed_marks_vision_capable_defaults(session: AsyncSession) -> None
     claude = await repo.find_by_provider_and_name("anthropic", "claude-sonnet-4-6", "req")
     assert gpt4o is not None and gpt4o.supports_vision is True
     assert claude is not None and claude.supports_vision is True
+
+
+# ── claude-agent-e2e-fixes Design §3.1 (V092): max_output_tokens 관통 ─────────
+
+@pytest.mark.asyncio
+async def test_max_output_tokens_round_trips(session: AsyncSession) -> None:  # L2
+    repo = LlmModelRepository(session, MagicMock())
+    plain = _make_model("mo0")
+    assert plain.max_output_tokens is None
+    await repo.save(plain, "req")
+    capped = LlmModel(**{**_make_model("mo1", model_name="claude-opus-5-5").__dict__, "max_output_tokens": 64000})
+    await repo.save(capped, "req")
+    assert (await repo.find_by_id("mo0", "req")).max_output_tokens is None
+    assert (await repo.find_by_id("mo1", "req")).max_output_tokens == 64000
+
+    await repo.update(LlmModel(**{**capped.__dict__, "max_output_tokens": None}), "req")
+    assert (await repo.find_by_id("mo1", "req")).max_output_tokens is None

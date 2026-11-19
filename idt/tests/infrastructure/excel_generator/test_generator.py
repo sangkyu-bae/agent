@@ -500,3 +500,32 @@ class TestBlockListContent:
         ]))
         result = await _generate(gen, llm, analysis_source=_raw_source(5))
         assert result.total_rows == 2
+
+
+class TestEmptyColumns:
+    """claude-agent-e2e-fixes Design §5.6 E2: 행이 있는데 값이 전부 빈 컬럼은 결과에 담는다."""
+
+    @pytest.mark.asyncio
+    async def test_all_empty_aggregate_column_reported(self, tmp_path):
+        gen, _ = _generator(tmp_path)
+        llm = _FakeLLM(_plan([{
+            "source": "raw:0", "sheet_name": "합계",
+            "ops": [{"op": "groupby", "by": ["이름"],
+                     "agg": [{"col": "이름", "fn": "sum", "as": "숫자아님"}]}],
+        }]))
+        result = await _generate(gen, llm, analysis_source=_raw_source(3))
+        assert result.empty_columns == ("합계/숫자아님",)
+
+    @pytest.mark.asyncio
+    async def test_no_empty_columns_by_default(self, tmp_path):
+        gen, _ = _generator(tmp_path)
+        llm = _FakeLLM(_plan([{"source": "raw:0", "sheet_name": "원본"}]))
+        result = await _generate(gen, llm, analysis_source=_raw_source(3))
+        assert result.empty_columns == ()
+
+    @pytest.mark.asyncio
+    async def test_prompt_mentions_percent_condition(self, tmp_path):
+        gen, _ = _generator(tmp_path)
+        llm = _FakeLLM(_plan([{"source": "raw:0", "sheet_name": "원본"}]))
+        await _generate(gen, llm, analysis_source=_raw_source(3))
+        assert "5%" in llm.prompt_text()

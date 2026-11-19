@@ -277,6 +277,7 @@ def _to_cache_dict(model: LlmModel) -> dict[str, Any]:
         ),
         "base_url": model.base_url,
         "supports_vision": model.supports_vision,
+        "max_output_tokens": model.max_output_tokens,
     }
 
 
@@ -302,6 +303,8 @@ def _from_cache_dict(data: dict[str, Any]) -> LlmModel:
         ),
         base_url=data["base_url"],
         supports_vision=data["supports_vision"],
+        # claude-agent-e2e-fixes §3.2: 배포 전 캐시 항목에는 키가 없다
+        max_output_tokens=data.get("max_output_tokens"),
     )
 
 

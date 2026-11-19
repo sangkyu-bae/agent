@@ -45,3 +45,5 @@ class ExcelGenerateResult:
     total_rows: int
     truncated: bool        # llm 시트가 행 상한으로 잘렸는지
     used_raw_source: bool  # 무손실(raw) 경로 사용 여부
+    # claude-agent-e2e-fixes Design §3.5: 행이 있는데 값이 전부 빈 컬럼 "시트/컬럼"
+    empty_columns: tuple[str, ...] = ()

@@ -412,3 +412,55 @@ class TestAnalyzeNodeUtilityLLM:
         provider = FakeUtilityLLM(available=False)
         with pytest.raises(UtilityLLMUnavailableError):
             await self._workflow(provider)._analyze_node(_base_state())
+
+
+class TestEmptyAnalysisResponse:
+    """claude-agent-e2e-fixes Check G-1: 분석 LLM 빈 답 처리.
+
+    2026-11-19 실 E2E: Opus 5.5가 입력 58k에 출력 한도 16000을 전부 thinking으로 써
+    text가 비었고, 빈 답이 환각 검사로 넘어가 "Generation and documents are required"
+    로 실패했다. 빈 답이면 검색 판단·환각 검사 전에 원인을 담아 실패한다.
+    """
+
+    def _workflow(self, provider, decision=None) -> ExcelAnalysisWorkflow:
+        return ExcelAnalysisWorkflow(
+            excel_parser=Mock(), llm_provider=provider, tavily_search=Mock(),
+            hallucination_evaluator=Mock(),
+            search_decision=decision or _make_search_decision(),
+            logger=Mock(), retry_policy=AnalysisRetryPolicy(max_retries=3),
+            quality_threshold=AnalysisQualityThreshold(),
+        )
+
+    @staticmethod
+    def _thinking_only(stop_reason: str | None):
+        thinking = {"type": "thinking", "thinking": "...", "signature": "s"}
+        provider = FakeUtilityLLM([thinking])
+        meta = {"stop_reason": stop_reason} if stop_reason else {}
+        provider.llm.ainvoke.return_value.response_metadata = meta
+        return provider
+
+    @pytest.mark.asyncio
+    async def test_max_tokens_stop_names_output_limit(self):
+        from src.domain.llm.exceptions import EmptyLLMResponseError
+
+        decision = _make_search_decision()
+        wf = self._workflow(self._thinking_only("max_tokens"), decision)
+        with pytest.raises(EmptyLLMResponseError, match="최대 출력 토큰"):
+            await wf._analyze_node(_base_state())
+        decision.decide.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_empty_without_stop_reason_still_fails_clearly(self):
+        from src.domain.llm.exceptions import EmptyLLMResponseError
+
+        with pytest.raises(EmptyLLMResponseError, match="빈 응답"):
+            await self._workflow(self._thinking_only(None))._analyze_node(_base_state())
+
+    @pytest.mark.asyncio
+    async def test_full_run_skips_hallucination_check(self):
+        from src.domain.llm.exceptions import EmptyLLMResponseError
+
+        wf = self._workflow(self._thinking_only("max_tokens"))
+        with pytest.raises(EmptyLLMResponseError):
+            await wf._analyze_node(_base_state())
+        wf._evaluator.evaluate.assert_not_called()

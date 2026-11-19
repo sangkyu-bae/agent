@@ -173,6 +173,9 @@ class UsageCallback(AsyncCallbackHandler):
         self._step_index: int = 0
         # LangChain run_id (UUID) → on_llm_start 시각
         self._start_ts: dict[UUID, float] = {}
+        # claude-agent-e2e-fixes §5.5: 시작 시점 모델명
+        # (스트리밍 end·error 폴백)
+        self._start_models: dict[UUID, str] = {}
         # M2: LangChain on_tool_start ↔ on_tool_end/error 매칭용
         self._tool_starts: dict[UUID, _ToolStartInfo] = {}
 
@@ -206,6 +209,7 @@ class UsageCallback(AsyncCallbackHandler):
         **kwargs: Any,
     ) -> None:
         self._start_ts[run_id] = time.monotonic()
+        self._remember_model(run_id, kwargs)
 
     async def on_chat_model_start(
         self,
@@ -217,12 +221,14 @@ class UsageCallback(AsyncCallbackHandler):
     ) -> None:
         # ChatModel은 on_chat_model_start로 들어오므로 동일 처리
         self._start_ts[run_id] = time.monotonic()
+        self._remember_model(run_id, kwargs)
 
     async def on_llm_end(
         self, response: LLMResult, *, run_id: UUID, **kwargs: Any
     ) -> None:
         latency_ms = self._compute_latency_ms(run_id)
-        provider, model_name = self._extract_model(response, kwargs)
+        start_model = self._start_models.pop(run_id, None)
+        provider, model_name = self._extract_model(response, kwargs, start_model)
         token_usage = self._extract_tokens(response, provider)
         try:
             await self._tracker.record_llm_call(
@@ -378,7 +384,8 @@ class UsageCallback(AsyncCallbackHandler):
         self, error: BaseException, *, run_id: UUID, **kwargs: Any
     ) -> None:
         latency_ms = self._compute_latency_ms(run_id)
-        provider, model_name = self._extract_model_from_kwargs(kwargs)
+        start_model = self._start_models.pop(run_id, None)
+        provider, model_name = self._extract_model_from_kwargs(kwargs, start_model)
         try:
             await self._tracker.record_llm_call(
                 run_id=self._run_id,
@@ -408,24 +415,42 @@ class UsageCallback(AsyncCallbackHandler):
             return None
         return int((time.monotonic() - start) * 1000)
 
+    def _remember_model(self, run_id: UUID, kwargs: dict[str, Any]) -> None:
+        """시작 시점 invocation_params 모델명 기록 — 스트리밍 end에는 없을 수 있다.
+
+        claude-agent-e2e-fixes Design §5.5 (SC-6).
+        """
+        params = kwargs.get("invocation_params") or {}
+        model = params.get("model") or params.get("model_name")
+        if model:
+            self._start_models[run_id] = str(model)
+
     def _extract_model(
-        self, response: LLMResult, kwargs: dict[str, Any]
+        self, response: LLMResult, kwargs: dict[str, Any],
+        start_model: Optional[str] = None,
     ) -> tuple[str, str]:
         llm_output = response.llm_output or {}
         model_name = (
             llm_output.get("model_name")
             or llm_output.get("model")
-            or kwargs.get("invocation_params", {}).get("model")
+            # claude-agent-e2e-fixes §5.5: 스트리밍은 llm_output 이 비고
+            # 생성 메시지 메타데이터에만 모델명이 남는다
+            or _model_from_generations(response)
+            or (kwargs.get("invocation_params") or {}).get("model")
+            or start_model
             or "unknown"
         )
         provider = self._infer_provider(model_name, llm_output)
         return provider, model_name
 
     def _extract_model_from_kwargs(
-        self, kwargs: dict[str, Any]
+        self, kwargs: dict[str, Any], start_model: Optional[str] = None,
     ) -> tuple[str, str]:
         invocation = kwargs.get("invocation_params", {}) or {}
-        model_name = invocation.get("model") or invocation.get("model_name") or "unknown"
+        model_name = (
+            invocation.get("model") or invocation.get("model_name")
+            or start_model or "unknown"
+        )
         provider = self._infer_provider(model_name, {})
         return provider, model_name
 
@@ -471,27 +496,38 @@ class UsageCallback(AsyncCallbackHandler):
     def _normalize_to_token_usage(
         self, usage: dict[str, Any], provider: str
     ) -> TokenUsage:
+        """키 이름으로 형식 판정 (claude-agent-e2e-fixes §5.5).
+
+        provider 추론이 실패(unknown)해도 Anthropic·LangChain 표준 키
+        (input_tokens/output_tokens)와 Ollama 키를 놓치지 않는다.
+        provider 인자는 호환용으로 남겨 둔다.
+        """
         if not usage:
             return TokenUsage()
-        if provider == "openai":
-            prompt = int(usage.get("prompt_tokens", 0) or 0)
-            completion = int(usage.get("completion_tokens", 0) or 0)
-            total = int(
-                usage.get("total_tokens", prompt + completion) or (prompt + completion)
-            )
-            return TokenUsage(prompt, completion, total)
-        if provider == "anthropic":
+        if "input_tokens" in usage or "output_tokens" in usage:
             prompt = int(usage.get("input_tokens", 0) or 0)
             completion = int(usage.get("output_tokens", 0) or 0)
             return TokenUsage(prompt, completion, prompt + completion)
-        if provider == "ollama":
+        if "prompt_eval_count" in usage or "eval_count" in usage:
             prompt = int(usage.get("prompt_eval_count", 0) or 0)
             completion = int(usage.get("eval_count", 0) or 0)
             return TokenUsage(prompt, completion, prompt + completion)
-        # fallback: OpenAI 키
+        # OpenAI 키
         prompt = int(usage.get("prompt_tokens", 0) or 0)
         completion = int(usage.get("completion_tokens", 0) or 0)
         total = int(
             usage.get("total_tokens", prompt + completion) or (prompt + completion)
         )
         return TokenUsage(prompt, completion, total)
+
+
+def _model_from_generations(response: LLMResult) -> Optional[str]:
+    """생성 메시지 response_metadata의 model_name/model (스트리밍 경로)."""
+    for gen_list in response.generations or []:
+        for gen in gen_list:
+            message = getattr(gen, "message", None)
+            meta = getattr(message, "response_metadata", None) or {}
+            model = meta.get("model_name") or meta.get("model")
+            if model:
+                return str(model)
+    return None

@@ -58,7 +58,10 @@ _PLAN_GUIDELINES = (
     '{"source": "llm", "sheet_name": "...", "columns": [...], "rows": [[...]]} 를 사용하라.\n'
     '5. 컬럼 표시 형식이 필요하면 "column_types": '
     '{"컬럼명": "text | integer | number | currency | percent | date"} 를 붙여라. '
-    "percent는 값이 0~1 비율일 때만 쓴다. 컬럼명은 ops 실행 후 결과 컬럼 기준이다.\n"
+    "percent는 값이 0~1 비율이거나 '8.9%'처럼 %가 붙은 값일 때 쓴다. "
+    "컬럼명은 ops 실행 후 결과 컬럼 기준이다. "
+    # claude-agent-e2e-fixes Design §4.3: 퍼센트 컬럼 조건은 % 를 붙여야 비율로 비교된다
+    "퍼센트 컬럼의 filter 값은 '5%'처럼 %를 붙여라.\n"
     '6. 정리할 데이터가 전혀 없으면 {"filename": "", "sheets": []} 를 출력하라.\n'
     "7. JSON 외 다른 텍스트를 출력하지 마라."
 )
@@ -117,18 +120,23 @@ class ExcelGenerator:
             total_rows=sum(len(s.rows) for s in sheets),
             truncated=truncated,
             used_raw_source=used_raw,
+            empty_columns=_empty_columns(sheets),
         )
+        self._log_done(result, request_id, retried, items)
+        return result
+
+    def _log_done(self, result, request_id: str, retried: bool, items) -> None:
         self._logger.info(
             "ExcelGenerator done",
             request_id=request_id,
             file_id=result.file_id,
             sheet_count=result.sheet_count,
             total_rows=result.total_rows,
-            truncated=truncated,
+            truncated=result.truncated,
             retried=retried,  # Design §6.4
             ops_sheet_count=sum(1 for item in items if item.ops),
+            empty_columns=list(result.empty_columns),
         )
-        return result
 
     # ── 소스 카탈로그 (Design §2.2 P1 > P2) ─────────────────────────────────
     def _build_catalog(
@@ -420,3 +428,26 @@ class ExcelGenerator:
         if not name:
             return "output.xlsx"
         return name if name.lower().endswith(".xlsx") else f"{name}.xlsx"
+
+
+def _is_blank(value) -> bool:
+    if value is None or value != value:  # NaN 포함
+        return True
+    return isinstance(value, str) and not value.strip()
+
+
+def _empty_columns(sheets) -> tuple[str, ...]:
+    """행이 1개 이상인데 값이 전부 빈 컬럼 → "시트/컬럼" (claude-agent-e2e-fixes §5.6).
+
+    예: 숫자로 해석할 수 없는 컬럼의 groupby mean.
+    답변이 빈 값을 감추지 않게 노드 요약에 싣는다.
+    """
+    found: list[str] = []
+    for sheet in sheets:
+        if not sheet.rows:
+            continue
+        for idx, column in enumerate(sheet.columns):
+            values = (row[idx] if idx < len(row) else None for row in sheet.rows)
+            if all(_is_blank(v) for v in values):
+                found.append(f"{sheet.sheet_name}/{column}")
+    return tuple(found)

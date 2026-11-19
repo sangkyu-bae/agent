@@ -224,3 +224,23 @@ class TestAct1:
             [{"op": "groupby", "by": ["g"], "agg": [{"col": "v", "fn": "sum", "as": "s"}]}],
         )
         assert {r[0]: r[1] for r in rows} == {"a": None, "b": 3.0}
+
+
+class TestPercentAggregation:
+    """claude-agent-e2e-fixes Design §8.3 E1: 퍼센트 문자열 컬럼 평균 = 비율 평균."""
+
+    def test_mean_of_percent_strings(self):
+        _, rows, _ = apply_ops(
+            ["지점", "금리"], [["a", "8.9%"], ["a", "7.1%"], ["b", "5%"]],
+            [{"op": "groupby", "by": ["지점"], "agg": [{"col": "금리", "fn": "mean", "as": "평균"}]}],
+        )
+        got = {r[0]: r[1] for r in rows}
+        assert got["a"] == pytest.approx(0.08)
+        assert got["b"] == pytest.approx(0.05)
+
+    def test_filter_percent_value(self):
+        _, rows, _ = apply_ops(
+            ["금리"], [["8.9%"], ["4.1%"]],
+            [{"op": "filter", "col": "금리", "cmp": ">", "value": "5%"}],
+        )
+        assert rows == [["8.9%"]]
