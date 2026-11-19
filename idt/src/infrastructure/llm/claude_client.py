@@ -11,6 +11,7 @@ from anthropic import (
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
+from src.domain.llm.message_content import coerce_message_text
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.infrastructure.llm.exceptions import (
     ClaudeAPIError,
@@ -130,7 +131,7 @@ class ClaudeClient:
         usage = ai_message.usage_metadata or {}
 
         result = ClaudeResponse(
-            content=ai_message.content,
+            content=coerce_message_text(ai_message.content),
             model=ai_message.response_metadata.get(
                 "model", request.model.value
             ),

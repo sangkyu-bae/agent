@@ -9,6 +9,7 @@ import re
 
 from pydantic import BaseModel, Field
 
+from src.domain.llm.message_content import coerce_message_text
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.domain.section_summary.entities import (
     SectionCard,
@@ -106,7 +107,7 @@ class LlmSectionSummarizer(SectionSummarizerInterface):
             response = await self._llm.ainvoke(
                 self._messages(user_prompt, json_mode=True)
             )
-            content = getattr(response, "content", str(response))
+            content = coerce_message_text(getattr(response, "content", str(response)))
             try:
                 return self._parse(content)
             except (ValueError, TypeError) as e:

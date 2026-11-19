@@ -16,6 +16,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from src.domain.llm.interfaces import LLMFactoryInterface
+from src.domain.llm.message_content import coerce_message_text
 from src.domain.llm_model.entity import LlmModel
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.domain.tool_selection.interfaces.selection_cache_port import (
@@ -221,8 +222,7 @@ class LLMToolSelector(ToolSelectorPort):
             ("user", build_user_prompt(query, candidates)),
         ]
         response = await llm.ainvoke(messages)
-        content = getattr(response, "content", "")
-        return content if isinstance(content, str) else str(content)
+        return coerce_message_text(getattr(response, "content", ""))
 
     # ── 결과 조립 & 관측 (FR-10) ────────────────────────────────────────────
 

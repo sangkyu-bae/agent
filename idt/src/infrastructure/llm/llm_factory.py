@@ -7,6 +7,7 @@ from langchain_ollama import ChatOllama
 from langchain_openai import ChatOpenAI
 
 from src.domain.llm.interfaces import LLMFactoryInterface
+from src.domain.llm.sampling_policy import anthropic_accepts_temperature
 from src.domain.llm_model.entity import LlmModel
 
 
@@ -49,11 +50,11 @@ class LLMFactory(LLMFactoryInterface):
         self, llm_model: LlmModel, temperature: float
     ) -> ChatAnthropic:
         api_key = self._resolve_api_key(llm_model)
-        return ChatAnthropic(
-            model=llm_model.model_name,
-            api_key=api_key,
-            temperature=temperature,
-        )
+        kwargs = dict(model=llm_model.model_name, api_key=api_key)
+        # Claude Opus 4.7 이후 모델은 temperature를 400으로 거부 — 구형 모델에만 전달
+        if anthropic_accepts_temperature(llm_model.model_name):
+            kwargs["temperature"] = temperature
+        return ChatAnthropic(**kwargs)
 
     def _create_ollama(
         self, llm_model: LlmModel, temperature: float

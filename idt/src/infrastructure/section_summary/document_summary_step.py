@@ -17,6 +17,7 @@ from src.domain.elasticsearch.interfaces import (
 )
 from src.domain.elasticsearch.schemas import ESDocument
 from src.domain.llm.interfaces import LLMFactoryInterface
+from src.domain.llm.message_content import coerce_message_text
 from src.domain.llm_model.interfaces import LlmModelRepositoryInterface
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.domain.section_summary.entities import (
@@ -103,7 +104,7 @@ class LlmDocumentSummarizer:
             response = await self._llm.ainvoke(
                 self._messages(body, final, json_mode=True)
             )
-            content = getattr(response, "content", str(response))
+            content = coerce_message_text(getattr(response, "content", str(response)))
             try:
                 raw = parse_summary_json(content, ("summary_lines",))
                 return [str(line) for line in raw["summary_lines"]]

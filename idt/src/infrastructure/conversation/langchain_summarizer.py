@@ -7,6 +7,7 @@ from langchain_openai import ChatOpenAI
 
 from src.application.conversation.interfaces import ConversationSummarizerInterface
 from src.domain.conversation.entities import ConversationMessage
+from src.domain.llm.message_content import coerce_message_text
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 
 _SYSTEM_PROMPT = (
@@ -54,7 +55,7 @@ class LangChainSummarizer(ConversationSummarizerInterface):
                 HumanMessage(content=conversation_text),
             ]
             response = await self._llm.ainvoke(lc_messages)
-            summary = response.content
+            summary = coerce_message_text(response.content)
             self._logger.info(
                 "LangChainSummarizer completed",
                 request_id=request_id,

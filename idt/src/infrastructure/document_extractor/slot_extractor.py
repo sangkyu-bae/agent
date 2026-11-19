@@ -13,6 +13,7 @@ from src.domain.document_extractor.schemas import (
     SuggestedSlots,
     TemplateSlot,
 )
+from src.domain.llm.message_content import coerce_message_text
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.infrastructure.langsmith.langsmith import (
     DOCUMENT_EXTRACTOR_PROJECT_NAME,
@@ -132,7 +133,7 @@ class SlotExtractor:
                 raise SlotExtractionFailedError(
                     f"슬롯 추출 LLM 호출에 실패했습니다: {e}"
                 ) from e
-            content = getattr(response, "content", str(response))
+            content = coerce_message_text(getattr(response, "content", str(response)))
             try:
                 return self._parse_slots(content, request_id)
             except (ValueError, TypeError) as e:

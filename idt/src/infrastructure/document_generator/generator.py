@@ -20,6 +20,7 @@ from src.domain.document_generator.schemas import (
     GenerateResult,
 )
 from src.domain.document_generator.tool_config import DocumentGeneratorToolConfig
+from src.domain.llm.message_content import coerce_message_text
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.infrastructure.langsmith.langsmith import (
     DOCUMENT_GENERATOR_PROJECT_NAME,
@@ -149,7 +150,7 @@ class DocumentGenerator:
 
     async def _invoke(self, llm, messages, config, gen_type) -> "_Draft | None":
         response = await llm.ainvoke(messages, config=config)
-        content = getattr(response, "content", str(response))
+        content = coerce_message_text(getattr(response, "content", str(response)))
         html = _CODE_FENCE_RE.sub("", (content or "").strip()).strip()
         if not html:
             return None

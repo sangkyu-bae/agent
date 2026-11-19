@@ -484,3 +484,19 @@ class TestAct1Generator:
         assert [c["run_name"] for c in llm.configs] == [
             "excel_generator_plan", "excel_generator_plan_retry",
         ]
+
+
+class TestBlockListContent:
+    """실 LLM 스모크(Claude Opus 5.5)에서 발견: thinking 상시 모델은 content가 블록 리스트."""
+
+    @pytest.mark.asyncio
+    async def test_thinking_and_text_blocks_are_parsed(self, tmp_path):
+        gen, _ = _generator(tmp_path)
+        plan = _plan([{"source": "raw:0", "sheet_name": "상위", "ops": [{"op": "top", "n": 2}]}])
+        llm = MagicMock()
+        llm.ainvoke = AsyncMock(return_value=SimpleNamespace(content=[
+            {"type": "thinking", "thinking": "", "signature": "sig"},
+            {"type": "text", "text": plan},
+        ]))
+        result = await _generate(gen, llm, analysis_source=_raw_source(5))
+        assert result.total_rows == 2
