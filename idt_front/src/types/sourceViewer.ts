@@ -10,6 +10,8 @@ export type OriginalKind = (typeof ORIGINAL_KIND)[keyof typeof ORIGINAL_KIND];
 
 /** 패널이 쓰는 청크 조회 파라미터 — 텍스트 뷰어와 원본 매칭 텍스트가 같은 캐시를 공유한다. */
 export const SOURCE_VIEWER_CHUNK_PARAMS = { source: 'qdrant', include_parent: true } as const;
+/** Qdrant 청크가 비었을 때(partial 업로드) 대체 조회 */
+export const SOURCE_VIEWER_FALLBACK_CHUNK_PARAMS = { source: 'es', include_parent: true } as const;
 
 export const VIEWER_MODE = {
   TEXT: 'text',

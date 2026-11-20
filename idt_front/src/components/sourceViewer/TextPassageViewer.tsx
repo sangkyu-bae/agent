@@ -2,9 +2,9 @@
 // 본문은 텍스트 노드로만 렌더한다(HTML·마크다운 미해석, SourceCitation 발췌와 같은 원칙).
 import { useEffect, useMemo, useRef } from 'react';
 
-import { useKbDocumentChunks } from '@/hooks/useKnowledgeBases';
+import { useSourceViewerChunks } from '@/hooks/useSourceViewerChunks';
 import { ApiError } from '@/services/api/ApiError';
-import { SOURCE_VIEWER_CHUNK_PARAMS, type SourceViewerRef } from '@/types/sourceViewer';
+import type { SourceViewerRef } from '@/types/sourceViewer';
 import { buildPassageDocument, toSegments } from '@/utils/buildPassageDocument';
 import { cn } from '@/utils/cn';
 
@@ -25,7 +25,7 @@ const Notice = ({ children }: { children: string }) => (
 );
 
 const TextPassageViewer = ({ viewer, index }: TextPassageViewerProps) => {
-  const { data, isLoading, error } = useKbDocumentChunks(viewer.kb_id, viewer.document_id, SOURCE_VIEWER_CHUNK_PARAMS);
+  const { data, isLoading, error } = useSourceViewerChunks(viewer.kb_id, viewer.document_id);
   const currentRef = useRef<HTMLElement>(null);
   const doc = useMemo(
     () => (data ? buildPassageDocument(data, viewer.passages) : null),
@@ -48,7 +48,10 @@ const TextPassageViewer = ({ viewer, index }: TextPassageViewerProps) => {
       {missing && (
         <div className="m-4 rounded-md border border-warning-border bg-warning-bg p-3 text-sm text-fg-secondary">
           <p className="font-medium text-warning">원문에서 정확한 위치를 찾지 못했습니다.</p>
-          {missing.excerpt && <p className="mt-2 whitespace-pre-wrap break-words">{missing.excerpt}</p>}
+          {/* 청킹이 한글을 바이트 중간에서 자른 깨진 문자(U+FFFD)는 보여 주지 않는다 */}
+          {missing.excerpt && (
+            <p className="mt-2 whitespace-pre-wrap break-words">{missing.excerpt.replace(/�/g, '')}</p>
+          )}
         </div>
       )}
       <p className="whitespace-pre-wrap break-words p-4 text-sm leading-[1.7] text-fg">

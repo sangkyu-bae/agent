@@ -494,3 +494,19 @@ idt_front/src/components/sourceViewer/{SourceViewerButton,SourceViewerPanel,Sour
 | M14 | ChatPage 는 `SourceViewerMount` 1줄만 둔다. Mount 가 스토어 구독·`lazy(SourceViewerPanel)`·ErrorBoundary 를 맡는다 | 패널 코드는 별도 청크(빌드 실측 4.7KB)로 처음 열 때만 로드. 패널 오류 시 같은 외곽(`SourceViewerShell`)에 안내 + 닫기 |
 | M15 | 텍스트 뷰어는 기존 `useKbDocumentChunks(kb, doc, {source:'qdrant', include_parent:true})` 를 재사용하고, 문서 구성·구절 해석·조각 분할은 `utils/buildPassageDocument.ts`(순수 함수)로 분리 | 캐시 키가 KB 화면과 같아 재조회가 줄고, 해석 규칙을 컴포넌트 없이 테스트한다 |
 | M16 | `SourceViewerButton` 은 `viewer` truthy 일 때만 렌더 — 재진입 API 의 `viewer: null`(M11)도 버튼 없음 | 서버 스위치 off 면 프론트 변경 없이 기존 화면과 같다 |
+| M17 | 텍스트 뷰어·매칭 텍스트는 `useSourceViewerChunks` — Qdrant 청크가 비면 ES 로 한 번 더 조회 | module-7 실측: 업로드가 partial(임베딩 실패로 Qdrant 실패·ES 성공)이면 Qdrant 청크 0개 → 텍스트 뷰어가 빈 문서였다 |
+| M18 | 정규화에서 하이픈 계열(`-`, U+00AD, U+2010, U+2011)을 **위치와 무관하게** 지운다. §5.4 의 "줄끝 하이픈만 제거"를 대체 | module-7 실측: 줄바꿈 유무가 추출기마다 달라(청크 `- 1 -\nI.` vs pdf.js `- 1 -I.`) 한쪽만 지워져 child 청크 매칭률 29%(5/17) |
+| M19 | 정규화에서 U+FFFD 를 지운다. 안내 발췌 표시에서도 지운다 | module-7 실측: 토큰 단위 child 청킹이 한글을 바이트 중간에서 잘라 청크 앞뒤에 `�` 가 섞인다(17개 중 5개) — 청킹 쪽 기존 결함, 이번 범위 밖 |
+| M20 | pdf.js 6: 문서 정리는 `PDFDocumentLoadingTask.destroy()`, 텍스트 레이어는 쪽 컨테이너의 `--total-scale-factor`·`--scale-round-x/y` 에 의존 → `lib/pdfTextLayer.css`·`pdfRenderer` 가 설정 | 전체 뷰어 CSS(168KB) 대신 텍스트 레이어 규칙만 발췌. `isEvalSupported` 옵션은 v6 에 없음 |
+
+### 12.1 module-7 실측 (2026-11-20)
+
+| 항목 | 결과 |
+|------|------|
+| 실측 문서 | 금융위원회 「가계부채 관리 방안」 보도자료(2025-06-27, 공개 PDF 7쪽, 표 다수). scratchpad 에만 보관, 커밋 안 함 |
+| 원본 보관 | KB 업로드 후 `{DIR}/e1/{document_id}` 저장 확인. 원본 API 200·`application/pdf`·`inline`·`nosniff` |
+| 원본 삭제(SC-7) | KB 문서 삭제 후 원본 파일 제거 확인 |
+| 매칭률(실제 pdf.js 텍스트 레이어) | 수정 전 child 5/17(29%) → M18·M19 후 **child 17/17, parent 7/7(100%)** |
+| 패널 화면 | 원본 PDF 렌더·음영·구절 이동·텍스트↔원본 전환·ES 대체 텍스트 뷰어 확인(스크린샷: 세션 기록) |
+| 미확인 | 에이전트 답변 → 칩 → 버튼 클릭의 라이브 경로. **OpenAI 크레딧 소진(429 insufficient_quota)** 으로 임베딩·supervisor LLM 실패. 칩 `viewer` 생성은 단위·연결 테스트, 버튼→스토어는 컴포넌트 테스트로만 확인 |
+| 관찰 | child 청크 `page` 메타데이터가 비어 있음(이 문서의 파서 경로) → 원본 뷰어는 앞 10쪽 렌더로 대체. 백그라운드 탭에서는 pdf.js 렌더가 멈춘다(브라우저 rAF 제약). 업로드 직후 원본 조회는 메타데이터 커밋 전이라 404 가 날 수 있다(응답 후 커밋되는 기존 세션 경계) |

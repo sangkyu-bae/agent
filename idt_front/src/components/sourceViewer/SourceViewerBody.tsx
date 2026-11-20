@@ -3,13 +3,8 @@
 // 대상 문서가 바뀌면 부모가 key 로 다시 마운트해 모드를 초기화한다.
 import { useCallback, useMemo, useState } from 'react';
 
-import { useKbDocumentChunks } from '@/hooks/useKnowledgeBases';
-import {
-  SOURCE_VIEWER_CHUNK_PARAMS,
-  VIEWER_MODE,
-  type SourceViewerRef,
-  type ViewerMode,
-} from '@/types/sourceViewer';
+import { useSourceViewerChunks } from '@/hooks/useSourceViewerChunks';
+import { VIEWER_MODE, type SourceViewerRef, type ViewerMode } from '@/types/sourceViewer';
 import { passageTexts } from '@/utils/buildPassageDocument';
 import { cn } from '@/utils/cn';
 
@@ -43,7 +38,7 @@ const ModeButton = ({ label, active, disabled, onClick }: {
 const SourceViewerBody = ({ viewer, index }: SourceViewerBodyProps) => {
   const [mode, setMode] = useState<ViewerMode>(viewer.original ? VIEWER_MODE.ORIGINAL : VIEWER_MODE.TEXT);
   const [notice, setNotice] = useState<string | null>(null);
-  const chunks = useKbDocumentChunks(viewer.kb_id, viewer.document_id, SOURCE_VIEWER_CHUNK_PARAMS);
+  const chunks = useSourceViewerChunks(viewer.kb_id, viewer.document_id);
   const texts = useMemo(() => passageTexts(chunks.data, viewer.passages), [chunks.data, viewer.passages]);
   const chunksSettled = chunks.isSuccess || chunks.isError;
 

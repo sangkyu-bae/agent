@@ -10,7 +10,13 @@ const SPAN_MIN = 0.5;
 const SPAN_MAX = 1.5;
 
 const WHITESPACE = /\s/;
-const SOFT_HYPHEN = '­';
+/**
+ * 정규화에서 버리는 문자.
+ * - 하이픈 계열(-, soft hyphen, U+2010/2011): 줄바꿈 유무가 추출기마다 달라 "줄끝 하이픈"만
+ *   지우면 한쪽만 지워진다(module-7 실측: 청크 "- 1 -\nI." vs pdf.js "- 1 -I."). 위치와 무관하게 지운다.
+ * - U+FFFD: 토큰 단위 청킹이 한글을 바이트 중간에서 잘라 생긴 깨진 문자. 원문에는 없다.
+ */
+const DROPPED = new Set(['-', '­', '‐', '‑', '�']);
 
 export interface NormalizedText {
   norm: string;
@@ -18,23 +24,14 @@ export interface NormalizedText {
   map: number[];
 }
 
-/** 하이픈 뒤에 공백만 이어지다 줄바꿈이 나오면 줄끝 하이픈이다. */
-const isLineEndHyphen = (text: string, i: number): boolean => {
-  for (let j = i + 1; j < text.length && WHITESPACE.test(text[j]); j += 1) {
-    if (text[j] === '\n') return true;
-  }
-  return false;
-};
-
 export const normalizeWithMap = (text: string): NormalizedText => {
   let norm = '';
   const map: number[] = [];
   for (let i = 0; i < text.length; i += 1) {
     const c = text[i];
-    if (WHITESPACE.test(c) || c === SOFT_HYPHEN) continue;
-    if (c === '-' && isLineEndHyphen(text, i)) continue;
+    if (WHITESPACE.test(c) || DROPPED.has(c)) continue;
     for (const ch of c.normalize('NFKC')) {
-      if (WHITESPACE.test(ch)) continue;
+      if (WHITESPACE.test(ch) || DROPPED.has(ch)) continue;
       norm += ch;
       map.push(i);
     }
