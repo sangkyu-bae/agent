@@ -8,7 +8,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
-from typing import Iterable, Optional
+from typing import Any, Iterable, Mapping, Optional
 from urllib.parse import urlsplit
 
 from src.domain.agent_run.entities import RetrievalSource, ToolCall
@@ -52,6 +52,8 @@ class RunSourceItem:
     excerpt: str
     key: str
     url: Optional[str] = None
+    # source-passage-viewer §11.2 #1 — 원문 뷰어 진입 정보. None 이면 키를 싣지 않는다.
+    viewer: Optional[Mapping[str, Any]] = None
 
     def to_payload(self) -> dict:
         """프론트 `DocumentSource` 형태. metadata·인자는 내보내지 않는다 (Design §7)."""
@@ -63,6 +65,8 @@ class RunSourceItem:
         }
         if self.url:
             payload["url"] = self.url
+        if self.viewer:
+            payload["viewer"] = dict(self.viewer)
         return payload
 
 

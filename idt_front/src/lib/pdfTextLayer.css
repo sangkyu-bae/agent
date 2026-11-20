@@ -1,0 +1,65 @@
+/*
+ * pdf.js 텍스트 레이어 최소 규칙 — pdfjs-dist 6.5.438 web/pdf_viewer.css 의 .textLayer 블록에서 발췌
+ * (Apache-2.0, Mozilla Foundation). 전체 뷰어 CSS(168KB)는 쓰지 않는다.
+ * source-passage-viewer: lib/pdfRenderer.ts 가 지연 로드 청크에서만 import 한다.
+ */
+.spv-pdf-page {
+  position: relative;
+  --scale-round-x: 1px;
+  --scale-round-y: 1px;
+}
+
+.spv-pdf-page canvas {
+  display: block;
+}
+
+.spv-pdf-page .textLayer {
+  position: absolute;
+  text-align: initial;
+  inset: 0;
+  overflow: clip;
+  opacity: 1;
+  line-height: 1;
+  letter-spacing: normal;
+  word-spacing: normal;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  z-index: 0;
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+}
+
+.spv-pdf-page .textLayer :is(span, br) {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+}
+
+.spv-pdf-page .textLayer > :not(.markedContent),
+.spv-pdf-page .textLayer .markedContent span:not(.markedContent) {
+  z-index: 1;
+  --font-height: 0;
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  --scale-x: 1;
+  --rotate: 0deg;
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+}
+
+.spv-pdf-page .textLayer .markedContent {
+  display: contents;
+}
+
+/* 음영: 텍스트는 캔버스가 그리므로 글자는 투명, 배경만 칠한다 */
+.spv-pdf-page .textLayer mark[data-spv-passage] {
+  color: transparent;
+  background: color-mix(in srgb, var(--color-warning-border) 55%, transparent);
+  border-radius: 2px;
+}
+
+.spv-pdf-page .textLayer mark[data-spv-passage][aria-current] {
+  background: color-mix(in srgb, var(--color-warning) 45%, transparent);
+}

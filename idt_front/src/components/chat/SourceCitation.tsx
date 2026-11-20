@@ -1,9 +1,10 @@
 // Design Ref: ui-redesign-chat §5.4 — 출처 칩. 위키 출처는 warning 톤, 문서 출처는 중립 톤 + hover brand.
 // Design Ref: agent-run-source-citations §5.4 — 에이전트 근거 4종, 문서·도구 발췌 패널, 웹 외부 링크.
-import { useId, useState } from 'react';
+import { Fragment, useId, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BookOpen, ExternalLink, FileText, Globe, Wrench } from 'lucide-react';
 
+import SourceViewerButton from '@/components/sourceViewer/SourceViewerButton';
 import { SOURCE_KIND, type DocumentSource, type SourceKind } from '@/types/chat';
 import { cn } from '@/utils/cn';
 import { isSafeHttpUrl } from '@/utils/safeUrl';
@@ -153,14 +154,17 @@ const SourceCitation = ({ sources }: SourceCitationProps) => {
           if (kind === SOURCE_KIND.WIKI) return <AgentWikiChip key={key} source={source} />;
           if (kind === SOURCE_KIND.WEB) return <WebChip key={key} source={source} />;
           return (
-            <ExcerptChip
-              key={key}
-              source={source}
-              index={idx}
-              isOpen={openKey === key}
-              panelId={panelId}
-              onToggle={() => setOpenKey(openKey === key ? null : key)}
-            />
+            <Fragment key={key}>
+              <ExcerptChip
+                source={source}
+                index={idx}
+                isOpen={openKey === key}
+                panelId={panelId}
+                onToggle={() => setOpenKey(openKey === key ? null : key)}
+              />
+              {/* source-passage-viewer §11.2 F2 — viewer 없으면 아무것도 그리지 않는다 */}
+              <SourceViewerButton source={source} />
+            </Fragment>
           );
         })}
       </div>

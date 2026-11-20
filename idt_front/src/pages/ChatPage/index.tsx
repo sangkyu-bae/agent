@@ -7,6 +7,7 @@ import ChatInput from '@/components/chat/ChatInput';
 import ToolPreviewPanel from '@/components/chat/ToolPreviewPanel';
 import ExcelPreviewModal from '@/components/chat/ExcelPreviewModal';
 import DocumentPreviewModal from '@/components/chat/DocumentPreviewModal';
+import SourceViewerMount from '@/components/sourceViewer/SourceViewerMount';
 import EmptyState from '@/components/ui/EmptyState';
 import { AlertTriangle, Loader2, MessageSquare } from 'lucide-react';
 import { useAgentSessionMessages } from '@/hooks/useChat';
@@ -530,6 +531,8 @@ const ChatPage = () => {
       <ExcelPreviewModal />
       {/* document-file-preview §2.1: .docx·.pdf 미리보기 모달 1회 마운트 */}
       <DocumentPreviewModal />
+      {/* source-passage-viewer §11.2 F3 — 근거 칩 원문 패널 1회 마운트(대상 없으면 null) */}
+      <SourceViewerMount />
       <ChatHeader
         title={selectedAgent?.name ?? 'SUPER AI Agent'}
         messageCount={messages.length}

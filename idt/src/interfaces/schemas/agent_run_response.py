@@ -4,7 +4,7 @@ agent-run-observability-m4 Design §6.3 / agent-run-admin-dashboard Design §4.3
 """
 from datetime import date, datetime
 from decimal import Decimal
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict
 
@@ -183,6 +183,8 @@ class SourceItemDto(BaseModel):
     content: str
     chunk_id: str
     url: Optional[str] = None
+    # source-passage-viewer §3.3 / §11.2 #7 — 원문 뷰어 진입 정보(문서 칩 전용, 없으면 null).
+    viewer: Optional[Dict[str, Any]] = None
 
 
 class MessageSourcesDto(BaseModel):

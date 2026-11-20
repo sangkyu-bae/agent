@@ -1,5 +1,6 @@
 import asyncio
 import uuid
+from typing import Any
 
 from langchain_core.documents import Document as LangchainDocument
 
@@ -50,6 +51,7 @@ class UnifiedUploadUseCase:
         document_metadata_repo: DocumentMetadataRepositoryInterface,
         activity_log_service: ActivityLogService,
         logger: LoggerInterface,
+        original_sink: Any | None = None,
     ) -> None:
         self._parser = parser
         self._collection_repo = collection_repo
@@ -63,6 +65,8 @@ class UnifiedUploadUseCase:
         self._document_metadata_repo = document_metadata_repo
         self._activity_log_service = activity_log_service
         self._logger = logger
+        # source-passage-viewer §11.2 #3 — duck typing(save). None = 원본 보관 없음.
+        self._original_sink = original_sink
 
     async def execute(
         self, request: UnifiedUploadRequest, request_id: str
@@ -150,6 +154,9 @@ class UnifiedUploadUseCase:
                 document_id=document_id,
             )
 
+        if status != "failed":
+            await self._save_original(request, document_id, request_id)
+
         await self._activity_log_service.log(
             collection_name=request.collection_name,
             action=ActionType.ADD_DOCUMENT,
@@ -186,6 +193,26 @@ class UnifiedUploadUseCase:
             chunking_config=chunking_config,
             status=status,
         )
+
+    async def _save_original(
+        self, request: UnifiedUploadRequest, document_id: str, request_id: str,
+    ) -> None:
+        """KB 업로드의 원본 보관 (source-passage-viewer §2.2).
+
+        인덱싱이 완전히 실패한 문서는 부르지 않아 고아 파일을 만들지 않는다.
+        sink 가 안에서 예외를 흡수하지만, 계약 밖 예외도 업로드를 막지 않게 한 번 더 감싼다.
+        """
+        if self._original_sink is None or not request.extra_metadata.get("kb_id"):
+            return
+        try:
+            await self._original_sink.save(
+                document_id, request.filename, request.file_bytes, request_id
+            )
+        except Exception as e:
+            self._logger.warning(
+                "Original sink raised, continuing",
+                exception=e, request_id=request_id, document_id=document_id,
+            )
 
     def _build_strategy(self, request: UnifiedUploadRequest):
         """전략 선택 (clause-aware-chunking Design D10).

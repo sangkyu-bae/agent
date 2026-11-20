@@ -21,6 +21,13 @@ load_dotenv()
 
 
 from src.config import settings
+# source-passage-viewer §11.2 #5 — 원문 뷰어 조립 접근자. 기능 제거 시 이 import 와
+# wire 호출 1곳·주입 4곳(sink 3, enricher 1)을 지운다. 끄기만 할 때는 SOURCE_VIEWER_ENABLED=false.
+from src.api.source_viewer_di import (
+    source_viewer_enricher,
+    source_viewer_sink,
+    wire_source_viewer,
+)
 from src.api.routes.document_upload import (
     router as document_router,
     GraphDocumentProcessor,
@@ -582,6 +589,7 @@ def _make_run_sources_service(session: AsyncSession, logger) -> RunSourcesServic
         ToolCatalogRepository(session, logger),
         logger,
         max_items=settings.agent_run_sources_max_items,
+        viewer_enricher=source_viewer_enricher(),
     )
 
 
@@ -4562,6 +4570,7 @@ def create_unified_upload_factories():
             document_metadata_repo=document_metadata_repo,
             activity_log_service=log_service,
             logger=app_logger,
+            original_sink=source_viewer_sink(),
         )
 
     return use_case_factory
@@ -4839,6 +4848,7 @@ def create_kb_document_delete_factory(kb_use_case_factory):
             logger=StructuredLogger("kb_document_delete.deleter"),
             # graph-rag-foundation §6.2: 삭제 후 확장 훅
             extension_hooks=get_extension_hooks(),
+            original_sink=source_viewer_sink(),
         )
 
     def delete_factory(session: AsyncSession = Depends(get_session)):
@@ -6563,6 +6573,8 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_kb_document_chunks_use_case] = (
         _kb_chunks_factory
     )
+    # source-passage-viewer §4 — 킬스위치 on + 원본 경로 있을 때만 원본 API 등록
+    wire_source_viewer(app, kb_uc_factory=_kb_uc_factory, get_session=get_session)
     # KB 문서 삭제 DI (kb-document-management)
     app.dependency_overrides[get_delete_kb_document_use_case] = (
         create_kb_document_delete_factory(_kb_uc_factory)
@@ -6697,6 +6709,7 @@ def create_app() -> FastAPI:
             logger=StructuredLogger("doc_browse.delete"),
             # graph-rag-foundation §6.2: 삭제 후 확장 훅
             extension_hooks=get_extension_hooks(),
+            original_sink=source_viewer_sink(),
         )
 
     app.dependency_overrides[get_list_documents_use_case] = _list_documents_uc_factory
