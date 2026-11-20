@@ -12,6 +12,7 @@
 | extractor-template-preview | completed | 98.6% (Check, Minor 5건 즉시 반영) | 2026-11-09 | [extractor-template-preview/](extractor-template-preview/) |
 | document-file-preview | completed | 96.5% (Check 95.3% → Act-1) | 2026-11-19 | [document-file-preview/](document-file-preview/) |
 | claude-agent-e2e-fixes | completed | 97% (Check 96% → Act-1) | 2026-11-19 | [claude-agent-e2e-fixes/](claude-agent-e2e-fixes/) |
+| source-passage-viewer | completed | 97.2% (Check 94.8% → Act-1) | 2026-11-20 | [source-passage-viewer/](source-passage-viewer/) |
 
 > 백엔드·프론트 전용 사이클은 `idt/docs/archive/2026-11/`, `idt_front/docs/archive/2026-11/` 에 있다.
 
@@ -72,3 +73,7 @@
 | claude-agent-e2e-fixes | 엑셀 생성이 끝난 뒤 실패했던 분석 워커를 다시 호출하는 비연속 재호출(분석 → 엑셀 → 분석) — 연속 상한으로는 막히지 않음 | 라우팅 | 수퍼바이저 작업 시 |
 | claude-agent-e2e-fixes | 수퍼바이저 결정 실패 종료 경로에서 반복 상태(repeat_worker_*) 미리셋 — 런이 끝나 실영향 없음 | 경미 | 수퍼바이저 리팩터 시 |
 | claude-agent-e2e-fixes | 운영 배포 시 V092 적용 + Opus 5.5 등 항상 추론하는 모델의 "최대 출력 토큰" 설정, 구형 Anthropic 기본 출력이 16000으로 바뀐 영향 확인 | 배포 의존 | 운영 배포 시 |
+| **source-passage-viewer** | **임베딩(Qdrant) 검색 경로의 칩 → 원문 패널 라이브 확인** — 로컬 OpenAI 크레딧 소진으로 Claude + BM25(ES) 경로만 확인 | 확인 | **운영 반영 전** |
+| source-passage-viewer | 운영 반영: `SOURCE_VIEWER_ENABLED=true`, `DOCUMENT_ORIGINAL_STORAGE_DIR` 볼륨 경로 지정·백업 대상 포함 (기본 off) | 배포 의존 | 운영 배포 시 |
+| source-passage-viewer | 토큰 단위 child 청킹이 한글을 바이트 중간에서 잘라 청크에 U+FFFD 생성 — 뷰어 매칭은 정규화로 흡수(Design §12 M19), 청킹 자체는 미수정 | 결함 후속 | 청킹 작업 시 |
+| source-passage-viewer | 원본 뷰어 매칭 범위를 구절 쪽 ±1 로 좁히기(M24), 컬렉션 전체 삭제 시 원본 고아 정리(M26), 모바일 폭 화면 확인 | 경미 | 요청 시 |
