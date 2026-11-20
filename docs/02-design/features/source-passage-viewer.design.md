@@ -437,8 +437,10 @@ idt_front/src/components/sourceViewer/{SourceViewerButton,SourceViewerPanel,Sour
 | F2 | `idt_front/src/components/chat/SourceCitation.tsx` | 문서 칩에 `<SourceViewerButton>` 1줄 | 1줄 삭제 |
 | F3 | `idt_front/src/pages/ChatPage/index.tsx` | `lazy(SourceViewerPanel)` + Boundary 마운트 | 블록 삭제 |
 | F4 | `idt_front/src/constants/api.ts` | 원본 엔드포인트 상수 | 삭제 |
+| F5 | `idt_front/src/lib/queryKeys.ts` | `sourceViewer.original` 키 | 삭제 |
+| F6 | `idt_front/package.json` | `pdfjs-dist` 6.5.438 (지연 로드 청크) | 의존성 제거 |
 
-`.env.example`에는 두 키를 추가한다. 이 표는 AST 계약 테스트(§8.2 #16)의 선언 목록과 같아야 한다.
+`.env.example`에는 두 키를 추가한다. **AST 계약 테스트(§8.2 #16)는 import 소비자만 강제한다**(source_viewer 소비자 = {di, 라우터}, di 소비자 = {main.py}). duck typing 연결 지점(#1–#4, #6, #7)과 프론트 F1–F6은 이 표가 SoT다.
 
 ### 11.3 Session Guide
 
@@ -500,6 +502,12 @@ idt_front/src/components/sourceViewer/{SourceViewerButton,SourceViewerPanel,Sour
 | M20 | pdf.js 6: 문서 정리는 `PDFDocumentLoadingTask.destroy()`, 텍스트 레이어는 쪽 컨테이너의 `--total-scale-factor`·`--scale-round-x/y` 에 의존 → `lib/pdfTextLayer.css`·`pdfRenderer` 가 설정 | 전체 뷰어 CSS(168KB) 대신 텍스트 레이어 규칙만 발췌. `isEvalSupported` 옵션은 v6 에 없음 |
 
 | M21 | 원본 음영 겹침: "앞 구절이 먼저 차지" → **모든 구절 경계에서 자르고 조각을 포함하는 모든 구절에 소속**(텍스트 뷰어 `toSegments` 와 같은 규칙). `setCurrentPassage` 는 전부 지운 뒤 현재 구절만 표시 | Claude 라이브 실측: 검색 결과에 서로 포함되는 청크가 섞여 5개 중 2개 구절이 자기 mark 0개 → 이동해도 강조·스크롤 없음. 수정 후 5/5 모두 현재 표시 |
+
+| M22 | Design 본문과 표기만 다른 부분: 음영색은 `bg-amber-200/70` 대신 warning 토큰(`--color-warning-bg/-border`, 토큰 규칙), 패널 모드는 스토어가 아니라 `SourceViewerBody` 로컬 상태(문서가 바뀌면 key 로 초기화), `Passage.rank` 는 wire 에 싣지 않고 배열 순서로 표현 | 구현이 규칙·단순성 면에서 맞다 |
+| M23 | (Check 반영) 위치를 못 찾은 구절 안내를 `MissingPassageNotice` 로 통일 — 세 뷰어 모두 FFFD 를 뺀 발췌, 원본 뷰어는 [텍스트로 보기]. Esc 닫기는 `SourceViewerShell` 로 이동(오류 대체 화면도 닫힘). PDF 로드 중 언마운트 시 도착한 문서를 정리 | Analysis 갭 #1·#3·#4 |
+| M24 | 원본 뷰어의 매칭 범위는 §5.4 의 "구절 page ±1" 이 아니라 **렌더된 전체 쪽** | 실측 문서는 child `page` 메타가 비어 있어 구절별 범위를 정할 수 없다. 같은 문구가 여러 쪽에 있으면 첫 위치를 칠할 수 있다 — 쪽 메타가 채워지는 파서 경로에서 재검토 |
+| M25 | `main.py` 는 `source_viewer_di` 를 최상위에서 import 한다. 모듈 import 자체의 실패는 §6 "조립 실패 → None" 으로 흡수되지 않는다 | `graph_rag_di` 와 같은 수준으로 유지(패키지에 외부 의존이 없어 import 실패 가능성이 낮다) |
+| M26 | 원본 고아: 컬렉션 전체 삭제(`delete_collection`)는 문서별 삭제 훅을 거치지 않아 원본이 남는다. KB 삭제는 소프트 삭제라 벡터·메타와 함께 보존(기존 정책) | 이월 — 정리 잡을 만들 때 원본 루트도 대상에 넣는다 |
 
 ### 12.1 module-7 실측 (2026-11-20)
 

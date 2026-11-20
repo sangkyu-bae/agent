@@ -57,4 +57,15 @@ describe('SourceViewerMount', () => {
     await userEvent.click(screen.getByRole('button', { name: '원문 패널 닫기' }));
     expect(useSourceViewerStore.getState().target).toBeNull();
   });
+
+  // Analysis 갭 #4: Esc 처리가 패널 안에만 있으면 오류 대체 화면은 Esc 로 닫히지 않는다.
+  it('오류 대체 화면도 Esc 로 닫힌다', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    panelMode.throws = true;
+    openTarget();
+    render(<SourceViewerMount />, { wrapper: createWrapper() });
+    await screen.findByText('원문을 열 수 없습니다.');
+    await userEvent.keyboard('{Escape}');
+    expect(useSourceViewerStore.getState().target).toBeNull();
+  });
 });

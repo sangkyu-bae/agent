@@ -2,6 +2,7 @@
 // jsdom 은 PDF 를 그릴 수 없으므로 렌더 경계(lib/pdfRenderer)만 mock 한다(docxRenderer 선례).
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 import { loadPdf } from '@/lib/pdfRenderer';
 import type { SourceViewerPassage } from '@/types/sourceViewer';
@@ -70,6 +71,39 @@ describe('PdfPassageViewer', () => {
     const onFallback = vi.fn();
     render(<PdfPassageViewer blob={blob} passages={[passage(1)]} texts={['x']} index={0} onFallback={onFallback} />);
     await waitFor(() => expect(onFallback).toHaveBeenCalledWith('render'));
+  });
+
+  // Analysis 갭 #1 (FR-12·SC-4): 원본 뷰어도 텍스트 뷰어처럼 발췌와 텍스트 전환을 준다.
+  it('위치를 못 찾으면 깨진 문자를 뺀 발췌와 [텍스트로 보기]를 보여 준다', async () => {
+    vi.mocked(loadPdf).mockResolvedValue(fakeDoc());
+    const onShowText = vi.fn();
+    render(
+      <PdfPassageViewer
+        blob={blob}
+        passages={[{ ...passage(3), excerpt: '�없는 문장입니다' }]}
+        texts={['없는 문장']}
+        index={0}
+        onFallback={vi.fn()}
+        onShowText={onShowText}
+      />,
+    );
+    expect(await screen.findByText('없는 문장입니다')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '텍스트로 보기' }));
+    expect(onShowText).toHaveBeenCalled();
+  });
+
+  // Analysis 갭 #3: 로드가 끝나기 전에 언마운트돼도 문서·워커를 정리한다.
+  it('로드 완료 전에 언마운트되면 도착한 문서를 정리한다', async () => {
+    const doc = fakeDoc();
+    let resolve: (d: ReturnType<typeof fakeDoc>) => void = () => {};
+    vi.mocked(loadPdf).mockImplementation(() => new Promise((r) => { resolve = r; }));
+    const { unmount } = render(
+      <PdfPassageViewer blob={blob} passages={[passage(1)]} texts={['x']} index={0} onFallback={vi.fn()} />,
+    );
+    unmount();
+    resolve(doc);
+    await waitFor(() => expect(doc.destroy).toHaveBeenCalled());
+    expect(doc.renderPage).not.toHaveBeenCalled();
   });
 
   it('쪽 정보가 없으면 앞쪽부터 상한까지 렌더한다', async () => {

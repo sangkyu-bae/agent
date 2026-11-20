@@ -50,6 +50,11 @@ const SourceViewerBody = ({ viewer, index }: SourceViewerBodyProps) => {
     setNotice(null);
     setMode(next);
   };
+  // 위치를 못 찾은 구절 안내의 [텍스트로 보기] — 실패 대체가 아닌 사용자 선택이라 안내 없음
+  const showText = useCallback(() => {
+    setNotice(null);
+    setMode(VIEWER_MODE.TEXT);
+  }, []);
 
   const showOriginal = mode === VIEWER_MODE.ORIGINAL && viewer.original !== null;
   return (
@@ -78,6 +83,7 @@ const SourceViewerBody = ({ viewer, index }: SourceViewerBodyProps) => {
             texts={texts}
             index={index}
             onFallback={fallback}
+            onShowText={showText}
           />
         ) : (
           <p role="status" className="p-4 text-sm text-fg-secondary">원문을 불러오는 중입니다…</p>

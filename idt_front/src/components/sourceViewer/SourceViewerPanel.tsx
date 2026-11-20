@@ -1,5 +1,4 @@
 // Design Ref: source-passage-viewer §5.1·§5.5 — 헤더·구절 이동·본문(텍스트/원본 전환은 SourceViewerBody).
-import { useEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 import IconButton from '@/components/ui/IconButton';
@@ -8,21 +7,10 @@ import { useSourceViewerStore } from '@/store/sourceViewerStore';
 import SourceViewerBody from './SourceViewerBody';
 import SourceViewerShell from './SourceViewerShell';
 
-const useEscapeToClose = (close: () => void) => {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') close();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [close]);
-};
-
 const SourceViewerPanel = () => {
   const target = useSourceViewerStore((s) => s.target);
   const index = useSourceViewerStore((s) => s.index);
   const { close, next, prev } = useSourceViewerStore.getState();
-  useEscapeToClose(close);
   if (!target) return null;
 
   const { passages } = target.viewer;

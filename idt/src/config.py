@@ -388,10 +388,10 @@ class Settings(BaseSettings):
 
     # Source Passage Viewer (source-passage-viewer Design §11.2 #6)
     # 근거 칩 → 원문 구절 음영. 킬스위치 기본 off — false 면 원본 보관·칩 viewer 키·
-    # 원본 API 라우터가 모두 없던 상태. 소비: main.py get_source_viewer() (module-4).
+    # 원본 API 라우터가 모두 없던 상태. 소비: src/api/source_viewer_di.py build_source_viewer() `if not settings.source_viewer_enabled`.
     source_viewer_enabled: bool = False
     # 원본 파일 보관 루트. 비우면 원본 보관 off(텍스트 뷰어만).
-    # 소비: main.py get_source_viewer() → LocalDiskOriginalStore(root=) (module-4).
+    # 소비: src/api/source_viewer_di.py build_source_viewer() → LocalDiskOriginalStore(root).
     document_original_storage_dir: str = ""
 
     # Judgment Backend (judgment-backend Design §4.3)

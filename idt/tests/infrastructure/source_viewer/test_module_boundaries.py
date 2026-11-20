@@ -26,7 +26,7 @@ _DECLARED_CONSUMERS = {
     "api/source_viewer_di.py",
     "api/routes/source_viewer_router.py",
 }
-# 조립 모듈을 부르는 곳은 main.py 하나 — 기능 제거 시 wire 호출과 주입 3곳만 지운다.
+# 조립 모듈을 부르는 곳은 main.py 하나 — 기능 제거 시 import·wire 호출·주입 4곳만 지운다.
 _DI_MODULE = "src.api.source_viewer_di"
 _DI_CONSUMERS = {"api/main.py"}
 

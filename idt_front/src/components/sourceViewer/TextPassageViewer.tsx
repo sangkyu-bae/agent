@@ -8,6 +8,8 @@ import type { SourceViewerRef } from '@/types/sourceViewer';
 import { buildPassageDocument, toSegments } from '@/utils/buildPassageDocument';
 import { cn } from '@/utils/cn';
 
+import MissingPassageNotice from './MissingPassageNotice';
+
 interface TextPassageViewerProps {
   viewer: SourceViewerRef;
   index: number;
@@ -45,15 +47,7 @@ const TextPassageViewer = ({ viewer, index }: TextPassageViewerProps) => {
   const anchor = segments.findIndex((s) => s.passages.includes(index));
   return (
     <div className="flex-1 overflow-y-auto">
-      {missing && (
-        <div className="m-4 rounded-md border border-warning-border bg-warning-bg p-3 text-sm text-fg-secondary">
-          <p className="font-medium text-warning">원문에서 정확한 위치를 찾지 못했습니다.</p>
-          {/* 청킹이 한글을 바이트 중간에서 자른 깨진 문자(U+FFFD)는 보여 주지 않는다 */}
-          {missing.excerpt && (
-            <p className="mt-2 whitespace-pre-wrap break-words">{missing.excerpt.replace(/�/g, '')}</p>
-          )}
-        </div>
-      )}
+      {missing && <MissingPassageNotice excerpt={missing.excerpt} />}
       <p className="whitespace-pre-wrap break-words p-4 text-sm leading-[1.7] text-fg">
         {segments.map((seg, i) => {
           if (seg.passages.length === 0) return <span key={i}>{seg.text}</span>;

@@ -6,6 +6,8 @@ import { loadPdf } from '@/lib/pdfRenderer';
 import type { SourceViewerPassage } from '@/types/sourceViewer';
 import { highlightPassages, setCurrentPassage } from '@/utils/domHighlight';
 
+import MissingPassageNotice from './MissingPassageNotice';
+
 interface PdfPassageViewerProps {
   blob: Blob;
   passages: SourceViewerPassage[];
@@ -13,6 +15,8 @@ interface PdfPassageViewerProps {
   texts: string[];
   index: number;
   onFallback: (reason: 'render') => void;
+  /** 위치를 못 찾은 구절 안내의 [텍스트로 보기] (FR-12) */
+  onShowText?: () => void;
 }
 
 /** 쪽 정보가 없는 구절이 있을 때 앞에서부터 렌더할 최대 쪽 수 */
@@ -33,7 +37,7 @@ const pagesToRender = (passagePages: (number | null)[], numPages: number): numbe
 
 type Marks = (HTMLElement[] | null)[];
 
-const PdfPassageViewer = ({ blob, passages, texts, index, onFallback }: PdfPassageViewerProps) => {
+const PdfPassageViewer = ({ blob, passages, texts, index, onFallback, onShowText }: PdfPassageViewerProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [marks, setMarks] = useState<Marks | null>(null);
   // 배열 참조가 아니라 내용이 바뀔 때만 다시 렌더한다 — PDF 재로딩은 비싸다.
@@ -47,8 +51,12 @@ const PdfPassageViewer = ({ blob, passages, texts, index, onFallback }: PdfPassa
     let destroy: (() => void) | undefined;
     const run = async () => {
       const doc = await loadPdf(blob);
+      // 로드 중에 cleanup 이 먼저 돌았으면 여기서 정리한다 (Analysis 갭 #3)
+      if (cancelled) {
+        doc.destroy();
+        return;
+      }
       destroy = doc.destroy;
-      if (cancelled) return;
       container.replaceChildren();
       const width = Math.max(container.clientWidth - 32, 0) || DEFAULT_WIDTH;
       for (const n of pagesToRender(JSON.parse(pagesKey) as (number | null)[], doc.numPages)) {
@@ -81,11 +89,11 @@ const PdfPassageViewer = ({ blob, passages, texts, index, onFallback }: PdfPassa
   return (
     <div className="flex-1 overflow-y-auto bg-surface-sunken">
       {missing && (
-        <p role="status" className="m-4 rounded-md border border-warning-border bg-warning-bg p-3 text-sm text-warning">
-          {current?.page != null
-            ? `원문에서 정확한 위치를 찾지 못해 ${current.page}쪽을 보여 줍니다.`
-            : '원문에서 정확한 위치를 찾지 못했습니다.'}
-        </p>
+        <MissingPassageNotice
+          message={current?.page != null ? `원문에서 정확한 위치를 찾지 못해 ${current.page}쪽을 보여 줍니다.` : undefined}
+          excerpt={current?.excerpt}
+          onShowText={onShowText}
+        />
       )}
       <div ref={containerRef} className="flex flex-col items-center gap-4 p-4" />
     </div>
