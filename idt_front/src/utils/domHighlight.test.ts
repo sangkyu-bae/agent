@@ -42,12 +42,22 @@ describe('highlightPassages', () => {
     expect(marked(el, 1)).toBe('사아자');
   });
 
-  it('겹치는 구절은 앞 구절이 먼저 차지한 부분을 다시 감싸지 않는다', () => {
+  // module-7 라이브 실측: parent·child 청크가 함께 검색되면 child 가 parent 안에 완전히 포함된다.
+  // "앞 구절이 먼저 차지"하면 child 는 자기 mark 가 0개라 이동해도 아무것도 강조되지 않았다.
+  it('겹치는 구절은 경계에서 잘라 조각을 두 구절이 함께 가진다', () => {
     const el = root('<p>0123456789</p>');
-    highlightPassages(el, ['234567', '456789']);
+    const result = highlightPassages(el, ['234567', '456789']);
     expect(el.textContent).toBe('0123456789');
-    expect(marked(el, 0)).toBe('234567');
-    expect(marked(el, 1)).toBe('89');
+    expect(result[0]?.map((m) => m.textContent).join('')).toBe('234567');
+    expect(result[1]?.map((m) => m.textContent).join('')).toBe('456789');
+    expect(el.querySelectorAll('mark')).toHaveLength(3);
+  });
+
+  it('다른 구절 안에 완전히 포함된 구절도 자기 mark 를 가진다', () => {
+    const el = root('<p>가나다라마바사</p>');
+    const result = highlightPassages(el, ['가나다라마바사', '다라마']);
+    expect(result[1]?.map((m) => m.textContent).join('')).toBe('다라마');
+    expect(result[0]?.map((m) => m.textContent).join('')).toBe('가나다라마바사');
   });
 });
 
@@ -61,5 +71,14 @@ describe('setCurrentPassage', () => {
     expect(marks[0]?.[0].hasAttribute('aria-current')).toBe(false);
     setCurrentPassage(marks, 0);
     expect(marks[1]?.[0].hasAttribute('aria-current')).toBe(false);
+  });
+
+  it('포함된 구절로 이동하면 공유 조각이 현재 표시를 유지한다', () => {
+    const el = root('<p>가나다라마바사</p>');
+    const marks = highlightPassages(el, ['가나다라마바사', '다라마']);
+    const first = setCurrentPassage(marks, 1);
+    expect(first?.textContent).toBe('다라마');
+    const current = [...el.querySelectorAll('mark[aria-current]')].map((m) => m.textContent).join('');
+    expect(current).toBe('다라마');
   });
 });

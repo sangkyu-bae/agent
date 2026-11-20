@@ -499,6 +499,8 @@ idt_front/src/components/sourceViewer/{SourceViewerButton,SourceViewerPanel,Sour
 | M19 | 정규화에서 U+FFFD 를 지운다. 안내 발췌 표시에서도 지운다 | module-7 실측: 토큰 단위 child 청킹이 한글을 바이트 중간에서 잘라 청크 앞뒤에 `�` 가 섞인다(17개 중 5개) — 청킹 쪽 기존 결함, 이번 범위 밖 |
 | M20 | pdf.js 6: 문서 정리는 `PDFDocumentLoadingTask.destroy()`, 텍스트 레이어는 쪽 컨테이너의 `--total-scale-factor`·`--scale-round-x/y` 에 의존 → `lib/pdfTextLayer.css`·`pdfRenderer` 가 설정 | 전체 뷰어 CSS(168KB) 대신 텍스트 레이어 규칙만 발췌. `isEvalSupported` 옵션은 v6 에 없음 |
 
+| M21 | 원본 음영 겹침: "앞 구절이 먼저 차지" → **모든 구절 경계에서 자르고 조각을 포함하는 모든 구절에 소속**(텍스트 뷰어 `toSegments` 와 같은 규칙). `setCurrentPassage` 는 전부 지운 뒤 현재 구절만 표시 | Claude 라이브 실측: 검색 결과에 서로 포함되는 청크가 섞여 5개 중 2개 구절이 자기 mark 0개 → 이동해도 강조·스크롤 없음. 수정 후 5/5 모두 현재 표시 |
+
 ### 12.1 module-7 실측 (2026-11-20)
 
 | 항목 | 결과 |
@@ -508,5 +510,8 @@ idt_front/src/components/sourceViewer/{SourceViewerButton,SourceViewerPanel,Sour
 | 원본 삭제(SC-7) | KB 문서 삭제 후 원본 파일 제거 확인 |
 | 매칭률(실제 pdf.js 텍스트 레이어) | 수정 전 child 5/17(29%) → M18·M19 후 **child 17/17, parent 7/7(100%)** |
 | 패널 화면 | 원본 PDF 렌더·음영·구절 이동·텍스트↔원본 전환·ES 대체 텍스트 뷰어 확인(스크린샷: 세션 기록) |
-| 미확인 | 에이전트 답변 → 칩 → 버튼 클릭의 라이브 경로. **OpenAI 크레딧 소진(429 insufficient_quota)** 으로 임베딩·supervisor LLM 실패. 칩 `viewer` 생성은 단위·연결 테스트, 버튼→스토어는 컴포넌트 테스트로만 확인 |
+| 라이브 경로(Claude) | OpenAI 크레딧 소진(429)으로 에이전트 LLM 을 `claude-sonnet-4-6`, RAG 도구를 `bm25_only`(ES) 로 바꿔 실행. 화면에서 질문 → 답변 칩 "원문 보기" → 패널에 원본 PDF·음영 확인. 칩 `viewer`: original=pdf, 구절 5개. 스크립트 2회 + 화면 1회 모두 동일 |
+| 재진입(SC-8) | 세션 근거 API 3개 세션 모두 `viewer`(original=pdf, 구절 5) 포함 |
+| 라이브 매칭 | 구절 5개 모두 원문 위치 찾음. 겹침으로 2개가 mark 0개였던 문제 → M21 로 5/5 |
+| 미확인 | 임베딩 경로(Qdrant) 검색 결과의 칩 — OpenAI 크레딧 복구 후. 모바일 폭 화면 |
 | 관찰 | child 청크 `page` 메타데이터가 비어 있음(이 문서의 파서 경로) → 원본 뷰어는 앞 10쪽 렌더로 대체. 백그라운드 탭에서는 pdf.js 렌더가 멈춘다(브라우저 rAF 제약). 업로드 직후 원본 조회는 메타데이터 커밋 전이라 404 가 날 수 있다(응답 후 커밋되는 기존 세션 경계) |
