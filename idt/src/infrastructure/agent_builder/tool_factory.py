@@ -37,8 +37,10 @@ class ToolFactory:
         wiki_repo_builder: Any = None,             # ★ (session) -> WikiArticleRepository
         wiki_folder_repo_builder: Any = None,      # ★ wiki-folder-summaries: (session) -> WikiFolderSummaryRepository
         extension_hooks: ExtensionHooks | None = None,  # ★ graph-rag-foundation §2.1
+        citation_labeler: Any = None,  # ★ answer-citation S4 (None=기존 머리말)
     ) -> None:
         self._logger = logger
+        self._citation_labeler = citation_labeler
         # graph-rag-foundation §2.1: 보조 검색 소스는 create 시점에 읽는다 —
         # 확장 모듈이 팩토리 생성 뒤(기동 후반)에 등록해도 반영된다.
         self._extension_hooks = extension_hooks
@@ -143,6 +145,8 @@ class ToolFactory:
                     use_supplemental=rag_config.use_graph,
                     supplemental_source=self._supplemental_source(),
                     supplemental_grant=supplemental_grant,
+                    # ── answer-citation-verification S4: 인용 번호 머리말 ──
+                    citation_labeler=self._citation_labeler,
                 )
             case "tavily_search":
                 from src.infrastructure.web_search.tavily_tool import TavilySearchTool

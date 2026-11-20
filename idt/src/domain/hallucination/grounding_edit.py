@@ -57,6 +57,19 @@ class GroundingEditPolicy:
         """공백 차이만 흡수한 원문 일치 — 판정기는 줄 끝 공백('  \\n')을 빼고 인용한다."""
         return re.compile(r"\s+".join(re.escape(token) for token in span.split()))
 
+    @classmethod
+    def sentence_spans(cls, text: str) -> list[tuple[int, int]]:
+        """문장 구간 [start, end) 목록 — 문장 제거와 같은 경계(공백뿐인 구간 제외).
+
+        answer-citation-verification D-06: 인용 파서가 이 경계를 그대로 써야
+        판정한 문장과 문장 제거 후 남은 문장이 같은 단위로 맞는다.
+        """
+        bounds = cls._boundaries(text)
+        return [
+            (start, end) for start, end in zip(bounds, bounds[1:])
+            if text[start:end].strip()
+        ]
+
     @staticmethod
     def _boundaries(text: str) -> list[int]:
         """문장이 시작·끝날 수 있는 위치. 번호 목록의 '1.' 은 끝 경계가 아니다."""

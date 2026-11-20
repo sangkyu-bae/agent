@@ -196,7 +196,8 @@ class CitationOutcome:
 |--------|------------|------|
 | `CitationMarkerParser.pairs(text, known)` | 본문, 레지스트리 번호 집합 → `CitationPair` 목록 | 코드 블록 제외(D-09), `[1, 3]` 정규화, 문장 경계는 `GroundingEditPolicy._boundaries`(문장 종결·번호 목록·문단 경계) 규칙을 공개 정적 메서드 `sentence_spans()`로 꺼내 재사용(문장 제거와 같은 경계 → D-06 일치), `known`에 없는 번호는 무시 |
 | `CitationFinalizePolicy.finalize(text, checks, registry, judged)` | 최종 본문, 판정 결과 → `CitationOutcome` | 통과 = 번호 존재 ∧ supported(D-07). 탈락 표시 제거, 등장 순서 재번호(D-08). `judged=False`면 `none/judge_failed`, 표시 0개면 `none/no_markers`, 통과 0개면 `none/all_rejected` |
-| `EvidenceLocator.find(evidence, chunk_text)` | → bool | 공백 접기 + NFKC 후 부분 문자열 |
+| `EvidenceLocator.find(evidence, chunk_text)` | → bool | 공백 전부 제거 + U+FFFD 제거 + NFKC 후 부분 문자열 (원문 뷰어 매칭과 같은 기준, Do module-5 확정) |
+| `CitationMarkerParser.normalize(text)` | → 본문 | `[1, 3]`→`[1][3]`, `문장.[1]`→`문장[1].` (종결 부호 뒤 공백을 요구하는 문장 경계 규칙 때문에 옮기지 않으면 두 문장이 합쳐짐 — Do module-5 확정). 코드 블록 제외 |
 | `CitationMarkerParser.strip_all(text)` | → 본문 | D-10 이전 대화 정리용 |
 
 ### 3.3 Database Schema
@@ -591,3 +592,4 @@ idt_front/src/
 | Version | Date | Changes | Author |
 |---------|------|---------|--------|
 | 0.1 | 2026-11-20 | 최초 작성 — C안 선택, 재번호·관리자 카드 위치 확정 | 배상규 |
+| 0.2 | 2026-11-20 | Do module-5: 정규화(종결 부호 뒤 번호 이동)·근거 문장 비교 기준 확정 | 배상규 |
