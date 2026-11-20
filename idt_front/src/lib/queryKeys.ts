@@ -94,6 +94,10 @@ export const queryKeys = {
 
   // ── Multimodal extraction (admin) ─────────────────────
   // ── Graph RAG (graph-rag-foundation, admin) ───────────
+  groundingJudge: {
+    all: ['groundingJudge'] as const,
+    settings: () => [...queryKeys.groundingJudge.all, 'settings'] as const,
+  },
   graphRag: {
     all: ['graphRag'] as const,
     capabilities: () => [...queryKeys.graphRag.all, 'capabilities'] as const,

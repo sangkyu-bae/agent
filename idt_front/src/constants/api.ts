@@ -160,6 +160,8 @@ export const API_ENDPOINTS = {
 
   // Admin — Multimodal extraction (multimodal-extractor Design §4.1)
   ADMIN_MULTIMODAL_SETTINGS: '/api/v1/admin/multimodal/settings',
+  // Admin — 근거 판정 모델 (answer-citation-verification Design §4.1)
+  ADMIN_GROUNDING_JUDGE_SETTINGS: '/api/v1/admin/grounding-judge/settings',
   ADMIN_MULTIMODAL_TEST: '/api/v1/admin/multimodal/test',
   PREVIEW_MULTIMODAL: '/api/v1/preview/multimodal',
   // graph-rag-foundation (Design §4.1) — 모듈 미등록이면 전부 404

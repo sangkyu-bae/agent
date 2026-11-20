@@ -14,6 +14,12 @@ const renderPage = () =>
   render(<AdminLlmModelsPage />, { wrapper: createWrapper() });
 
 describe('AdminLlmModelsPage', () => {
+  it('P0: 상단에 근거 판정 모델 카드를 보여 준다 (answer-citation-verification §5.1)', async () => {
+    renderPage();
+    expect(await screen.findByRole('heading', { name: '근거 판정 모델' })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: '근거 판정 모델' })).toBeInTheDocument();
+  });
+
   it('P1: 모델 목록을 렌더한다 (상태 칩·기본 배지 포함)', async () => {
     renderPage();
     expect(await screen.findByText('GPT-4o')).toBeInTheDocument();
