@@ -37,7 +37,7 @@ _VERB_ADJ_TAGS = frozenset({"VV", "VA"})
 
 
 def _page_of(metadata: dict) -> int | None:
-    """청크 metadata 의 page 를 정수로. 없거나 숫자가 아니면 None (ES integer 매핑 보호)."""
+    """청크 metadata 의 page 를 정수로. 없거나 숫자가 아니면 None."""
     try:
         return int(metadata["page"])
     except (KeyError, TypeError, ValueError):

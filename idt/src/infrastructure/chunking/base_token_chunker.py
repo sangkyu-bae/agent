@@ -53,8 +53,8 @@ class BaseTokenChunker:
         if total_tokens <= self.config.chunk_size:
             return [text]
 
-        # Design Ref: answer-citation-verification FR-01 — 토큰 경계를 그대로 decode 하면
-        # 한글 한 글자가 두 토큰에 걸칠 때 양쪽 청크에 U+FFFD 가 생긴다.
+        # Design Ref: answer-citation-verification FR-01 — 토큰 경계를 그대로
+        # decode 하면 한글 한 글자가 두 토큰에 걸칠 때 양쪽 청크에 U+FFFD 가 생긴다.
         # 경계를 UTF-8 글자 경계로 맞춘 뒤 바이트를 잘라 decode 한다.
         data = text.encode("utf-8")
         offsets = self._byte_offsets(tokens)
@@ -80,22 +80,23 @@ class BaseTokenChunker:
 
         return chunks
 
-    def _byte_offsets(self, tokens: List[int]) -> List[int]:
+    def _byte_offsets(self, tokens: list[int]) -> list[int]:
         """토큰 i 의 시작 바이트 위치 (길이 len(tokens)+1, 마지막은 전체 바이트 수)."""
         offsets = [0]
         for token in tokens:
-            offsets.append(offsets[-1] + len(self._encoder.decode_single_token_bytes(token)))
+            size = len(self._encoder.decode_single_token_bytes(token))
+            offsets.append(offsets[-1] + size)
         return offsets
 
     @staticmethod
-    def _snap(offsets: List[int], data: bytes, index: int, direction: int) -> int:
-        """index 를 direction(-1 뒤로 / 1 앞으로) 방향의 가장 가까운 글자 경계 토큰으로."""
+    def _snap(offsets: list[int], data: bytes, index: int, direction: int) -> int:
+        """index 를 direction(-1 뒤로 / 1 앞으로)의 가장 가까운 글자 경계 토큰으로."""
         last = len(offsets) - 1
         while 0 < index < last and (data[offsets[index]] & 0xC0) == 0x80:
             index += direction
         return index
 
-    def _split_by_raw_tokens(self, tokens: List[int]) -> List[str]:
+    def _split_by_raw_tokens(self, tokens: list[int]) -> list[str]:
         """방어용 기존 동작 — 토큰 바이트가 원문과 맞지 않을 때만."""
         chunks = []
         step = self.config.chunk_size - self.config.chunk_overlap
