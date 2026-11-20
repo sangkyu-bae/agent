@@ -912,10 +912,33 @@ def get_utility_llm_provider() -> UtilityLLMProvider:
 
 # draft-grounding-check: 근거 판정 전용 공급자 (앱 수명 싱글톤, lazy).
 _grounding_judge_llm_provider: Optional[UtilityLLMProvider] = None
+# answer-citation-verification D-15·D-16: 관리자 설정 모델 → 위 env 공급자 순으로 해석.
+_admin_grounding_judge_llm_provider: Optional[UtilityLLMProviderPort] = None
 
 
-def get_grounding_judge_llm_provider() -> UtilityLLMProvider:
-    """근거 판정기 LLM 공급자 — settings.grounding_judge_model 을 이름으로 해석.
+def get_grounding_judge_llm_provider() -> UtilityLLMProviderPort:
+    """근거 판정기 LLM 공급자 — 관리자 설정 모델 우선, 없으면 env 공급자.
+
+    관리자 화면(grounding_judge_setting)에서 고른 활성 채팅 모델을 먼저 쓰고,
+    비었거나 쓸 수 없으면 기존 env 공급자(_env_grounding_judge_llm_provider)로 내려간다.
+    """
+    global _admin_grounding_judge_llm_provider
+    if _admin_grounding_judge_llm_provider is None:
+        from src.api.grounding_judge_di import build_grounding_judge_provider
+
+        _admin_grounding_judge_llm_provider = build_grounding_judge_provider(
+            fallback=_env_grounding_judge_llm_provider(),
+            # pii-masking-integration §8.6: 판정 경로는 마스킹 팩토리를 쓴다.
+            llm_factory=_pii_llm_factory,
+            session_factory=get_session_factory(),
+            logger=get_app_logger(),
+            ttl_seconds=settings.llm_model_cache_ttl_seconds,
+        )
+    return _admin_grounding_judge_llm_provider
+
+
+def _env_grounding_judge_llm_provider() -> UtilityLLMProvider:
+    """env 판정 공급자 — settings.grounding_judge_model 을 이름으로 해석.
 
     유틸리티 공급자와 같은 해석 규칙(활성 모델 이름 일치 → 실패 시 기본 모델)을
     쓰되 모델만 분리한다. 빈 값이면 유틸리티 공급자를 그대로 쓴다.
@@ -6815,6 +6838,14 @@ def create_app() -> FastAPI:
         judgment_backend=get_judgment_backend(),
         # module-5b: 관리자 검색 테스트의 비교용(처음 쓸 때 생성)
         hybrid_search_factory=create_hybrid_search_use_case,
+    )
+    # answer-citation-verification D-15: 근거 판정 모델 관리자 설정
+    # (/api/v1/admin/grounding-judge). 저장 시 판정 공급자 캐시를 바로 비운다.
+    from src.api.grounding_judge_di import wire_grounding_judge
+
+    wire_grounding_judge(
+        app, get_session=get_session, provider=get_grounding_judge_llm_provider(),
+        env_model_name=settings.grounding_judge_model, logger=get_app_logger(),
     )
     # golden-sample-blueprint: DI + /api/v1/admin/blueprints 라우터 (multimodal 레지스트리 재사용)
     from src.api.blueprint_di import wire_blueprint
