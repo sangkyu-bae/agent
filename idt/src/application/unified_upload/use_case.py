@@ -36,6 +36,14 @@ _KEYWORD_TAGS = frozenset({"NNG", "NNP", "VV", "VA"})
 _VERB_ADJ_TAGS = frozenset({"VV", "VA"})
 
 
+def _page_of(metadata: dict) -> int | None:
+    """청크 metadata 의 page 를 정수로. 없거나 숫자가 아니면 None (ES integer 매핑 보호)."""
+    try:
+        return int(metadata["page"])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
 class UnifiedUploadUseCase:
     def __init__(
         self,
@@ -320,6 +328,10 @@ class UnifiedUploadUseCase:
             }
             if "parent_id" in chunk.metadata:
                 body["parent_id"] = chunk.metadata["parent_id"]
+            # answer-citation-verification FR-02: BM25 히트에도 쪽 번호 (Qdrant 와 같게)
+            page = _page_of(chunk.metadata)
+            if page is not None:
+                body["page"] = page
             for key, value in request.extra_metadata.items():
                 body.setdefault(key, value)
             es_docs.append(ESDocument(id=chunk_id, body=body, index=self._es_index))

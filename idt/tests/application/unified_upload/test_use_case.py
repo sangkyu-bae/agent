@@ -515,3 +515,55 @@ class TestUnifiedUploadUseCase:
             if "Qdrant" in str(c)
         ]
         assert len(error_calls) >= 1
+
+
+# answer-citation-verification FR-02 — ES 청크에도 쪽 번호를 저장해 BM25 히트에 page 가 실린다.
+async def _es_body_for_chunk_metadata(metadata: dict) -> dict:
+    uc, deps = _build_use_case()
+    deps["collection_repo"].collection_exists.return_value = True
+    deps["activity_log_repo"].find_all.return_value = [_make_activity_log_entry()]
+    deps["embedding_model_repo"].find_by_model_name.return_value = _make_embedding_model()
+    deps["parser"].parse_bytes.return_value = [MagicMock()]
+    mock_embedding = AsyncMock()
+    mock_embedding.embed_documents.return_value = [[0.1] * 1536]
+    deps["embedding_factory"].create_from_string.return_value = mock_embedding
+    deps["morph_analyzer"].analyze.return_value = _make_morph_result()
+    deps["es_repo"].bulk_index.return_value = 1
+    base = {"chunk_id": "c-1", "chunk_type": "child", "chunk_index": 0, "total_chunks": 1}
+    with patch(
+        "src.application.unified_upload.use_case.ChunkingStrategyFactory"
+    ) as mock_factory, patch(
+        "src.application.unified_upload.use_case.QdrantVectorStore"
+    ) as mock_vs_cls:
+        mock_strategy = MagicMock()
+        mock_strategy.chunk.return_value = [_fake_chunk(metadata={**base, **metadata})]
+        mock_factory.create_strategy.return_value = mock_strategy
+        mock_vs = AsyncMock()
+        stored = MagicMock()
+        stored.value = "stored-id-1"
+        mock_vs.add_documents.return_value = [stored]
+        mock_vs_cls.return_value = mock_vs
+        await uc.execute(_make_request(), "req-1")
+    return deps["es_repo"].bulk_index.call_args[0][0][0].body
+
+
+class TestEsBodyPage:
+    @pytest.mark.asyncio
+    async def test_page_is_stored_as_int(self):
+        body = await _es_body_for_chunk_metadata({"page": 3})
+        assert body["page"] == 3
+
+    @pytest.mark.asyncio
+    async def test_numeric_string_page_is_converted(self):
+        body = await _es_body_for_chunk_metadata({"page": "7"})
+        assert body["page"] == 7
+
+    @pytest.mark.asyncio
+    async def test_missing_page_leaves_no_key(self):
+        body = await _es_body_for_chunk_metadata({})
+        assert "page" not in body
+
+    @pytest.mark.asyncio
+    async def test_invalid_page_is_skipped(self):
+        body = await _es_body_for_chunk_metadata({"page": "표지"})
+        assert "page" not in body
