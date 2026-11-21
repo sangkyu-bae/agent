@@ -120,3 +120,16 @@ class TestEvidenceLocator:
     def test_empty_or_missing(self):
         assert not EvidenceLocator.find("", "본문")
         assert not EvidenceLocator.find("없는 문장", "본문")
+
+
+class TestWrongChunkEvidence:
+    """벤치 발견(2026-11-21): 판정기가 다른 청크의 문장을 근거로 대며 supported 라고 답함."""
+
+    def test_evidence_found_only_in_other_chunk_rejects_citation(self):
+        out = _finalize("가[3].", {3: "근거 문장 2번이 여기에"})
+        assert (out.status, out.none_reason, out.text) == ("none", "all_rejected", "가.")
+
+    def test_evidence_found_nowhere_keeps_citation_without_evidence(self):
+        out = _finalize("가[3].", {3: "어느 청크에도 없는 문장"})
+        assert out.status == "verified"
+        assert out.citations[0].evidence is None

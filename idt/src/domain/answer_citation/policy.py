@@ -123,10 +123,28 @@ def _verdicts(
     verdicts: Verdicts = {}
     for p in pairs:
         check = by_id.get(p.pair_id)
-        if check is not None and check.supported and p.marker in chunks:
-            key = CitationMarkerParser.sentence_key(p.sentence)
-            verdicts[(key, p.marker)] = check.evidence
+        if check is None or not check.supported or p.marker not in chunks:
+            continue
+        if _evidence_from_other_chunk(check.evidence, p.marker, chunks):
+            continue  # 번호가 틀린 인용 — 다른 청크 문장을 근거로 댔다(D-07 보강)
+        key = CitationMarkerParser.sentence_key(p.sentence)
+        verdicts[(key, p.marker)] = check.evidence
     return verdicts
+
+
+def _evidence_from_other_chunk(
+    evidence: str, marker: int, chunks: Mapping[int, RegisteredChunk]
+) -> bool:
+    """근거 문장이 지정 청크엔 없고 다른 청크에만 있는가.
+
+    벤치(2026-11-21): 판정기가 틀린 번호의 인용에 실제 근거 청크 문장을 대며
+    supported 로 답했다. 어느 청크에도 없으면(복사 오류) 탈락시키지 않는다.
+    """
+    if not evidence or EvidenceLocator.find(evidence, chunks[marker].text):
+        return False
+    return any(
+        EvidenceLocator.find(evidence, c.text) for n, c in chunks.items() if n != marker
+    )
 
 
 def _renumber(hits: list[MarkerHit], kept: dict[int, str]) -> dict[int, int]:

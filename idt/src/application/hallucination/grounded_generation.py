@@ -14,6 +14,8 @@ import traceback
 from dataclasses import dataclass
 from typing import Awaitable, Callable, Literal
 
+
+from src.domain.hallucination.citation_check import CitationCheckRequest
 from src.domain.hallucination.grounding import GroundingJudgePort, GroundingVerdict
 from src.domain.hallucination.grounding_edit import GroundingEditPolicy
 from src.domain.hallucination.grounding_hints import GroundingHintPolicy
@@ -21,6 +23,8 @@ from src.domain.logging.interfaces.logger_interface import LoggerInterface
 
 Target = Literal["draft", "answer"]
 Generate = Callable[[str], Awaitable[str]]
+# answer-citation-verification S7: 판정할 본문 → 인용 검증 요청(인용이 없으면 None)
+CitationBuilder = Callable[[str], CitationCheckRequest | None]
 
 
 @dataclass(frozen=True)
@@ -29,6 +33,9 @@ class GroundedResult:
     attempts: int  # 생성 호출 수
     stripped: bool
     judged: bool  # 판정이 한 번이라도 성공했는가
+    # answer-citation-verification D-06: 마지막으로 성공한 판정과 그때의 인용 요청
+    verdict: GroundingVerdict | None = None
+    citation_request: CitationCheckRequest | None = None
 
 
 class GroundedGenerator:
@@ -48,6 +55,7 @@ class GroundedGenerator:
     async def run(
         self, *, generate: Generate, question: str, sources: str,
         max_retries: int, target: Target, request_id: str,
+        citations: CitationBuilder | None = None,
     ) -> GroundedResult:
         text = await generate("")
         reason = self._skip_reason(sources)
@@ -56,22 +64,55 @@ class GroundedGenerator:
                 "grounding skipped", target=target, request_id=request_id, reason=reason,
             )
             return GroundedResult(text, 1, False, False)
-        attempts, judged = 1, False
+        attempts, judged, last = 1, False, {}
         for attempt in range(max_retries + 1):
-            verdict = await self._judge_safely(question, sources, text, target, request_id)
+            request = self._citation_request(citations, text, request_id)
+            verdict = await self._judge_safely(
+                question, sources, text, target, request_id, request
+            )
             if verdict is None:
-                return GroundedResult(text, attempts, False, judged)
+                return GroundedResult(text, attempts, False, judged, **last)
             judged = True
+            last = {"verdict": verdict, "citation_request": request}
             high = verdict.high_claims
             if not high:
-                return GroundedResult(text, attempts, False, True)
+                return GroundedResult(text, attempts, False, True, **last)
             if attempt == max_retries:
-                return self._strip(text, high, attempts, target, request_id)
+                return self._strip(text, high, attempts, target, request_id, last)
             regenerated = await self._regenerate(generate, text, high, target, request_id)
             if regenerated is None:
-                return self._strip(text, high, attempts, target, request_id)
+                return self._strip(text, high, attempts, target, request_id, last)
             text, attempts = regenerated, attempts + 1
-        return GroundedResult(text, attempts, False, judged)
+        return GroundedResult(text, attempts, False, judged, **last)
+
+    async def verify_citations(
+        self, *, question: str, sources: str, text: str,
+        request: CitationCheckRequest | None, request_id: str,
+    ) -> GroundingVerdict | None:
+        """재작성 없이 인용만 1회 판정 (answer-citation-verification D-05).
+
+        근거 판정이 꺼져 있어도 인용 기능이 켜져 있으면 쓴다. 판정기가 없거나
+        요청이 비었거나 실패하면 None (fail-open — 답변은 그대로).
+        """
+        if self._judge is None or request is None or request.empty:
+            return None
+        return await self._judge_safely(
+            question, sources, text, "answer", request_id, request
+        )
+
+    def _citation_request(
+        self, citations: CitationBuilder | None, text: str, request_id: str
+    ) -> CitationCheckRequest | None:
+        if citations is None:
+            return None
+        try:
+            return citations(text)
+        except Exception as e:  # noqa: BLE001 — 인용 요청 실패는 기존 판정으로
+            self._logger.warning(
+                "citation request build failed", request_id=request_id,
+                exception_type=type(e).__name__,
+            )
+            return None
 
     def _skip_reason(self, sources: str) -> str:
         if not self._enabled:
@@ -84,12 +125,16 @@ class GroundedGenerator:
 
     async def _judge_safely(
         self, question: str, sources: str, text: str, target: Target, request_id: str,
+        citations: CitationCheckRequest | None = None,
     ) -> GroundingVerdict | None:
         hints = GroundingHintPolicy.unfound_values(text, sources)
+        kwargs = {}
+        if citations is not None and not citations.empty:
+            kwargs["citations"] = citations  # 없으면 기존 호출 그대로(D-04)
         try:
             verdict = await self._judge.judge(
                 question=question, sources=sources[: self._corpus_max_chars],
-                generation=text, hints=hints, request_id=request_id,
+                generation=text, hints=hints, request_id=request_id, **kwargs,
             )
         except Exception as e:
             # D-06: fail-open — 원문을 그대로 쓴다. 초안은 승인 게이트가 최종 방어선.
@@ -126,20 +171,22 @@ class GroundedGenerator:
 
     def _strip(
         self, text: str, high, attempts: int, target: Target, request_id: str,
+        last: dict | None = None,
     ) -> GroundedResult:
+        last = last or {}
         stripped = GroundingEditPolicy.strip_sentences(text, high)
         if stripped == text:
             # 판정기가 원문에 없는 구간을 인용 — 오삭제 없이 원문 유지.
-            return GroundedResult(text, attempts, False, True)
+            return GroundedResult(text, attempts, False, True, **last)
         if not stripped.strip() and target == "answer":
             # D-07: 채팅 답변은 빈 응답 금지 — 원문 유지.
             self._logger.warning(
                 "grounding strip left empty answer — original kept",
                 target=target, request_id=request_id,
             )
-            return GroundedResult(text, attempts, False, True)
+            return GroundedResult(text, attempts, False, True, **last)
         self._logger.warning(
             "grounding sentences stripped", target=target, request_id=request_id,
             removed_count=len(high),
         )
-        return GroundedResult(stripped, attempts, True, True)
+        return GroundedResult(stripped, attempts, True, True, **last)

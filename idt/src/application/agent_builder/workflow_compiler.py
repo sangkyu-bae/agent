@@ -593,8 +593,12 @@ class WorkflowCompiler:
         # pii-masking-integration §2.1 / D-03: 외부 LLM 경계의 PII 마스킹.
         # None 이면 해제 — 미들웨어·프록시 모두 붙지 않는다(무회귀).
         pii_masker: PiiMessageMasker | None = None,
+        # answer-citation-verification S8: 답변 인용 서비스(duck typing begin()).
+        # None 이면 인용 지시·검증·정리 없이 기존 final_answer 그대로.
+        citation_service: Any | None = None,
     ) -> None:
         self._pii_masker = pii_masker
+        self._citation_service = citation_service
         self._tool_factory = tool_factory
         self._llm_factory = llm_factory
         self._logger = logger
@@ -1809,6 +1813,13 @@ class WorkflowCompiler:
                 m for m in messages
                 if not _is_worker_output(m) and not _is_tool_message(m)
             ]
+            # answer-citation-verification S8: 이 실행에 번호 붙은 검색 청크가 있을 때만
+            # 인용 실행. 지난 답변의 [n] 은 이번 번호와 섞이지 않게 지운다(D-10).
+            citation_run = self._begin_citation()
+            if citation_run is not None:
+                conversation_messages = _strip_citation_history(
+                    conversation_messages, citation_run
+                )
             charts = state.get("charts", [])
 
             blocks: list[str] = []
@@ -1867,6 +1878,7 @@ class WorkflowCompiler:
                 + limit_notice
                 + denial_notice
                 + draft_instruction
+                + (citation_run.instruction if citation_run is not None else "")
             )
 
             # fix-anthropic-prefill-error: name 없는 assistant-last 방어.
@@ -1892,6 +1904,7 @@ class WorkflowCompiler:
             response = await self._generate_final_answer(
                 llm, llm_messages, grounding_sources,
                 latest_user_question(messages), request_id,
+                citation_run=citation_run,
             )
 
             token_delta = len(message_text(response)) // 4
@@ -1926,14 +1939,75 @@ class WorkflowCompiler:
         ]
         return "\n\n".join([system_prompt, *evidence, *conversation])
 
+    def _begin_citation(self):
+        """인용 실행 시작 — 서비스 미주입·번호 청크 없음·실패면 None (탈착형)."""
+        if self._citation_service is None:
+            return None
+        try:
+            return self._citation_service.begin()
+        except Exception as e:  # noqa: BLE001 — 인용 실패는 기존 답변 경로로
+            self._logger.warning("citation begin failed", exception=e)
+            return None
+
+    async def _generate_with_citations(
+        self, llm, llm_messages: list, sources: str, question: str, request_id: str,
+        citation_run,
+    ):
+        """인용 실행 답변 — 같은 판정 호출로 인용 검증 후 최종 본문을 정리한다.
+
+        answer-citation-verification D-05·D-06: 근거 판정이 켜져 있으면 루프의
+        마지막 판정을 쓰고, 꺼져 있으면 인용만 1회 판정한다. 판정 실패면 none.
+        """
+        if self._grounded is not None and self._grounded.active and sources:
+            last: dict = {}
+
+            async def generate(feedback: str) -> str:
+                messages = llm_messages
+                if feedback:
+                    head = llm_messages[0]
+                    system = {**head, "content": head["content"] + "\n\n" + feedback}
+                    messages = [system, *llm_messages[1:]]
+                last["response"] = await llm.ainvoke(
+                    messages, config={"tags": [INTERNAL_LLM_TAG]}
+                )
+                return message_text(last["response"])
+
+            result = await self._grounded.run(
+                generate=generate, question=question, sources=sources,
+                max_retries=self._answer_grounding_max_retries, target="answer",
+                request_id=request_id, citations=citation_run.request_for,
+            )
+            response, text = last["response"], result.text
+            verdict, request = result.verdict, result.citation_request
+        else:
+            response = await llm.ainvoke(llm_messages)
+            text = message_text(response)
+            request = citation_run.request_for(text)
+            verdict = None
+            if self._grounded is not None:
+                verdict = await self._grounded.verify_citations(
+                    question=question, sources=sources, text=text,
+                    request=request, request_id=request_id,
+                )
+        final = await citation_run.finalize(
+            text, verdict, request, request_id=request_id
+        )
+        return _with_content(response, final)
+
     async def _generate_final_answer(
         self, llm, llm_messages: list, sources: str, question: str, request_id: str,
+        citation_run=None,
     ):
         """최종 답변 생성 — 근거 루프 활성이면 판정·재작성 (draft-grounding-check §5.3).
 
         비활성(미주입·off·근거 없음)이면 기존 1회 호출 그대로 — 태그도 붙이지
         않아 스트리밍 동작이 바뀌지 않는다(D-09). 반환은 AIMessage 1건(계약 유지).
+        citation_run 이 있으면 인용 검증 경로(answer-citation-verification S8).
         """
+        if citation_run is not None:
+            return await self._generate_with_citations(
+                llm, llm_messages, sources, question, request_id, citation_run
+            )
         if self._grounded is None or not self._grounded.active or not sources:
             return await llm.ainvoke(llm_messages)
         last: dict = {}
@@ -3168,3 +3242,33 @@ def _render_presentation_summary(blueprint, result) -> str:
     if result.warnings:
         lines.append("[주의] " + " / ".join(result.warnings[:5]))
     return "\n".join(lines)
+
+
+# ── answer-citation-verification S8 헬퍼 ─────────────────────────────
+
+
+def _strip_citation_history(messages: list, citation_run) -> list:
+    """지난 assistant 답변의 인용 표시 [n] 제거 (D-10). 문자열 본문만 바꾼다."""
+    out = []
+    for m in messages:
+        is_assistant = isinstance(m, AIMessage) or (
+            isinstance(m, dict) and m.get("role") == "assistant"
+        )
+        text = message_text(m) if is_assistant else ""
+        stripped = citation_run.strip_history(text) if text else text
+        if stripped != text:  # 인용 표시가 있던 답변만 바꾼다
+            m = (
+                m.model_copy(update={"content": stripped})
+                if isinstance(m, AIMessage) else {**m, "content": stripped}
+            )
+        out.append(m)
+    return out
+
+
+def _with_content(response, text: str):
+    """정리된 본문으로 교체 — usage·response_metadata 는 보존(Analysis G-5 선례)."""
+    if message_text(response) == text:
+        return response
+    if isinstance(response, AIMessage):
+        return response.model_copy(update={"content": text})
+    return AIMessage(content=text)

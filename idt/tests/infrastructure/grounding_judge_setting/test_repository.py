@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from src.domain.grounding_judge_setting.models import GroundingJudgeSetting
 from src.infrastructure.grounding_judge_setting.models import (
     GROUNDING_JUDGE_SETTING_ID,
+    GroundingJudgeSettingModel,
 )
 from src.infrastructure.grounding_judge_setting.repository import (
     GroundingJudgeSettingRepository,
@@ -33,7 +34,11 @@ async def session() -> AsyncGenerator[AsyncSession, None]:
     tmp.close()
     engine = create_async_engine(f"sqlite+aiosqlite:///{tmp.name}", future=True)
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(
+            lambda c: Base.metadata.create_all(
+                c, tables=[GroundingJudgeSettingModel.__table__]
+            )
+        )
     factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     try:
         async with factory() as s:
