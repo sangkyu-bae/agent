@@ -185,6 +185,9 @@ class SourceItemDto(BaseModel):
     url: Optional[str] = None
     # source-passage-viewer §3.3 / §11.2 #7 — 원문 뷰어 진입 정보(문서 칩 전용, 없으면 null).
     viewer: Optional[Dict[str, Any]] = None
+    # answer-citation-verification §4.2 — 검증된 인용 {status, entries}.
+    # 문서 칩 전용, 없으면 null.
+    citation: dict[str, Any] | None = None
 
 
 class MessageSourcesDto(BaseModel):

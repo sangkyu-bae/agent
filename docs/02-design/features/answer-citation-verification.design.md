@@ -491,7 +491,8 @@ status=none:
 | S6 | `infrastructure/hallucination/{adapter,prompts,schemas}.py` | 확장 체인(citations 있을 때만) | 기존 체인 |
 | S7 | `application/hallucination/grounded_generation.py` | `run(..., citations=None)`·`GroundedResult.verdict`·`verify_citations()` | 기존 경로 |
 | S8 | `application/agent_builder/workflow_compiler.py` | 생성자 `citation_service=None`, final_answer 지시 블록·이전 대화 정리·정리/저장 호출 | None → 기존 |
-| S9 | `application/agent_run/run_sources.py` | `citation_enricher=None`, `build_for_runs` 끝에서 `enrich_runs` | None |
+| S9 | `application/agent_run/run_sources.py` | `citation_enricher=None`, `build_for_runs` 에서 실행 묶음당 `load` 1회 + 실행마다 `apply`(Do module-7 확정 — `enrich_runs` 단일 호출 대신, 문서 칩 보충에 실행별 evidence 가 필요) | None |
+| S9b | `domain/agent_run/source_policy.py` | `RunSourceItem.citation` + payload `citation` 키 (원문 뷰어 `viewer` 와 같은 방식, Do module-7 추가 — 초판 표 누락) | 키 없음 |
 | S10 | `interfaces/schemas/agent_run_response.py` | `SourceItemDto.citation` | null |
 | S10b | `domain/hallucination/grounding_edit.py` | `_boundaries` → 공개 `sentence_spans()` (동작 불변, 기존 호출부 그대로) | (상시) |
 | S11 | `api/main.py` | DI 조립 2곳(인용·판정 모델), 판정 공급자 교체, 관리자 라우터 include | 스위치 off → None |
@@ -608,3 +609,4 @@ idt_front/src/
 | 0.1 | 2026-11-20 | 최초 작성 — C안 선택, 재번호·관리자 카드 위치 확정 | 배상규 |
 | 0.2 | 2026-11-20 | Do module-5: 정규화(종결 부호 뒤 번호 이동)·근거 문장 비교 기준 확정 | 배상규 |
 | 0.3 | 2026-11-21 | Do module-6 벤치: D-07 보강(다른 청크 근거 탈락), 확장 프롬프트 2문장, §8.3 기준 개정·실측 기록. 저장 judge_model 은 미기록(None) — 판정 모델 이름을 노출하는 경로가 없어 이월 | 배상규 |
+| 0.4 | 2026-11-21 | Do module-7: S9 호출 형태(load/apply) 확정, S9b(source_policy) 이음매 추가. main.py 새 import 의 E402 는 파일 구조상 기존 import 와 동일(수용) | 배상규 |

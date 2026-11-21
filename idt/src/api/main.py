@@ -28,6 +28,14 @@ from src.api.source_viewer_di import (
     source_viewer_sink,
     wire_source_viewer,
 )
+# answer-citation-verification §9.2 S11 — 인용 검증 조립 접근자.
+# 기능 제거 시 이 import 와 주입 3곳(labeler·service·enricher)을 지운다.
+# 끄기만 할 때는 ANSWER_CITATION_ENABLED=false.
+from src.api.answer_citation_di import (
+    answer_citation_enricher,
+    answer_citation_labeler,
+    answer_citation_service,
+)
 from src.api.routes.document_upload import (
     router as document_router,
     GraphDocumentProcessor,
@@ -590,6 +598,7 @@ def _make_run_sources_service(session: AsyncSession, logger) -> RunSourcesServic
         logger,
         max_items=settings.agent_run_sources_max_items,
         viewer_enricher=source_viewer_enricher(),
+        citation_enricher=answer_citation_enricher(session, logger),
     )
 
 
@@ -913,7 +922,7 @@ def get_utility_llm_provider() -> UtilityLLMProvider:
 # draft-grounding-check: 근거 판정 전용 공급자 (앱 수명 싱글톤, lazy).
 _grounding_judge_llm_provider: Optional[UtilityLLMProvider] = None
 # answer-citation-verification D-15·D-16: 관리자 설정 모델 → 위 env 공급자 순으로 해석.
-_admin_grounding_judge_llm_provider: Optional[UtilityLLMProviderPort] = None
+_admin_grounding_judge_llm_provider: UtilityLLMProviderPort | None = None
 
 
 def get_grounding_judge_llm_provider() -> UtilityLLMProviderPort:
@@ -3183,6 +3192,8 @@ def create_agent_builder_factories():
         wiki_folder_repo_builder=_wiki_folder_repo_builder,
         # ★ graph-rag-foundation §2.1: 보조 검색 소스(create 시점에 읽음)
         extension_hooks=get_extension_hooks(),
+        # ★ answer-citation-verification S4: 검색 머리말 [출처 n: …] (off 면 None)
+        citation_labeler=answer_citation_labeler(),
     )
     # document-template-extractor Design §6: 합성 노드 의존(싱글톤).
     # 컴파일러/컴포저는 앱 싱글톤이라 per-request 세션 대신 session-scoped 어댑터 사용.
@@ -3352,6 +3363,8 @@ def create_agent_builder_factories():
         ),
         draft_grounding_max_retries=settings.draft_grounding_max_retries,
         answer_grounding_max_retries=settings.answer_grounding_max_retries,
+        # ★ answer-citation-verification S8: 답변 인용 지시·검증·저장 (off 면 None)
+        citation_service=answer_citation_service(),
         # pii-masking-integration §2.1: None 이면 해제(D-03)
         pii_masker=get_pii_masker(),
     )

@@ -35,6 +35,7 @@ class RunSourcesService:
         *,
         max_items: int,
         viewer_enricher: Any | None = None,
+        citation_enricher: Any | None = None,
     ) -> None:
         self._agent_run_repo = agent_run_repo
         self._document_repo = document_repo
@@ -44,6 +45,8 @@ class RunSourcesService:
         self._max_items = max_items
         # source-passage-viewer §11.2 #2 — duck typing(enrich). None = 원문 뷰어 없음.
         self._viewer_enricher = viewer_enricher
+        # answer-citation-verification S9 — duck typing(load·apply). None = 인용 없음.
+        self._citation_enricher = citation_enricher
 
     async def build_for_runs(
         self, run_ids: list[RunId], request_id: str,
@@ -62,6 +65,7 @@ class RunSourcesService:
             return {}
         filenames = await self._filenames(_flatten(retrievals.values()), request_id)
         mcp_tools = await self._mcp_tools(_flatten(tool_calls.values()), request_id)
+        citations = await self._load_citations(run_ids, request_id)
         built = {}
         for run_id in run_ids:
             evidence = RunEvidence(
@@ -72,9 +76,46 @@ class RunSourcesService:
             )
             items = RunSourcePolicy.build(evidence, max_items=self._max_items)
             items = await self._enrich(items, evidence, request_id)
+            if citations is not None:
+                items = self._cite(
+                    items, citations.get(run_id.value), evidence, request_id
+                )
             if items:
                 built[run_id.value] = items
         return built
+
+    async def _load_citations(
+        self, run_ids: list[RunId], request_id: str
+    ) -> dict | None:
+        """저장된 인용을 실행 묶음당 1회 읽는다.
+
+        미주입·실패면 None — 인용 단계를 건너뛴다(§6).
+        """
+        if self._citation_enricher is None:
+            return None
+        try:
+            return await self._citation_enricher.load(
+                [r.value for r in run_ids], request_id
+            )
+        except Exception as e:
+            self._logger.warning(
+                "run sources citation load failed (sources unaffected)",
+                exception=e, request_id=request_id,
+            )
+            return None
+
+    def _cite(
+        self, items: list[RunSourceItem], stored: Any, evidence: RunEvidence,
+        request_id: str,
+    ) -> list[RunSourceItem]:
+        try:
+            return self._citation_enricher.apply(items, stored, evidence)
+        except Exception as e:
+            self._logger.warning(
+                "run sources citation apply failed (sources unaffected)",
+                exception=e, request_id=request_id,
+            )
+            return items
 
     async def _enrich(
         self, items: list[RunSourceItem], evidence: RunEvidence, request_id: str,

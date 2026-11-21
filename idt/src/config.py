@@ -394,6 +394,18 @@ class Settings(BaseSettings):
     # 소비: src/api/source_viewer_di.py build_source_viewer() → LocalDiskOriginalStore(root).
     document_original_storage_dir: str = ""
 
+    # Answer Citation Verification (answer-citation-verification Design §10.1)
+    # 답변 [n] 인용 + 근거 판정 같은 호출로 검증 + 칩 인용 표시. 킬스위치 기본 off —
+    # false 면 검색 머리말·답변 프롬프트·판정 호출·칩 payload 가 모두 기존과 같다.
+    # 소비: src/api/answer_citation_di.py build_answer_citation()
+    # `if not settings.answer_citation_enabled`.
+    answer_citation_enabled: bool = False
+    # 실행 단위 번호 레지스트리 보존 시간·최대 실행 수(프로세스 메모리).
+    # 소비: src/api/answer_citation_di.py build_answer_citation()
+    # → CitationRegistry(...).
+    answer_citation_registry_ttl_seconds: float = 1800.0
+    answer_citation_registry_max_runs: int = 1000
+
     # Judgment Backend (judgment-backend Design §4.3)
     # 소비 지점은 전부 src/api/main.py get_judgment_backend()
     # → src/infrastructure/judgment/factory.py build_judgment_backend().
