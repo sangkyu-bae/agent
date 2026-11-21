@@ -334,7 +334,9 @@ status=none:
 | `SourceCitation` (수정) | `components/chat/SourceCitation.tsx` | `citation` 유무로 분기 — 없으면 기존 렌더 그대로 |
 | `MarkdownRenderer` (수정) | `components/chat/MarkdownRenderer.tsx` | 선택 prop `citations`가 있을 때만 플러그인 추가 |
 | `GroundingJudgeModelCard` | `pages/AdminLlmModelsPage/GroundingJudgeModelCard.tsx` | 판정 모델 선택·현재 적용 표시 |
-| `useCitationView` | `hooks/useCitationView.ts` | 메시지 sources → {status, rows, unused} 파생(순수 계산) |
+| `buildCitationView` | `utils/citationView.ts` | 메시지 sources → {status, rows, unused, others} 파생(순수 계산). Do module-8: 상태가 없어 훅 대신 순수 함수 |
+| `citationViewerTarget` | `utils/citationViewerTarget.ts` | 인용 번호 → 원문 뷰어 대상(그 문서의 인용 구절만, focus=근거 문장, 시작 index) |
+| `highlightWithFocus`·`setCurrentWithFocus` | `utils/domHighlight.ts` | 근거 문장을 추가 구절로 함께 칠하고 `data-spv-focus`, 현재 위치는 근거 문장(없으면 청크) |
 | `useGroundingJudgeSetting` | `hooks/useGroundingJudgeSetting.ts` | GET/PUT TanStack Query |
 
 ### 5.4 Page UI Checklist
@@ -610,3 +612,4 @@ idt_front/src/
 | 0.2 | 2026-11-20 | Do module-5: 정규화(종결 부호 뒤 번호 이동)·근거 문장 비교 기준 확정 | 배상규 |
 | 0.3 | 2026-11-21 | Do module-6 벤치: D-07 보강(다른 청크 근거 탈락), 확장 프롬프트 2문장, §8.3 기준 개정·실측 기록. 저장 judge_model 은 미기록(None) — 판정 모델 이름을 노출하는 경로가 없어 이월 | 배상규 |
 | 0.4 | 2026-11-21 | Do module-7: S9 호출 형태(load/apply) 확정, S9b(source_policy) 이음매 추가. main.py 새 import 의 E402 는 파일 구조상 기존 import 와 동일(수용) | 배상규 |
+| 0.5 | 2026-11-21 | Do module-8·9: useCitationView→순수 유틸, 위첨자 원문 열기는 원문 뷰어(viewer) 있을 때만, 근거 문장 음영은 추가 구절 + data-spv-focus 방식(현재 위치=근거 문장, 청크는 옅게) | 배상규 |

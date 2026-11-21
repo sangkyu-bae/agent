@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { loadPdf } from '@/lib/pdfRenderer';
 import type { SourceViewerPassage } from '@/types/sourceViewer';
-import { highlightPassages, setCurrentPassage } from '@/utils/domHighlight';
+import { highlightWithFocus, setCurrentWithFocus, type FocusHighlight } from '@/utils/domHighlight';
 
 import MissingPassageNotice from './MissingPassageNotice';
 
@@ -35,14 +35,15 @@ const pagesToRender = (passagePages: (number | null)[], numPages: number): numbe
   return [...pages].sort((a, b) => a - b);
 };
 
-type Marks = (HTMLElement[] | null)[];
 
 const PdfPassageViewer = ({ blob, passages, texts, index, onFallback, onShowText }: PdfPassageViewerProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [marks, setMarks] = useState<Marks | null>(null);
+  const [marks, setMarks] = useState<FocusHighlight | null>(null);
   // 배열 참조가 아니라 내용이 바뀔 때만 다시 렌더한다 — PDF 재로딩은 비싸다.
   const pagesKey = JSON.stringify(passages.map((p) => p.page));
   const textsKey = JSON.stringify(texts);
+  // answer-citation-verification FR-14: 근거 문장(focus)도 같은 번에 칠한다
+  const focusKey = JSON.stringify(passages.map((p) => p.focus ?? null));
 
   useEffect(() => {
     const container = containerRef.current;
@@ -63,7 +64,10 @@ const PdfPassageViewer = ({ blob, passages, texts, index, onFallback, onShowText
         if (cancelled) return;
         await doc.renderPage(n, container, width);
       }
-      if (!cancelled) setMarks(highlightPassages(container, JSON.parse(textsKey) as string[]));
+      if (!cancelled) {
+        const focuses = JSON.parse(focusKey) as (string | null)[];
+        setMarks(highlightWithFocus(container, JSON.parse(textsKey) as string[], focuses));
+      }
     };
     run().catch(() => {
       if (!cancelled) onFallback('render');
@@ -72,14 +76,14 @@ const PdfPassageViewer = ({ blob, passages, texts, index, onFallback, onShowText
       cancelled = true;
       destroy?.();
     };
-  }, [blob, pagesKey, textsKey, onFallback]);
+  }, [blob, pagesKey, textsKey, focusKey, onFallback]);
 
   const current = passages[index];
-  const missing = marks !== null && marks[index] === null;
+  const missing = marks !== null && marks.marks[index] === null;
 
   useEffect(() => {
     if (!marks) return;
-    const first = setCurrentPassage(marks, index);
+    const first = setCurrentWithFocus(marks.marks, marks.focusMarks, index);
     const pageEl = current?.page != null
       ? containerRef.current?.querySelector(`[data-page="${current.page}"]`)
       : null;

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { renderDocx } from '@/lib/docxRenderer';
 import type { SourceViewerPassage } from '@/types/sourceViewer';
-import { highlightPassages, setCurrentPassage } from '@/utils/domHighlight';
+import { highlightWithFocus, setCurrentWithFocus, type FocusHighlight } from '@/utils/domHighlight';
 
 import MissingPassageNotice from './MissingPassageNotice';
 
@@ -21,13 +21,15 @@ interface DocxPassageViewerProps {
 
 // CSS 변수는 shadow 경계를 넘어 상속되므로 디자인 토큰을 그대로 쓴다.
 const MARK_CSS = `mark[data-spv-passage]{background:var(--color-warning-bg);color:inherit;border-radius:2px}
-mark[data-spv-passage][aria-current]{background:var(--color-warning-border)}`;
-
-type Marks = (HTMLElement[] | null)[];
+mark[data-spv-passage][aria-current]{background:var(--color-warning-border)}
+mark[data-spv-focus]{background:var(--color-warning-border);font-weight:600}
+mark[data-spv-focus][aria-current]{outline:2px solid var(--color-warning);outline-offset:1px}`;
 
 const DocxPassageViewer = ({ blob, passages, texts, index, onFallback, onShowText }: DocxPassageViewerProps) => {
   const hostRef = useRef<HTMLDivElement>(null);
-  const [marks, setMarks] = useState<Marks | null>(null);
+  const [marks, setMarks] = useState<FocusHighlight | null>(null);
+  // answer-citation-verification FR-14: 근거 문장(focus)도 같은 번에 칠한다
+  const focusKey = JSON.stringify(passages.map((p) => p.focus ?? null));
 
   useEffect(() => {
     const host = hostRef.current;
@@ -41,7 +43,7 @@ const DocxPassageViewer = ({ blob, passages, texts, index, onFallback, onShowTex
         style.dataset.spv = '';
         style.textContent = MARK_CSS;
         root.appendChild(style);
-        setMarks(highlightPassages(root, texts));
+        setMarks(highlightWithFocus(root, texts, JSON.parse(focusKey) as (string | null)[]));
       })
       .catch(() => {
         if (!cancelled) onFallback('render');
@@ -49,15 +51,17 @@ const DocxPassageViewer = ({ blob, passages, texts, index, onFallback, onShowTex
     return () => {
       cancelled = true;
     };
-  }, [blob, texts, onFallback]);
+  }, [blob, texts, focusKey, onFallback]);
 
   useEffect(() => {
-    if (marks) setCurrentPassage(marks, index)?.scrollIntoView?.({ block: 'center' });
+    if (marks) {
+      setCurrentWithFocus(marks.marks, marks.focusMarks, index)?.scrollIntoView?.({ block: 'center' });
+    }
   }, [marks, index]);
 
   return (
     <div className="flex-1 overflow-y-auto">
-      {marks !== null && marks[index] === null && (
+      {marks !== null && marks.marks[index] === null && (
         <MissingPassageNotice excerpt={passages[index]?.excerpt} onShowText={onShowText} />
       )}
       <div ref={hostRef} data-testid="docx-passage-host" className="p-4" />
