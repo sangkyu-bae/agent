@@ -1,13 +1,19 @@
 // Design Ref: ui-redesign-chat §5.4 — 출처 칩. 위키 출처는 warning 톤, 문서 출처는 중립 톤 + hover brand.
 // Design Ref: agent-run-source-citations §5.4 — 에이전트 근거 4종, 문서·도구 발췌 패널, 웹 외부 링크.
-import { Fragment, useId, useState } from 'react';
+// Design Ref: answer-citation-verification §5.1 — citation 이 있으면 인용 화면, 없으면 기존 칩 그대로.
+import { Fragment, useId, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BookOpen, ExternalLink, FileText, Globe, Wrench } from 'lucide-react';
 
 import SourceViewerButton from '@/components/sourceViewer/SourceViewerButton';
-import { SOURCE_KIND, type DocumentSource, type SourceKind } from '@/types/chat';
+import { CITATION_STATUS, SOURCE_KIND, type DocumentSource, type SourceKind } from '@/types/chat';
+import { buildCitationView, type CitationView } from '@/utils/citationView';
 import { cn } from '@/utils/cn';
 import { isSafeHttpUrl } from '@/utils/safeUrl';
+
+import CitationList from './CitationList';
+import CitationNoneBadge from './CitationNoneBadge';
+import UnusedSourcesDisclosure from './UnusedSourcesDisclosure';
 
 interface SourceCitationProps {
   sources: DocumentSource[];
@@ -134,18 +140,16 @@ const resolveKind = (source: DocumentSource): SourceKind | 'legacyWiki' | 'legac
   return source.source === 'wiki' ? 'legacyWiki' : 'legacyDocument';
 };
 
-const SourceCitation = ({ sources }: SourceCitationProps) => {
+/** 칩 묶음 + 발췌 패널. 기존 근거 칩 렌더 그대로이며 인용 화면에서도 미사용·기타 칩에 재사용한다. */
+const ChipGroup = ({ sources }: SourceCitationProps) => {
   const [openKey, setOpenKey] = useState<string | null>(null);
   const panelId = useId();
-
-  if (sources.length === 0) return null;
 
   const keyOf = (source: DocumentSource, idx: number) => `${source.kind ?? 'legacy'}:${source.chunk_id}:${idx}`;
   const opened = sources.find((s, idx) => keyOf(s, idx) === openKey);
 
   return (
-    <div className="mt-4 border-t border-border pt-3">
-      <p className="mb-2 text-xs font-medium text-fg-subtle">참고 문서</p>
+    <>
       <div className="flex flex-wrap gap-2">
         {sources.map((source, idx) => {
           const key = keyOf(source, idx);
@@ -179,6 +183,39 @@ const SourceCitation = ({ sources }: SourceCitationProps) => {
           <p className="whitespace-pre-wrap break-words">{opened.content}</p>
         </div>
       )}
+    </>
+  );
+};
+
+/** answer-citation-verification §5.1 — 인용 행 · 근거 확인 안 됨 · 기타 칩 · 미사용 구절 접힘 */
+const CitationSection = ({ view }: { view: CitationView }) => {
+  const verified = view.status === CITATION_STATUS.VERIFIED;
+  const unusedLabel = verified
+    ? `검색했지만 답변에 쓰지 않은 구절 ${view.unused.length}건`
+    : `검색된 구절 ${view.unused.length}건`;
+  return (
+    <div className="mt-4 flex flex-col gap-2 border-t border-border pt-3">
+      <p className="text-xs font-medium text-fg-subtle">답변 근거</p>
+      {verified ? <CitationList rows={view.rows} /> : <CitationNoneBadge />}
+      {view.others.length > 0 && <ChipGroup sources={view.others} />}
+      {view.unused.length > 0 && (
+        <UnusedSourcesDisclosure label={unusedLabel}>
+          <ChipGroup sources={view.unused} />
+        </UnusedSourcesDisclosure>
+      )}
+    </div>
+  );
+};
+
+const SourceCitation = ({ sources }: SourceCitationProps) => {
+  const view = useMemo(() => buildCitationView(sources), [sources]);
+  if (sources.length === 0) return null;
+  // 인용 정보가 없는 메시지는 기존 칩 렌더 그대로(FR-15)
+  if (view.status !== null) return <CitationSection view={view} />;
+  return (
+    <div className="mt-4 border-t border-border pt-3">
+      <p className="mb-2 text-xs font-medium text-fg-subtle">참고 문서</p>
+      <ChipGroup sources={sources} />
     </div>
   );
 };

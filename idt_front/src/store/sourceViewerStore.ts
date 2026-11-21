@@ -11,7 +11,8 @@ interface SourceViewerState {
   target: SourceViewerTarget | null;
   /** 현재 구절 위치 (passages 기준) */
   index: number;
-  open: (target: SourceViewerTarget) => void;
+  /** startIndex — answer-citation-verification §5.2: 누른 인용 위치에서 연다(기본 0) */
+  open: (target: SourceViewerTarget, startIndex?: number) => void;
   close: () => void;
   next: () => void;
   prev: () => void;
@@ -20,7 +21,10 @@ interface SourceViewerState {
 export const useSourceViewerStore = create<SourceViewerState>()((set) => ({
   target: null,
   index: 0,
-  open: (target) => set({ target, index: 0 }),
+  open: (target, startIndex = 0) => {
+    const last = Math.max(target.viewer.passages.length - 1, 0);
+    set({ target, index: Math.min(Math.max(startIndex, 0), last) });
+  },
   close: () => set({ target: null, index: 0 }),
   next: () =>
     set((s) => {
