@@ -98,3 +98,17 @@
 
 Critical 0, Important 3(G-10·G-1·G-2), Minor 7. 종합 90.6%.
 중복 인용(G-10)은 화면에서 바로 보이는 문제라 Act에서 먼저 고치는 것을 권장한다.
+
+## 7. Act-1 (2026-11-23, ca463f8)
+
+사용자 선택: Important 3건 수정.
+
+| ID | 수정 | 테스트 |
+|----|------|--------|
+| G-10 | `CitationFinalizePolicy._kept` — 한 문장 안에서 같은 문서·같은 근거 문장의 인용은 첫 번째만 남김 | test_policy.py TestDuplicateEvidence 3건 |
+| G-1 | `RunSourcesService.build_for_runs` — 인용 apply 를 viewer enrich 앞으로 | test_supplemented_chip_also_gets_viewer |
+| G-2 | `_generate_with_citations` 판정 off 경로 최종 답변 호출에 INTERNAL_LLM_TAG | test_grounding_disabled_answer_call_is_not_streamed |
+
+회귀: 영향 범위 1776 passed. 라이브 재질문(같은 에이전트·KB, 4문항): 모두 verified, `[1][2]` 중복 0건(Act 전 3/5), 쪽 번호 모두 있음.
+
+Act-1 후 Runtime 85→90, Functional 88→93 → **Overall 93.6%** (0.15×96 + 0.25×93 + 0.25×95 + 0.35×90). 남은 항목: Minor G-3~G-9, SC-2·5·6 실측, PDF 원본 모드 확인(환경).
