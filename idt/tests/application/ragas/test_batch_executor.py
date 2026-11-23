@@ -1,11 +1,12 @@
 """BatchEvalExecutor — 백그라운드 배치 평가 실행 (eval-hub Design §2.4)."""
 import asyncio
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, create_autospec
 
 import pytest
 
 from src.application.ragas.batch_executor import BatchEvalExecutor
+from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.domain.ragas.entities import EvaluationRun
 from src.domain.ragas.value_objects import (
     EvalConfig,
@@ -107,6 +108,31 @@ class TestBatchExecutor:
         final = store.update_run.await_args.args[0]
         assert final.status == "failed"
         assert "컬렉션 없음" in final.error_message
+
+    @pytest.mark.asyncio
+    async def test_실제_로거_계약으로도_실패시_failed로_끝난다(self):
+        """MagicMock 로거는 없는 메서드(.exception)도 받아 줘 결함을 가린다.
+
+        LoggerInterface 에는 exception() 이 없다. 오류 처리부가 그걸 부르면
+        AttributeError 로 mark_failed 를 건너뛰어 run 이 running 으로 영원히 남는다.
+        """
+        store = _store(_run())
+        target = MagicMock()
+        target.execute = AsyncMock(side_effect=RuntimeError("ragas 미설치"))
+        executor = BatchEvalExecutor(
+            store=store,
+            evaluator=_evaluator(),
+            target_executor=target,
+            logger=create_autospec(LoggerInterface, instance=True),
+            run_fetch_retries=2,
+            retry_delay=0.0,
+        )
+
+        await _run_and_wait(executor)
+
+        final = store.update_run.await_args.args[0]
+        assert final.status == "failed"
+        assert "ragas 미설치" in final.error_message
 
     @pytest.mark.asyncio
     async def test_run_미가시_재시도후_포기(self):

@@ -86,9 +86,9 @@ class OpenAIQAGenerator:
             draft: _QADraft = await chain.ainvoke(
                 {"text": text, "max_pairs": max_pairs}
             )
-        except Exception:
-            self._logger.exception(
-                "QA draft generation failed", request_id=request_id
+        except Exception as e:
+            self._logger.error(
+                "QA draft generation failed", exception=e, request_id=request_id
             )
             raise
         pairs = [
