@@ -783,6 +783,7 @@ from src.interfaces.dependencies.auth import (
 )
 from src.application.auth.register_use_case import RegisterUseCase
 from src.application.permission.assemble_auth_context import AssembleAuthContextUseCase
+from src.domain.logging.interfaces.logger_interface import LoggerInterface
 from src.application.permission.grant_revoke import (
     GrantPermissionUseCase,
     RevokePermissionUseCase,
@@ -4069,6 +4070,33 @@ def create_agent_webhook_factories(build_run_agent_uc):
     )
 
 
+async def assemble_user_auth_context(
+    session_factory, user_id: str, request_id: str, logger: LoggerInterface
+):
+    """user_id → AuthContext 재조립 (요청 밖 실행 경로용) — 미존재/비활성이면 None.
+
+    백그라운드 잡(D3)과 RAGAS 에이전트 평가가 함께 쓴다. auth_ctx 없이 에이전트를
+    돌리면 내부 문서 검색 도구가 public_anonymous 로 판단해 검색을 거부한다.
+    """
+    from src.domain.auth.entities import UserStatus
+
+    async with session_factory() as session:
+        user_repo = UserRepository(session=session, logger=logger)
+        try:
+            user = await user_repo.find_by_id(int(user_id))
+        except (TypeError, ValueError):
+            return None
+        if user is None or user.status != UserStatus.APPROVED:
+            return None
+        assemble_uc = AssembleAuthContextUseCase(
+            profile_repo=UserProfileRepository(session=session, logger=logger),
+            department_repo=DepartmentRepository(session=session, logger=logger),
+            permission_repo=PermissionRepository(session=session, logger=logger),
+            logger=logger,
+        )
+        return await assemble_uc.execute(user, request_id)
+
+
 def create_background_job_factories(
     build_run_agent_uc, outbound_dispatcher=None, schedule_trigger_uc=None,
     approval_tick_runner=None,
@@ -4120,29 +4148,9 @@ def create_background_job_factories(
 
     async def _assemble_job_auth_context(user_id: str, request_id: str):
         """등록자 AuthContext 재조립 (D3) — 사용자 미존재/비활성 시 None."""
-        from src.domain.auth.entities import UserStatus
-
-        async with session_factory() as session:
-            user_repo = UserRepository(session=session, logger=app_logger)
-            try:
-                user = await user_repo.find_by_id(int(user_id))
-            except (TypeError, ValueError):
-                return None
-            if user is None or user.status != UserStatus.APPROVED:
-                return None
-            assemble_uc = AssembleAuthContextUseCase(
-                profile_repo=UserProfileRepository(
-                    session=session, logger=app_logger
-                ),
-                department_repo=DepartmentRepository(
-                    session=session, logger=app_logger
-                ),
-                permission_repo=PermissionRepository(
-                    session=session, logger=app_logger
-                ),
-                logger=app_logger,
-            )
-            return await assemble_uc.execute(user, request_id)
+        return await assemble_user_auth_context(
+            session_factory, user_id, request_id, app_logger
+        )
 
     def enqueue_f(session: AsyncSession = Depends(get_session)):
         return EnqueueJobUseCase(
@@ -4297,6 +4305,15 @@ def create_ragas_factories(build_run_agent_uc=None):
         True 다(라우터 403 검사). 그때만 관리자 grant 로 보조 검색을 허용한다."""
         if build_run_agent_uc is None:
             raise ValueError("agent 대상 평가 실행기가 구성되지 않았습니다")
+        # 평가 요청자의 권한으로 실행한다 — auth_ctx 가 없으면 내부 문서 검색이
+        # public_anonymous 로 거부되어 RAG 에이전트가 검색 없이 채점된다.
+        auth_ctx = await assemble_user_auth_context(
+            session_factory, user_id, request_id, app_logger
+        )
+        if auth_ctx is None:
+            raise ValueError(
+                f"평가 요청자 권한을 조립할 수 없습니다: user_id={user_id}"
+            )
         async with session_factory() as session:
             async with session.begin():
                 run_uc = build_run_agent_uc(session)
@@ -4311,6 +4328,8 @@ def create_ragas_factories(build_run_agent_uc=None):
                     ),
                     request_id,
                     viewer_user_id=user_id,
+                    viewer_department_ids=list(auth_ctx.department_ids),
+                    auth_ctx=auth_ctx,
                     supplemental_grant=(
                         SupplementalGrant(caller_is_admin=True)
                         if allow_supplemental

@@ -62,8 +62,9 @@ class SweepExecutor:
                 sweep, run_ids, testcases, base_config, user_id, request_id
             )
         except Exception as e:
-            self._logger.exception(
+            self._logger.error(
                 "Sweep orchestration crashed",
+                exception=e,
                 request_id=request_id,
                 sweep_id=sweep.id,
             )
@@ -123,9 +124,10 @@ class SweepExecutor:
             await self._batch.run_now(
                 run_id, _TARGET_TYPE, testcases, config, user_id, request_id
             )
-        except Exception:
-            self._logger.exception(
+        except Exception as e:
+            self._logger.error(
                 "Sweep model run failed — 나머지 모델은 계속 실행한다",
+                exception=e,
                 request_id=request_id,
                 run_id=run_id,
                 llm_model_id=model_id,

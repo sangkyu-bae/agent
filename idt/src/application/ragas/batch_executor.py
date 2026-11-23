@@ -129,8 +129,11 @@ class BatchEvalExecutor:
             run.mark_completed(datetime.now(timezone.utc))
             await self._store.update_run(run, request_id)
         except Exception as e:
-            self._logger.exception(
-                "Batch evaluation failed", request_id=request_id, run_id=run_id
+            self._logger.error(
+                "Batch evaluation failed",
+                exception=e,
+                request_id=request_id,
+                run_id=run_id,
             )
             run.mark_failed(str(e), datetime.now(timezone.utc))
             await self._store.update_run(run, request_id)

@@ -69,8 +69,10 @@ class RagasEvaluatorAdapter(EvaluatorInterface):
                 scores=result,
             )
             return result
-        except Exception:
-            self._logger.exception("RAGAS evaluate failed", request_id=request_id)
+        except Exception as e:
+            self._logger.error(
+                "RAGAS evaluate failed", exception=e, request_id=request_id
+            )
             raise
 
     def _attach_judge(
