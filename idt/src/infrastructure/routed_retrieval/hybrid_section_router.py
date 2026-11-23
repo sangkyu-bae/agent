@@ -5,6 +5,7 @@
 병합 키 = 요약 결정적 ID(Qdrant point id = ES _id, 2단계 D5의 3자 일치).
 한쪽 소스 실패는 warning 후 다른 소스로 강등(graceful).
 """
+from src.domain.document_revision.search_guard import es_revision_guard_clause
 from src.domain.elasticsearch.interfaces import (
     ElasticsearchRepositoryInterface,
 )
@@ -106,6 +107,8 @@ class HybridSectionRouter(SectionRouterInterface):
         ]
         if scope.kb_id:
             filters.append({"term": {"kb_id": scope.kb_id}})
+        # document-revision §9.5 G4: superseded 문서의 섹션 요약 제외
+        filters.append(es_revision_guard_clause())
         es_query = ESSearchQuery(
             index=self._es_index,
             query={

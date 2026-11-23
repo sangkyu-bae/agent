@@ -8,9 +8,10 @@ from qdrant_client import AsyncQdrantClient
 
 from src.domain.retriever.interfaces.retriever_interface import RetrieverInterface
 from src.domain.retriever.value_objects.metadata_filter import MetadataFilter
-from src.domain.vector.interfaces import EmbeddingInterface
 from src.domain.vector.entities import Document
+from src.domain.vector.interfaces import EmbeddingInterface
 from src.domain.vector.value_objects import DocumentId
+from src.infrastructure.document_revision.qdrant_guard import apply_revision_guard
 
 
 class QdrantRetriever(RetrieverInterface):
@@ -80,6 +81,8 @@ class QdrantRetriever(RetrieverInterface):
         query_filter = None
         if filters is not None:
             query_filter = filters.to_qdrant_filter()
+        # document-revision §9.5 G2: superseded 청크 기본 제외
+        query_filter = apply_revision_guard(query_filter)
 
         response = await self._client.query_points(
             collection_name=self._collection_name,
@@ -115,7 +118,7 @@ class QdrantRetriever(RetrieverInterface):
         Returns:
             List of documents matching the filters
         """
-        scroll_filter = filters.to_qdrant_filter()
+        scroll_filter = apply_revision_guard(filters.to_qdrant_filter())
 
         records, _ = await self._client.scroll(
             collection_name=self._collection_name,

@@ -331,15 +331,16 @@ class TestMetadataFilterConversion:
     """Tests for MetadataFilter to Qdrant Filter conversion."""
 
     @pytest.mark.asyncio
-    async def test_empty_filter_no_query_filter(self, retriever, mock_client):
-        """Empty filter should result in no query_filter."""
+    async def test_empty_filter_only_revision_guard(self, retriever, mock_client):
+        """Empty filter → 조건 없음, document-revision §9.5 G2 개정 가드만 남는다."""
         mock_client.query_points.return_value = MagicMock(points=[])
         filters = MetadataFilter()
 
         await retriever.retrieve("test query", filters=filters)
 
-        call_kwargs = mock_client.query_points.call_args.kwargs
-        assert call_kwargs["query_filter"] is None
+        qf = mock_client.query_points.call_args.kwargs["query_filter"]
+        assert not qf.must
+        assert [c.key for c in qf.must_not] == ["revision_status"]
 
     @pytest.mark.asyncio
     async def test_filter_conversion_correctness(self, retriever, mock_client):

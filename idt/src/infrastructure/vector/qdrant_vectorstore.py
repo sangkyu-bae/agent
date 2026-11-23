@@ -7,9 +7,10 @@ from uuid import uuid4
 
 from qdrant_client import AsyncQdrantClient, models
 
-from src.domain.vector.interfaces import VectorStoreInterface, EmbeddingInterface
 from src.domain.vector.entities import Document
+from src.domain.vector.interfaces import EmbeddingInterface, VectorStoreInterface
 from src.domain.vector.value_objects import DocumentId, SearchFilter
+from src.infrastructure.document_revision.qdrant_guard import apply_revision_guard
 from src.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -92,6 +93,8 @@ class QdrantVectorStore(VectorStoreInterface):
         target_collection = collection_name if collection_name else self._collection_name
         query_filter = self._build_qdrant_filter(filter) if filter else None
         query_filter = self._apply_section_summary_guard(query_filter, filter)
+        # document-revision §9.5 G1: 요약 가드(요약 요청 시 해제)와 별개로 항상 적용.
+        query_filter = apply_revision_guard(query_filter)
 
         try:
             response = await self._client.query_points(

@@ -121,3 +121,23 @@ class ElasticsearchRepositoryInterface(ABC):
         Returns:
             True: 새로 생성됨, False: 이미 존재하거나 실패
         """
+
+    @abstractmethod
+    async def update_by_query(
+        self,
+        index: str,
+        query: dict[str, Any],
+        script: dict[str, Any],
+        request_id: str,
+    ) -> int:
+        """쿼리 조건에 맞는 문서를 스크립트로 일괄 갱신 (document-revision 청크 표식).
+
+        Returns:
+            갱신된 건수
+        """
+
+    @abstractmethod
+    async def put_mapping(
+        self, index: str, properties: dict[str, Any], request_id: str
+    ) -> None:
+        """기존 인덱스에 필드 매핑 추가. 충돌 시 예외."""

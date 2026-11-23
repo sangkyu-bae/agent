@@ -40,6 +40,7 @@ class KnowledgeBaseRepository(KnowledgeBaseRepositoryInterface):
             chunk_overlap=kb.chunk_overlap,
             use_custom_chunking=1 if kb.use_custom_chunking else 0,
             custom_chunking_config=kb.custom_chunking_config,
+            revision_mode=kb.revision_mode,
         )
         self._session.add(model)
         await self._session.flush()
@@ -131,6 +132,23 @@ class KnowledgeBaseRepository(KnowledgeBaseRepositoryInterface):
         await self._session.execute(stmt)
         await self._session.flush()
 
+    async def update_revision_mode(
+        self, kb_id: str, revision_mode: str, request_id: str
+    ) -> None:
+        """document-revision §4.2 #10: 개정 판정 모드 컬럼만 갱신."""
+        self._logger.info(
+            "KnowledgeBase revision mode update",
+            request_id=request_id,
+            kb_id=kb_id,
+            revision_mode=revision_mode,
+        )
+        await self._session.execute(
+            update(KnowledgeBaseModel)
+            .where(KnowledgeBaseModel.id == kb_id)
+            .values(revision_mode=revision_mode)
+        )
+        await self._session.flush()
+
     async def soft_delete(self, kb_id: str, request_id: str) -> None:
         stmt = (
             update(KnowledgeBaseModel)
@@ -156,6 +174,7 @@ class KnowledgeBaseRepository(KnowledgeBaseRepositoryInterface):
             chunk_overlap=model.chunk_overlap,
             use_custom_chunking=bool(model.use_custom_chunking),
             custom_chunking_config=model.custom_chunking_config,
+            revision_mode=model.revision_mode or "suggest",
             created_at=model.created_at,
             updated_at=model.updated_at,
         )

@@ -26,7 +26,9 @@ class DocumentMetadataRepositoryInterface(ABC):
         kb_id: str,
         request_id: str,
         pagination: Optional[MySQLPaginationParams] = None,
+        active_only: bool = False,
     ) -> MySQLPageResult[KbDocumentSummary]:
+        """active_only: document-revision — superseded 버전 제외 (KB 문서 목록)."""
         ...
 
     @abstractmethod
@@ -53,3 +55,14 @@ class DocumentMetadataRepositoryInterface(ABC):
     ) -> dict[str, str]:
         """document_id → filename 일괄 조회 (agent-run-source-citations §3.4)."""
         ...
+
+    async def find_version_labels(
+        self,
+        document_ids: list[str],
+        request_id: str,
+    ) -> dict[str, str]:
+        """document_id → 버전 라벨 ("v3" / "v3 (라벨)"). v1·라벨 없음은 제외.
+
+        document-revision module-6 근거 칩 라벨용. 구현이 없으면 빈 결과(라벨 생략).
+        """
+        return {}

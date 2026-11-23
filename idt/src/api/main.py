@@ -355,6 +355,11 @@ from src.api.routes.unified_upload_router import (
     router as unified_upload_router,
     get_unified_upload_use_case,
 )
+from src.api.routes.kb_document_revision_router import (
+    get_revision_check_use_case,
+    get_revision_management_use_case,
+    router as kb_document_revision_router,
+)
 from src.api.routes.knowledge_base_router import (
     router as knowledge_base_router,
     get_knowledge_base_use_case,
@@ -4628,7 +4633,90 @@ def create_unified_upload_factories():
             original_sink=source_viewer_sink(),
         )
 
+    # document-revision §2.1: 사전 점검이 업로드와 같은 파서·임베딩·저장소를 재사용
+    use_case_factory.components = {
+        "parser": parser,
+        "embedding_factory": embedding_factory,
+        "qdrant_client": qdrant_client,
+        "es_repo": es_repo,
+    }
     return use_case_factory
+
+
+def create_revision_check_factory(unified_upload_factory):
+    """document-revision Design §4.2 #1 — 사전 점검 유스케이스 per-request DI."""
+    from src.application.document_revision.revision_check_use_case import (
+        RevisionCheckUseCase,
+    )
+    from src.domain.document_revision.value_objects import RevisionScoringConfig
+    from src.domain.knowledge_base.policy import KnowledgeBasePolicy
+    from src.infrastructure.collection.activity_log_repository import (
+        ActivityLogRepository,
+    )
+    from src.infrastructure.department.department_repository import (
+        DepartmentRepository,
+    )
+    from src.infrastructure.document_revision.candidate_head_reader import (
+        EsCandidateHeadReader,
+    )
+    from src.infrastructure.document_revision.check_log_repository import (
+        RevisionCheckLogRepository,
+    )
+    from src.infrastructure.document_revision.head_similarity_search import (
+        CollectionHeadEmbedder,
+        QdrantHeadSimilaritySearch,
+    )
+    from src.infrastructure.document_revision.llm_revision_judge import (
+        LlmRevisionJudge,
+    )
+    from src.infrastructure.document_revision.revision_repository import (
+        DocumentRevisionRepository,
+    )
+    from src.infrastructure.embedding_model.repository import (
+        EmbeddingModelRepository,
+    )
+    from src.infrastructure.knowledge_base.repository import KnowledgeBaseRepository
+
+    app_logger = get_app_logger()
+    parts = unified_upload_factory.components
+    vector_store = QdrantVectorStore(
+        client=parts["qdrant_client"], embedding=None,
+        collection_name=settings.qdrant_collection_name,
+    )
+    head_reader = EsCandidateHeadReader(parts["es_repo"], settings.es_index, app_logger)
+    config = RevisionScoringConfig(
+        head_chars=settings.revision_head_chars,
+        top_n=settings.revision_candidate_top_n,
+        llm_top_m=settings.revision_llm_top_m,
+        filename_min=settings.revision_filename_min,
+        content_min=settings.revision_content_min,
+        weight_filename=settings.revision_weight_filename,
+        weight_content=settings.revision_weight_content,
+        suggest_min_combined=settings.revision_suggest_min_combined,
+        llm_timeout_s=settings.revision_llm_timeout_s,
+    )
+
+    def factory(session: AsyncSession = Depends(get_session)):
+        embedder = CollectionHeadEmbedder(
+            ActivityLogRepository(session, app_logger),
+            EmbeddingModelRepository(session=session, logger=app_logger),
+            parts["embedding_factory"],
+        )
+        return RevisionCheckUseCase(
+            kb_repo=KnowledgeBaseRepository(session, app_logger),
+            policy=KnowledgeBasePolicy(),
+            dept_repo=DepartmentRepository(session, app_logger),
+            parser=parts["parser"],
+            revision_repo=DocumentRevisionRepository(session, app_logger),
+            check_log_repo=RevisionCheckLogRepository(session, app_logger),
+            similarity=QdrantHeadSimilaritySearch(vector_store, embedder, app_logger),
+            head_reader=head_reader,
+            judge=LlmRevisionJudge(get_utility_llm_provider(), app_logger),
+            config=config,
+            logger=app_logger,
+        )
+
+    return factory
 
 
 def create_knowledge_base_factories(
@@ -4663,6 +4751,33 @@ def create_knowledge_base_factories(
         port=settings.qdrant_port,
     )
     collection_repo = QdrantCollectionRepository(qdrant_client)
+    # document-revision Design §2.1: 청크 표식기는 싱글턴(매핑 보장 캐시 유지)
+    from src.application.document_revision.supersede_service import SupersedeService
+    from src.infrastructure.document_revision.check_log_repository import (
+        RevisionCheckLogRepository,
+    )
+    from src.infrastructure.document_revision.chunk_revision_marker import (
+        QdrantEsChunkRevisionMarker,
+    )
+    from src.infrastructure.document_revision.revision_repository import (
+        DocumentRevisionRepository,
+    )
+
+    revision_marker = QdrantEsChunkRevisionMarker(
+        qdrant_client,
+        ElasticsearchRepository(
+            client=ElasticsearchClient.from_config(
+                ElasticsearchConfig(
+                    ES_HOST=settings.es_host,
+                    ES_PORT=settings.es_port,
+                    ES_SCHEME=settings.es_scheme,
+                )
+            ),
+            logger=app_logger,
+        ),
+        settings.es_index,
+        app_logger,
+    )
 
     def _build_assigner(session: AsyncSession):
         perm_repo = CollectionPermissionRepository(session, app_logger)
@@ -4706,6 +4821,7 @@ def create_knowledge_base_factories(
         unified = unified_upload_factory(session)
         profile_repo = ChunkingProfileRepository(session, app_logger)
         resolver = ChunkingSettingsResolver(profile_repo, app_logger)
+        revision_repo = DocumentRevisionRepository(session, app_logger)
         return KnowledgeBaseUploadUseCase(
             kb_repo=kb_repo,
             policy=KnowledgeBasePolicy(),
@@ -4716,6 +4832,12 @@ def create_knowledge_base_factories(
             summary_launcher=summary_launcher,
             # graph-rag-foundation §2.2: 업로드 후 확장 훅
             extension_hooks=get_extension_hooks(),
+            # document-revision §2.1: 해시 중복 차단·개정 확정·판정 로그
+            revision_repo=revision_repo,
+            supersede_service=SupersedeService(
+                revision_repo, revision_marker, app_logger
+            ),
+            check_log_repo=RevisionCheckLogRepository(session, app_logger),
         )
 
     def kb_documents_factory(session: AsyncSession = Depends(get_session)):
@@ -4733,6 +4855,8 @@ def create_knowledge_base_factories(
                 session, app_logger
             ),
             logger=app_logger,
+            # document-revision §4.2 #3: 청크 표식 반영 실패 목록
+            revision_repo=DocumentRevisionRepository(session, app_logger),
         )
 
     def kb_quick_create_factory(session: AsyncSession = Depends(get_session)):
@@ -4906,23 +5030,67 @@ def create_kb_document_delete_factory(kb_use_case_factory):
             original_sink=source_viewer_sink(),
         )
 
-    def delete_factory(session: AsyncSession = Depends(get_session)):
+    # document-revision §4.2 #5·#9: 최신 버전 삭제 시 이전 버전 복귀 + 되돌리기 관리
+    from src.application.document_revision.revision_management_use_case import (
+        RevisionManagementUseCase,
+    )
+    from src.application.document_revision.supersede_service import SupersedeService
+    from src.infrastructure.document_revision.check_log_repository import (
+        RevisionCheckLogRepository,
+    )
+    from src.infrastructure.document_revision.chunk_revision_marker import (
+        QdrantEsChunkRevisionMarker,
+    )
+    from src.infrastructure.document_revision.revision_repository import (
+        DocumentRevisionRepository,
+    )
+
+    revision_marker = QdrantEsChunkRevisionMarker(
+        qdrant_client, es_repo, settings.es_index, app_logger
+    )
+
+    def _guard(session: AsyncSession) -> KbDocumentGuard:
+        return KbDocumentGuard(
+            kb_use_case=kb_use_case_factory(session),
+            document_metadata_repo=DocumentMetadataRepository(session, app_logger),
+            logger=StructuredLogger("kb_document_delete.guard"),
+        )
+
+    def _build(session: AsyncSession) -> DeleteKbDocumentUseCase:
+        revision_repo = DocumentRevisionRepository(session, app_logger)
         return DeleteKbDocumentUseCase(
-            guard=KbDocumentGuard(
-                kb_use_case=kb_use_case_factory(session),
-                document_metadata_repo=DocumentMetadataRepository(
-                    session, app_logger
-                ),
-                logger=StructuredLogger("kb_document_delete.guard"),
-            ),
+            guard=_guard(session),
             deleter=_deleter(session),
             job_repo=SectionSummaryJobRepository(session, app_logger),
             policy=KnowledgeBasePolicy(),
             job_policy=SectionSummaryJobPolicy(),
             logger=StructuredLogger("kb_document_delete"),
             stale_seconds=settings.section_summary_stale_seconds,
+            revision_repo=revision_repo,
+            supersede_service=SupersedeService(
+                revision_repo, revision_marker, app_logger
+            ),
         )
 
+    def delete_factory(session: AsyncSession = Depends(get_session)):
+        return _build(session)
+
+    def management_factory(session: AsyncSession = Depends(get_session)):
+        revision_repo = DocumentRevisionRepository(session, app_logger)
+        return RevisionManagementUseCase(
+            guard=_guard(session),
+            policy=KnowledgeBasePolicy(),
+            dept_repo=DepartmentRepository(session, app_logger),
+            revision_repo=revision_repo,
+            supersede_service=SupersedeService(
+                revision_repo, revision_marker, app_logger
+            ),
+            kb_deleter=_build(session),
+            check_log_repo=RevisionCheckLogRepository(session, app_logger),
+            logger=app_logger,
+        )
+
+    delete_factory.management_factory = management_factory
     return delete_factory
 
 
@@ -6608,6 +6776,10 @@ def create_app() -> FastAPI:
     )
     app.dependency_overrides[get_knowledge_base_use_case] = _kb_uc_factory
     app.dependency_overrides[get_kb_upload_use_case] = _kb_upload_factory
+    # document-revision §4.2 #1: 업로드 전 개정 사전 점검
+    app.dependency_overrides[get_revision_check_use_case] = (
+        create_revision_check_factory(_unified_upload_uc_factory)
+    )
     app.dependency_overrides[get_kb_quick_create_use_case] = _kb_quick_factory
     app.dependency_overrides[get_list_kb_documents_use_case] = (
         _kb_documents_factory
@@ -6631,8 +6803,11 @@ def create_app() -> FastAPI:
     # source-passage-viewer §4 — 킬스위치 on + 원본 경로 있을 때만 원본 API 등록
     wire_source_viewer(app, kb_uc_factory=_kb_uc_factory, get_session=get_session)
     # KB 문서 삭제 DI (kb-document-management)
-    app.dependency_overrides[get_delete_kb_document_use_case] = (
-        create_kb_document_delete_factory(_kb_uc_factory)
+    _kb_delete_factory = create_kb_document_delete_factory(_kb_uc_factory)
+    app.dependency_overrides[get_delete_kb_document_use_case] = _kb_delete_factory
+    # document-revision §4.2 #4~#8: 이력·되돌리기·연결·메타·재반영
+    app.dependency_overrides[get_revision_management_use_case] = (
+        _kb_delete_factory.management_factory
     )
     # KB 검색/히스토리 DI (kb-retrieval-test)
     _kb_search_factory, _kb_search_history_factory = (
@@ -6843,6 +7018,7 @@ def create_app() -> FastAPI:
     app.include_router(pdf_export_router)
     app.include_router(unified_upload_router)
     app.include_router(knowledge_base_router)
+    app.include_router(kb_document_revision_router)
     app.include_router(admin_collection_router)
     app.include_router(admin_chunking_router)
     app.include_router(chunking_profile_router)

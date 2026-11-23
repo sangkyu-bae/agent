@@ -53,5 +53,8 @@ DOCUMENTS_INDEX_MAPPINGS: dict = {
         "summary_keywords": {"type": "keyword"},
         "section_ref": {"type": "keyword"},
         "clause_title": {"type": "text", "fields": {"raw": {"type": "keyword"}}},
+        # document-revision §3.3: 개정 검색 가드 대상. 신규 적재 시에는 쓰지 않으며
+        # (부재 = active) 대체·되돌리기 때만 update_by_query 로 갱신한다.
+        "revision_status": {"type": "keyword"},
     }
 }

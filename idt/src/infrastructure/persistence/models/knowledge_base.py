@@ -62,6 +62,10 @@ class KnowledgeBaseModel(Base):
     custom_chunking_config: Mapped[dict | None] = mapped_column(
         JSON, nullable=True
     )
+    # document-revision Design §3.3 (V096): 개정 판정 모드. auto 는 후속 사이클(저장 거부).
+    revision_mode: Mapped[str] = mapped_column(
+        String(10), nullable=False, default="suggest"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now()
     )

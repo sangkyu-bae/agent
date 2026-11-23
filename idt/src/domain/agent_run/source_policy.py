@@ -5,7 +5,7 @@ Design Ref: agent-run-source-citations §3.3 — 실시간과 재진입이 같�
 """
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 from typing import Any, Iterable, Mapping, Optional
@@ -90,6 +90,8 @@ class RunEvidence:
     tool_calls: list[ToolCall]
     filenames: dict[str, str]
     mcp_tools: dict[str, McpToolInfo]
+    # document-revision module-6: document_id → "v3 (라벨)". v1·라벨 없음은 키 없음.
+    version_labels: dict[str, str] = field(default_factory=dict)
 
 
 def unwrap_tool_summary(summary: Optional[str]) -> str:
@@ -150,7 +152,9 @@ class RunSourcePolicy:
         retrievals = sorted(evidence.retrievals, key=_retrieval_order)
         calls = sorted(evidence.tool_calls, key=_tool_order)
         groups = {
-            SourceKind.DOCUMENT: _document_items(retrievals, evidence.filenames),
+            SourceKind.DOCUMENT: _document_items(
+                retrievals, evidence.filenames, evidence.version_labels
+            ),
             SourceKind.WIKI: _unique(_present(_wiki_item(c) for c in calls)),
             SourceKind.WEB: _unique(
                 _web_item(r) for r in retrievals if r.collection_name == WEB_COLLECTION
@@ -181,11 +185,14 @@ def _round_robin(
 
 
 def _document_items(
-    retrievals: list[RetrievalSource], filenames: dict[str, str],
+    retrievals: list[RetrievalSource],
+    filenames: dict[str, str],
+    version_labels: dict[str, str],
 ) -> list[RunSourceItem]:
-    """파일명이 있으면 파일명, 없으면 문서 키로 중복을 제거한다.
+    """파일명이 있으면 파일명(+버전), 없으면 문서 키로 중복을 제거한다.
 
     같은 파일을 다시 올리면 document_id 만 달라 같은 이름의 칩이 겹친다 (실측).
+    document-revision module-6: 버전이 다르면 다른 칩으로 남긴다.
     """
     seen: dict[str, RunSourceItem] = {}
     for r in retrievals:
@@ -194,18 +201,25 @@ def _document_items(
         filename = _text_field(r.metadata_json, "filename") or filenames.get(
             r.document_id or ""
         )
-        item = _document_item(r, filename)
-        seen.setdefault(filename or item.key, item)
+        version = version_labels.get(r.document_id or "")
+        item = _document_item(r, filename, version)
+        dedup = f"{filename}|{version or ''}" if filename else item.key
+        seen.setdefault(dedup, item)
     return list(seen.values())
 
 
-def _document_item(r: RetrievalSource, filename: Optional[str]) -> RunSourceItem:
+def _document_item(
+    r: RetrievalSource, filename: Optional[str], version: Optional[str] = None
+) -> RunSourceItem:
     label = (
         filename
         or _text_field(r.metadata_json, "clause_title")
         or _text_field(r.metadata_json, "kb_name")
         or DOCUMENT_FALLBACK_LABEL
     )
+    if version:
+        # Plan SC-5: 근거 칩에 버전 라벨 ("규정.pdf · v3 (2026-11 개정)")
+        label = f"{label} · {version}"
     return RunSourceItem(
         kind=SourceKind.DOCUMENT,
         label=label,

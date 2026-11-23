@@ -15,6 +15,10 @@ import KbDocumentTable from '@/components/knowledge-base/KbDocumentTable';
 import KbSearchSection from '@/components/knowledge-base/KbSearchSection';
 import KbStatusCards from '@/components/knowledge-base/KbStatusCards';
 import KbUploadDocumentModal from '@/components/knowledge-base/KbUploadDocumentModal';
+import PendingSyncBanner from '@/components/knowledge-base/PendingSyncBanner';
+import RevisionLinkModal from '@/components/knowledge-base/RevisionLinkModal';
+import RevisionMetaDialog from '@/components/knowledge-base/RevisionMetaDialog';
+import RevisionRollbackDialog from '@/components/knowledge-base/RevisionRollbackDialog';
 
 // 403·404 서버 메시지는 영문이라 화면 문구로 바꾼다. 409·503은 서버 한국어 메시지를 쓴다.
 const DOCUMENT_DELETE_ERROR_MAP: Record<number, string> = {
@@ -47,14 +51,26 @@ const KnowledgeBaseDetailPage = () => {
     null,
   );
 
+  // document-revision §5.1 — 개정 관리 대화상자 대상 (한 번에 하나)
+  const [rollbackTarget, setRollbackTarget] = useState<KbDocumentInfo | null>(null);
+  const [linkTarget, setLinkTarget] = useState<KbDocumentInfo | null>(null);
+  const [metaTarget, setMetaTarget] = useState<KbDocumentInfo | null>(null);
+  // document-revision §4.2 #9 — 최신 버전 삭제 시 이전 버전 복귀 (기본 켬)
+  const [restorePrevious, setRestorePrevious] = useState(true);
+
   const kbQuery = useKnowledgeBase(kbId);
   const docsQuery = useKbDocuments(kbId);
   const deleteMutation = useDeleteKbDocument(kbId ?? '');
 
   const openDeleteDialog = (doc: KbDocumentInfo) => {
     deleteMutation.reset();
+    setRestorePrevious(true);
     setDeleteTarget(doc);
   };
+  const deletePreviousVersionNo =
+    deleteTarget && (deleteTarget.version_no ?? 1) > 1
+      ? (deleteTarget.version_no ?? 1) - 1
+      : null;
 
   const closeDeleteDialog = () => {
     if (deleteMutation.isPending) return;
@@ -64,7 +80,7 @@ const KnowledgeBaseDetailPage = () => {
   const confirmDelete = () => {
     if (!deleteTarget || deleteMutation.isPending) return;
     const deletedId = deleteTarget.document_id;
-    deleteMutation.mutate(deletedId, {
+    deleteMutation.mutate({ documentId: deletedId, restorePrevious }, {
       onSuccess: () => {
         setSelectedDoc((prev) =>
           prev?.document_id === deletedId ? null : prev,
@@ -146,6 +162,11 @@ const KnowledgeBaseDetailPage = () => {
               </button>
             </div>
 
+            <PendingSyncBanner
+              kbId={kbId}
+              items={docsQuery.data?.pending_sync ?? []}
+            />
+
             <div className="mt-4">
               <KbDocumentTable
                 documents={docsQuery.data?.documents ?? []}
@@ -165,6 +186,10 @@ const KnowledgeBaseDetailPage = () => {
                   })
                 }
                 onDeleteDocument={openDeleteDialog}
+                kbId={kbId}
+                onRollback={setRollbackTarget}
+                onLink={setLinkTarget}
+                onEditMeta={setMetaTarget}
               />
             </div>
 
@@ -196,7 +221,36 @@ const KnowledgeBaseDetailPage = () => {
               onConfirm={confirmDelete}
               isPending={deleteMutation.isPending}
               error={getDeleteError(deleteMutation.error)}
+              previousVersionNo={deletePreviousVersionNo}
+              restorePrevious={restorePrevious}
+              onRestorePreviousChange={setRestorePrevious}
             />
+
+            {rollbackTarget && (
+              <RevisionRollbackDialog
+                kbId={kbId}
+                document={rollbackTarget}
+                isOpen
+                onClose={() => setRollbackTarget(null)}
+              />
+            )}
+            {linkTarget && (
+              <RevisionLinkModal
+                kbId={kbId}
+                document={linkTarget}
+                candidates={docsQuery.data?.documents ?? []}
+                isOpen
+                onClose={() => setLinkTarget(null)}
+              />
+            )}
+            {metaTarget && (
+              <RevisionMetaDialog
+                kbId={kbId}
+                document={metaTarget}
+                isOpen
+                onClose={() => setMetaTarget(null)}
+              />
+            )}
           </>
         )}
       </div>

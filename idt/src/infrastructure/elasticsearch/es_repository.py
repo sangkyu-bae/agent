@@ -208,3 +208,56 @@ class ElasticsearchRepository(ElasticsearchRepositoryInterface):
                 "ES delete_by_query failed", exception=e, request_id=request_id
             )
             raise
+
+    async def update_by_query(
+        self,
+        index: str,
+        query: dict[str, Any],
+        script: dict[str, Any],
+        request_id: str,
+    ) -> int:
+        """쿼리 조건 문서 일괄 갱신 — 버전 충돌은 건너뛰고 즉시 refresh."""
+        self._logger.info(
+            "ES update_by_query start", request_id=request_id, index=index
+        )
+        try:
+            es = self._client.get_client()
+            resp = await es.update_by_query(
+                index=index,
+                query=query,
+                script=script,
+                conflicts="proceed",
+                refresh=True,
+            )
+            updated = resp.get("updated", 0)
+            conflicts = resp.get("version_conflicts", 0)
+            if conflicts:
+                # document-revision Act-1 M8: 건너뛴 문서가 있으면 표식 미완료로 본다
+                raise RuntimeError(f"update_by_query version_conflicts={conflicts}")
+            self._logger.info(
+                "ES update_by_query completed",
+                request_id=request_id,
+                updated_count=updated,
+            )
+            return updated
+        except Exception as e:
+            self._logger.error(
+                "ES update_by_query failed", exception=e, request_id=request_id
+            )
+            raise
+
+    async def put_mapping(
+        self, index: str, properties: dict[str, Any], request_id: str
+    ) -> None:
+        try:
+            es = self._client.get_client()
+            await es.indices.put_mapping(index=index, properties=properties)
+            self._logger.info(
+                "ES put_mapping completed", request_id=request_id, index=index
+            )
+        except Exception as e:
+            self._logger.warning(
+                "ES put_mapping failed", exception=e, request_id=request_id,
+                index=index,
+            )
+            raise

@@ -78,6 +78,15 @@ export interface KbDocumentInfo {
   created_at: string | null;
   /** 서버가 KB 정책으로 계산한 삭제 가능 여부 (kb-document-management FR-08) */
   can_delete: boolean;
+  // document-revision §4.2 #3 — 목록은 active 만, 버전 표시용.
+  // 서버는 항상 내려주지만 이전 응답 형태와 호환되도록 선택 필드로 둔다(미존재 = v1·active).
+  version_no?: number;
+  version_label?: string | null;
+  effective_date?: string | null;
+  revision_status?: RevisionStatus;
+  sync_state?: SyncState;
+  lineage_id?: string | null;
+  has_history?: boolean;
 }
 
 /** DELETE /knowledge-bases/{kbId}/documents/{docId} (kb-document-management §4.2) */
@@ -88,6 +97,8 @@ export interface KbDocumentDeleteResponse {
   deleted_qdrant_chunks: number;
   deleted_es_chunks: number;
   status: string;
+  /** document-revision §4.2 #9 — 최신 버전 삭제로 다시 검색에 쓰이게 된 이전 버전 */
+  restored_document_id?: string | null;
 }
 
 export interface KbDocumentListResponse {
@@ -97,6 +108,8 @@ export interface KbDocumentListResponse {
   total: number;
   offset: number;
   limit: number;
+  /** document-revision §4.2 #3 — 검색 제외 표식 반영 실패(재시도 대상) */
+  pending_sync?: DocumentVersion[];
 }
 
 export interface KbStoreResult {
@@ -122,6 +135,8 @@ export interface KbUploadResponse {
   es: KbStoreResult;
   status: string;
   section_summary?: KbSectionSummaryLaunch | null;
+  /** document-revision §4.2 #2 — 개정 적용 결과 */
+  revision?: RevisionApplyResult | null;
 }
 
 // scope 배지 라벨/스타일은 컬렉션 화면과 동일한
@@ -244,4 +259,140 @@ export interface SectionSummaryStatusResponse {
   error: string | null;
   created_at: string | null;
   updated_at: string | null;
+}
+
+// ── 문서 개정 (document-revision Design §3.1·§4.2) ──────────────
+// 백엔드 계약: src/interfaces/schemas/document_revision.py, kb_document_revision_router.py
+
+export const REVISION_STATUS = { ACTIVE: 'active', SUPERSEDED: 'superseded' } as const;
+export type RevisionStatus = (typeof REVISION_STATUS)[keyof typeof REVISION_STATUS];
+
+export const SYNC_STATE = { SYNCED: 'synced', PENDING: 'pending' } as const;
+export type SyncState = (typeof SYNC_STATE)[keyof typeof SYNC_STATE];
+
+export const CHECK_VERDICT = {
+  NEW: 'new',
+  REVISION_CANDIDATE: 'revision_candidate',
+  DUPLICATE: 'duplicate',
+} as const;
+export type CheckVerdict = (typeof CHECK_VERDICT)[keyof typeof CHECK_VERDICT];
+
+export const LLM_VERDICT = {
+  SAME: 'same_document_revision',
+  DIFFERENT: 'different_document',
+  UNCERTAIN: 'uncertain',
+} as const;
+export type LlmVerdict = (typeof LLM_VERDICT)[keyof typeof LLM_VERDICT];
+
+export const LLM_STATUS = { OK: 'ok', FAILED: 'failed', SKIPPED: 'skipped' } as const;
+export type LlmStatus = (typeof LLM_STATUS)[keyof typeof LLM_STATUS];
+
+export const ROLLBACK_MODE = { DETACH: 'detach', DELETE: 'delete' } as const;
+export type RollbackMode = (typeof ROLLBACK_MODE)[keyof typeof ROLLBACK_MODE];
+
+/** 409 detail.code (Design §6.1) */
+export const REVISION_ERROR_CODE = {
+  DUPLICATE_DOCUMENT: 'DUPLICATE_DOCUMENT',
+  REVISION_TARGET_INVALID: 'REVISION_TARGET_INVALID',
+  ROLLBACK_NOT_ALLOWED: 'ROLLBACK_NOT_ALLOWED',
+  REVISION_LINK_INVALID: 'REVISION_LINK_INVALID',
+  REVISION_MODE_NOT_AVAILABLE: 'REVISION_MODE_NOT_AVAILABLE',
+} as const;
+
+export interface DocumentVersion {
+  document_id: string;
+  filename: string;
+  lineage_id: string;
+  version_no: number;
+  version_label: string | null;
+  effective_date: string | null;
+  revision_status: RevisionStatus;
+  sync_state: SyncState;
+  superseded_by: string | null;
+  superseded_at: string | null;
+  revised_by: string | null;
+  created_at: string | null;
+}
+
+export interface RevisionCandidate {
+  document_id: string;
+  filename: string;
+  version_no: number;
+  version_label: string | null;
+  filename_score: number;
+  content_score: number;
+  combined_score: number;
+  llm_verdict: LlmVerdict | null;
+  llm_reason: string | null;
+}
+
+/** POST /knowledge-bases/{kbId}/documents/revision-check */
+export interface RevisionCheckResponse {
+  check_id: string;
+  verdict: CheckVerdict;
+  duplicate_of: DocumentVersion | null;
+  suggested_document_id: string | null;
+  candidates: RevisionCandidate[];
+  llm_status: LlmStatus;
+  elapsed_ms: number;
+}
+
+/** 업로드 요청의 개정 입력 (모두 선택) */
+export interface RevisionUploadOptions {
+  supersedesDocumentId?: string | null;
+  versionLabel?: string | null;
+  /** YYYY-MM-DD */
+  effectiveDate?: string | null;
+  revisionCheckId?: string | null;
+}
+
+export interface RevisionApplyResult {
+  applied: boolean;
+  lineage_id: string | null;
+  version_no: number;
+  superseded_document_id: string | null;
+  sync_state: SyncState | null;
+  /** ingest_incomplete 등 — 개정 요청이 없었으면 null */
+  reason: string | null;
+}
+
+export interface DocumentVersionsResponse {
+  lineage_id: string;
+  versions: DocumentVersion[];
+}
+
+export interface RevisionRollbackResponse {
+  restored_document_id: string;
+  detached_document_id: string | null;
+  deleted_document_id: string | null;
+  sync_state: SyncState;
+}
+
+export interface RevisionLinkResponse {
+  document: DocumentVersion;
+  sync_state: SyncState;
+}
+
+export interface RevisionMetaRequest {
+  version_label: string | null;
+  effective_date: string | null;
+}
+
+export interface RevisionSyncResponse {
+  document_id: string;
+  revision_status: RevisionStatus;
+  sync_state: SyncState;
+}
+
+export interface RevisionModeResponse {
+  kb_id: string;
+  revision_mode: string;
+}
+
+/** 409 응답 detail (Design §6.2) */
+export interface RevisionErrorDetail {
+  code: string;
+  message: string;
+  reason?: string;
+  document?: DocumentVersion;
 }

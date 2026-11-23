@@ -40,10 +40,13 @@ class SessionScopedDocumentMetadataRepository(DocumentMetadataRepositoryInterfac
         kb_id: str,
         request_id: str,
         pagination: Optional[MySQLPaginationParams] = None,
+        active_only: bool = False,
     ) -> MySQLPageResult[KbDocumentSummary]:
         async with self._session_factory() as session:
             repo = DocumentMetadataRepository(session, self._logger)
-            return await repo.find_by_kb_id(kb_id, request_id, pagination)
+            return await repo.find_by_kb_id(
+                kb_id, request_id, pagination, active_only=active_only
+            )
 
     async def delete_by_document_id(
         self,
@@ -72,3 +75,12 @@ class SessionScopedDocumentMetadataRepository(DocumentMetadataRepositoryInterfac
         async with self._session_factory() as session:
             repo = DocumentMetadataRepository(session, self._logger)
             return await repo.find_filenames(document_ids, request_id)
+
+    async def find_version_labels(
+        self,
+        document_ids: list[str],
+        request_id: str,
+    ) -> dict[str, str]:
+        async with self._session_factory() as session:
+            repo = DocumentMetadataRepository(session, self._logger)
+            return await repo.find_version_labels(document_ids, request_id)

@@ -4,6 +4,8 @@ from __future__ import annotations
 import uuid
 
 from src.domain.auth.entities import User, UserRole
+from src.domain.document_revision.errors import RevisionModeNotAvailableError
+from src.domain.document_revision.value_objects import RevisionMode
 from src.domain.chunking_profile.interfaces import (
     ChunkingProfileRepositoryInterface,
 )
@@ -190,6 +192,26 @@ class KnowledgeBaseUseCase:
             request_id=request_id,
             kb_id=kb_id,
         )
+        return await self._find_or_raise(kb_id, request_id)
+
+    async def update_revision_mode(
+        self, kb_id: str, user: User, revision_mode: str, request_id: str
+    ) -> KnowledgeBase:
+        """document-revision §4.2 #10 — suggest 만 저장. auto 는 후속 사이클(422)."""
+        kb = await self._find_or_raise(kb_id, request_id)
+        if not self._policy.can_manage_settings(user, kb):
+            raise PermissionError(
+                f"No settings access to knowledge base '{kb_id}'"
+            )
+        try:
+            mode = RevisionMode(revision_mode)
+        except ValueError as e:
+            raise ValueError(f"Unknown revision_mode '{revision_mode}'") from e
+        if mode is RevisionMode.AUTO:
+            raise RevisionModeNotAvailableError(
+                "auto_not_available", "자동 개정 모드는 아직 사용할 수 없습니다"
+            )
+        await self._kb_repo.update_revision_mode(kb_id, mode.value, request_id)
         return await self._find_or_raise(kb_id, request_id)
 
     async def _validate_chunking(

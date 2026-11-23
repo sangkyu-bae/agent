@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from datetime import date
 
 
 @dataclass(frozen=True)
@@ -26,6 +27,13 @@ class UnifiedUploadRequest:
     extra_metadata: dict[str, str] = field(default_factory=dict)
     # None이면 기존 parent_child 하드코딩 경로, 지정 시 해당 전략 사용 (Design D10).
     chunking_config: "UploadChunkingConfig | None" = None
+    # document-revision Design §3.3: document_metadata 신규 행의 계보 필드.
+    #   청크 payload 에는 쓰지 않는다(revision_status 부재 = active).
+    file_hash: str | None = None
+    lineage_id: str | None = None
+    version_no: int = 1
+    version_label: str | None = None
+    effective_date: date | None = None
 
 
 @dataclass

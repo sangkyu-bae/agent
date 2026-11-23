@@ -55,6 +55,13 @@ class KnowledgeBaseRepositoryInterface(ABC):
         """청킹 설정 6개 컬럼만 전체 교체 (kb-custom-chunking D7/D8)."""
         ...
 
+    @abstractmethod
+    async def update_revision_mode(
+        self, kb_id: str, revision_mode: str, request_id: str
+    ) -> None:
+        """document-revision §4.2 #10: 개정 판정 모드 컬럼만 갱신."""
+        ...
+
 
 class CollectionAssignerInterface(ABC):
     """KB가 사용할 물리 컬렉션 결정 전략 (Design D6).

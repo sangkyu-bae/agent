@@ -29,5 +29,7 @@ class KnowledgeBase:
     #   파싱·검증은 domain custom_chunking 모듈).
     use_custom_chunking: bool = False
     custom_chunking_config: dict | None = None
+    # document-revision (Design §3.3 V096): suggest | auto. 이번 사이클은 suggest 만 동작.
+    revision_mode: str = "suggest"
     created_at: datetime | None = None
     updated_at: datetime | None = None
