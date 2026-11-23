@@ -42,6 +42,9 @@ DOCUMENTS_INDEX_MAPPINGS: dict = {
         "user_id": {"type": "keyword"},
         "collection_name": {"type": "keyword"},
         "parent_id": {"type": "keyword"},
+        # answer-citation-verification FR-02: 청크 쪽 번호
+        # (기존 인덱스는 dynamic 매핑으로 자동 추가)
+        "page": {"type": "integer"},
         "kb_id": {"type": "keyword"},
         "kb_name": {"type": "keyword"},
         # card-section-summary D7: 섹션 요약 전용 필드 — content/morph_text를

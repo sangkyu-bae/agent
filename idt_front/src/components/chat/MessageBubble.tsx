@@ -1,7 +1,8 @@
 // Design Ref: ui-redesign-chat §5.4 — 유저 버블·어시스턴트 아바타를 토큰 그라데이션으로, eyebrow 대문자 라벨은 제거.
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { Sparkles } from 'lucide-react';
-import type { Message } from '@/types/chat';
+import { CITATION_STATUS, type Message } from '@/types/chat';
+import { buildCitationView } from '@/utils/citationView';
 import SourceCitation from './SourceCitation';
 import ChartRenderer from './ChartRenderer';
 import MarkdownRenderer from './MarkdownRenderer';
@@ -47,6 +48,15 @@ export const AssistantAvatar = () => (
   </div>
 );
 
+/** answer-citation-verification §5.3 — 검증된 인용이 있을 때만 본문 [n] 위첨자용 행을 넘긴다. */
+const CitedMarkdown = ({ message }: { message: Message }) => {
+  const citations = useMemo(() => {
+    const view = buildCitationView(message.sources ?? []);
+    return view.status === CITATION_STATUS.VERIFIED ? view.rows : undefined;
+  }, [message.sources]);
+  return <MarkdownRenderer content={message.content} citations={citations} />;
+};
+
 const AssistantMessage = ({ message }: { message: Message }) => (
   <div className="flex items-start gap-4">
     <AssistantAvatar />
@@ -54,7 +64,7 @@ const AssistantMessage = ({ message }: { message: Message }) => (
     <div className="min-w-0 flex-1">
       <p className="mb-1.5 text-xs font-medium text-fg-subtle">상플AI</p>
       <div className="text-md leading-[1.7] text-fg">
-        <MarkdownRenderer content={message.content} />
+        <CitedMarkdown message={message} />
         {message.isStreaming && (
           <span
             aria-hidden="true"

@@ -63,3 +63,13 @@
 .spv-pdf-page .textLayer mark[data-spv-passage][aria-current] {
   background: color-mix(in srgb, var(--color-warning) 45%, transparent);
 }
+
+/* answer-citation-verification FR-14: 근거 문장은 진하게, 현재 근거 문장은 테두리 */
+.spv-pdf-page .textLayer mark[data-spv-focus] {
+  background: color-mix(in srgb, var(--color-warning) 45%, transparent);
+}
+
+.spv-pdf-page .textLayer mark[data-spv-focus][aria-current] {
+  outline: 2px solid var(--color-warning);
+  outline-offset: 1px;
+}

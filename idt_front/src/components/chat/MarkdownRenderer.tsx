@@ -1,17 +1,23 @@
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
+import type { PluggableList } from 'unified';
 import { FileText } from 'lucide-react';
 import { documentExtractorService } from '@/services/documentExtractorService';
 import { useExcelPreviewStore } from '@/store/excelPreviewStore';
 import { useDocumentPreviewStore } from '@/store/documentPreviewStore';
 import { FILE_PREVIEW_TRIGGER } from '@/types/filePreview';
+import type { CitationRow } from '@/utils/citationView';
 import { previewKindOf } from '@/utils/previewKind';
+import { remarkCitationRefs } from '@/utils/remarkCitationRefs';
 import AuthenticatedImage from './AuthenticatedImage';
+import CitationRef from './CitationRef';
 
 interface MarkdownRendererProps {
   content: string;
+  /** answer-citation-verification — 검증된 인용 행. 있으면 본문 [n] 을 위첨자로 바꾼다 */
+  citations?: CitationRow[];
 }
 
 // document-template-extractor GB3: 산출 파일 링크는 JWT가 필요해
@@ -141,13 +147,37 @@ const components: Components = {
   strong: ({ children }) => <strong className="font-semibold text-fg">{children}</strong>,
 };
 
-const MarkdownRenderer = ({ content }: MarkdownRendererProps) => (
-  <div className="min-w-0">
-    <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={components}>
-      {content}
-    </ReactMarkdown>
-  </div>
-);
+const BASE_PLUGINS: PluggableList = [remarkGfm, remarkBreaks];
+
+/**
+ * answer-citation-verification §5.3 — 인용이 있는 메시지만 [n] 플러그인과 sup 매핑을 더한다.
+ * 인용이 없으면 기존 플러그인·컴포넌트 그대로(FR-15).
+ */
+const citationRendering = (citations?: CitationRow[]) => {
+  if (!citations || citations.length === 0) return { plugins: BASE_PLUGINS, mapping: components };
+  const nos = citations.map((c) => c.no);
+  const mapping: Components = {
+    ...components,
+    sup: (props) => {
+      const no = Number((props as Record<string, unknown>)['data-citation']);
+      if (!no) return <sup>{props.children}</sup>;
+      return <CitationRef no={no} rows={citations} />;
+    },
+  };
+  const plugins: PluggableList = [...BASE_PLUGINS, [remarkCitationRefs, { nos }]];
+  return { plugins, mapping };
+};
+
+const MarkdownRenderer = ({ content, citations }: MarkdownRendererProps) => {
+  const { plugins, mapping } = useMemo(() => citationRendering(citations), [citations]);
+  return (
+    <div className="min-w-0">
+      <ReactMarkdown remarkPlugins={plugins} components={mapping}>
+        {content}
+      </ReactMarkdown>
+    </div>
+  );
+};
 
 /** 스트리밍 중 완료된 과거 메시지의 재파싱 차단 — content 동일 시 재렌더 생략 */
 export default memo(MarkdownRenderer);

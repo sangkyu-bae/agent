@@ -3,6 +3,7 @@ import { API_ENDPOINTS } from '@/constants/api';
 import type { ScheduleResponse } from '@/types/agentSchedule';
 import type { ExcelPreviewResponse } from '@/types/excelPreview';
 import { graphRagHandlers } from './graphRagMocks';
+import { groundingJudgeHandlers } from './groundingJudgeMocks';
 
 // ── Agent Schedule (agent-schedule) — stateful in-memory store ──
 const scheduleStore = new Map<string, ScheduleResponse[]>();
@@ -176,6 +177,7 @@ export const mockExcelPreview = (fileId: string): ExcelPreviewResponse => ({
 export const handlers = [
   // graph-rag-foundation (capabilities 기본 visible=false)
   ...graphRagHandlers,
+  ...groundingJudgeHandlers,
 
   // ── kb-profile-selector (Design §8.5) ───────────────────────────────────────
   http.get(`*${API_ENDPOINTS.CHUNKING_PROFILES}`, () =>

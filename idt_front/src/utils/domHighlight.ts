@@ -108,3 +108,43 @@ export const setCurrentPassage = (
   marks[index]?.forEach((m) => m.setAttribute('aria-current', 'true'));
   return marks[index]?.[0] ?? null;
 };
+
+// ── answer-citation-verification §5.2 FR-14: 근거 문장 진하게, 청크 나머지 옅게 ──
+
+export interface FocusHighlight {
+  /** 청크 구절별 mark (highlightPassages 와 같은 순서) */
+  marks: (HTMLElement[] | null)[];
+  /** 같은 순서의 근거 문장 mark. 근거 문장이 없거나 못 찾으면 null */
+  focusMarks: (HTMLElement[] | null)[];
+}
+
+/** 청크와 근거 문장을 한 번에 칠한다(겹침 규칙 공유). 근거 문장 mark 에 data-spv-focus. */
+export const highlightWithFocus = (
+  root: Node,
+  texts: string[],
+  focuses: (string | null | undefined)[],
+): FocusHighlight => {
+  const extra = focuses.flatMap((f, i) => (f ? [{ i, f }] : []));
+  const all = highlightPassages(root, [...texts, ...extra.map((e) => e.f)]);
+  const focusMarks: (HTMLElement[] | null)[] = texts.map(() => null);
+  extra.forEach(({ i }, k) => {
+    const found = all[texts.length + k];
+    if (!found || found.length === 0) return;
+    found.forEach((m) => {
+      m.dataset.spvFocus = 'true';
+    });
+    focusMarks[i] = found;
+  });
+  return { marks: all.slice(0, texts.length), focusMarks };
+};
+
+/** 근거 문장이 있으면 그 mark 만 현재 구절로(청크는 옅게 유지), 없으면 기존처럼 청크. */
+export const setCurrentWithFocus = (
+  marks: (HTMLElement[] | null)[],
+  focusMarks: (HTMLElement[] | null)[],
+  index: number,
+): HTMLElement | null =>
+  setCurrentPassage(
+    marks.map((m, i) => focusMarks[i] ?? m),
+    index,
+  );

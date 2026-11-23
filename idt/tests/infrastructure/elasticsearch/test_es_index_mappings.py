@@ -57,3 +57,8 @@ class TestDocumentsIndexMappings:
         props = DOCUMENTS_INDEX_MAPPINGS["properties"]
         assert props["chunk_index"]["type"] == "integer"
         assert props["total_chunks"]["type"] == "integer"
+
+
+def test_page_field_is_integer():
+    """answer-citation-verification FR-02 — BM25 히트에도 쪽 번호."""
+    assert DOCUMENTS_INDEX_MAPPINGS["properties"]["page"] == {"type": "integer"}

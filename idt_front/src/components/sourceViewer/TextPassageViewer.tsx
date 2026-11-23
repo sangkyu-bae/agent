@@ -6,6 +6,7 @@ import { useSourceViewerChunks } from '@/hooks/useSourceViewerChunks';
 import { ApiError } from '@/services/api/ApiError';
 import type { SourceViewerRef } from '@/types/sourceViewer';
 import { buildPassageDocument, toSegments } from '@/utils/buildPassageDocument';
+import { findPassage } from '@/utils/passageMatch';
 import { cn } from '@/utils/cn';
 
 import MissingPassageNotice from './MissingPassageNotice';
@@ -33,7 +34,16 @@ const TextPassageViewer = ({ viewer, index }: TextPassageViewerProps) => {
     () => (data ? buildPassageDocument(data, viewer.passages) : null),
     [data, viewer.passages],
   );
-  const segments = useMemo(() => (doc ? toSegments(doc.text, doc.ranges) : []), [doc]);
+  // answer-citation-verification FR-14: 근거 문장(focus) 범위 — 구절 번호 뒤(count + i)에 덧붙여 함께 자른다
+  const count = viewer.passages.length;
+  const focusRanges = useMemo(
+    () => (doc ? viewer.passages.map((p) => (p.focus ? findPassage(doc.text, p.focus) : null)) : []),
+    [doc, viewer.passages],
+  );
+  const segments = useMemo(
+    () => (doc ? toSegments(doc.text, [...doc.ranges, ...focusRanges]) : []),
+    [doc, focusRanges],
+  );
 
   useEffect(() => {
     currentRef.current?.scrollIntoView?.({ block: 'center' });
@@ -43,21 +53,30 @@ const TextPassageViewer = ({ viewer, index }: TextPassageViewerProps) => {
   if (error || !doc) return <Notice>{errorMessage(error)}</Notice>;
 
   const missing = doc.ranges[index] === null ? viewer.passages[index] : undefined;
+  // 근거 문장을 찾았으면 그 문장이 현재 위치(청크는 옅게), 아니면 기존처럼 청크 전체.
+  const currentOwner = focusRanges[index] ? count + index : index;
   // 현재 구절의 첫 조각에만 스크롤 기준점을 단다.
-  const anchor = segments.findIndex((s) => s.passages.includes(index));
+  const anchor = segments.findIndex((s) => s.passages.includes(currentOwner));
   return (
     <div className="flex-1 overflow-y-auto">
       {missing && <MissingPassageNotice excerpt={missing.excerpt} />}
       <p className="whitespace-pre-wrap break-words p-4 text-sm leading-[1.7] text-fg">
         {segments.map((seg, i) => {
           if (seg.passages.length === 0) return <span key={i}>{seg.text}</span>;
-          const isCurrent = seg.passages.includes(index);
+          const isCurrent = seg.passages.includes(currentOwner);
+          const isFocus = seg.passages.some((p) => p >= count);
           return (
             <mark
               key={i}
               ref={i === anchor ? currentRef : undefined}
               aria-current={isCurrent ? 'true' : undefined}
-              className={cn('rounded-sm text-fg', isCurrent ? 'bg-warning-border' : 'bg-warning-bg')}
+              data-spv-focus={isFocus ? 'true' : undefined}
+              className={cn(
+                'rounded-sm text-fg',
+                isCurrent || isFocus ? 'bg-warning-border' : 'bg-warning-bg',
+                isFocus && 'font-semibold',
+                isFocus && isCurrent && 'outline-2 outline-warning',
+              )}
             >
               {seg.text}
             </mark>

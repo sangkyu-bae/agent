@@ -54,6 +54,9 @@ class RunSourceItem:
     url: Optional[str] = None
     # source-passage-viewer §11.2 #1 — 원문 뷰어 진입 정보. None 이면 키를 싣지 않는다.
     viewer: Optional[Mapping[str, Any]] = None
+    # answer-citation-verification §4.2 — 검증된 인용 {status, entries}.
+    # None 이면 키를 싣지 않는다.
+    citation: Mapping[str, Any] | None = None
 
     def to_payload(self) -> dict:
         """프론트 `DocumentSource` 형태. metadata·인자는 내보내지 않는다 (Design §7)."""
@@ -67,6 +70,8 @@ class RunSourceItem:
             payload["url"] = self.url
         if self.viewer:
             payload["viewer"] = dict(self.viewer)
+        if self.citation is not None:
+            payload["citation"] = dict(self.citation)
         return payload
 
 

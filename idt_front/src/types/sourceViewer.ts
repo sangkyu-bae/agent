@@ -26,6 +26,11 @@ export interface SourceViewerPassage {
   page: number | null;
   /** 검색 기록의 청크 앞부분 — 위치를 못 찾았을 때 표시·대체 매칭용 */
   excerpt: string;
+  /**
+   * answer-citation-verification §5.2 — 인용에서 열었을 때의 근거 문장.
+   * 있으면 청크는 옅게, 이 문장은 진하게 칠한다. 없거나 못 찾으면 청크 전체 음영.
+   */
+  focus?: string | null;
 }
 
 /** 문서 칩의 `viewer` 객체. 없거나 null 이면 원문 보기 기능이 없는 칩이다. */

@@ -8,9 +8,10 @@ Design Ref: draft-grounding-check v0.2 §3.1.
 """
 import re
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Literal
 
+from src.domain.hallucination.citation_check import CitationCheck, CitationCheckRequest
 from src.domain.hallucination.value_objects import HallucinationEvaluationResult
 
 # 근거 재작성 루프 안의 LLM 호출(생성·판정·재작성)에 붙이는 태그.
@@ -35,6 +36,8 @@ class UnsupportedClaim:
 @dataclass(frozen=True)
 class GroundingVerdict:
     unsupported_claims: tuple[UnsupportedClaim, ...]
+    # answer-citation-verification S5: 같은 판정 호출의 인용 검증 결과(요청 없으면 빈 값)
+    citation_checks: tuple[CitationCheck, ...] = ()
 
     @property
     def grounded(self) -> bool:
@@ -54,7 +57,9 @@ class GroundingVerdict:
         """
         corpus = " ".join((sources or "").split())
         kept = tuple(c for c in self.unsupported_claims if not _found_literally(c.span, corpus))
-        return self if len(kept) == len(self.unsupported_claims) else GroundingVerdict(kept)
+        if len(kept) == len(self.unsupported_claims):
+            return self
+        return replace(self, unsupported_claims=kept)  # 인용 검증 결과는 보존
 
 
 def _found_literally(span: str, corpus: str) -> bool:
@@ -70,8 +75,13 @@ class GroundingJudgePort(ABC):
     async def judge(
         self, *, question: str, sources: str, generation: str,
         hints: list[str], request_id: str,
+        citations: CitationCheckRequest | None = None,
     ) -> GroundingVerdict:
-        """근거 없는 주장 목록. 실패는 예외로 올린다(fail-open 은 호출측 몫)."""
+        """근거 없는 주장 목록. 실패는 예외로 올린다(fail-open 은 호출측 몫).
+
+        citations 가 있으면 같은 호출에서 인용 쌍도 검증해 citation_checks 에 싣는다
+        (answer-citation-verification D-04 — 없으면 기존 판정 그대로).
+        """
 
 
 class HallucinationEvaluatorPort(ABC):

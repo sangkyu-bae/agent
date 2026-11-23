@@ -17,6 +17,7 @@ import type {
   UpdateLlmModelRequest,
 } from '@/types/llmModel';
 import { isImageModel } from '@/utils/llmModelKind';
+import GroundingJudgeModelCard from './GroundingJudgeModelCard';
 
 /** image-generation-tool Design §5.1: 종류 라디오 표기 */
 const MODEL_KIND_LABELS: Record<LlmModelKind, string> = {
@@ -751,6 +752,9 @@ const AdminLlmModelsPage = () => {
           </button>
         </div>
       </div>
+
+      {/* answer-citation-verification §5.1 — 근거 판정·인용 검증 모델 선택 */}
+      <GroundingJudgeModelCard />
 
       {isLoading ? (
         <div className="flex h-48 items-center justify-center text-zinc-400">로딩 중...</div>

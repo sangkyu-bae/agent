@@ -13,6 +13,29 @@ export const SOURCE_KIND = {
 } as const;
 export type SourceKind = (typeof SOURCE_KIND)[keyof typeof SOURCE_KIND];
 
+// answer-citation-verification §4.2 — 백엔드 계약: idt/src/application/answer_citation/enricher.py
+/** 인용 검증 결과. verified=검증된 인용 있음, none=인용 없음(근거 확인 안 됨) */
+export const CITATION_STATUS = {
+  VERIFIED: 'verified',
+  NONE: 'none',
+} as const;
+export type CitationStatus = (typeof CITATION_STATUS)[keyof typeof CITATION_STATUS];
+
+/** 문서 칩에 실린 검증된 인용 1건 — no 는 본문 [n] 번호 */
+export interface SourceCitationEntry {
+  no: number;
+  chunk_id: string | null;
+  page: number | null;
+  /** 청크 안 근거 문장. 청크에서 찾지 못했으면 null (원문 뷰어는 청크 전체 음영) */
+  evidence: string | null;
+}
+
+export interface SourceCitationInfo {
+  status: CitationStatus;
+  /** 이 문서의 인용. 빈 배열이면 검색했지만 답변에 쓰지 않은 문서 */
+  entries: SourceCitationEntry[];
+}
+
 /**
  * 답변 출처. 일반 채팅은 score 가 있고 kind 가 없다.
  * 에이전트 근거는 kind 가 있고, 검색 방식마다 점수 스케일이 달라 score 가 없다.
@@ -27,6 +50,8 @@ export interface DocumentSource {
   url?: string;
   /** source-passage-viewer §3.3 — 원문 뷰어 진입 정보(KB 문서 칩 전용). 재진입 API 는 null 을 싣는다 */
   viewer?: SourceViewerRef | null;
+  /** answer-citation-verification §4.2 — 인용 검증 결과(문서 칩 전용). 없으면 기존 칩 렌더 */
+  citation?: SourceCitationInfo | null;
 }
 
 /** GET /api/v1/conversations/agents/{agent_id}/sessions/{session_id}/sources 응답 */

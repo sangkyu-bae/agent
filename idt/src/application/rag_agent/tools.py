@@ -103,6 +103,28 @@ class InternalDocumentSearchTool(BaseTool):
     use_supplemental: bool = False       # RagToolConfig.use_graph
     supplemental_source: Any = None      # SupplementalRetrievalSource | None
     supplemental_grant: Any = None       # SupplementalGrant | None (대화 경로만)
+    # ── answer-citation-verification S3: 인용 번호 머리말 (duck typing label) ──
+    citation_labeler: Any = None  # CitationLabeler | None (None=기존 머리말)
+
+    def _source_header(
+        self, source: str, *, chunk_id: Any, document_id: Any, page: Any, text: str
+    ) -> str:
+        """검색 결과 머리말. 라벨러가 없거나 실패·None 이면 기존 `[출처: 파일]`."""
+        if self.citation_labeler is not None:
+            try:
+                label = self.citation_labeler.label(
+                    source=source, chunk_id=chunk_id, document_id=document_id,
+                    page=page, text=text,
+                )
+            except Exception as e:  # noqa: BLE001 — 탈착형: 실패는 기존 머리말
+                label = None
+                if self.logger is not None:
+                    self.logger.warning(
+                        "citation labeler failed — plain header", exception=e
+                    )
+            if label:
+                return label
+        return f"[출처: {source}]"
 
     def _run(self, query: str) -> str:
         raise NotImplementedError("비동기 _arun을 사용하세요.")
@@ -435,14 +457,18 @@ class InternalDocumentSearchTool(BaseTool):
         ctx = get_current_run_context() if self.tracker is not None else None
         for rank_index, chunk in enumerate(chunks, start=1):
             source = self._routed_source_label(chunk)
+            header = self._source_header(
+                source, chunk_id=chunk.section_ref, document_id=chunk.document_id,
+                page=None, text=chunk.content,
+            )
             if chunk.from_fallback or chunk.section is None:
-                lines.append(f"[출처: {source}]\n{chunk.content}")
+                lines.append(f"{header}\n{chunk.content}")
             else:
                 summary_line = chunk.section.summary.split("\n")[0][
                     :_ROUTED_EVIDENCE_SUMMARY_MAX
                 ]
                 lines.append(
-                    f"[출처: {source}]\n요약: {summary_line}\n{chunk.content}"
+                    f"{header}\n요약: {summary_line}\n{chunk.content}"
                 )
             self.collected_sources.append(
                 DocumentSource(
@@ -537,7 +563,11 @@ class InternalDocumentSearchTool(BaseTool):
                     score=hit.score,
                 )
             )
-            lines.append(f"[출처: {source}]\n{hit.content}")
+            header = self._source_header(
+                source, chunk_id=hit.id, document_id=hit.metadata.get("document_id"),
+                page=hit.metadata.get("page"), text=hit.content,
+            )
+            lines.append(f"{header}\n{hit.content}")
 
             if ctx is None or ctx.run_id is None:
                 continue

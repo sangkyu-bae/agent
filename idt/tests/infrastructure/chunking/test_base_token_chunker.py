@@ -166,3 +166,62 @@ class TestBaseTokenChunker:
         # Should not raise error and should work
         count = chunker.count_tokens("Hello world")
         assert count > 0
+
+
+# answer-citation-verification FR-01 — 토큰 경계가 멀티바이트 글자 중간에 걸려도
+# 깨진 문자(U+FFFD)를 만들지 않는다.
+_KOREAN = (
+    "가계대출 총량관리 목표를 경상성장률 이내로 관리하고, 수도권 주택담보대출 한도를 "
+    "6억 원으로 제한합니다. 정책대출 공급 계획은 연간 25% 감축합니다. 뷁똠햏쌰 같은 "
+    "드문 글자도 섞어 토큰 경계가 글자 가운데에 오도록 합니다. "
+) * 12
+
+
+class TestSplitByTokensMultibyteBoundary:
+    @pytest.mark.parametrize("size,overlap", [(7, 2), (13, 3), (31, 5), (50, 10)])
+    def test_no_replacement_char_in_korean_chunks(self, size, overlap):
+        chunker = BaseTokenChunker(ChunkingConfig(chunk_size=size, chunk_overlap=overlap))
+        chunks = chunker.split_by_tokens(_KOREAN)
+        assert len(chunks) > 1
+        assert all("�" not in c for c in chunks)
+
+    @pytest.mark.parametrize("size,overlap", [(7, 2), (13, 3), (31, 5)])
+    def test_chunks_stay_within_token_limit(self, size, overlap):
+        chunker = BaseTokenChunker(ChunkingConfig(chunk_size=size, chunk_overlap=overlap))
+        for chunk in chunker.split_by_tokens(_KOREAN):
+            assert chunker.count_tokens(chunk) <= size + 1  # 재인코딩 병합 오차 1 허용
+
+    @pytest.mark.parametrize("size,overlap", [(7, 2), (13, 3)])
+    def test_chunks_are_substrings_and_cover_text(self, size, overlap):
+        chunker = BaseTokenChunker(ChunkingConfig(chunk_size=size, chunk_overlap=overlap))
+        chunks = chunker.split_by_tokens(_KOREAN)
+        assert all(c in _KOREAN for c in chunks)
+        assert _KOREAN.startswith(chunks[0])
+        assert _KOREAN.endswith(chunks[-1])
+        # 다음 청크 시작이 이전 청크 끝을 넘지 않는다 → 빠진 글자 없음
+        pos = 0
+        for c in chunks:
+            start = _KOREAN.find(c, max(0, pos - len(c)))
+            assert start <= pos
+            pos = start + len(c)
+        assert pos == len(_KOREAN)
+
+    def test_original_replacement_char_is_kept(self):
+        text = "원문에 이미 � 가 있는 문장입니다. " * 30
+        chunker = BaseTokenChunker(ChunkingConfig(chunk_size=11, chunk_overlap=2))
+        joined = "".join(chunker.split_by_tokens(text))
+        assert "�" in joined
+
+    def test_ascii_split_unchanged(self):
+        text = "The quick brown fox jumps over the lazy dog. " * 40
+        chunker = BaseTokenChunker(ChunkingConfig(chunk_size=20, chunk_overlap=4))
+        enc = chunker._encoder
+        tokens = enc.encode(text)
+        expected, start = [], 0
+        while start < len(tokens):
+            end = min(start + 20, len(tokens))
+            expected.append(enc.decode(tokens[start:end]))
+            if end >= len(tokens):
+                break
+            start += 16
+        assert chunker.split_by_tokens(text) == expected
