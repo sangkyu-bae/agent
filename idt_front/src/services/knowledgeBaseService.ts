@@ -3,6 +3,8 @@ import { API_ENDPOINTS } from '@/constants/api';
 import type { KnowledgeBaseInfo } from '@/types/ragToolConfig';
 import type {
   CreateKnowledgeBaseRequest,
+  DocumentVersion,
+  DocumentVersionsResponse,
   KbCreateResponse,
   KbDocumentChunksParams,
   KbDocumentDeleteResponse,
@@ -16,6 +18,14 @@ import type {
   KbSectionSummaryListResponse,
   KbStoreSource,
   KbUploadResponse,
+  RevisionCheckResponse,
+  RevisionLinkResponse,
+  RevisionMetaRequest,
+  RevisionModeResponse,
+  RevisionRollbackResponse,
+  RevisionSyncResponse,
+  RevisionUploadOptions,
+  RollbackMode,
   SectionSummaryStatusResponse,
   UpdateKbChunkingRequest,
 } from '@/types/knowledgeBase';
@@ -83,9 +93,16 @@ const knowledgeBaseService = {
   deleteKbDocument: async (
     kbId: string,
     documentId: string,
+    // document-revision §4.2 #9 — 미지정이면 서버 기본(이전 버전 복귀)
+    options?: { restorePrevious?: boolean },
   ): Promise<KbDocumentDeleteResponse> => {
+    const params =
+      options?.restorePrevious === undefined
+        ? undefined
+        : { restore_previous: options.restorePrevious };
     const { data } = await authApiClient.delete<KbDocumentDeleteResponse>(
       API_ENDPOINTS.KNOWLEDGE_BASE_DOCUMENT_DETAIL(kbId, documentId),
+      { params },
     );
     return data;
   },
@@ -94,9 +111,20 @@ const knowledgeBaseService = {
   uploadKbDocument: async (
     kbId: string,
     file: File,
+    // document-revision §4.2 #2 — 개정 확정 입력 (빈 값은 보내지 않음)
+    revision?: RevisionUploadOptions,
   ): Promise<KbUploadResponse> => {
     const formData = new FormData();
     formData.append('file', file);
+    const fields: [string, string | null | undefined][] = [
+      ['supersedes_document_id', revision?.supersedesDocumentId],
+      ['version_label', revision?.versionLabel],
+      ['effective_date', revision?.effectiveDate],
+      ['revision_check_id', revision?.revisionCheckId],
+    ];
+    for (const [key, value] of fields) {
+      if (value) formData.append(key, value);
+    }
     const { data } = await authApiClient.post<KbUploadResponse>(
       API_ENDPOINTS.KNOWLEDGE_BASE_DOCUMENTS(kbId),
       formData,
@@ -186,6 +214,92 @@ const knowledgeBaseService = {
   ): Promise<SectionSummaryStatusResponse> => {
     const { data } = await authApiClient.post<SectionSummaryStatusResponse>(
       API_ENDPOINTS.KNOWLEDGE_BASE_SECTION_SUMMARY_RETRY(kbId, documentId),
+    );
+    return data;
+  },
+
+  // ── 문서 개정 (document-revision Design §4.2) ──────────────────
+  /** 업로드 전 사전 점검 — 파싱·LLM 판정 포함이라 업로드와 같은 timeout */
+  checkKbRevision: async (
+    kbId: string,
+    file: File,
+  ): Promise<RevisionCheckResponse> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const { data } = await authApiClient.post<RevisionCheckResponse>(
+      API_ENDPOINTS.KNOWLEDGE_BASE_REVISION_CHECK(kbId),
+      formData,
+      {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 120_000,
+      },
+    );
+    return data;
+  },
+
+  getDocumentVersions: async (
+    kbId: string,
+    documentId: string,
+  ): Promise<DocumentVersionsResponse> => {
+    const { data } = await authApiClient.get<DocumentVersionsResponse>(
+      API_ENDPOINTS.KNOWLEDGE_BASE_DOCUMENT_VERSIONS(kbId, documentId),
+    );
+    return data;
+  },
+
+  rollbackRevision: async (
+    kbId: string,
+    documentId: string,
+    mode: RollbackMode,
+  ): Promise<RevisionRollbackResponse> => {
+    const { data } = await authApiClient.post<RevisionRollbackResponse>(
+      API_ENDPOINTS.KNOWLEDGE_BASE_REVISION_ROLLBACK(kbId, documentId),
+      { mode },
+    );
+    return data;
+  },
+
+  linkRevision: async (
+    kbId: string,
+    documentId: string,
+    supersedesDocumentId: string,
+  ): Promise<RevisionLinkResponse> => {
+    const { data } = await authApiClient.post<RevisionLinkResponse>(
+      API_ENDPOINTS.KNOWLEDGE_BASE_REVISION_LINK(kbId, documentId),
+      { supersedes_document_id: supersedesDocumentId },
+    );
+    return data;
+  },
+
+  updateRevisionMeta: async (
+    kbId: string,
+    documentId: string,
+    body: RevisionMetaRequest,
+  ): Promise<DocumentVersion> => {
+    const { data } = await authApiClient.patch<DocumentVersion>(
+      API_ENDPOINTS.KNOWLEDGE_BASE_REVISION_META(kbId, documentId),
+      body,
+    );
+    return data;
+  },
+
+  retryRevisionSync: async (
+    kbId: string,
+    documentId: string,
+  ): Promise<RevisionSyncResponse> => {
+    const { data } = await authApiClient.post<RevisionSyncResponse>(
+      API_ENDPOINTS.KNOWLEDGE_BASE_REVISION_SYNC(kbId, documentId),
+    );
+    return data;
+  },
+
+  updateRevisionMode: async (
+    kbId: string,
+    revisionMode: string,
+  ): Promise<RevisionModeResponse> => {
+    const { data } = await authApiClient.patch<RevisionModeResponse>(
+      API_ENDPOINTS.KNOWLEDGE_BASE_REVISION_MODE(kbId),
+      { revision_mode: revisionMode },
     );
     return data;
   },

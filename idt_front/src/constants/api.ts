@@ -152,6 +152,21 @@ export const API_ENDPOINTS = {
     `/api/v1/knowledge-bases/${kbId}/search`,
   KNOWLEDGE_BASE_SEARCH_HISTORY: (kbId: string) =>
     `/api/v1/knowledge-bases/${kbId}/search-history`,
+  // 문서 개정 (document-revision Design §4.1)
+  KNOWLEDGE_BASE_REVISION_CHECK: (kbId: string) =>
+    `/api/v1/knowledge-bases/${kbId}/documents/revision-check`,
+  KNOWLEDGE_BASE_DOCUMENT_VERSIONS: (kbId: string, docId: string) =>
+    `/api/v1/knowledge-bases/${kbId}/documents/${docId}/versions`,
+  KNOWLEDGE_BASE_REVISION_ROLLBACK: (kbId: string, docId: string) =>
+    `/api/v1/knowledge-bases/${kbId}/documents/${docId}/revision-rollback`,
+  KNOWLEDGE_BASE_REVISION_LINK: (kbId: string, docId: string) =>
+    `/api/v1/knowledge-bases/${kbId}/documents/${docId}/revision-link`,
+  KNOWLEDGE_BASE_REVISION_META: (kbId: string, docId: string) =>
+    `/api/v1/knowledge-bases/${kbId}/documents/${docId}/revision-meta`,
+  KNOWLEDGE_BASE_REVISION_SYNC: (kbId: string, docId: string) =>
+    `/api/v1/knowledge-bases/${kbId}/documents/${docId}/revision-sync`,
+  KNOWLEDGE_BASE_REVISION_MODE: (kbId: string) =>
+    `/api/v1/knowledge-bases/${kbId}/revision-mode`,
 
   // LLM Models
   LLM_MODELS: '/api/v1/llm-models',

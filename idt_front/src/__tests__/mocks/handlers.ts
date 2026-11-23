@@ -720,6 +720,20 @@ export const handlers = [
     })
   ),
 
+  // document-revision §4.2 #1: 업로드 전 사전 점검 기본값 = 신규 문서(후보 없음).
+  // formData() 를 읽지 않는다 (MSW 멈춤 함정).
+  http.post(`*${API_ENDPOINTS.KNOWLEDGE_BASE_REVISION_CHECK(':kbId')}`, () =>
+    HttpResponse.json({
+      check_id: 'chk-default',
+      verdict: 'new',
+      duplicate_of: null,
+      suggested_document_id: null,
+      candidates: [],
+      llm_status: 'skipped',
+      elapsed_ms: 5,
+    }),
+  ),
+
   // KB (kb-rag-filter): 지식베이스 목록
   http.get(`*${API_ENDPOINTS.KNOWLEDGE_BASES}`, () =>
     HttpResponse.json({

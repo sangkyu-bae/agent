@@ -6,6 +6,7 @@ import type {
   KbDocumentChunksParams,
   KbSearchRequest,
   KbStoreSource,
+  RevisionUploadOptions,
   SectionSummaryStatusResponse,
   UpdateKbChunkingRequest,
 } from '@/types/knowledgeBase';
@@ -82,8 +83,13 @@ export const useDeleteKnowledgeBase = () => {
 export const useDeleteKbDocument = (kbId: string) => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (documentId: string) =>
-      knowledgeBaseService.deleteKbDocument(kbId, documentId),
+    // document-revision §4.2 #9 — 객체 입력이면 이전 버전 복귀 여부를 지정
+    mutationFn: (input: string | { documentId: string; restorePrevious?: boolean }) =>
+      typeof input === 'string'
+        ? knowledgeBaseService.deleteKbDocument(kbId, input)
+        : knowledgeBaseService.deleteKbDocument(kbId, input.documentId, {
+            restorePrevious: input.restorePrevious,
+          }),
     onSettled: () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.knowledgeBases.all,
@@ -227,8 +233,9 @@ export const useKbSearchHistory = (
 export const useUploadKbDocument = (kbId: string) => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (file: File) =>
-      knowledgeBaseService.uploadKbDocument(kbId, file),
+    // document-revision §4.2 #2 — 개정 확정 입력과 함께 업로드
+    mutationFn: ({ file, revision }: { file: File; revision?: RevisionUploadOptions }) =>
+      knowledgeBaseService.uploadKbDocument(kbId, file, revision),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.knowledgeBases.all,

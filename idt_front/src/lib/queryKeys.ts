@@ -163,6 +163,9 @@ export const queryKeys = {
     // KB 리트리버 테스트 (kb-retrieval-test)
     searchHistory: (kbId: string, params?: { limit?: number; offset?: number }) =>
       [...queryKeys.knowledgeBases.all, 'searchHistory', kbId, params] as const,
+    // 문서 개정 이력 (document-revision §4.2 #4)
+    versions: (kbId: string, docId: string) =>
+      [...queryKeys.knowledgeBases.all, 'versions', kbId, docId] as const,
   },
 
   // ── KB 기본값 (agent-kb-quick-setup) ───────────────────
