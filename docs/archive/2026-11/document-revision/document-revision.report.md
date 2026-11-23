@@ -80,9 +80,9 @@
 
 | Phase | Document | Status |
 |-------|----------|--------|
-| Plan | [document-revision.plan.md](../01-plan/features/document-revision.plan.md) | ✅ |
-| Design | [document-revision.design.md](../02-design/features/document-revision.design.md) (§12에 Do·Act 조정 기록) | ✅ |
-| Check | [document-revision.analysis.md](../03-analysis/document-revision.analysis.md) | ✅ 96.1% |
+| Plan | [document-revision.plan.md](document-revision.plan.md) | ✅ |
+| Design | [document-revision.design.md](document-revision.design.md) (§12에 Do·Act 조정 기록) | ✅ |
+| Check | [document-revision.analysis.md](document-revision.analysis.md) | ✅ 96.1% |
 | Report | 현재 문서 | ✅ |
 
 ---
