@@ -52,7 +52,7 @@ class CitationFinalizePolicy:
         if not judged:
             return _none(_rebuild(text, hits, {}), "judge_failed")
         verdicts = _verdicts(pairs, checks, chunks)
-        kept = cls._kept(text, hits, verdicts)
+        kept = cls._kept(text, hits, verdicts, chunks)
         if not kept:
             return _none(_rebuild(text, hits, {}), "all_rejected")
         numbers = _renumber(hits, kept)
@@ -65,9 +65,19 @@ class CitationFinalizePolicy:
         )
 
     @staticmethod
-    def _kept(text: str, hits: list[MarkerHit], verdicts: Verdicts) -> dict[int, str]:
-        """남길 인용 표시 index → 그 문장 원문."""
+    def _kept(
+        text: str,
+        hits: list[MarkerHit],
+        verdicts: Verdicts,
+        chunks: Mapping[int, RegisteredChunk],
+    ) -> dict[int, str]:
+        """남길 인용 표시 index → 그 문장 원문.
+
+        Analysis G-10: 한 문장 안에서 같은 문서의 같은 근거 문장을 가리키는
+        인용(parent·child 청크 중복)은 첫 번째만 남긴다.
+        """
         kept: dict[int, str] = {}
+        seen: set[tuple[tuple[int, int], str | None, str]] = set()
         spans = GroundingEditPolicy.sentence_spans(text)
         for i, hit in enumerate(hits):
             span = next((s for s in spans if s[0] <= hit.start < s[1]), None)
@@ -75,8 +85,15 @@ class CitationFinalizePolicy:
                 continue
             sentence = text[span[0] : span[1]]
             key = CitationMarkerParser.sentence_key(sentence)
-            if (key, hit.marker) in verdicts:
-                kept[i] = sentence
+            if (key, hit.marker) not in verdicts:
+                continue
+            evidence = _squash(verdicts[(key, hit.marker)])
+            if evidence:
+                same = (span, chunks[hit.marker].document_id, evidence)
+                if same in seen:
+                    continue
+                seen.add(same)
+            kept[i] = sentence
         return kept
 
     @staticmethod

@@ -133,3 +133,41 @@ class TestWrongChunkEvidence:
         out = _finalize("가[3].", {3: "어느 청크에도 없는 문장"})
         assert out.status == "verified"
         assert out.citations[0].evidence is None
+
+
+EV = "정책대출은 연간 공급계획 대비 25%를 감축한다."
+DUP_CHUNKS = {
+    1: RegisteredChunk(1, "child", "doc-a", 2, EV),
+    2: RegisteredChunk(2, "parent", "doc-a", 2, f"머리말. {EV} 꼬리말."),
+    3: RegisteredChunk(3, "other", "doc-b", 5, EV),
+}
+
+
+def _finalize_dup(text: str, supported: dict[int, str]):
+    norm = CitationMarkerParser.normalize(text)
+    pairs = CitationMarkerParser.pairs(norm, set(DUP_CHUNKS))
+    checks = tuple(
+        CitationCheck(p.pair_id, p.marker in supported, supported.get(p.marker, ""))
+        for p in pairs
+    )
+    return CitationFinalizePolicy.finalize(
+        text, chunks=DUP_CHUNKS, pairs=pairs, checks=checks, judged=True
+    )
+
+
+class TestDuplicateEvidence:
+    """Analysis G-10 — parent·child 청크가 같은 근거 문장을 가리키면 하나로 합친다."""
+
+    def test_same_document_same_evidence_in_one_sentence_keeps_first(self):
+        out = _finalize_dup("25%를 줄입니다[1][2].", {1: EV, 2: EV})
+        assert out.text == "25%를 줄입니다[1]."
+        assert [(c.no, c.chunk_id) for c in out.citations] == [(1, "child")]
+
+    def test_merge_is_per_sentence(self):
+        out = _finalize_dup("25%를 줄입니다[2][1]. 또 줄입니다[1].", {1: EV, 2: EV})
+        assert out.text == "25%를 줄입니다[1]. 또 줄입니다[2]."
+        assert [c.chunk_id for c in out.citations] == ["parent", "child"]
+
+    def test_different_documents_are_not_merged(self):
+        out = _finalize_dup("25%를 줄입니다[1][3].", {1: EV, 3: EV})
+        assert out.text == "25%를 줄입니다[1][2]."

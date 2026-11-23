@@ -1980,7 +1980,10 @@ class WorkflowCompiler:
             response, text = last["response"], result.text
             verdict, request = result.verdict, result.citation_request
         else:
-            response = await llm.ainvoke(llm_messages)
+            # Analysis G-2: 검증 전 번호가 채팅에 흐르지 않게 한다 — 최종본은 ANSWER_COMPLETED.
+            response = await llm.ainvoke(
+                llm_messages, config={"tags": [INTERNAL_LLM_TAG]}
+            )
             text = message_text(response)
             request = citation_run.request_for(text)
             verdict = None

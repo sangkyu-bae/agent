@@ -83,3 +83,30 @@ async def test_apply_failure_keeps_chips_without_citation():
     (item,) = (await service.build_for_runs([RUN_ID], "req"))[RUN_ID.value]
     assert item.citation is None
     logger.warning.assert_called()
+
+
+@pytest.mark.asyncio
+async def test_supplemented_chip_also_gets_viewer():
+    """Analysis G-1 — 인용 단계가 보충한 문서 칩도 원문 뷰어 정보를 받는다."""
+    from src.domain.agent_run.source_policy import RunSourceItem, SourceKind
+
+    extra = RunSourceItem(
+        kind=SourceKind.DOCUMENT, label="b.pdf", excerpt="", key="doc-extra"
+    )
+    enricher = MagicMock()
+    enricher.load = AsyncMock(return_value={RUN_ID.value: "stored"})
+    enricher.apply = MagicMock(
+        side_effect=lambda items, stored, evidence: [*items, extra]
+    )
+    viewer = MagicMock()
+    viewer.enrich = AsyncMock(
+        side_effect=lambda items, evidence, rid: [
+            dataclasses.replace(i, viewer={"document_id": i.key}) for i in items
+        ]
+    )
+    service, _ = _service(enricher)
+    service._viewer_enricher = viewer
+    items = (await service.build_for_runs([RUN_ID], "req"))[RUN_ID.value]
+    assert [i.viewer for i in items if i.key == "doc-extra"] == [
+        {"document_id": "doc-extra"}
+    ]

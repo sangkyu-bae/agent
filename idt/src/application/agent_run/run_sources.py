@@ -75,11 +75,12 @@ class RunSourcesService:
                 mcp_tools=mcp_tools,
             )
             items = RunSourcePolicy.build(evidence, max_items=self._max_items)
-            items = await self._enrich(items, evidence, request_id)
+            # Analysis G-1: 인용을 먼저 적용해야 보충된 칩도 원문 뷰어를 받는다.
             if citations is not None:
                 items = self._cite(
                     items, citations.get(run_id.value), evidence, request_id
                 )
+            items = await self._enrich(items, evidence, request_id)
             if items:
                 built[run_id.value] = items
         return built

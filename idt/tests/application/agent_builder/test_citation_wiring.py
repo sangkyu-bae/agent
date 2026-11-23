@@ -40,9 +40,11 @@ class RecordingLLM:
     def __init__(self, outputs):
         self.outputs = list(outputs)
         self.calls: list[list] = []
+        self.configs: list = []
 
     async def ainvoke(self, messages, config=None):
         self.calls.append(messages)
+        self.configs.append(config)
         return AIMessage(content=self.outputs.pop(0))
 
 
@@ -162,3 +164,15 @@ async def test_previous_answer_markers_are_stripped_from_prompt(run_ctx):
     contents = [getattr(m, "content", None) for m in llm.calls[0][1:]]
     assert "이전 답변입니다." in contents
     assert all("[3]" not in str(c) for c in contents)
+
+
+@pytest.mark.asyncio
+async def test_grounding_disabled_answer_call_is_not_streamed(run_ctx):
+    """Analysis G-2 — 검증 전 번호가 채팅에 스트리밍되지 않도록 내부 태그를 단다."""
+    from src.domain.hallucination.grounding import INTERNAL_LLM_TAG
+
+    llm = RecordingLLM([ANSWER])
+    await _node(
+        llm, FakeJudge(_CHECKS), enabled=False, registry=_registry_with_chunks()
+    )(_state())
+    assert INTERNAL_LLM_TAG in (llm.configs[0] or {}).get("tags", [])
