@@ -14,6 +14,7 @@
 | claude-agent-e2e-fixes | completed | 97% (Check 96% → Act-1) | 2026-11-19 | [claude-agent-e2e-fixes/](claude-agent-e2e-fixes/) |
 | source-passage-viewer | completed | 97.2% (Check 94.8% → Act-1) | 2026-11-20 | [source-passage-viewer/](source-passage-viewer/) |
 | answer-citation-verification | completed | 93.6% (Check 90.6% → Act-1) | 2026-11-23 | [answer-citation-verification/](answer-citation-verification/) |
+| document-revision | completed | 96.1% (Check 90.3% → Act-1) | 2026-11-23 | [document-revision/](document-revision/) |
 
 > 백엔드·프론트 전용 사이클은 `idt/docs/archive/2026-11/`, `idt_front/docs/archive/2026-11/` 에 있다.
 
@@ -83,3 +84,8 @@
 | answer-citation-verification | SC-2 골든셋 10문항 인용 정확도, SC-5 음영 매칭률, SC-6 스위치 on/off 호출 수·지연 실측 | 실측 | 다음 인용 작업 시 |
 | answer-citation-verification | 라우팅 검색 인용에 쪽 번호 없음(G-4), 관리자 카드 폴백 경고(G-5), GET effective 계산(G-6), supervisor 밖 경로 라벨(G-8), 설정 조회 실패 캐시(G-9), judge_model 미기록(G-3) | 경미 | 요청 시 |
 | answer-citation-verification | 기존 동작(무관): supervisor 라우팅 JSON 이 채팅에 잠깐 스트리밍됨, KB 삭제 API 가 Qdrant 컬렉션을 남김 | 기존 결함 | 해당 영역 작업 시 |
+| **document-revision** | **운영 반영: Flyway V095~V097 적용** — V095 는 `document_metadata` 컬럼 추가라 업로드·목록 쿼리가 새 컬럼을 참조. ES 기존 인덱스의 `revision_status` 매핑은 첫 전환 때 `put_mapping` 으로 멱등 추가 | 배포 의존 | **배포 전 필수** |
+| document-revision | SC-5 근거 칩·원문 뷰어 버전 라벨 화면 확인 (백엔드 라벨 생성·칩 중복 제거 단위 테스트만 통과) | 확인 | 다음 인용 작업 시 |
+| document-revision | 본문 유사도 개선 — 새 문서 앞부분 토막과 기존 청크 전체를 비교해 거의 같은 문서도 0.65~0.70. 임계값 `revision_content_min` 0.5 는 합성 픽스처 실측값 | 개선 | 판정 로그 실측 후 |
+| document-revision | 계보 전체 삭제(FR-19 일부), `revision_mode=auto` 실동작(현재 422) | 범위 밖 | 요청 시 |
+| document-revision | 기존 동작(무관): KB 삭제는 상태값만 `deleted` 로 바꿔 `document_metadata` 행·벡터가 남음 | 기존 결함 | 해당 영역 작업 시 |
