@@ -13,6 +13,7 @@
 | document-file-preview | completed | 96.5% (Check 95.3% → Act-1) | 2026-11-19 | [document-file-preview/](document-file-preview/) |
 | claude-agent-e2e-fixes | completed | 97% (Check 96% → Act-1) | 2026-11-19 | [claude-agent-e2e-fixes/](claude-agent-e2e-fixes/) |
 | source-passage-viewer | completed | 97.2% (Check 94.8% → Act-1) | 2026-11-20 | [source-passage-viewer/](source-passage-viewer/) |
+| answer-citation-verification | completed | 93.6% (Check 90.6% → Act-1) | 2026-11-23 | [answer-citation-verification/](answer-citation-verification/) |
 
 > 백엔드·프론트 전용 사이클은 `idt/docs/archive/2026-11/`, `idt_front/docs/archive/2026-11/` 에 있다.
 
@@ -77,3 +78,8 @@
 | source-passage-viewer | 운영 반영: `SOURCE_VIEWER_ENABLED=true`, `DOCUMENT_ORIGINAL_STORAGE_DIR` 볼륨 경로 지정·백업 대상 포함 (기본 off) | 배포 의존 | 운영 배포 시 |
 | source-passage-viewer | 토큰 단위 child 청킹이 한글을 바이트 중간에서 잘라 청크에 U+FFFD 생성 — 뷰어 매칭은 정규화로 흡수(Design §12 M19), 청킹 자체는 미수정 | 결함 후속 | 청킹 작업 시 |
 | source-passage-viewer | 원본 뷰어 매칭 범위를 구절 쪽 ±1 로 좁히기(M24), 컬렉션 전체 삭제 시 원본 고아 정리(M26), 모바일 폭 화면 확인 | 경미 | 요청 시 |
+| **answer-citation-verification** | **PDF 원본 모드에서 근거 문장 음영 확인** — worktree의 node_modules junction 에서 pdf.js `?url` 워커가 비어 텍스트로 폴백, 텍스트·docx 모드만 확인 | 확인 | **운영 반영 전** |
+| answer-citation-verification | 운영 반영: Flyway V093·V094 순서 확인, `ANSWER_CITATION_ENABLED` 기본 off 로 시작, 판정 모델은 LLM 모델 관리 페이지에서 선택(비면 env) | 배포 의존 | 운영 배포 시 |
+| answer-citation-verification | SC-2 골든셋 10문항 인용 정확도, SC-5 음영 매칭률, SC-6 스위치 on/off 호출 수·지연 실측 | 실측 | 다음 인용 작업 시 |
+| answer-citation-verification | 라우팅 검색 인용에 쪽 번호 없음(G-4), 관리자 카드 폴백 경고(G-5), GET effective 계산(G-6), supervisor 밖 경로 라벨(G-8), 설정 조회 실패 캐시(G-9), judge_model 미기록(G-3) | 경미 | 요청 시 |
+| answer-citation-verification | 기존 동작(무관): supervisor 라우팅 JSON 이 채팅에 잠깐 스트리밍됨, KB 삭제 API 가 Qdrant 컬렉션을 남김 | 기존 결함 | 해당 영역 작업 시 |
