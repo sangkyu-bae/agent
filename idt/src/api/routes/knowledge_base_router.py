@@ -1,6 +1,6 @@
 """Knowledge Base Router: 지식베이스 CRUD + 지정 업로드 API (knowledge-base-scoping Design §7.1)."""
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from fastapi import (
     APIRouter,
@@ -16,6 +16,13 @@ from pydantic import BaseModel, Field
 
 from src.application.doc_browse.delete_document_use_case import (
     DeleteDocumentUseCase,
+)
+from src.application.document_revision.schemas import RevisionUploadOptions
+from src.domain.document_revision.errors import DocumentRevisionError
+from src.interfaces.schemas.document_revision import (
+    DocumentVersionResponse,
+    RevisionApplyResponse,
+    revision_error_detail,
 )
 from src.application.knowledge_base.delete_document_use_case import (
     DeleteKbDocumentUseCase,
@@ -223,6 +230,8 @@ class KbUploadResponse(BaseModel):
     status: str
     # 요약 비활성 프로파일/기존 경로는 null (card-section-summary D15)
     section_summary: KbSectionSummaryLaunchResponse | None = None
+    # document-revision §4.2 #2: 개정 적용 결과 (개정 요청 없으면 applied=false, reason=null)
+    revision: RevisionApplyResponse | None = None
 
 
 class KbDocumentInfoResponse(BaseModel):
@@ -235,6 +244,14 @@ class KbDocumentInfoResponse(BaseModel):
     created_at: datetime | None
     # kb-document-management FR-08: 서버 계산값 (additive)
     can_delete: bool = False
+    # document-revision §4.2 #3: 버전 표시 (목록은 active 만)
+    version_no: int = 1
+    version_label: str | None = None
+    effective_date: date | None = None
+    revision_status: str = "active"
+    sync_state: str = "synced"
+    lineage_id: str | None = None
+    has_history: bool = False
 
 
 class KbDocumentDeleteResponse(BaseModel):
@@ -246,6 +263,8 @@ class KbDocumentDeleteResponse(BaseModel):
     deleted_qdrant_chunks: int
     deleted_es_chunks: int
     status: str
+    # document-revision §4.2 #9: 다시 검색에 쓰이게 된 이전 버전
+    restored_document_id: str | None = None
 
 
 class KbDocumentListResponse(BaseModel):
@@ -255,6 +274,8 @@ class KbDocumentListResponse(BaseModel):
     total: int
     offset: int
     limit: int
+    # document-revision §4.2 #3: 청크 표식 반영 실패 문서(재시도 대상)
+    pending_sync: list[DocumentVersionResponse] = []
 
 
 class SectionSummaryStatusResponse(BaseModel):
@@ -613,12 +634,23 @@ async def list_kb_documents(
                 chunking_strategy=d.chunk_strategy,
                 created_at=d.created_at,
                 can_delete=d.can_delete,
+                version_no=d.version_no,
+                version_label=d.version_label,
+                effective_date=d.effective_date,
+                revision_status=d.revision_status,
+                sync_state=d.sync_state,
+                lineage_id=d.lineage_id,
+                has_history=d.has_history,
             )
             for d in result.documents
         ],
         total=result.total,
         offset=result.offset,
         limit=result.limit,
+        pending_sync=[
+            DocumentVersionResponse.from_version(v)
+            for v in getattr(result, "pending_sync", [])
+        ],
     )
 
 
@@ -634,6 +666,8 @@ async def list_kb_documents(
 async def delete_kb_document(
     kb_id: str,
     document_id: str,
+    # document-revision §4.2 #9: 최신 버전 삭제 시 이전 버전을 다시 검색에 사용
+    restore_previous: bool = Query(True),
     current_user: User = Depends(get_current_user),
     use_case: DeleteKbDocumentUseCase = Depends(
         get_delete_kb_document_use_case
@@ -642,8 +676,14 @@ async def delete_kb_document(
     request_id = str(uuid.uuid4())
     try:
         result = await use_case.execute(
-            kb_id, document_id, current_user, request_id
+            kb_id, document_id, current_user, request_id,
+            restore_previous=restore_previous,
         )
+    except DocumentRevisionError as e:
+        # document-revision Act-1 I2: 이전 버전 복귀 표식 실패 → 삭제 중단
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=revision_error_detail(e)
+        ) from e
     except DeleteKbDocumentUseCase.DocumentBusyError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except DeleteDocumentUseCase.StoreDeleteFailedError:
@@ -660,6 +700,7 @@ async def delete_kb_document(
         deleted_qdrant_chunks=result.deleted_qdrant_chunks,
         deleted_es_chunks=result.deleted_es_chunks,
         status=result.status,
+        restored_document_id=getattr(result, "restored_document_id", None),
     )
 
 
@@ -678,6 +719,11 @@ async def upload_document(
     file: UploadFile = File(...),
     child_chunk_size: int = Query(500, ge=100, le=4000),
     child_chunk_overlap: int = Query(50, ge=0, le=500),
+    # document-revision §4.2 #2: 개정 확정 입력 (모두 선택)
+    supersedes_document_id: str | None = Form(None, max_length=64),
+    version_label: str | None = Form(None, max_length=100),
+    effective_date: date | None = Form(None),
+    revision_check_id: str | None = Form(None, max_length=36),
     current_user: User = Depends(get_current_user),
     use_case: KnowledgeBaseUploadUseCase = Depends(get_kb_upload_use_case),
 ):
@@ -685,7 +731,7 @@ async def upload_document(
     file_bytes = await file.read()
     filename = file.filename or "unknown.pdf"
     try:
-        result, kb, summary_launch = await use_case.execute(
+        outcome = await use_case.execute_with_revision(
             kb_id,
             current_user,
             file_bytes,
@@ -693,9 +739,20 @@ async def upload_document(
             request_id,
             child_chunk_size=child_chunk_size,
             child_chunk_overlap=child_chunk_overlap,
+            revision=RevisionUploadOptions(
+                supersedes_document_id=supersedes_document_id or None,
+                version_label=version_label or None,
+                effective_date=effective_date,
+                revision_check_id=revision_check_id or None,
+            ),
         )
+    except DocumentRevisionError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=revision_error_detail(e)
+        ) from e
     except (PermissionError, ValueError) as e:
         _raise_http(e)
+    result, kb, summary_launch = outcome.result, outcome.kb, outcome.summary_launch
     return KbUploadResponse(
         kb_id=kb.id,
         kb_name=kb.name,
@@ -721,6 +778,7 @@ async def upload_document(
             if summary_launch is not None
             else None
         ),
+        revision=RevisionApplyResponse.from_result(outcome.revision),
     )
 
 

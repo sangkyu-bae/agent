@@ -31,6 +31,7 @@ class DocumentMetadataRepository(DocumentMetadataRepositoryInterface):
                 existing.chunk_count = metadata.chunk_count
                 existing.chunk_strategy = metadata.chunk_strategy
                 existing.kb_id = metadata.kb_id
+                # document-revision §1.2: 재저장은 개정 계보·상태를 건드리지 않는다.
             else:
                 model = DocumentMetadataModel(
                     document_id=metadata.document_id,
@@ -41,6 +42,11 @@ class DocumentMetadataRepository(DocumentMetadataRepositoryInterface):
                     chunk_count=metadata.chunk_count,
                     chunk_strategy=metadata.chunk_strategy,
                     kb_id=metadata.kb_id,
+                    file_hash=metadata.file_hash,
+                    lineage_id=metadata.lineage_id,
+                    version_no=metadata.version_no,
+                    version_label=metadata.version_label,
+                    effective_date=metadata.effective_date,
                 )
                 self._session.add(model)
             await self._session.flush()
@@ -114,8 +120,12 @@ class DocumentMetadataRepository(DocumentMetadataRepositoryInterface):
         kb_id: str,
         request_id: str,
         pagination: Optional[MySQLPaginationParams] = None,
+        active_only: bool = False,
     ) -> MySQLPageResult[KbDocumentSummary]:
-        """kb-management-ui D1: kb_id 필터 문서 목록 (created_at DESC)."""
+        """kb-management-ui D1: kb_id 필터 문서 목록 (created_at DESC).
+
+        active_only: document-revision §4.2 #3 — superseded 버전 제외.
+        """
         self._logger.info(
             "Document metadata find_by_kb_id started",
             request_id=request_id,
@@ -123,17 +133,20 @@ class DocumentMetadataRepository(DocumentMetadataRepositoryInterface):
         )
         try:
             p = pagination or MySQLPaginationParams(limit=20, offset=0)
+            conditions = [DocumentMetadataModel.kb_id == kb_id]
+            if active_only:
+                conditions.append(DocumentMetadataModel.revision_status == "active")
 
             count_stmt = (
                 select(func.count())
                 .select_from(DocumentMetadataModel)
-                .where(DocumentMetadataModel.kb_id == kb_id)
+                .where(*conditions)
             )
             total = (await self._session.execute(count_stmt)).scalar_one()
 
             query_stmt = (
                 select(DocumentMetadataModel)
-                .where(DocumentMetadataModel.kb_id == kb_id)
+                .where(*conditions)
                 .order_by(DocumentMetadataModel.created_at.desc())
                 .limit(p.limit)
                 .offset(p.offset)
@@ -216,6 +229,31 @@ class DocumentMetadataRepository(DocumentMetadataRepositoryInterface):
         rows = (await self._session.execute(stmt)).all()
         return {document_id: filename for document_id, filename in rows}
 
+    async def find_version_labels(
+        self,
+        document_ids: list[str],
+        request_id: str,
+    ) -> dict[str, str]:
+        """document-revision module-6: 근거 칩 버전 라벨 (v1·라벨 없음은 생략)."""
+        if not document_ids:
+            return {}
+        stmt = select(
+            DocumentMetadataModel.document_id,
+            DocumentMetadataModel.version_no,
+            DocumentMetadataModel.version_label,
+        ).where(DocumentMetadataModel.document_id.in_(document_ids))
+        labels: dict[str, str] = {}
+        for document_id, version_no, version_label in (
+            await self._session.execute(stmt)
+        ).all():
+            version = version_no or 1
+            if version <= 1 and not version_label:
+                continue
+            labels[document_id] = (
+                f"v{version} ({version_label})" if version_label else f"v{version}"
+            )
+        return labels
+
     async def _find_model_by_document_id(
         self, document_id: str
     ) -> Optional[DocumentMetadataModel]:
@@ -236,6 +274,11 @@ class DocumentMetadataRepository(DocumentMetadataRepositoryInterface):
             chunk_count=model.chunk_count,
             chunk_strategy=model.chunk_strategy,
             kb_id=model.kb_id,
+            file_hash=model.file_hash,
+            lineage_id=model.lineage_id,
+            version_no=model.version_no if model.version_no is not None else 1,
+            version_label=model.version_label,
+            effective_date=model.effective_date,
         )
 
     @staticmethod
@@ -247,4 +290,10 @@ class DocumentMetadataRepository(DocumentMetadataRepositoryInterface):
             chunk_strategy=model.chunk_strategy,
             created_at=model.created_at,
             user_id=model.user_id,
+            version_no=model.version_no or 1,
+            version_label=model.version_label,
+            effective_date=model.effective_date,
+            revision_status=model.revision_status or "active",
+            sync_state=model.sync_state or "synced",
+            lineage_id=model.lineage_id,
         )

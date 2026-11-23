@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.domain.document_revision.search_guard import es_revision_guard_clause
 from src.domain.elasticsearch.schemas import ESSearchQuery
 from src.domain.graph_rag.interfaces import EvidenceFetcherPort
 from src.domain.hybrid_search.schemas import HybridSearchResult
@@ -35,6 +36,8 @@ def build_filters(
         )
     if collection_name:
         clauses.append({"term": {"collection_name": collection_name}})
+    # document-revision §9.5 G5: 그래프가 고른 청크라도 superseded 문서면 근거에서 제외
+    clauses.append(es_revision_guard_clause())
     return clauses
 
 

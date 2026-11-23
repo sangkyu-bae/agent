@@ -152,6 +152,12 @@ class UnifiedUploadUseCase:
                     chunk_strategy=strategy_name,
                     # kb-management-ui D2: KB 지정 업로드만 값 존재
                     kb_id=request.extra_metadata.get("kb_id"),
+                    # document-revision Design §3.3: 계보 필드 (KB 업로드만 값 존재)
+                    file_hash=request.file_hash,
+                    lineage_id=request.lineage_id,
+                    version_no=request.version_no,
+                    version_label=request.version_label,
+                    effective_date=request.effective_date,
                 ),
                 request_id=request_id,
             )

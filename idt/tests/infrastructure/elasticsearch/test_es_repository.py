@@ -446,3 +446,53 @@ class TestElasticsearchRepositoryEnsureIndexExists:
 
         assert result is False
         mock_logger.warning.assert_called()
+
+
+class TestElasticsearchRepositoryUpdateByQuery:
+    """update_by_query() — document-revision §1.2 청크 표식(멱등)."""
+
+    @pytest.mark.asyncio
+    async def test_returns_updated_count_and_passes_script(self, repo, mock_es):
+        mock_es.update_by_query = AsyncMock(return_value={"updated": 4})
+        script = {"source": "ctx._source.x = params.v", "params": {"v": 1}}
+        result = await repo.update_by_query(
+            "idx", {"term": {"document_id": "d"}}, script, REQUEST_ID
+        )
+        assert result == 4
+        kwargs = mock_es.update_by_query.call_args.kwargs
+        assert kwargs["index"] == "idx"
+        assert kwargs["query"] == {"term": {"document_id": "d"}}
+        assert kwargs["script"] == script
+        assert kwargs["conflicts"] == "proceed"
+        assert kwargs["refresh"] is True
+
+    @pytest.mark.asyncio
+    async def test_raises_on_failure(self, repo, mock_es):
+        mock_es.update_by_query = AsyncMock(side_effect=RuntimeError("boom"))
+        with pytest.raises(RuntimeError):
+            await repo.update_by_query("idx", {}, {"source": ""}, REQUEST_ID)
+
+
+class TestElasticsearchRepositoryPutMapping:
+    @pytest.mark.asyncio
+    async def test_put_mapping_passes_properties(self, repo, mock_es):
+        mock_es.indices = MagicMock()
+        mock_es.indices.put_mapping = AsyncMock(return_value={"acknowledged": True})
+        await repo.put_mapping(
+            "idx", {"revision_status": {"type": "keyword"}}, REQUEST_ID
+        )
+        mock_es.indices.put_mapping.assert_awaited_once_with(
+            index="idx", properties={"revision_status": {"type": "keyword"}}
+        )
+
+
+class TestUpdateByQueryConflicts:
+    """Act-1 (Gap M8): 버전 충돌로 건너뛴 문서가 있으면 실패로 알린다(재시도 대상)."""
+
+    @pytest.mark.asyncio
+    async def test_version_conflicts_raise(self, repo, mock_es):
+        mock_es.update_by_query = AsyncMock(
+            return_value={"updated": 3, "version_conflicts": 1}
+        )
+        with pytest.raises(RuntimeError, match="version_conflicts"):
+            await repo.update_by_query("idx", {}, {"source": ""}, REQUEST_ID)

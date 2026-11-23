@@ -50,7 +50,30 @@ def mock_use_case() -> AsyncMock:
 
 @pytest.fixture
 def mock_upload_use_case() -> AsyncMock:
-    return AsyncMock()
+    """라우터는 execute_with_revision 을 호출한다 (document-revision §4.2 #2).
+
+    기존 테스트가 쓰는 execute(3-tuple) 설정을 그대로 살리도록 위임한다.
+    """
+    from src.application.document_revision.schemas import (
+        KbUploadOutcome,
+        RevisionApplyResult,
+    )
+
+    uc = AsyncMock()
+
+    async def _bridge(*args, **kwargs):
+        kwargs.pop("revision", None)
+        result, kb, summary = await uc.execute(*args, **kwargs)
+        return KbUploadOutcome(
+            result=result, kb=kb, summary_launch=summary,
+            revision=RevisionApplyResult(
+                applied=False, lineage_id=None, version_no=1,
+                superseded_document_id=None, sync_state=None,
+            ),
+        )
+
+    uc.execute_with_revision.side_effect = _bridge
+    return uc
 
 
 @pytest.fixture

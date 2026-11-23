@@ -80,6 +80,17 @@ class Settings(BaseSettings):
     # 에이전트별 RagToolConfig.score_threshold가 None일 때 사용된다.
     rag_vector_score_threshold: float = 0.0
 
+    # document-revision Design §10.4: 개정 후보 판정 임계값 (판정 로그로 실측 후 조정)
+    revision_head_chars: int = 2000
+    revision_candidate_top_n: int = 3
+    revision_llm_top_m: int = 2
+    revision_filename_min: float = 0.6
+    revision_content_min: float = 0.5  # Act-1 C1 (SC-3 평가로 보정)
+    revision_weight_filename: float = 0.4
+    revision_weight_content: float = 0.6
+    revision_suggest_min_combined: float = 0.80
+    revision_llm_timeout_s: float = 8.0
+
     # Elasticsearch
     es_host: str = "localhost"
     es_port: int = 9200

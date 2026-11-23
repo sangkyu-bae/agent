@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from typing import Dict, List, Optional
 
 
@@ -42,6 +42,13 @@ class DocumentMetadata:
     chunk_strategy: str
     # kb-management-ui D2: 논리 KB 지정 업로드만 값 보유. None = 일반 업로드.
     kb_id: Optional[str] = None
+    # document-revision Design §3.3: 적재 시점의 계보 필드(신규 행에만 저장).
+    #   개정 상태(revision_status·sync_state)는 개정 전용 리포지토리가 소유한다.
+    file_hash: Optional[str] = None
+    lineage_id: Optional[str] = None
+    version_no: int = 1
+    version_label: Optional[str] = None
+    effective_date: Optional[date] = None
 
 
 @dataclass(frozen=True)
@@ -55,6 +62,13 @@ class KbDocumentSummary:
     created_at: Optional[datetime]
     # kb-document-management FR-08: 문서별 삭제 가능 여부 계산용 업로더
     user_id: str = ""
+    # document-revision §4.2 #3: 버전 표시
+    version_no: int = 1
+    version_label: Optional[str] = None
+    effective_date: Optional[date] = None
+    revision_status: str = "active"
+    sync_state: str = "synced"
+    lineage_id: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -76,3 +90,5 @@ class DeleteDocumentResult:
     deleted_es_chunks: int
     status: str
     error: Optional[str] = None
+    # document-revision §4.2 #9: 최신 버전 삭제 시 다시 검색에 쓰이게 된 이전 버전
+    restored_document_id: Optional[str] = None

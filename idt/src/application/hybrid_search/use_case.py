@@ -1,4 +1,5 @@
 """HybridSearchUseCase: BM25(ES) + Vector(Qdrant) → RRF 병합."""
+from src.domain.document_revision.search_guard import es_revision_guard_clause
 from src.domain.elasticsearch.interfaces import ElasticsearchRepositoryInterface
 from src.domain.elasticsearch.schemas import ESSearchQuery
 from src.domain.hybrid_search.policies import RRFFusionPolicy
@@ -96,7 +97,6 @@ class HybridSearchUseCase:
                     "type": "most_fields",
                 }
             }
-            es_query_body: dict = multi_match_clause
             filter_clauses = [
                 {"term": {k: v}} for k, v in request.metadata_filter.items()
             ]
@@ -116,13 +116,14 @@ class HybridSearchUseCase:
                 filter_clauses.append(
                     {"term": {"collection_name": request.collection_name}}
                 )
-            if filter_clauses:
-                es_query_body = {
-                    "bool": {
-                        "must": [multi_match_clause],
-                        "filter": filter_clauses,
-                    },
-                }
+            # document-revision §9.5 G3: superseded 청크 기본 제외 (필드 부재 = 통과)
+            filter_clauses.append(es_revision_guard_clause())
+            es_query_body = {
+                "bool": {
+                    "must": [multi_match_clause],
+                    "filter": filter_clauses,
+                },
+            }
             target_es_index = request.es_index if request.es_index else self._es_index
             es_query = ESSearchQuery(
                 index=target_es_index,

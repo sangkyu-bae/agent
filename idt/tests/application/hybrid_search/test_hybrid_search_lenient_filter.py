@@ -3,6 +3,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock
 
 from src.application.hybrid_search.use_case import HybridSearchUseCase
+from src.domain.document_revision.search_guard import es_revision_guard_clause
 from src.domain.hybrid_search.schemas import HybridSearchRequest
 
 REQUEST_ID = "req-lenient-001"
@@ -64,15 +65,19 @@ class TestLenientFilterES:
                 ],
                 "minimum_should_match": 1,
             }
-        }]
+        }, es_revision_guard_clause()]
 
     @pytest.mark.asyncio
-    async def test_no_filters_keeps_plain_multi_match(self, use_case, mock_es_repo):
+    async def test_no_filters_wraps_with_revision_guard_only(
+        self, use_case, mock_es_repo
+    ):
         req = HybridSearchRequest(query="q")
         await use_case.execute(req, REQUEST_ID)
 
         query = _es_query(mock_es_repo)
-        assert "multi_match" in query  # bool 래핑 없음 (기존 동작)
+        # document-revision §9.5 G3: 개정 가드 때문에 항상 bool 래핑
+        assert "multi_match" in query["bool"]["must"][0]
+        assert query["bool"]["filter"] == [es_revision_guard_clause()]
 
     @pytest.mark.asyncio
     async def test_collection_name_adds_term_filter(self, use_case, mock_es_repo):

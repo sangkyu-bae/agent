@@ -2,6 +2,7 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+from src.domain.document_revision.search_guard import es_revision_guard_clause
 
 REQUEST_ID = "req-hybrid-001"
 
@@ -88,7 +89,8 @@ class TestHybridSearchUseCaseExecute:
         mock_es_repo.search.assert_called_once()
         call_args = mock_es_repo.search.call_args
         es_query = call_args[0][0]
-        mm = es_query.query["multi_match"]
+        # document-revision §9.5 G3: 필터가 없어도 개정 가드 때문에 bool 로 감싼다
+        mm = es_query.query["bool"]["must"][0]["multi_match"]
         assert mm["query"] == "test query"
         assert mm["fields"] == ["content^1.5", "morph_text"]
         assert mm["type"] == "most_fields"
@@ -224,7 +226,8 @@ class TestHybridSearchUseCaseExecute:
         assert must_clause["multi_match"]["query"] == "q"
         assert must_clause["multi_match"]["fields"] == ["content^1.5", "morph_text"]
         assert es_query.query["bool"]["filter"] == [
-            {"term": {"department": "finance"}}
+            {"term": {"department": "finance"}},
+            es_revision_guard_clause(),
         ]
 
     @pytest.mark.asyncio
@@ -242,9 +245,10 @@ class TestHybridSearchUseCaseExecute:
         assert call_args.kwargs["filter"] is not None
 
     @pytest.mark.asyncio
-    async def test_no_metadata_filter_uses_simple_match_query(
+    async def test_no_metadata_filter_has_only_revision_guard(
         self, use_case, mock_es_repo
     ):
+        """document-revision §9.5 G3: 필터 없음 → 개정 가드 1개만 (기존 단순 match 대체)."""
         from src.domain.hybrid_search.schemas import HybridSearchRequest
 
         req = HybridSearchRequest(query="test")
@@ -252,8 +256,8 @@ class TestHybridSearchUseCaseExecute:
 
         call_args = mock_es_repo.search.call_args
         es_query = call_args[0][0]
-        assert "multi_match" in es_query.query
-        assert "bool" not in es_query.query
+        assert "multi_match" in es_query.query["bool"]["must"][0]
+        assert es_query.query["bool"]["filter"] == [es_revision_guard_clause()]
 
 
 class TestHybridSearchVectorScoreThreshold:

@@ -3,6 +3,14 @@
 물리 컬렉션은 KB 레코드에서 자동 결정하고, kb_id/kb_name을 extra_metadata로
 UnifiedUploadUseCase에 위임해 Qdrant payload + ES 문서 양쪽에 주입한다.
 """
+import hashlib
+
+from src.application.document_revision.schemas import (
+    KbUploadOutcome,
+    RevisionApplyResult,
+    RevisionUploadOptions,
+)
+from src.application.document_revision.supersede_service import SupersedeService
 from src.application.knowledge_base.chunking_resolver import (
     ChunkingSettingsResolver,
 )
@@ -18,6 +26,19 @@ from src.application.unified_upload.schemas import (
 from src.application.unified_upload.use_case import UnifiedUploadUseCase
 from src.domain.auth.entities import User
 from src.domain.department.interfaces import DepartmentRepositoryInterface
+from src.domain.document_revision.errors import (
+    DuplicateDocumentError,
+    RevisionTargetInvalidError,
+)
+from src.domain.document_revision.interfaces import (
+    DocumentRevisionRepositoryPort,
+    RevisionCheckLogRepositoryPort,
+)
+from src.domain.document_revision.policy import RevisionPolicy
+from src.domain.document_revision.value_objects import (
+    CheckDecision,
+    DocumentVersion,
+)
 from src.domain.extension_hooks import DocumentIngestedEvent, ExtensionHooks
 from src.domain.knowledge_base.entities import KnowledgeBase
 from src.domain.knowledge_base.interfaces import (
@@ -42,9 +63,16 @@ class KnowledgeBaseUploadUseCase:
         chunking_resolver: ChunkingSettingsResolver | None = None,
         summary_launcher: SectionSummaryLauncher | None = None,
         extension_hooks: ExtensionHooks | None = None,
+        revision_repo: DocumentRevisionRepositoryPort | None = None,
+        supersede_service: SupersedeService | None = None,
+        check_log_repo: RevisionCheckLogRepositoryPort | None = None,
     ) -> None:
         # graph-rag-foundation §2.2: 업로드 후 확장 훅(그래프 추출 등). 미등록 = 무동작.
         self._extension_hooks = extension_hooks
+        # document-revision Design §2.1: 미주입이면 해시 중복 검사·개정 없이 기존 동작
+        self._revision_repo = revision_repo
+        self._supersede = supersede_service
+        self._check_log = check_log_repo
         self._kb_repo = kb_repo
         self._policy = policy
         self._dept_repo = dept_repo
@@ -65,6 +93,31 @@ class KnowledgeBaseUploadUseCase:
     ) -> tuple[
         UnifiedUploadResult, KnowledgeBase, SectionSummaryLaunchInfo | None
     ]:
+        """기존 3-tuple 계약 (quick create 등). 개정 입력 없이 업로드한다."""
+        outcome = await self.execute_with_revision(
+            kb_id, user, file_bytes, filename, request_id,
+            child_chunk_size=child_chunk_size,
+            child_chunk_overlap=child_chunk_overlap,
+        )
+        return outcome.result, outcome.kb, outcome.summary_launch
+
+    async def execute_with_revision(
+        self,
+        kb_id: str,
+        user: User,
+        file_bytes: bytes,
+        filename: str,
+        request_id: str,
+        child_chunk_size: int = 500,
+        child_chunk_overlap: int = 50,
+        revision: RevisionUploadOptions | None = None,
+    ) -> KbUploadOutcome:
+        """Design Ref: document-revision §2.2 확정 업로드.
+
+        권한 → 해시 중복(적재 전 차단) → 대체 대상 검증(적재 전) → 적재 →
+        completed 일 때만 구버전 전환. partial/failed 면 신규 문서를 계보에서 분리한다.
+        """
+        revision = revision or RevisionUploadOptions()
         kb = await self._kb_repo.find_by_id(kb_id, request_id)
         if kb is None:
             raise ValueError(f"Knowledge base '{kb_id}' not found")
@@ -74,6 +127,12 @@ class KnowledgeBaseUploadUseCase:
             raise PermissionError(
                 f"No write access to knowledge base '{kb_id}'"
             )
+
+        file_hash = hashlib.sha256(file_bytes).hexdigest()
+        await self._reject_duplicate(kb.id, file_hash, request_id)
+        target, lineage_id, version_no = await self._resolve_target(
+            kb.id, revision.supersedes_document_id, request_id
+        )
 
         is_excel = resolve_format(filename) == FORMAT_EXCEL
         chunking_config = await self._resolve_chunking(
@@ -89,6 +148,11 @@ class KnowledgeBaseUploadUseCase:
             child_chunk_overlap=child_chunk_overlap,
             extra_metadata={"kb_id": kb.id, "kb_name": kb.name},
             chunking_config=chunking_config,
+            file_hash=file_hash,
+            lineage_id=lineage_id,
+            version_no=version_no,
+            version_label=revision.version_label,
+            effective_date=revision.effective_date,
         )
         self._logger.info(
             "KnowledgeBase upload delegating",
@@ -98,11 +162,134 @@ class KnowledgeBaseUploadUseCase:
             filename=filename,
         )
         result = await self._unified_upload.execute(unified_req, request_id)
+        revision_result = await self._apply_revision(
+            kb, target, lineage_id, version_no, result, user, request_id
+        )
+        await self._record_decision(revision, revision_result, result, user, request_id)
         summary_launch = await self._launch_summary(
             kb, result, request_id, is_excel=is_excel
         )
         await self._notify_post_ingest(kb, result, user, filename, request_id)
-        return result, kb, summary_launch
+        return KbUploadOutcome(
+            result=result, kb=kb, summary_launch=summary_launch,
+            revision=revision_result,
+        )
+
+    # ── document-revision ─────────────────────────────────
+    async def _reject_duplicate(
+        self, kb_id: str, file_hash: str, request_id: str
+    ) -> None:
+        """Plan SC-2: 같은 KB 에 바이트가 같은 파일이 있으면 적재 전 차단."""
+        if self._revision_repo is None:
+            return
+        matches = await self._revision_repo.find_by_hash(kb_id, file_hash, request_id)
+        if not matches:
+            return
+        existing = next((m for m in matches if m.is_active), matches[0])
+        self._logger.info(
+            "Duplicate document rejected",
+            request_id=request_id,
+            kb_id=kb_id,
+            existing_document_id=existing.document_id,
+        )
+        raise DuplicateDocumentError(existing)
+
+    async def _resolve_target(
+        self, kb_id: str, supersedes_document_id: str | None, request_id: str
+    ) -> tuple[DocumentVersion | None, str | None, int]:
+        """대체 대상 검증 → (대상, 계보 ID, 신규 버전 번호). 대상 없음 = (None, None, 1)."""
+        if not supersedes_document_id:
+            return None, None, 1
+        if self._revision_repo is None or self._supersede is None:
+            raise RevisionTargetInvalidError(
+                "not_supported", "개정 업로드가 구성되지 않았습니다"
+            )
+        target = await self._revision_repo.find_version(
+            supersedes_document_id, request_id
+        )
+        lineage = (
+            await self._revision_repo.find_lineage_versions(
+                target.effective_lineage_id, request_id
+            )
+            if target
+            else []
+        )
+        RevisionPolicy.validate_supersede_target(target, kb_id, lineage)
+        return target, target.effective_lineage_id, RevisionPolicy.next_version_no(
+            lineage
+        )
+
+    async def _apply_revision(
+        self,
+        kb: KnowledgeBase,
+        target: DocumentVersion | None,
+        lineage_id: str | None,
+        version_no: int,
+        result: UnifiedUploadResult,
+        user: User,
+        request_id: str,
+    ) -> RevisionApplyResult:
+        if target is None:
+            return RevisionApplyResult(
+                applied=False, lineage_id=None, version_no=1,
+                superseded_document_id=None, sync_state=None,
+            )
+        if result.status != "completed":
+            # 신버전이 온전히 적재되지 않았으면 구버전을 유지하고 신규 문서를 계보에서 뗀다
+            await self._revision_repo.assign_lineage(
+                result.document_id, lineage_id=None, version_no=1,
+                request_id=request_id,
+            )
+            self._logger.warning(
+                "Revision not applied: ingest incomplete",
+                request_id=request_id,
+                document_id=result.document_id,
+                status=result.status,
+            )
+            return RevisionApplyResult(
+                applied=False, lineage_id=None, version_no=1,
+                superseded_document_id=None, sync_state=None,
+                reason="ingest_incomplete",
+            )
+        sync_state = await self._supersede.supersede(
+            target, result.document_id, kb.collection_name,
+            revised_by=str(user.id), request_id=request_id,
+        )
+        return RevisionApplyResult(
+            applied=True, lineage_id=lineage_id, version_no=version_no,
+            superseded_document_id=target.document_id,
+            sync_state=sync_state.value,
+        )
+
+    async def _record_decision(
+        self,
+        revision: RevisionUploadOptions,
+        applied: RevisionApplyResult,
+        result: UnifiedUploadResult,
+        user: User,
+        request_id: str,
+    ) -> None:
+        """판정 로그에 운영자 결정 기록 — 실패해도 업로드는 성공으로 둔다."""
+        if not revision.revision_check_id or self._check_log is None:
+            return
+        try:
+            await self._check_log.record_decision(
+                revision.revision_check_id,
+                decision=(
+                    CheckDecision.REVISION if applied.applied else CheckDecision.NEW
+                ),
+                target_document_id=applied.superseded_document_id,
+                decided_document_id=result.document_id,
+                decided_by=str(user.id),
+                request_id=request_id,
+            )
+        except Exception as e:
+            self._logger.warning(
+                "Revision decision log failed (upload unaffected)",
+                request_id=request_id,
+                check_id=revision.revision_check_id,
+                exception=e,
+            )
 
     async def _notify_post_ingest(
         self,

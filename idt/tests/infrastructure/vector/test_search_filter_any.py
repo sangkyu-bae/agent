@@ -69,7 +69,8 @@ async def test_summary_guard_unchanged_with_metadata_any():
         metadata_any={"document_id": ["doc-1"]},
     )
     await _store(client).search_by_vector(vector=[0.1], top_k=5, filter=sfilter)
-    assert not (client.captured_filter.must_not or [])
+    # 요약 가드는 해제, document-revision §9.5 G1 개정 가드만 남는다
+    assert [c.key for c in client.captured_filter.must_not] == ["revision_status"]
 
     # 일반 검색 → 가드 유지
     client2 = _FakeQdrantClient()

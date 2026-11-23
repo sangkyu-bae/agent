@@ -197,6 +197,8 @@ class TestDeleteAllowed:
             "deleted_qdrant_chunks": 4,
             "deleted_es_chunks": 4,
             "status": "deleted",
+            # document-revision §4.2 #9: 이전 버전 없는 문서는 복귀 대상 없음
+            "restored_document_id": None,
         }
         harness.qdrant.delete.assert_awaited_once()
         harness.es_repo.delete_by_query.assert_awaited_once()

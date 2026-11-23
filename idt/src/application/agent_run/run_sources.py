@@ -64,6 +64,9 @@ class RunSourcesService:
             )
             return {}
         filenames = await self._filenames(_flatten(retrievals.values()), request_id)
+        version_labels = await self._version_labels(
+            _flatten(retrievals.values()), request_id
+        )
         mcp_tools = await self._mcp_tools(_flatten(tool_calls.values()), request_id)
         citations = await self._load_citations(run_ids, request_id)
         built = {}
@@ -73,6 +76,7 @@ class RunSourcesService:
                 tool_calls=tool_calls.get(run_id.value, []),
                 filenames=filenames,
                 mcp_tools=mcp_tools,
+                version_labels=version_labels,
             )
             items = RunSourcePolicy.build(evidence, max_items=self._max_items)
             # Analysis G-1: 인용을 먼저 적용해야 보충된 칩도 원문 뷰어를 받는다.
@@ -149,6 +153,27 @@ class RunSourcesService:
             # 라벨만 폴백으로 낮추면 되므로 근거 전체를 버리지 않는다.
             self._logger.warning(
                 "run sources filename read failed",
+                exception=e, request_id=request_id,
+            )
+            return {}
+
+    async def _version_labels(
+        self, retrievals: list[RetrievalSource], request_id: str,
+    ) -> dict[str, str]:
+        """document-revision module-6: 근거 칩 버전 라벨. 실패해도 라벨만 생략한다."""
+        document_ids = sorted({
+            r.document_id for r in retrievals
+            if r.document_id and r.collection_name != WEB_COLLECTION
+        })
+        if not document_ids:
+            return {}
+        try:
+            return await self._document_repo.find_version_labels(
+                document_ids, request_id
+            )
+        except Exception as e:
+            self._logger.warning(
+                "run sources version label read failed",
                 exception=e, request_id=request_id,
             )
             return {}

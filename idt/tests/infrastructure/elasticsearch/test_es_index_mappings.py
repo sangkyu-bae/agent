@@ -53,6 +53,12 @@ class TestDocumentsIndexMappings:
         for field in ["chunk_id", "chunk_type", "document_id", "user_id", "collection_name", "parent_id"]:
             assert props[field]["type"] == "keyword"
 
+    def test_revision_status_is_keyword(self):
+        # document-revision §3.3: superseded 가드의 term 매칭 대상
+        assert DOCUMENTS_INDEX_MAPPINGS["properties"]["revision_status"] == {
+            "type": "keyword"
+        }
+
     def test_integer_fields_unchanged(self):
         props = DOCUMENTS_INDEX_MAPPINGS["properties"]
         assert props["chunk_index"]["type"] == "integer"

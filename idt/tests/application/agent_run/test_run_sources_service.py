@@ -61,6 +61,8 @@ def _service(
     runs.find_tool_calls_by_runs = AsyncMock(return_value=tool_calls or {})
     documents = MagicMock()
     documents.find_filenames = AsyncMock(return_value=filenames or {})
+    # document-revision module-6: 버전 라벨 조회 (기본은 라벨 없음)
+    documents.find_version_labels = AsyncMock(return_value={})
     tools = MagicMock()
     tools.list_active = AsyncMock(return_value=catalog or [])
     logger = MagicMock()
@@ -182,3 +184,25 @@ class TestFailureAbsorption:
         result = await service.build_for_runs([RUN_ID], "req")
         assert [i.kind for i in result[RUN_ID.value]] == [SourceKind.DOCUMENT]
         assert logger.warning.call_args.kwargs["exception"] is error
+
+
+@pytest.mark.asyncio
+async def test_version_labels_are_fetched_for_all_documents() -> None:
+    """document-revision module-6: metadata 에 filename 이 있어도 버전 라벨은 조회."""
+    r = _retrieval()
+    r.metadata_json = {"filename": "규정.pdf"}
+    service, _, documents, *_ = _service(retrievals={RUN_ID.value: [r]})
+    documents.find_version_labels = AsyncMock(return_value={"doc-1": "v2"})
+    result = await service.build_for_runs([RUN_ID], "req")
+    documents.find_version_labels.assert_awaited_once_with(["doc-1"], "req")
+    assert result[RUN_ID.value][0].label == "규정.pdf · v2"
+
+
+@pytest.mark.asyncio
+async def test_version_label_failure_keeps_plain_labels() -> None:
+    r = _retrieval()
+    r.metadata_json = {"filename": "규정.pdf"}
+    service, _, documents, *_ = _service(retrievals={RUN_ID.value: [r]})
+    documents.find_version_labels = AsyncMock(side_effect=RuntimeError("db"))
+    result = await service.build_for_runs([RUN_ID], "req")
+    assert result[RUN_ID.value][0].label == "규정.pdf"
