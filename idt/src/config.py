@@ -405,6 +405,26 @@ class Settings(BaseSettings):
     # 소비: src/api/source_viewer_di.py build_source_viewer() → LocalDiskOriginalStore(root).
     document_original_storage_dir: str = ""
 
+    # Firewall Admin Console (firewall-admin-console Design §10.3)
+    # fireware 방화벽 관리 화면용 백엔드. 킬스위치 기본 off — false 면 조립하지 않고
+    # /api/v1/admin/firewall/* 라우터가 없다(404).
+    # 소비: src/api/firewall_admin_di.py build_firewall_admin()
+    # `if not settings.firewall_admin_enabled`.
+    firewall_admin_enabled: bool = False
+    # fwctl(차단 집행 API) base URL. idt 를 컨테이너로 띄우면 host.docker.internal 사용.
+    # 소비: firewall_admin_di.build_firewall_admin() → FwctlClient(base_url=).
+    firewall_admin_fwctl_url: str = "http://127.0.0.1:8070"
+    # fwctl Bearer 토큰(fireware .env 의 FWCTL_TOKEN 과 같은 값). 비면 차단 계열이
+    # FWCTL_AUTH_FAILED 로 실패하고 status 가 configured=false 를 돌려준다.
+    # 소비: firewall_admin_di.build_firewall_admin() → FwctlClient(token=).
+    firewall_admin_fwctl_token: str = ""
+    # Grafana base URL — 알림 룰 상태와 Loki 쿼리(데이터소스 프록시), 대시보드 링크.
+    # 소비: firewall_admin_di.build_firewall_admin() → GrafanaClient(base_url=), dashboard_url.
+    firewall_admin_grafana_url: str = "http://127.0.0.1:3000"
+    # Grafana 서비스 계정 토큰(Viewer). 비면 탐지·감사 조회가 GRAFANA_UNAVAILABLE.
+    # 소비: firewall_admin_di.build_firewall_admin() → GrafanaClient(token=).
+    firewall_admin_grafana_token: str = ""
+
     # Answer Citation Verification (answer-citation-verification Design §10.1)
     # 답변 [n] 인용 + 근거 판정 같은 호출로 검증 + 칩 인용 표시. 킬스위치 기본 off —
     # false 면 검색 머리말·답변 프롬프트·판정 호출·칩 payload 가 모두 기존과 같다.

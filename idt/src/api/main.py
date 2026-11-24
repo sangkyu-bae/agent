@@ -28,6 +28,9 @@ from src.api.source_viewer_di import (
     source_viewer_sink,
     wire_source_viewer,
 )
+# firewall-admin-console §9.2 — 방화벽 관리 조립 접근자. 기능 제거 시 이 import 와
+# wire·close 호출 각 1곳을 지운다. 끄기만 할 때는 FIREWALL_ADMIN_ENABLED=false(기본).
+from src.api.firewall_admin_di import close_firewall_admin, wire_firewall_admin
 # answer-citation-verification §9.2 S11 — 인용 검증 조립 접근자.
 # 기능 제거 시 이 import 와 주입 3곳(labeler·service·enricher)을 지운다.
 # 끄기만 할 때는 ANSWER_CITATION_ENABLED=false.
@@ -6206,6 +6209,8 @@ async def lifespan(app: FastAPI):
     await _close_judgment_backend()
     # graph-rag-foundation: Neo4j 드라이버 정리 (best-effort, wire 안 했으면 no-op)
     await close_graph_rag()
+    # firewall-admin-console §6.3: fwctl·Grafana HTTP 클라이언트 정리 (조립 안 했으면 no-op)
+    await close_firewall_admin()
 
     # Shutdown: Cleanup (if needed)
     _document_processor = None
@@ -6802,6 +6807,8 @@ def create_app() -> FastAPI:
     )
     # source-passage-viewer §4 — 킬스위치 on + 원본 경로 있을 때만 원본 API 등록
     wire_source_viewer(app, kb_uc_factory=_kb_uc_factory, get_session=get_session)
+    # firewall-admin-console §6.3 — 킬스위치 on 일 때만 /api/v1/admin/firewall/* 등록
+    wire_firewall_admin(app)
     # KB 문서 삭제 DI (kb-document-management)
     _kb_delete_factory = create_kb_document_delete_factory(_kb_uc_factory)
     app.dependency_overrides[get_delete_kb_document_use_case] = _kb_delete_factory
