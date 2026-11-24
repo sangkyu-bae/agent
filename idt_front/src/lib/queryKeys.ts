@@ -354,6 +354,15 @@ export const queryKeys = {
       [...queryKeys.admin.toolAccess(), 'department', deptId] as const,
     toolAccessUser: (userId: number) =>
       [...queryKeys.admin.toolAccess(), 'user', userId] as const,
+    /** firewall-admin-console: 방화벽 관리 (상태·차단 목록) */
+    firewall: () => [...queryKeys.admin.all, 'firewall'] as const,
+    firewallStatus: () => [...queryKeys.admin.firewall(), 'status'] as const,
+    firewallBlocks: () => [...queryKeys.admin.firewall(), 'blocks'] as const,
+    firewallAlerts: () => [...queryKeys.admin.firewall(), 'alerts'] as const,
+    firewallEvents: (params: { range: string; action: string }) =>
+      [...queryKeys.admin.firewall(), 'events', params] as const,
+    firewallAudit: (params: { range: string; event: string; ip?: string; actor?: string }) =>
+      [...queryKeys.admin.firewall(), 'audit', params] as const,
     /** Skill 목록 (scope 별) */
     skills: (params?: import('@/types/skill').ListSkillsRequest) =>
       [...queryKeys.admin.all, 'skills', params] as const,

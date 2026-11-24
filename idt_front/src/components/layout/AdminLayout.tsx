@@ -1,12 +1,16 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import TopNav from '@/components/layout/TopNav';
 import AdminSectionTabs from '@/components/layout/AdminSectionTabs';
-import { ADMIN_NAV_GROUPS, findAdminGroupByPath } from '@/constants/adminNav';
+import { findAdminGroupByPath } from '@/constants/adminNav';
+import { useAdminNavGroups } from '@/hooks/useAdminNavGroups';
 
 const AdminLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  // 경로 → 그룹 역산은 전체 목록 기준(숨겨진 그룹의 페이지에 직접 들어와도 탭이 보인다).
   const activeGroup = findAdminGroupByPath(location.pathname);
+  // firewall-admin-console §10.4: 백엔드에서 꺼진 기능의 그룹은 사이드바에 내지 않는다.
+  const navGroups = useAdminNavGroups();
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -22,7 +26,7 @@ const AdminLayout = () => {
               Admin
             </p>
             <ul className="space-y-1">
-              {ADMIN_NAV_GROUPS.map((group) => {
+              {navGroups.map((group) => {
                 const isActive = group.key === activeGroup?.key;
                 return (
                   <li key={group.key}>

@@ -3,7 +3,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { useLogout } from '@/hooks/useAuth';
 import NotificationBell from '@/components/layout/NotificationBell';
-import { ADMIN_NAV_GROUPS, isAdminItemActive, type AdminNavGroup } from '@/constants/adminNav';
+import { isAdminItemActive, type AdminNavGroup } from '@/constants/adminNav';
+import { useAdminNavGroups } from '@/hooks/useAdminNavGroups';
 
 interface DropdownItem {
   label: string;
@@ -81,10 +82,7 @@ const NAV_MENUS: NavMenu[] = [
   },
 ];
 
-const ADMIN_MENU: NavMenu = {
-  label: '관리',
-  groups: ADMIN_NAV_GROUPS,
-};
+const ADMIN_MENU_LABEL = '관리';
 
 const TopNav = () => {
   const navigate = useNavigate();
@@ -95,7 +93,13 @@ const TopNav = () => {
   const { user } = useAuthStore();
   const { mutate: logout, isPending: isLoggingOut } = useLogout();
 
-  const menus = user?.role === 'admin' ? [...NAV_MENUS, ADMIN_MENU] : NAV_MENUS;
+  // firewall-admin-console §10.4: 백엔드에서 꺼진 기능의 그룹은 드롭다운에 내지 않는다.
+  const adminGroups = useAdminNavGroups();
+
+  const menus: NavMenu[] =
+    user?.role === 'admin'
+      ? [...NAV_MENUS, { label: ADMIN_MENU_LABEL, groups: adminGroups }]
+      : NAV_MENUS;
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {

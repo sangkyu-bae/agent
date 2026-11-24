@@ -247,6 +247,15 @@ export const API_ENDPOINTS = {
     `/api/v1/admin/tool-access/departments/${deptId}`,
   ADMIN_TOOL_ACCESS_USER: (userId: number) => `/api/v1/admin/tool-access/users/${userId}`,
 
+  // Admin — Firewall (firewall-admin-console §4.1, admin 전용. 백엔드에서 꺼져 있으면 전 경로 404)
+  ADMIN_FIREWALL_STATUS: '/api/v1/admin/firewall/status',
+  ADMIN_FIREWALL_BLOCKS: '/api/v1/admin/firewall/blocks',
+  ADMIN_FIREWALL_BLOCK_DETAIL: (ip: string) =>
+    `/api/v1/admin/firewall/blocks/${encodeURIComponent(ip)}`,
+  ADMIN_FIREWALL_ALERTS: '/api/v1/admin/firewall/alerts',
+  ADMIN_FIREWALL_EVENTS: '/api/v1/admin/firewall/events',
+  ADMIN_FIREWALL_AUDIT: '/api/v1/admin/firewall/audit',
+
   // Admin — MCP Server Registry
   MCP_SERVERS: '/api/v1/mcp-registry',
   MCP_SERVER_DETAIL: (id: string) => `/api/v1/mcp-registry/${id}`,
