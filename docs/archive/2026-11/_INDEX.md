@@ -15,6 +15,7 @@
 | source-passage-viewer | completed | 97.2% (Check 94.8% → Act-1) | 2026-11-20 | [source-passage-viewer/](source-passage-viewer/) |
 | answer-citation-verification | completed | 93.6% (Check 90.6% → Act-1) | 2026-11-23 | [answer-citation-verification/](answer-citation-verification/) |
 | document-revision | completed | 96.1% (Check 90.3% → Act-1) | 2026-11-23 | [document-revision/](document-revision/) |
+| firewall-admin-console | completed | 97.8% (Check, Minor 4건 수정) | 2026-11-24 | [firewall-admin-console/](firewall-admin-console/) |
 
 > 백엔드·프론트 전용 사이클은 `idt/docs/archive/2026-11/`, `idt_front/docs/archive/2026-11/` 에 있다.
 
@@ -89,3 +90,9 @@
 | document-revision | 본문 유사도 개선 — 새 문서 앞부분 토막과 기존 청크 전체를 비교해 거의 같은 문서도 0.65~0.70. 임계값 `revision_content_min` 0.5 는 합성 픽스처 실측값 | 개선 | 판정 로그 실측 후 |
 | document-revision | 계보 전체 삭제(FR-19 일부), `revision_mode=auto` 실동작(현재 422) | 범위 밖 | 요청 시 |
 | document-revision | 기존 동작(무관): KB 삭제는 상태값만 `deleted` 로 바꿔 `document_metadata` 행·벡터가 남음 | 기존 결함 | 해당 영역 작업 시 |
+| firewall-admin-console | 켤 때: `FIREWALL_ADMIN_*` 설정 5개 + Grafana Viewer 서비스 계정 토큰. 기본 off 라 설정 없이 배포해도 기존 동작 불변. 절차 `docs/firewall-admin-setup.md` | 운영 설정 | 기능을 켤 때 |
+| firewall-admin-console | 실장비 연결 — TLS, 호출자별 토큰, 대역 차단, 차단 영속화, 감사 장기 보관, 조직 승인 (`docs/firewall-admin-setup.md` §7) | 범위 밖 | 별도 사이클 |
+| firewall-admin-console | fireware Phase 4 — 방화벽 에이전트 프롬프트(`detection-policy.md`), mcp-grafana 등록, 스케줄 실행 | 후속 기능 | 요청 시 |
+| firewall-admin-console | `RejectReasonDialog` 를 `components/` 로 이동 — 방화벽 승인 탭이 작업함 페이지 파일을 import (G7) | 구조 소형 | 해당 파일 수정 시 |
+| firewall-admin-console | 기존 동작(무관): 승인 API 가 에이전트 재개까지 동기 대기해 30초를 넘기면 작업함 화면이 오류를 표시(실제로는 처리됨). 방화벽 승인 탭만 "처리됐을 수 있음" 안내로 대응 | 기존 결함 | 승인 영역 작업 시 |
+| firewall-admin-console | 기존 동작(무관): 승인 필요 MCP 도구에 도구 카탈로그 category `action` 을 지정하면 워커에서 빠져 에이전트가 호출하지 못함 → 미분류로 둘 것 | 기존 결함 | 도구 카테고리 작업 시 |

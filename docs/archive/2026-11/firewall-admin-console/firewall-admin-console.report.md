@@ -81,10 +81,10 @@
 
 | Phase | Document | Status |
 |-------|----------|--------|
-| Plan | [firewall-admin-console.plan.md](../01-plan/features/firewall-admin-console.plan.md) | ✅ Finalized |
-| Design | [firewall-admin-console.design.md](../02-design/features/firewall-admin-console.design.md) | ✅ v0.6 |
-| Check | [firewall-admin-console.analysis.md](../03-analysis/firewall-admin-console.analysis.md) | ✅ Complete |
-| 운영 | [firewall-admin-setup.md](../firewall-admin-setup.md) | ✅ 준비 절차·문제 해결 |
+| Plan | [firewall-admin-console.plan.md](firewall-admin-console.plan.md) | ✅ Finalized |
+| Design | [firewall-admin-console.design.md](firewall-admin-console.design.md) | ✅ v0.6 |
+| Check | [firewall-admin-console.analysis.md](firewall-admin-console.analysis.md) | ✅ Complete |
+| 운영 | [firewall-admin-setup.md](../../../firewall-admin-setup.md) | ✅ 준비 절차·문제 해결 |
 | Report | 현재 문서 | ✅ |
 
 ---

@@ -6,7 +6,7 @@
 > **Author**: 배상규
 > **Date**: 2026-11-23
 > **Status**: Implemented (v0.6, Check 97.8%)
-> **Planning Doc**: [firewall-admin-console.plan.md](../../01-plan/features/firewall-admin-console.plan.md)
+> **Planning Doc**: [firewall-admin-console.plan.md](firewall-admin-console.plan.md)
 
 ### Pipeline References
 
