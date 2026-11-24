@@ -32,6 +32,7 @@ import AdminAgentRunsPage from '@/pages/AdminAgentRunsPage';
 import AdminDashboardPage from '@/pages/AdminDashboardPage';
 import AdminToolsPage from '@/pages/AdminToolsPage';
 import AdminToolAccessPage from '@/pages/AdminToolAccessPage';
+import AdminFirewallPage from '@/pages/AdminFirewallPage';
 import AdminMiddlewarePage from '@/pages/AdminMiddlewarePage';
 import WikiPage from '@/pages/WikiPage';
 import AgentKnowledgePage from '@/pages/AgentKnowledgePage';
@@ -97,6 +98,8 @@ const App = () => (
           <Route path="/admin/users" element={<AdminUsersPage />} />
           <Route path="/admin/departments" element={<AdminDepartmentsPage />} />
           <Route path="/admin/tool-access" element={<AdminToolAccessPage />} />
+          {/* firewall-admin-console: 방화벽 관리 (백엔드 모듈이 꺼져 있으면 안내만 표시) */}
+          <Route path="/admin/firewall" element={<AdminFirewallPage />} />
           <Route path="/admin/mcp-servers" element={<AdminMcpServersPage />} />
           {/* builtin-tools D9: 도구 카탈로그 + 빌트인 토글 */}
           <Route path="/admin/tools" element={<AdminToolsPage />} />

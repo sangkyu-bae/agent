@@ -3,18 +3,33 @@ import {
   ADMIN_NAV_GROUPS,
   ADMIN_NAV_ITEMS,
   ADMIN_ENTRY_PATH,
+  OPTIONAL_ADMIN_GROUP_KEYS,
   findAdminGroupByPath,
   isAdminItemActive,
+  selectAdminNavGroups,
 } from './adminNav';
 
 describe('adminNav 상수 — 그룹 구조', () => {
-  it('G1: 그룹은 4개다 (관측/조직/문서·품질/에이전트 리소스)', () => {
+  it('G1: 그룹은 5개다 (관측/조직/문서·품질/에이전트 리소스/보안 운영)', () => {
     expect(ADMIN_NAV_GROUPS.map((g) => g.key)).toEqual([
       'observability',
       'org',
       'docs-quality',
       'agent-resources',
+      // firewall-admin-console: 백엔드 모듈이 켜져 있을 때만 노출 (맨 뒤)
+      'security',
     ]);
+  });
+
+  it('G1b: selectAdminNavGroups는 방화벽이 꺼져 있으면 보안 운영 그룹을 뺀다', () => {
+    const off = selectAdminNavGroups({ firewallEnabled: false });
+    expect(off.map((g) => g.key)).toEqual(
+      ADMIN_NAV_GROUPS.map((g) => g.key).filter((k) => !OPTIONAL_ADMIN_GROUP_KEYS.includes(k)),
+    );
+    expect(off.some((g) => g.key === 'security')).toBe(false);
+
+    const on = selectAdminNavGroups({ firewallEnabled: true });
+    expect(on).toEqual(ADMIN_NAV_GROUPS);
   });
 
   it('G2: ADMIN_NAV_ITEMS는 그룹 flatten과 동일하다', () => {
@@ -55,6 +70,8 @@ describe('adminNav 상수 — 그룹 구조', () => {
       '/admin/middleware',
       '/admin/skills',
       '/admin/wiki',
+      // firewall-admin-console: 방화벽 (security)
+      '/admin/firewall',
     ];
     for (const path of expected) {
       expect(paths).toContain(path);
