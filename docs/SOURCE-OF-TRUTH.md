@@ -2,6 +2,7 @@
 
 > **목적**: 프로젝트의 단일 진실 공급원(Single Source of Truth). 아키텍처·기술스택·API·데이터 모델·도메인 기능의 사실 기준점.
 > **갱신 기준일**: 2026-07-23 (커밋 `6cc25656`, 최신 마이그레이션 V052) — 워킹트리 미커밋 변경(rag-auth-filter-fix 등)은 반영하지 않음
+> **부분 갱신**: 2026-11-24 — 방화벽 관리(firewall-admin-console, PR #131)만 추가 반영(🛡 표시). 7/23 이후 다른 기능 변경(V053~ 마이그레이션, 관리자 메뉴 그룹화 등)은 아직 반영되지 않았으므로 해당 영역은 코드를 기준으로 본다.
 > **작성 방식**: 코드/설정/마이그레이션 직접 조사 기반. 추정이 아닌 실제 파일 근거.
 > **Who & Why**: 누가 왜 쓰는가는 `docs/USER-SCENARIOS.md`, 성장 철학은 `idt/docs/architecture/growing-agent-vision.md` 참조.
 
@@ -141,6 +142,7 @@ sangplusbot/
 | 26 | **문서 템플릿 추출기 (V037)** | 양식 슬롯 추출·refine·미리보기 하이라이트, 채팅으로 슬롯 채움. 하드 규칙: 미근거 = 공란 | `/api/v1/document-extractor` |
 | 27 | **관리자 대시보드** | 적재량·KB별 통계·최근 문서·헬스 + 만족도 위젯 | `/api/v1/admin/dashboard` |
 | 28 | **PII 마스킹** | 외부 LLM 경계 가역 마스킹 엔진(rrn/phone/email/card/account). 엔진 완성, 경로별 배선은 후속 | (내부 모듈, env로 제어) |
+| 🛡 | **방화벽 관리 (firewall-admin-console)** | fireware 방화벽 랩을 관리자 화면에서 다루는 백엔드 프록시. fwctl 직접 호출(차단 목록·TTL 차단·해제, 수행자 `sangplusbot/admin:<user_id>`, 요청 ID `adm-<user_id>-…`)과 Grafana API 경유 조회(알림 룰·Loki 차단 로그·감사). 토큰은 서버에만 보관. 기본 off, DB 변경 없음, 조립은 `src/api/firewall_admin_di.py` 한 곳 | `/api/v1/admin/firewall` |
 
 ---
 
@@ -156,6 +158,8 @@ sangplusbot/
 /api/v1/admin/dashboard    🆕 운영 현황 대시보드
 /api/v1/admin/collections  🆕 관리자 컬렉션
 /api/v1/admin/chunking     🆕 관리자 청킹 프로파일
+/api/v1/admin/firewall     🛡 방화벽 관리 — FIREWALL_ADMIN_ENABLED=true 일 때만 등록(wire_firewall_admin)
+                              GET status · GET/POST blocks · DELETE blocks/{ip} · GET alerts · GET events · GET audit (admin 전용)
 /api/v1/documents             문서/통합 업로드
 /api/v1/ingest, /ingest/pdf   인제스트 / 고급 PDF 인제스트
 /api/v1/retrieval             검색 + 🆕 요약 라우팅 검색 (prefix 공유)
@@ -347,7 +351,7 @@ conversation_message ┈┈ message_feedback (UQ(message_id, user_id))
 
 **사용자** (19): ChatPage, AgentBuilderPage, AgentStorePage, CollectionPage, CollectionDocumentsPage, ToolConnectionPage, ToolAdminPage, EvalDatasetPage, UsageMePage, SettingsPage, WorkflowDesignerPage, WorkflowBuilderPage, 🆕KnowledgeBasesPage, 🆕KnowledgeBaseDetailPage, 🆕KnowledgeArticlePage, 🆕AgentKnowledgePage, 🆕AgentWorkspacePage + 미연결 2(AgentPage, DocumentPage — `/documents`는 `/collections`로 리다이렉트)
 
-**관리자** (11, `/admin/*`): AdminUsersPage, AdminDepartmentsPage, AdminRagasPage, AdminAgentRunsPage, AgentRunDetailPage(`/admin/agent-runs/:runId`), AdminMcpServersPage, 🆕AdminDashboardPage, 🆕AdminLlmModelsPage, 🆕AdminChunkingProfilesPage, 🆕AdminSkillsPage, 🆕WikiPage(`/admin/wiki`)
+**관리자** (11, `/admin/*`): AdminUsersPage, AdminDepartmentsPage, AdminRagasPage, AdminAgentRunsPage, AgentRunDetailPage(`/admin/agent-runs/:runId`), AdminMcpServersPage, 🆕AdminDashboardPage, 🆕AdminLlmModelsPage, 🆕AdminChunkingProfilesPage, 🆕AdminSkillsPage, 🆕WikiPage(`/admin/wiki`), 🛡AdminFirewallPage(`/admin/firewall` — 상태 띠 + 현황·탐지·감사·승인 탭)
 
 **인증** (2): LoginPage, RegisterPage
 
@@ -357,6 +361,7 @@ conversation_message ┈┈ message_feedback (UQ(message_id, user_id))
   - 🆕 `/knowledge-bases(/:kbId)`, `/knowledge/:articleId`, `/agents/:agentId/knowledge`, `/agents/:agentId/workspace`
 - 관리자(`AdminRoute` + `AdminLayout`): `/admin/*`, 진입점 `/admin/users`
 - 관리자 내비: `src/constants/adminNav.ts` — **11개 항목** (운영 대시보드·LLM 모델·청킹 프로파일·Skill 관리·위키 관리 🆕 포함, 그룹 헤더 없는 단일 배열)
+- 🛡 방화벽 메뉴: `adminNav.ts` 의 `security` 그룹("보안 운영 > 방화벽"). `useAdminNavGroups` 가 `GET /api/v1/admin/firewall/status` 응답의 `enabled` 로 노출을 정한다(백엔드 off → 404 → 그룹 숨김). 프론트 환경변수 없음
 
 ### 6-3. 상태관리 (Zustand — `src/store/`)
 `authStore`(유저·토큰), `chatStore`, `chatPreferencesStore`, `agentStore`, `documentStore`, `layoutStore`, `commonSlices`
@@ -412,6 +417,7 @@ conversation_message ┈┈ message_feedback (UQ(message_id, user_id))
 | KB | `KB_EXCEL_MAX_ROWS_PER_SHEET`(20000) |
 | 메모리 | `MEMORY_MAX_ACTIVE_PER_USER`(30), `_PER_DEPARTMENT`(50), `MEMORY_INJECT_TOKEN_CAP`(800), `MEMORY_EXTRACTION_ENABLED`(**false**), `_MODEL_NAME`(gpt-4o-mini), `_MAX_PER_TURN`(3), `MEMORY_MAX_PENDING_PER_USER`(20) |
 | 평가/환류 | `EVAL_RECENT_NEGATIVE_LIMIT`(20), `EVAL_FEEDBACK_EXTRACTION_ENABLED`(**false**), `WIKI_FEEDBACK_DRAFT_ENABLED`(**false**), `WIKI_FEEDBACK_REINFORCE_ENABLED`(**false**) |
+| 🛡 방화벽 관리 | `FIREWALL_ADMIN_ENABLED`(**false**), `FIREWALL_ADMIN_FWCTL_URL`(http://127.0.0.1:8070), `FIREWALL_ADMIN_FWCTL_TOKEN`("" — fireware `.env` 의 `FWCTL_TOKEN`), `FIREWALL_ADMIN_GRAFANA_URL`(http://127.0.0.1:3000), `FIREWALL_ADMIN_GRAFANA_TOKEN`("" — Viewer 서비스 계정). 준비 절차 `docs/firewall-admin-setup.md` |
 
 > ⚠ 성장 루프 4종(메모리 자동 추출 + 환류 3종)은 **전부 opt-in 기본 off** — 켜지 않으면 성장 기능이 동작하지 않는다.
 
@@ -449,6 +455,8 @@ npm run dev
 - **배포 의존성**: 기능별 필수 마이그레이션 매핑은 `docs/wiki/ops/migration-deploy-deps.md` (V046~V052 전부 additive).
 - **E2E 이월**: Qdrant/ES/실서버 기동 시 일괄 체크리스트 `docs/wiki/ops/e2e-carryover-checklist.md`.
 - **미연결 화면 2종**: AgentPage, DocumentPage는 라우트 없음 (orphan).
+- 🛡 **승인 필요 MCP 도구의 카테고리**: 도구 카탈로그 category 를 `action` 으로 지정하면 워커에서 빠져 에이전트가 호출하지 못한다 → 미분류로 둔다 (방화벽 `block_ip` 연동에서 확인).
+- 🛡 **승인 API 응답 지연**: 승인 API 가 에이전트 재개까지 동기로 기다려 30초(프론트 axios 클라이언트 `timeout: 30000`)를 넘길 수 있다. 이때 작업함 화면은 오류를 표시하지만 승인은 처리된다.
 
 ---
 
@@ -463,6 +471,7 @@ npm run dev
 | 백엔드 세부 규칙 | `idt/docs/rules/*.md` |
 | Task 레지스트리 | `idt/docs/task-registry.md` |
 | PDCA 문서 | `docs/01-plan ~ 04-report`, `docs/archive/`, `idt/docs/archive/` |
+| 🛡 방화벽 관리 준비 절차 (랩 기동·Grafana 서비스 계정·에이전트 연동·LIVE 전환·실장비 조건) | `docs/firewall-admin-setup.md` |
 
 ---
 

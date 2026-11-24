@@ -5,8 +5,8 @@
 > **Project**: sangplusbot (idt + idt_front) — 연동: fireware, agent_mcp
 > **Analyst**: 배상규
 > **Date**: 2026-11-24
-> **Design Doc**: [firewall-admin-console.design.md](../02-design/features/firewall-admin-console.design.md) (v0.5)
-> **Plan Doc**: [firewall-admin-console.plan.md](../01-plan/features/firewall-admin-console.plan.md)
+> **Design Doc**: [firewall-admin-console.design.md](firewall-admin-console.design.md) (v0.5)
+> **Plan Doc**: [firewall-admin-console.plan.md](firewall-admin-console.plan.md)
 
 ---
 

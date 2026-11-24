@@ -2,7 +2,7 @@
 
 > Agent Builder 관리자 메뉴의 **보안 운영 > 방화벽**(`/admin/firewall`)을 쓰기 위한 준비 절차다.
 > 대상은 fireware 방화벽 랩(Docker)이며 기본은 dry-run이다.
-> 설계: `docs/02-design/features/firewall-admin-console.design.md` · 절차는 2026-11-23~24에 로컬에서 실제로 수행해 확인했다.
+> 설계: `docs/archive/2026-11/firewall-admin-console/firewall-admin-console.design.md` · 절차는 2026-11-23~24에 로컬에서 실제로 수행해 확인했다.
 
 ## 구성
 
