@@ -85,7 +85,7 @@ FIREWALL_ADMIN_GRAFANA_TOKEN=<2번에서 만든 토큰>
 3. **승인 필요 지정** — 관리 → 도구 관리에서 `block_ip`(필요하면 `unblock_ip`)의 **승인 필요만 켠다.**
    - **카테고리는 미분류로 둔다.** `action`으로 지정하면 이 도구에는 본문(초안) 인자가 없어서 워커가 실행에서 제외되고, 에이전트가 `block_ip`를 호출하지 못한다(실측).
 4. **도구 권한** — 관리 → 조직 관리 → 도구 권한에서 방화벽 도구를 쓸 사용자·부서만 허용한다.
-5. **에이전트 구성** — 에이전트 빌더에서 방화벽 에이전트를 만들고 도구 4종을 연결한다. 승인 게이트를 켠다. 프롬프트는 fireware `docs/detection-policy.md`를 원본으로 쓴다. 로그 조회가 필요하면 mcp-grafana를 별도로 등록한다.
+5. **에이전트 구성** — 에이전트 빌더에서 방화벽 에이전트를 만들고 도구 4종을 연결한다. 승인 게이트를 켠다. 프롬프트는 fireware `docs/detection-policy.md`를 원본으로 쓴다. 탐지 알림·로그 조회는 mcp-firewall-server 의 조회 도구로 한다(mcp-grafana 는 쓰지 않는다 — 5-1).
 6. **확인** — 에이전트에 "172.28.10.66을 60초 차단해 줘"를 보내면 "담당자 승인함에 올렸습니다"로 끝나고, 방화벽 화면의 승인 탭에 요청이 보인다. 승인하면 `block_ip`가 실행되고 감사 탭에 "에이전트" 수행자로 남는다.
 
 알아 둘 점:
@@ -93,6 +93,27 @@ FIREWALL_ADMIN_GRAFANA_TOKEN=<2번에서 만든 토큰>
 - 승인 탭은 **내가 소유한 에이전트의 요청**만 보여 준다. 다른 사람이 소유한 방화벽 에이전트의 요청은 그 사람의 화면에만 나온다.
 - 승인 API는 에이전트 재개까지 기다려서 응답이 30초를 넘길 수 있다. 그때 화면은 "응답을 받지 못했습니다. 요청은 처리됐을 수 있습니다"를 보여 주고 목록을 다시 불러온다. 결과는 목록과 감사 탭으로 확인한다.
 - 스케줄 등록은 dry-run으로 판단 품질을 확인한 뒤에 한다.
+
+## 5-1. 보안 에이전트 (자동 판단 — firewall-agent)
+
+탐지 알림을 보고 차단 여부를 스스로 판단해 `block_ip`를 요청하는 에이전트다. 요청은 위 5의 승인 게이트를 거친다.
+
+1. **조회 도구** — mcp-firewall-server 에 Grafana Viewer 토큰을 넣어 다시 띄우고 도구를 다시 동기화한다. 도구가 6종(`list_detections`·`get_ip_context` 추가)이 된다. 새 두 도구는 읽기 전용이라 승인 필요를 켜지 않는다.
+   ```sh
+   # agent_mcp 에서 (토큰은 셸 환경변수로만)
+   FIREWALL_FWCTL_TOKEN=<FWCTL_TOKEN> FIREWALL_GRAFANA_TOKEN=<Viewer 토큰> \
+     docker compose up -d --build mcp-firewall-server
+   ```
+2. **에이전트 만들기** — 지침은 fireware `docs/security-agent-prompt.md` 의 "프롬프트" 블록을 그대로 넣는다(정책 원본은 `docs/detection-policy.md`). 도구는 `list_detections`·`get_ip_context`·`list_blocks`·`block_ip` 네 개만 붙이고 `unblock_ip`는 붙이지 않는다. 온도 0.2, 승인 게이트 켬(항상).
+3. **10분 스케줄** — 스케줄 탭에서 cron `*/10 * * * *`, 지침 "발화 중인 방화벽 탐지 알림을 정책대로 점검하라.", **"이전 실행이 진행 중이거나 승인 대기 중이면 건너뛰기"를 켠다.** 처음에는 꺼 둔다.
+4. **알림 수신** — 설정 탭 "알림 수신"에서 설정을 만들면 토큰이 한 번만 보인다. 바쁘면 건너뛰기는 켠 채로 둔다. fireware `.env`에 `FW_ALERT_WEBHOOK_URL=http://host.docker.internal:<idt 포트>/api/v1/alert-hooks/agents/<에이전트 ID>`와 `FW_ALERT_WEBHOOK_TOKEN=<토큰>`을 넣고 fireware runbook "웹훅 활성화" 절차로 Grafana 에 연결한다.
+5. **방화벽 화면에 연결** — idt `.env`에 `FIREWALL_ADMIN_AGENT_ID=<에이전트 ID>`를 넣고 백엔드를 다시 시작한다. 방화벽 화면 상태 띠 아래 "자동 점검"에서 스케줄·알림 수신을 켜고 끈다(끌 때 확인창).
+6. **운영 순서** — dry-run 에서 스케줄·알림 수신을 켜고, 승인 탭에 올라오는 요청의 사유(reason)·TTL 이 정책과 맞는지 며칠 본 뒤 LIVE 로 바꾼다(6).
+
+알아 둘 점:
+
+- 승인 대기 건이 있으면 다음 회차(스케줄·알림)는 실행하지 않고 "건너뜀(승인 대기 중)"으로 남는다. 같은 IP 요청이 승인함에 쌓이지 않게 하려는 것이다. 승인·거절하면 다음 회차부터 다시 돈다.
+- 스케줄은 idt 백그라운드 워커(`BACKGROUND_WORKER_ENABLED`, 기본 켬)가 30초마다 실행한다. 외부 cron 은 필요 없다. 같은 DB 를 쓰는 백엔드를 두 개 띄우면 두 워커가 같은 일을 가져가므로 하나만 켠다.
 
 ## 6. LIVE 전환
 
