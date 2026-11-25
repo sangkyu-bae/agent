@@ -193,6 +193,7 @@ class TestTriggerEndpoint:
         assert res.status_code == 200
         assert res.json() == {
             "claimed": 2, "success": 2, "failed": 0, "request_id": "req",
+            "skipped": 0,  # firewall-agent design §2.2 — 바쁨 판정 건너뜀 수 (additive)
         }
 
     def test_trigger_status_returns_snapshot(self, client, monkeypatch):
@@ -206,3 +207,47 @@ class TestTriggerEndpoint:
         )
         assert res.status_code == 200
         assert res.json()["last_triggered_at"] is None
+
+
+class TestUserIdIsPassedAsString:
+    """실제 User.id 는 int, agent_definition.user_id 는 문자열이다.
+
+    int 를 그대로 넘기면 소유자 비교("7" != 7)가 항상 실패해 본인 스케줄도 403 이 된다
+    (firewall-agent M4 화면 확인 중 발견, master 동일).
+    다른 라우터(webhook)처럼 str 로 넘긴다.
+    """
+
+    @pytest.fixture
+    def int_client(self, mock_ucs):
+        app = FastAPI()
+        app.include_router(router)
+        user = MagicMock()
+        user.id = 7
+        app.dependency_overrides[get_current_user] = lambda: user
+        overrides = {
+            get_create_schedule_use_case: "create",
+            get_list_schedules_use_case: "list",
+            get_get_schedule_use_case: "get",
+            get_update_schedule_use_case: "update",
+            get_delete_schedule_use_case: "delete",
+            get_toggle_schedule_use_case: "toggle",
+            get_list_schedule_runs_use_case: "runs",
+        }
+        for dep, name in overrides.items():
+            app.dependency_overrides[dep] = lambda n=name: mock_ucs[n]
+        return TestClient(app)
+
+    def test_every_endpoint_passes_str_user_id(self, int_client, mock_ucs):
+        int_client.post("/api/v1/agents/a1/schedules", json=VALID_BODY)
+        int_client.get("/api/v1/agents/a1/schedules")
+        int_client.get("/api/v1/agents/a1/schedules/s1")
+        int_client.put("/api/v1/agents/a1/schedules/s1", json=VALID_BODY)
+        int_client.delete("/api/v1/agents/a1/schedules/s1")
+        int_client.patch("/api/v1/agents/a1/schedules/s1", json={"enabled": False})
+        int_client.get("/api/v1/agents/a1/schedules/s1/runs")
+        seen = {
+            name: [a for a in uc.execute.call_args[0] if a in (7, "7")]
+            for name, uc in mock_ucs.items()
+            if uc.execute.await_count
+        }
+        assert seen and all(v == ["7"] for v in seen.values()), seen
