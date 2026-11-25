@@ -1,5 +1,6 @@
 import { MAX_ITERATIONS, TOKEN_LIMIT } from '@/constants/agentSettings';
 import LimitNumberField from './LimitNumberField';
+import AlertReceiverSection from './AlertReceiverSection';
 import WebhookSection from './WebhookSection';
 
 interface SettingsPanelProps {
@@ -109,6 +110,8 @@ const SettingsPanel = ({
 
       {/* ── Webhook (실기능 — agent-webhook M1) ── */}
       <WebhookSection agentId={agentId} />
+      {/* firewall-agent: 모니터링 알림(Alertmanager 웹훅) 수신 */}
+      <AlertReceiverSection agentId={agentId} />
 
       {/* ── 연동 스텁 2종 (토글 disabled + 준비중) ── */}
       {STUB_SECTIONS.map((s) => (

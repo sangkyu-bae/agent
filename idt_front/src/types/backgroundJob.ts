@@ -6,6 +6,8 @@ export const JOB_STATUS = {
   RUNNING: 'running',
   SUCCESS: 'success',
   FAILED: 'failed',
+  /** firewall-agent: 스케줄 회차 전용 — 바쁨 판정으로 실행하지 않음 */
+  SKIPPED: 'skipped',
 } as const;
 export type JobStatus = (typeof JOB_STATUS)[keyof typeof JOB_STATUS];
 
@@ -137,6 +139,7 @@ export const JOB_STATUS_LABEL: Record<JobStatus, string> = {
   running: '실행 중',
   success: '완료',
   failed: '실패',
+  skipped: '건너뜀',
 };
 
 export interface UnseenCountResponse {

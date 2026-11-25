@@ -152,3 +152,96 @@ class TestTriggerDueSchedules:
         snapshot = uc.status()
         assert snapshot.last_triggered_at is not None
         assert snapshot.last_result.claimed == 1
+
+
+# ── firewall-agent design §2.2: 바쁘면 회차 건너뜀 ─────────────────────────
+
+
+def _busy_uc(claimed, verdict):
+    from src.domain.agent_automation.busy import BusyVerdict
+
+    checker = MagicMock()
+    checker.check = AsyncMock(
+        return_value=verdict or BusyVerdict(busy=False, reason=None)
+    )
+    uc, repo, run_uc, sink = _make_uc(claimed=claimed)
+    uc._busy_checker = checker
+    sink.on_skipped = AsyncMock()
+    return uc, repo, run_uc, sink, checker
+
+
+def _skip_claimed(schedule_id="s1", skip=True) -> ClaimedSchedule:
+    item = _claimed(schedule_id)
+    item.schedule.skip_when_busy = skip
+    return item
+
+
+class TestSkipWhenBusy:
+    @pytest.mark.asyncio
+    async def test_option_off_never_asks_the_checker(self):
+        from src.domain.agent_automation.busy import BusyVerdict
+
+        uc, _, run_uc, _, checker = _busy_uc(
+            [_skip_claimed(skip=False)],
+            BusyVerdict(busy=True, reason="approval_pending"),
+        )
+        result = await uc.execute("req-1")
+        checker.check.assert_not_awaited()
+        run_uc.execute.assert_awaited_once()
+        assert result.success == 1 and result.skipped == 0
+
+    @pytest.mark.asyncio
+    async def test_busy_agent_is_skipped_and_recorded(self):
+        from src.domain.agent_automation.busy import BusyVerdict
+
+        uc, repo, run_uc, sink, checker = _busy_uc(
+            [_skip_claimed()], BusyVerdict(busy=True, reason="approval_pending")
+        )
+        result = await uc.execute("req-1")
+        checker.check.assert_awaited_once_with("a1", "req-1")
+        run_uc.execute.assert_not_awaited()
+        sink.on_started.assert_not_awaited()
+        sink.on_skipped.assert_awaited_once()
+        assert sink.on_skipped.call_args.kwargs["reason"] == "approval_pending"
+        # 건너뜀은 '실행 시도' 가 아니다 — last_run_at 을 건드리지 않는다
+        repo.touch_last_run.assert_not_awaited()
+        counts = (result.claimed, result.success, result.failed, result.skipped)
+        assert counts == (1, 0, 0, 1)
+
+    @pytest.mark.asyncio
+    async def test_idle_agent_runs_normally(self):
+        uc, _, run_uc, sink, checker = _busy_uc([_skip_claimed()], None)
+        result = await uc.execute("req-1")
+        checker.check.assert_awaited_once()
+        run_uc.execute.assert_awaited_once()
+        sink.on_skipped.assert_not_awaited()
+        assert result.success == 1
+
+    @pytest.mark.asyncio
+    async def test_skip_record_failure_does_not_stop_other_schedules(self):
+        """firewall-agent analysis G10 — 건너뜀 이력 저장이 실패해도 같은 틱의
+        다른 스케줄은 실행된다(next_run_at 은 claim 에서 이미 넘어갔으므로
+        여기서 멈추면 그 회차가 사라진다). 바쁜 회차는 실행하지 않고 skipped 로 센다."""
+        from src.domain.agent_automation.busy import BusyVerdict
+
+        busy_item = _skip_claimed("s-busy")
+        other_item = _claimed("s-other")
+        uc, _, run_uc, sink, checker = _busy_uc([busy_item, other_item], None)
+        checker.check = AsyncMock(
+            return_value=BusyVerdict(busy=True, reason="approval_pending")
+        )
+        sink.on_skipped = AsyncMock(side_effect=RuntimeError("db down"))
+
+        result = await uc.execute("req-1")
+
+        run_uc.execute.assert_awaited_once()  # s-other 만 실행
+        counts = (result.claimed, result.success, result.failed, result.skipped)
+        assert counts == (2, 1, 0, 1)
+
+    @pytest.mark.asyncio
+    async def test_option_on_without_checker_runs_and_warns(self):
+        """조립 누락(checker 미주입)은 기존 동작으로 — 경고만 남긴다."""
+        uc, _, run_uc, _ = _make_uc(claimed=[_skip_claimed()])
+        result = await uc.execute("req-1")
+        run_uc.execute.assert_awaited_once()
+        assert result.success == 1

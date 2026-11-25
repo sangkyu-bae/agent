@@ -38,6 +38,7 @@ export const mockSchedule = (
   last_run_at: null,
   created_at: '2026-07-03T00:00:00Z',
   updated_at: '2026-07-03T00:00:00Z',
+  skip_when_busy: false,
   ...overrides,
 });
 
@@ -175,6 +176,28 @@ export const mockExcelPreview = (fileId: string): ExcelPreviewResponse => ({
 });
 
 export const handlers = [
+  // firewall-agent: 방화벽 화면 자동 점검 기본값 — 보안 에이전트 미설정
+  http.get(`*${API_ENDPOINTS.ADMIN_FIREWALL_AUTOMATION}`, () =>
+    HttpResponse.json({
+      configured: false,
+      reason: 'AGENT_NOT_SET',
+      agent: null,
+      schedules: [],
+      alert_receiver: null,
+    }),
+  ),
+  // firewall-agent: 빌더 알림 수신 기본값 — 미설정
+  http.get('*/api/v1/agents/:agentId/alert-receiver', () =>
+    HttpResponse.json({
+      configured: false,
+      enabled: null,
+      skip_when_busy: null,
+      instruction_prefix: null,
+      token_hint: null,
+      inbound_path: null,
+      updated_at: null,
+    }),
+  ),
   // graph-rag-foundation (capabilities 기본 visible=false)
   ...graphRagHandlers,
   ...groundingJudgeHandlers,

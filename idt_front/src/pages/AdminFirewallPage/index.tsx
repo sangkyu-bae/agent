@@ -19,6 +19,7 @@ import FirewallApprovalsTab from './FirewallApprovalsTab';
 import FirewallAuditTab from './FirewallAuditTab';
 import FirewallBlocksTab from './FirewallBlocksTab';
 import FirewallDetectionTab from './FirewallDetectionTab';
+import FirewallAutomationBar from './FirewallAutomationBar';
 import FirewallStatusBar from './FirewallStatusBar';
 
 const AdminFirewallPage = () => {
@@ -95,6 +96,7 @@ const AdminFirewallPage = () => {
       {status?.enabled && (
         <>
           <FirewallStatusBar status={status} />
+          <FirewallAutomationBar />
 
           <Tabs
             aria-label="방화벽 관리"

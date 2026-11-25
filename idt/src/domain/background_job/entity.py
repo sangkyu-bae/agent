@@ -7,7 +7,8 @@ from datetime import datetime
 from typing import Literal
 
 JobStatus = Literal["queued", "running", "success", "failed"]
-JobSource = Literal["chat", "api"]
+# alert: firewall-agent design §4.3 — 알림 수신이 등록한 잡
+JobSource = Literal["chat", "api", "alert"]
 
 # jobs-page-revamp Design §3.1 — 통합 이력의 소스 구분
 JobHistoryType = Literal["manual", "schedule"]
@@ -18,7 +19,7 @@ class BackgroundJob:
     id: str
     user_id: str  # 등록자 = 실행 신원 (D3)
     agent_id: str
-    source: str  # chat|api
+    source: str  # chat|api|alert
     query: str
     session_id: str | None  # 미지정 시 실행 시 생성 후 역기입
     run_id: str | None  # ai_run 연결 (AGENT-OBS-001)

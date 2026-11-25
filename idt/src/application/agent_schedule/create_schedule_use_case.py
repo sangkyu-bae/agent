@@ -62,6 +62,7 @@ class CreateScheduleUseCase:
                 last_run_at=None,
                 created_at=now,
                 updated_at=now,
+                skip_when_busy=request.skip_when_busy,
             )
             await self._schedule_repo.save(schedule, request_id)
             self._logger.info(

@@ -12,9 +12,18 @@ export const SCHEDULE_RUN_STATUS = {
   RUNNING: 'running',
   SUCCESS: 'success',
   FAILED: 'failed',
+  /** firewall-agent: 바쁨 판정으로 실행하지 않은 회차 (skip_reason 동반) */
+  SKIPPED: 'skipped',
 } as const;
 export type ScheduleRunStatus =
   (typeof SCHEDULE_RUN_STATUS)[keyof typeof SCHEDULE_RUN_STATUS];
+
+/** firewall-agent design §10.1 — 건너뜀 사유 코드 → 화면 문구 */
+export const SCHEDULE_SKIP_REASON_LABEL: Record<string, string> = {
+  approval_pending: '승인 대기 중',
+  run_in_progress: '이전 실행 진행 중',
+  check_failed: '상태 확인 실패',
+};
 
 export interface ScheduleSpecPayload {
   schedule_type: ScheduleType;
@@ -37,6 +46,8 @@ export interface ScheduleCreateRequest {
   /** 항상 'Asia/Seoul' 명시 전송 */
   timezone: string;
   enabled: boolean;
+  /** 진행 중·승인 대기 건이 있으면 회차 건너뜀 (기본 false) */
+  skip_when_busy?: boolean;
 }
 
 /** PUT은 생성과 동일 스키마 */
@@ -55,6 +66,7 @@ export interface ScheduleResponse {
   last_run_at: string | null;
   created_at: string;
   updated_at: string;
+  skip_when_busy: boolean;
 }
 
 export interface ScheduleRunResponse {
@@ -67,6 +79,8 @@ export interface ScheduleRunResponse {
   session_id: string | null;
   run_id: string | null;
   error_message: string | null;
+  /** status=skipped 일 때만 (approval_pending | run_in_progress | check_failed) */
+  skip_reason?: string | null;
 }
 
 /** 생성 모드 전용 — 에이전트 생성 성공 후 순차 POST될 로컬 항목 */
@@ -77,6 +91,7 @@ export interface StagedSchedule {
   instruction: string;
   timezone: string;
   enabled: boolean;
+  skip_when_busy?: boolean;
 }
 
 export const MAX_SCHEDULES_PER_AGENT = 10;

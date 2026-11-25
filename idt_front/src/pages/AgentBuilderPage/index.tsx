@@ -483,6 +483,8 @@ const AgentBuilderPage = () => {
                     instruction: s.instruction,
                     timezone: s.timezone,
                     enabled: s.enabled,
+                    // firewall-agent analysis G1 — 첫 저장 전 체크한 건너뜀 옵션 유지
+                    skip_when_busy: s.skip_when_busy ?? false,
                   },
                 });
               } catch {

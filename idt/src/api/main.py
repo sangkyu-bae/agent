@@ -165,6 +165,18 @@ from src.api.routes.webhook_public_router import (
     router as webhook_public_router,
     get_invoke_webhook_use_case,
 )
+# firewall-agent design §4.1 — 에이전트 알림(Alertmanager 웹훅) 수신
+from src.api.routes.agent_alert_router import (
+    router as agent_alert_router,
+    get_get_alert_receiver_use_case,
+    get_list_alert_receipts_use_case,
+    get_rotate_alert_token_use_case,
+    get_upsert_alert_receiver_use_case,
+)
+from src.api.routes.alert_hook_public_router import (
+    router as alert_hook_public_router,
+    get_receive_alert_use_case,
+)
 from src.api.routes.rag_tool_router import (
     router as rag_tool_router,
     get_qdrant_client as rag_tool_get_qdrant_client,
@@ -3877,6 +3889,79 @@ def create_approval_factories(build_run_agent_uc):
     return decide_f, list_f, tick_f, approval_repo_factory, gate_settings_f
 
 
+def create_agent_alert_factories():
+    """agent-alert DI (firewall-agent design §4.1): 관리 4종 + 공개 수신, 요청 스코프.
+
+    수신은 실행하지 않고 잡만 등록한다(BackgroundJobWorker 가 실행). 수신 이력·잡 등록은
+    요청 세션 하나의 트랜잭션, 바쁨 판정은 자체 읽기 세션(AgentBusyChecker).
+    """
+    from src.application.agent_alert.manage_use_cases import (
+        GetAlertReceiverUseCase,
+        ListAlertReceiptsUseCase,
+        RotateAlertTokenUseCase,
+        UpsertAlertReceiverUseCase,
+    )
+    from src.application.agent_alert.receive_alert_use_case import (
+        ReceiveAlertUseCase,
+    )
+    from src.application.agent_automation.busy_checker import AgentBusyChecker
+    from src.infrastructure.agent_alert.repository import (
+        AlertReceiptRepository,
+        AlertReceiverRepository,
+    )
+    from src.infrastructure.agent_automation.activity_reader import (
+        AgentActivityReader,
+    )
+    from src.infrastructure.background_job.job_repository import (
+        BackgroundJobRepository,
+    )
+
+    app_logger = get_app_logger()
+    busy_checker = AgentBusyChecker(
+        session_factory=get_session_factory(),
+        reader_builder=lambda s: AgentActivityReader(s, app_logger),
+        logger=app_logger,
+        stale_seconds=settings.agent_busy_run_stale_seconds,
+    )
+
+    def _receivers(session: AsyncSession):
+        return AlertReceiverRepository(session, app_logger)
+
+    def _agents(session: AsyncSession):
+        return AgentDefinitionRepository(session=session, logger=app_logger)
+
+    def get_f(session: AsyncSession = Depends(get_session)):
+        return GetAlertReceiverUseCase(_receivers(session), _agents(session), app_logger)
+
+    def upsert_f(session: AsyncSession = Depends(get_session)):
+        return UpsertAlertReceiverUseCase(
+            _receivers(session), _agents(session), app_logger
+        )
+
+    def rotate_f(session: AsyncSession = Depends(get_session)):
+        return RotateAlertTokenUseCase(_receivers(session), _agents(session), app_logger)
+
+    def receipts_f(session: AsyncSession = Depends(get_session)):
+        return ListAlertReceiptsUseCase(
+            _receivers(session),
+            AlertReceiptRepository(session, app_logger),
+            _agents(session),
+            app_logger,
+        )
+
+    def receive_f(session: AsyncSession = Depends(get_session)):
+        return ReceiveAlertUseCase(
+            receiver_repo=_receivers(session),
+            receipt_repo=AlertReceiptRepository(session, app_logger),
+            job_repo=BackgroundJobRepository(session=session, logger=app_logger),
+            busy_checker=busy_checker,
+            logger=app_logger,
+            dedupe_seconds=settings.alert_hook_dedupe_seconds,
+        )
+
+    return get_f, upsert_f, rotate_f, receipts_f, receive_f
+
+
 def create_agent_schedule_factories(build_run_agent_uc, outbound_dispatcher=None):
     """agent-schedule DI: CRUD 요청-스코프 팩토리 + 트리거 싱글턴.
 
@@ -3907,10 +3992,11 @@ def create_agent_schedule_factories(build_run_agent_uc, outbound_dispatcher=None
     from src.application.agent_schedule.update_schedule_use_case import (
         UpdateScheduleUseCase,
     )
-    from src.infrastructure.agent_schedule.run_sink import DbScheduleRunSink
-    from src.infrastructure.agent_schedule.schedule_repository import (
-        ScheduleRepository,
+    from src.application.agent_automation.busy_checker import AgentBusyChecker
+    from src.infrastructure.agent_automation.activity_reader import (
+        AgentActivityReader,
     )
+    from src.infrastructure.agent_schedule.run_sink import DbScheduleRunSink
     from src.infrastructure.agent_schedule.schedule_repository import (
         ScheduleRepository,
     )
@@ -3962,6 +4048,13 @@ def create_agent_schedule_factories(build_run_agent_uc, outbound_dispatcher=None
         sink=DbScheduleRunSink(get_session_factory(), app_logger),
         logger=app_logger,
         outbound_dispatcher=outbound_dispatcher,
+        # firewall-agent design §2.2 — skip_when_busy 스케줄의 바쁨 판정
+        busy_checker=AgentBusyChecker(
+            session_factory=get_session_factory(),
+            reader_builder=lambda s: AgentActivityReader(s, app_logger),
+            logger=app_logger,
+            stale_seconds=settings.agent_busy_run_stale_seconds,
+        ),
     )
 
     def trigger_f():
@@ -6318,6 +6411,16 @@ def create_app() -> FastAPI:
         _wh_deliveries_f
     )
 
+    # Agent Alert DI (firewall-agent design §4.1) — Alertmanager 웹훅 수신
+    (
+        _al_get_f, _al_upsert_f, _al_rotate_f, _al_receipts_f, _al_receive_f,
+    ) = create_agent_alert_factories()
+    app.dependency_overrides[get_get_alert_receiver_use_case] = _al_get_f
+    app.dependency_overrides[get_upsert_alert_receiver_use_case] = _al_upsert_f
+    app.dependency_overrides[get_rotate_alert_token_use_case] = _al_rotate_f
+    app.dependency_overrides[get_list_alert_receipts_use_case] = _al_receipts_f
+    app.dependency_overrides[get_receive_alert_use_case] = _al_receive_f
+
     # Agent Schedule DI (agent-schedule Design §6.2 + outbound 훅 ①)
     (
         _sch_create_f, _sch_list_f, _sch_get_f, _sch_update_f, _sch_delete_f,
@@ -7000,6 +7103,8 @@ def create_app() -> FastAPI:
     app.include_router(background_job_router)
     app.include_router(agent_webhook_router)
     app.include_router(webhook_public_router)
+    app.include_router(agent_alert_router)
+    app.include_router(alert_hook_public_router)
     app.include_router(rag_tool_router)
     app.include_router(department_router)
     app.include_router(tool_catalog_router)

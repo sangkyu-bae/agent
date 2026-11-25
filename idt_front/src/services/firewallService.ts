@@ -4,6 +4,8 @@ import type {
   FirewallAlertsResponse,
   FirewallAuditParams,
   FirewallAuditResponse,
+  FirewallAutomationResponse,
+  FirewallAutomationUpdate,
   FirewallBlockListResponse,
   FirewallBlockRequest,
   FirewallBlockResponse,
@@ -52,5 +54,15 @@ export const firewallService = {
           ...(params.actor ? { actor: params.actor } : {}),
         },
       })
+      .then((r) => r.data),
+
+  // firewall-agent §4.4 — 보안 에이전트 자동 점검
+  getAutomation: () =>
+    authApiClient
+      .get<FirewallAutomationResponse>(API_ENDPOINTS.ADMIN_FIREWALL_AUTOMATION)
+      .then((r) => r.data),
+  updateAutomation: (body: FirewallAutomationUpdate) =>
+    authApiClient
+      .put<FirewallAutomationResponse>(API_ENDPOINTS.ADMIN_FIREWALL_AUTOMATION, body)
       .then((r) => r.data),
 };

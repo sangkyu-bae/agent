@@ -118,6 +118,7 @@ describe('ScheduleForm — 제출 payload', () => {
       instruction: '{today} 뉴스 요약',
       timezone: 'Asia/Seoul',
       enabled: true,
+      skip_when_busy: false,
     });
   });
 
@@ -133,6 +134,7 @@ describe('ScheduleForm — 제출 payload', () => {
       instruction: '연말 리포트',
       timezone: 'Asia/Seoul',
       enabled: true,
+      skip_when_busy: false,
     });
   });
 });
@@ -171,5 +173,33 @@ describe('ScheduleForm — 수정 모드 (initial 주입)', () => {
     expect(onSubmit).toHaveBeenCalledWith(
       expect.objectContaining({ enabled: false, instruction: '기존 메시지' }),
     );
+  });
+});
+
+// firewall-agent design §5.2 — 진행 중·승인 대기 건이 있으면 회차 건너뜀
+describe('ScheduleForm — 바쁠 때 건너뜀 옵션', () => {
+  const fillAndSubmit = async () => {
+    await userEvent.type(screen.getByLabelText('실행 메시지'), '방화벽 점검');
+    await userEvent.click(screen.getByRole('button', { name: '생성' }));
+  };
+
+  it('기본은 꺼져 있고 skip_when_busy=false 로 제출한다', async () => {
+    const { onSubmit } = renderForm();
+    const box = screen.getByRole('checkbox', { name: /승인 대기 중이면 건너뛰기/ });
+    expect(box).not.toBeChecked();
+    await fillAndSubmit();
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ skip_when_busy: false }));
+  });
+
+  it('체크하면 skip_when_busy=true 로 제출한다', async () => {
+    const { onSubmit } = renderForm();
+    await userEvent.click(screen.getByRole('checkbox', { name: /승인 대기 중이면 건너뛰기/ }));
+    await fillAndSubmit();
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ skip_when_busy: true }));
+  });
+
+  it('수정 모드에서 기존 값을 불러온다', () => {
+    renderForm({ initial: mockSchedule({ skip_when_busy: true }) });
+    expect(screen.getByRole('checkbox', { name: /승인 대기 중이면 건너뛰기/ })).toBeChecked();
   });
 });

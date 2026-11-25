@@ -102,7 +102,7 @@ async def create_schedule(
 ):
     request_id = str(uuid.uuid4())
     try:
-        return await use_case.execute(agent_id, current_user.id, body, request_id)
+        return await use_case.execute(agent_id, str(current_user.id), body, request_id)
     except PermissionError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     except ValueError as e:
@@ -117,7 +117,7 @@ async def list_schedules(
 ):
     request_id = str(uuid.uuid4())
     try:
-        return await use_case.execute(agent_id, current_user.id, request_id)
+        return await use_case.execute(agent_id, str(current_user.id), request_id)
     except PermissionError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     except ValueError as e:
@@ -136,7 +136,7 @@ async def get_schedule(
     request_id = str(uuid.uuid4())
     try:
         return await use_case.execute(
-            agent_id, schedule_id, current_user.id, request_id
+            agent_id, schedule_id, str(current_user.id), request_id
         )
     except PermissionError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
@@ -157,7 +157,7 @@ async def update_schedule(
     request_id = str(uuid.uuid4())
     try:
         return await use_case.execute(
-            agent_id, schedule_id, current_user.id, body, request_id
+            agent_id, schedule_id, str(current_user.id), body, request_id
         )
     except PermissionError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
@@ -177,7 +177,7 @@ async def delete_schedule(
 ):
     request_id = str(uuid.uuid4())
     try:
-        await use_case.execute(agent_id, schedule_id, current_user.id, request_id)
+        await use_case.execute(agent_id, schedule_id, str(current_user.id), request_id)
     except PermissionError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     except ValueError as e:
@@ -198,7 +198,7 @@ async def toggle_schedule(
     request_id = str(uuid.uuid4())
     try:
         return await use_case.execute(
-            agent_id, schedule_id, current_user.id, body.enabled, request_id
+            agent_id, schedule_id, str(current_user.id), body.enabled, request_id
         )
     except PermissionError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
@@ -221,7 +221,7 @@ async def list_schedule_runs(
     request_id = str(uuid.uuid4())
     try:
         return await use_case.execute(
-            agent_id, schedule_id, current_user.id, limit, offset, request_id
+            agent_id, schedule_id, str(current_user.id), limit, offset, request_id
         )
     except PermissionError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))

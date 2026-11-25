@@ -456,6 +456,44 @@ describe('AgentBuilderPage — 스케줄 staged 일괄 등록 (agent-schedule)',
     expect(captured[1].body).toMatchObject({ name: '매일 18:00 실행' });
   });
 
+  // firewall-agent analysis G1 — 첫 저장 전 체크한 "바쁘면 건너뜀"이 POST 본문에서 빠지던 회귀
+  it('staged 스케줄의 바쁘면 건너뜀 체크가 생성 POST에 실린다', async () => {
+    const captured: Array<Record<string, unknown>> = [];
+    server.use(
+      mockCreateAgent('new-agent-skip'),
+      http.post('*/api/v1/agents/:agentId/schedules', async ({ params, request }) => {
+        const body = (await request.json()) as Record<string, unknown>;
+        captured.push(body);
+        return HttpResponse.json(
+          { id: `sch-${captured.length}`, agent_id: params.agentId, ...body },
+          { status: 201 },
+        );
+      }),
+    );
+
+    await enterStudio();
+    await userEvent.type(screen.getByLabelText('에이전트 이름'), '건너뜀 에이전트');
+    await fillInstruction();
+
+    await userEvent.click(screen.getByRole('button', { name: '스케줄' }));
+    await userEvent.click(screen.getByRole('button', { name: /스케줄 추가/ }));
+    await userEvent.selectOptions(screen.getByLabelText('시'), '9');
+    await userEvent.type(screen.getByLabelText('실행 메시지'), '방화벽 점검');
+    await userEvent.click(
+      screen.getByLabelText(/이전 실행이 진행 중이거나 승인 대기 중이면 건너뛰기/),
+    );
+    await userEvent.click(screen.getByRole('button', { name: '생성' }));
+    await addStagedSchedule('18', '저녁 점검');
+
+    await userEvent.click(screen.getByRole('button', { name: /^저장$/ }));
+
+    expect(
+      await screen.findByText(/스케줄 2건이 함께 등록되었습니다/),
+    ).toBeInTheDocument();
+    expect(captured[0]).toMatchObject({ skip_when_busy: true });
+    expect(captured[1]).toMatchObject({ skip_when_busy: false });
+  });
+
   it('일부 스케줄 등록 실패 시 결과 메시지에 실패 건수를 표시한다', async () => {
     let calls = 0;
     server.use(

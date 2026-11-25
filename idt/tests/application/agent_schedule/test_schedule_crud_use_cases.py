@@ -95,6 +95,18 @@ class TestCreateScheduleUseCase:
         assert saved.next_run_at is not None
         assert resp.agent_id == "a1"
         assert resp.instruction == "{today} 시황 요약해줘"
+        # firewall-agent design §3.1 — 기본값 off (기존 동작 보존)
+        assert saved.skip_when_busy is False and resp.skip_when_busy is False
+
+    @pytest.mark.asyncio
+    async def test_create_with_skip_when_busy(self):
+        schedule_repo, agent_repo, logger = _mocks()
+        uc = CreateScheduleUseCase(schedule_repo, agent_repo, logger)
+        resp = await uc.execute(
+            "a1", "u1", _create_request(skip_when_busy=True), "req-1"
+        )
+        assert schedule_repo.save.call_args[0][0].skip_when_busy is True
+        assert resp.skip_when_busy is True
 
     @pytest.mark.asyncio
     async def test_create_agent_not_found_raises(self):
@@ -194,6 +206,15 @@ class TestUpdateScheduleUseCase:
         # 18:00 KST = 09:00 UTC 로 재계산됨
         assert updated.next_run_at.hour == 9
         assert resp.name == "아침 요약"
+
+    @pytest.mark.asyncio
+    async def test_update_sets_skip_when_busy(self):
+        schedule_repo, _, logger = _mocks()
+        uc = UpdateScheduleUseCase(schedule_repo, logger)
+        await uc.execute(
+            "a1", "s1", "u1", _create_request(skip_when_busy=True), "req-1"
+        )
+        assert schedule_repo.update.call_args[0][0].skip_when_busy is True
 
     @pytest.mark.asyncio
     async def test_update_non_owner_forbidden(self):

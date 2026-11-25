@@ -255,6 +255,8 @@ export const API_ENDPOINTS = {
   ADMIN_FIREWALL_ALERTS: '/api/v1/admin/firewall/alerts',
   ADMIN_FIREWALL_EVENTS: '/api/v1/admin/firewall/events',
   ADMIN_FIREWALL_AUDIT: '/api/v1/admin/firewall/audit',
+  /** firewall-agent: 보안 에이전트 자동 점검 상태·토글 */
+  ADMIN_FIREWALL_AUTOMATION: '/api/v1/admin/firewall/automation',
 
   // Admin — MCP Server Registry
   MCP_SERVERS: '/api/v1/mcp-registry',
@@ -366,6 +368,12 @@ export const API_ENDPOINTS = {
     `/api/v1/agents/${agentId}/webhook/deliveries`,
   /** 공개 inbound 경로 — API_BASE_URL과 조합해 외부 시스템에 전달할 URL 표시용 */
   WEBHOOK_INBOUND: (agentId: string) => `/api/v1/webhooks/agents/${agentId}`,
+  /** firewall-agent: 알림(Alertmanager 웹훅) 수신 설정 — 소유자 전용 */
+  AGENT_ALERT_RECEIVER: (agentId: string) => `/api/v1/agents/${agentId}/alert-receiver`,
+  AGENT_ALERT_RECEIVER_TOKEN: (agentId: string) =>
+    `/api/v1/agents/${agentId}/alert-receiver/token`,
+  AGENT_ALERT_RECEIVER_RECEIPTS: (agentId: string) =>
+    `/api/v1/agents/${agentId}/alert-receiver/receipts`,
 
   // Embedding Models
   EMBEDDING_MODELS: '/api/v1/embedding-models',

@@ -100,9 +100,13 @@ def test_wire_enabled_registers_seven_routes(monkeypatch):
         "/api/v1/admin/firewall/status", "/api/v1/admin/firewall/blocks",
         "/api/v1/admin/firewall/blocks/{ip}", "/api/v1/admin/firewall/alerts",
         "/api/v1/admin/firewall/events", "/api/v1/admin/firewall/audit",
+        # firewall-agent design §4.4 — 자동 점검 (GET·PUT)
+        "/api/v1/admin/firewall/automation",
     }
     methods = app.openapi()["paths"]["/api/v1/admin/firewall/blocks"]
     assert set(methods) == {"get", "post"}
+    automation = app.openapi()["paths"]["/api/v1/admin/firewall/automation"]
+    assert set(automation) == {"get", "put"}
 
     admin = User(email="a@t", password_hash="h", role=UserRole.ADMIN,
                  status=UserStatus.APPROVED, id=1)

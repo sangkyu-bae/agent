@@ -155,3 +155,24 @@ class TestDbScheduleRunSink:
 
         assert model.status == "failed"
         assert model.error_message == "boom"
+
+    @pytest.mark.asyncio
+    async def test_on_skipped_inserts_finished_skipped_record(
+        self, mock_session, mock_logger
+    ):
+        """firewall-agent design §2.2 — 건너뛴 회차도 이력 1행 (시작=종료)."""
+        factory = _make_session_factory(mock_session)
+        sink = DbScheduleRunSink(session_factory=factory, logger=mock_logger)
+
+        await sink.on_skipped(
+            _schedule(),
+            scheduled_for=datetime(2026, 7, 2, 0, 0),
+            reason="approval_pending",
+            request_id="req-1",
+        )
+
+        added = mock_session.add.call_args[0][0]
+        assert added.status == "skipped"
+        assert added.skip_reason == "approval_pending"
+        assert added.finished_at == added.started_at
+        assert added.agent_id == "a1"

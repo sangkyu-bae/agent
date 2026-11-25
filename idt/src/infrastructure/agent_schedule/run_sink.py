@@ -75,3 +75,34 @@ class DbScheduleRunSink(ScheduleRunSinkInterface):
             run_record_id=run_record_id,
             status=status,
         )
+
+    async def on_skipped(
+        self,
+        schedule: AgentSchedule,
+        scheduled_for: datetime,
+        *,
+        reason: str,
+        request_id: str,
+    ) -> None:
+        now = _utc_now()
+        async with self._session_factory() as session:
+            async with session.begin():
+                session.add(
+                    AgentScheduleRunModel(
+                        id=str(uuid.uuid4()),
+                        schedule_id=schedule.id,
+                        agent_id=schedule.agent_id,
+                        status="skipped",
+                        skip_reason=reason,
+                        scheduled_for=scheduled_for,
+                        started_at=now,
+                        finished_at=now,
+                        request_id=request_id,
+                    )
+                )
+        self._logger.info(
+            "schedule run skipped",
+            request_id=request_id,
+            schedule_id=schedule.id,
+            reason=reason,
+        )

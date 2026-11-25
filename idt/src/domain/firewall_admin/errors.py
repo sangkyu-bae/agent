@@ -87,3 +87,11 @@ class GrafanaUnavailableError(FirewallAdminError):
     http_status = 503
     # 탐지·감사 탭이 함께 쓰므로 탭 이름을 넣지 않는다 (Check G4)
     default_message = "Grafana에서 정보를 가져올 수 없습니다. Grafana가 실행 중인지 확인하세요"
+
+
+class AutomationNotConfiguredError(FirewallAdminError):
+    """firewall-agent design §4.4 — 토글 대상(보안 에이전트·스케줄·알림 수신)이 없다."""
+
+    code = "AUTOMATION_NOT_CONFIGURED"
+    http_status = 422
+    default_message = "자동 점검 대상이 설정되지 않았습니다"

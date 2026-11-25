@@ -372,6 +372,12 @@ class Settings(BaseSettings):
     background_job_max_concurrency: int = 2
     # 내장 스케줄러 틱 주기 (D1) — 외부 cron 대체
     background_schedule_tick_interval_sec: float = 30.0
+    # firewall-agent design §10.2: 바쁨 판정에서 이보다 오래된 status=running 회차는
+    # 고아(서버 재시작 등)로 보고 세지 않는다.
+    agent_busy_run_stale_seconds: int = 1800
+    # firewall-agent design §10.2: 알림 수신(Alertmanager 웹훅) — 본문 상한, 재전송 중복 창(초)
+    alert_hook_max_body_bytes: int = 262144
+    alert_hook_dedupe_seconds: int = 600
     # approval-gate Check G5: 예약 집행 tick 주기(초). 워커 루프가 호출한다.
     # 집행 지연 상한 = 이 값 (금리 00시 집행이면 최대 이만큼 늦어질 수 있다).
     approval_executor_tick_seconds: float = 60.0
@@ -424,6 +430,10 @@ class Settings(BaseSettings):
     # Grafana 서비스 계정 토큰(Viewer). 비면 탐지·감사 조회가 GRAFANA_UNAVAILABLE.
     # 소비: firewall_admin_di.build_firewall_admin() → GrafanaClient(token=).
     firewall_admin_grafana_token: str = ""
+    # firewall-agent design §4.4: 방화벽 화면 자동 점검 토글 대상 보안 에이전트 ID.
+    # 비어 있으면 화면에 "보안 에이전트 미설정" 안내만 나온다.
+    # 소비: firewall_admin_di._automation_factory() → FirewallAutomationService(agent_id=).
+    firewall_admin_agent_id: str = ""
 
     # Answer Citation Verification (answer-citation-verification Design §10.1)
     # 답변 [n] 인용 + 근거 판정 같은 호출로 검증 + 칩 인용 표시. 킬스위치 기본 off —
