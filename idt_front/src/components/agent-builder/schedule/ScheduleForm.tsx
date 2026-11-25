@@ -84,6 +84,8 @@ const ScheduleForm = ({
   const [runDate, setRunDate] = useState(initial?.spec.run_date ?? '');
   const [timeOfDay, setTimeOfDay] = useState(initial?.spec.time_of_day ?? '09:00');
   const [instruction, setInstruction] = useState(initial?.instruction ?? '');
+  // firewall-agent design §5.2 — 진행 중·승인 대기 건이 있으면 회차 건너뜀
+  const [skipWhenBusy, setSkipWhenBusy] = useState(initial?.skip_when_busy ?? false);
   const [clientError, setClientError] = useState<string | null>(null);
 
   const preview = inputMode === 'form' ? buildCronExpr(cronForm) : cronExprInput;
@@ -138,6 +140,7 @@ const ScheduleForm = ({
       instruction: trimmed,
       timezone: DEFAULT_SCHEDULE_TIMEZONE,
       enabled: initial?.enabled ?? true,
+      skip_when_busy: skipWhenBusy,
     });
   };
 
@@ -341,6 +344,22 @@ const ScheduleForm = ({
           {instruction.trim().length}/{MAX_INSTRUCTION_LENGTH}
         </span>
       </div>
+
+      {/* 바쁠 때 건너뜀 */}
+      <label className="mt-4 flex cursor-pointer items-start gap-2.5 text-[13px] text-zinc-700">
+        <input
+          type="checkbox"
+          checked={skipWhenBusy}
+          onChange={(e) => setSkipWhenBusy(e.target.checked)}
+          className="mt-0.5 h-4 w-4 rounded border-zinc-300 accent-violet-600"
+        />
+        <span>
+          이전 실행이 진행 중이거나 승인 대기 중이면 건너뛰기
+          <span className="mt-0.5 block text-[12px] text-zinc-400">
+            같은 요청이 승인함에 쌓이지 않게 합니다. 건너뛴 회차는 이력에 남습니다.
+          </span>
+        </span>
+      </label>
 
       {error && (
         <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-[13px] text-red-600">{error}</p>

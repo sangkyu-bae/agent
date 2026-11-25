@@ -7,6 +7,7 @@ import type {
 } from '@/types/agentSchedule';
 import {
   MAX_SCHEDULES_PER_AGENT,
+  SCHEDULE_SKIP_REASON_LABEL,
   SCHEDULE_TYPE,
 } from '@/types/agentSchedule';
 import {
@@ -36,6 +37,7 @@ const RUN_STATUS_BADGE: Record<ScheduleRunStatus, { label: string; className: st
   running: { label: '실행중', className: 'bg-amber-100 text-amber-700 animate-pulse' },
   success: { label: '성공', className: 'bg-emerald-100 text-emerald-700' },
   failed: { label: '실패', className: 'bg-red-100 text-red-600' },
+  skipped: { label: '건너뜀', className: 'bg-zinc-100 text-zinc-500' },
 };
 
 const EmptyState = () => (
@@ -301,6 +303,11 @@ const ScheduleCard = ({
                 일시중지
               </span>
             )}
+            {schedule.skip_when_busy && (
+              <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[10.5px] font-semibold text-violet-600">
+                바쁘면 건너뜀
+              </span>
+            )}
           </div>
           <p className="mt-1 text-[12px] text-zinc-400">
             다음 실행: {schedule.next_run_at ? formatDate(schedule.next_run_at) : '-'}
@@ -400,6 +407,11 @@ const ScheduleRunsList = ({ agentId, scheduleId }: { agentId: string; scheduleId
                 {run.finished_at && ` → ${formatDate(run.finished_at)}`}
               </span>
             </div>
+            {run.status === 'skipped' && run.skip_reason && (
+              <p className="mt-0.5 pl-1 text-[12px] text-zinc-400">
+                {SCHEDULE_SKIP_REASON_LABEL[run.skip_reason] ?? run.skip_reason}
+              </p>
+            )}
             {run.error_message && (
               <p className="mt-0.5 pl-1 text-[12px] text-red-500">{run.error_message}</p>
             )}

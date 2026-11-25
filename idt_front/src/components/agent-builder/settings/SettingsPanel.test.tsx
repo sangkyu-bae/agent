@@ -15,6 +15,16 @@ vi.mock('./WebhookSection', () => ({
   ),
 }));
 
+// firewall-agent: 알림 수신 섹션도 서버 상태 훅을 쓴다 — 실기능은 AlertReceiverSection.test.tsx
+vi.mock('./AlertReceiverSection', () => ({
+  default: ({ agentId }: { agentId: string | null }) => (
+    <section>
+      <h3>알림 수신</h3>
+      <div data-testid="alert-receiver-section" data-agent-id={agentId ?? ''} />
+    </section>
+  ),
+}));
+
 const renderPanel = (
   maxIterations = 25,
   agentId: string | null = null,

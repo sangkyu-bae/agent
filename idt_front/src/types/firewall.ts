@@ -94,6 +94,7 @@ export const FIREWALL_BLOCKS_REFETCH_MS = 10_000;
 
 /** 오류 코드별 화면 문구 — Design §6.1. 없는 코드는 서버 메시지를 쓴다. */
 export const FIREWALL_ERROR_MESSAGES: Record<string, string> = {
+  AUTOMATION_NOT_CONFIGURED: '자동 점검 대상이 설정되지 않았습니다.',
   INVALID_IP: 'IPv4 주소 한 개를 입력하세요.',
   INVALID_REASON: '사유를 1~500자로 입력하세요.',
   FORBIDDEN_WHITELIST: '보호 대상 주소라 차단할 수 없습니다.',
@@ -267,3 +268,59 @@ export const FIREWALL_ACTOR_ADMIN_PREFIX = 'sangplusbot/admin:';
 export const FIREWALL_ACTOR_AGENT_PREFIX = 'mcp-firewall-server';
 /** 관리자 화면 요청 ID 형식 adm-<user_id>-<난수> — 해제는 actor 가 없어 여기서 사용자를 읽는다 */
 export const FIREWALL_ADMIN_REQUEST_ID_RE = /^adm-(\d+)-/;
+
+
+// ── 자동 점검 (firewall-agent design §4.4·§5.1) ──────────────────────────
+
+export interface FirewallAutomationRun {
+  status: string;
+  skip_reason: string | null;
+  started_at: string;
+}
+
+export interface FirewallAutomationSchedule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  cron_expr: string | null;
+  skip_when_busy: boolean;
+  next_run_at: string | null;
+  last_run: FirewallAutomationRun | null;
+}
+
+export interface FirewallAutomationAlert {
+  configured: boolean;
+  enabled: boolean | null;
+  skip_when_busy: boolean | null;
+  last_result: string | null;
+  last_received_at: string | null;
+}
+
+export interface FirewallAutomationResponse {
+  configured: boolean;
+  reason: 'AGENT_NOT_SET' | 'AGENT_NOT_FOUND' | null;
+  agent: { id: string; name: string } | null;
+  schedules: FirewallAutomationSchedule[];
+  alert_receiver: FirewallAutomationAlert | null;
+}
+
+export interface FirewallAutomationUpdate {
+  schedule_enabled?: boolean;
+  alert_enabled?: boolean;
+}
+
+export const FIREWALL_AUTOMATION_REFETCH_MS = 30_000;
+
+/** 스케줄 회차 상태·알림 수신 결과 → 화면 문구 */
+export const FIREWALL_AUTOMATION_RESULT_LABEL: Record<string, string> = {
+  running: '실행 중',
+  success: '성공',
+  failed: '실패',
+  skipped: '건너뜀',
+  enqueued: '실행',
+  duplicate: '중복 무시',
+  resolved_only: '해소 알림',
+  disabled: '꺼짐',
+  skipped_busy: '건너뜀',
+  invalid_payload: '형식 오류',
+};

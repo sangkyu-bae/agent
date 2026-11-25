@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { queryClient } from '@/lib/queryClient';
+import { http, HttpResponse } from 'msw';
 import { server } from '@/__tests__/mocks/server';
 import {
   resetScheduleStore,
@@ -117,6 +118,38 @@ describe('SchedulePanel — edit 모드', () => {
     expect(await screen.findByText('성공')).toBeInTheDocument();
     expect(screen.getByText('실패')).toBeInTheDocument();
     expect(screen.getByText('LLM timeout')).toBeInTheDocument();
+  });
+
+  it('건너뛴 회차는 사유와 함께 표시한다 (firewall-agent)', async () => {
+    server.use(
+      http.get('*/api/v1/agents/:agentId/schedules/:scheduleId/runs', ({ params }) =>
+        HttpResponse.json([
+          {
+            id: 'run-s',
+            schedule_id: params.scheduleId as string,
+            status: 'skipped',
+            skip_reason: 'approval_pending',
+            scheduled_for: '2026-07-03T00:00:00Z',
+            started_at: '2026-07-03T00:00:01Z',
+            finished_at: '2026-07-03T00:00:01Z',
+            session_id: null,
+            run_id: null,
+            error_message: null,
+          },
+        ]),
+      ),
+    );
+    seedSchedules('agent-1', [mockSchedule()]);
+    renderPanel();
+    await userEvent.click(await screen.findByRole('button', { name: /이력 보기/ }));
+    expect(await screen.findByText('건너뜀')).toBeInTheDocument();
+    expect(screen.getByText('승인 대기 중')).toBeInTheDocument();
+  });
+
+  it('건너뜀 옵션이 켜진 스케줄은 카드에 표시한다', async () => {
+    seedSchedules('agent-1', [mockSchedule({ skip_when_busy: true })]);
+    renderPanel();
+    expect(await screen.findByText('바쁘면 건너뜀')).toBeInTheDocument();
   });
 
   it('10개 도달 시 추가 버튼이 비활성화된다', async () => {

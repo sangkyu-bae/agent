@@ -306,6 +306,15 @@ export const queryKeys = {
       [...queryKeys.backgroundJobs.all, 'mySchedules'] as const,
   },
 
+  // ── Agent Alert Receiver (firewall-agent) ─────────────
+  agentAlertReceiver: {
+    all: ['agentAlertReceiver'] as const,
+    config: (agentId: string) =>
+      [...queryKeys.agentAlertReceiver.all, 'config', agentId] as const,
+    receipts: (agentId: string) =>
+      [...queryKeys.agentAlertReceiver.all, 'receipts', agentId] as const,
+  },
+
   // ── Agent Webhook (agent-webhook) ──────────────────────
   agentWebhook: {
     all: ['agentWebhook'] as const,
@@ -359,6 +368,8 @@ export const queryKeys = {
     firewallStatus: () => [...queryKeys.admin.firewall(), 'status'] as const,
     firewallBlocks: () => [...queryKeys.admin.firewall(), 'blocks'] as const,
     firewallAlerts: () => [...queryKeys.admin.firewall(), 'alerts'] as const,
+    /** firewall-agent: 자동 점검 */
+    firewallAutomation: () => [...queryKeys.admin.firewall(), 'automation'] as const,
     firewallEvents: (params: { range: string; action: string }) =>
       [...queryKeys.admin.firewall(), 'events', params] as const,
     firewallAudit: (params: { range: string; event: string; ip?: string; actor?: string }) =>

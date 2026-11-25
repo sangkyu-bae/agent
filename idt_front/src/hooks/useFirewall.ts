@@ -14,7 +14,9 @@ import {
   FIREWALL_ERROR_MESSAGES,
   FIREWALL_OBSERVABILITY_REFETCH_MS,
   FIREWALL_STATUS_REFETCH_MS,
+  FIREWALL_AUTOMATION_REFETCH_MS,
   type FirewallAuditParams,
+  type FirewallAutomationUpdate,
   type FirewallBlockRequest,
   type FirewallEventsParams,
   type FirewallStatus,
@@ -81,6 +83,27 @@ export const useUnblockIp = () => {
     mutationFn: (ip: string) => firewallService.unblock(ip),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.admin.firewallBlocks() });
+    },
+  });
+};
+
+// ── 자동 점검 (firewall-agent design §4.4) ──────────────────────────────
+
+export const useFirewallAutomation = (options: { enabled?: boolean } = {}) =>
+  useQuery({
+    queryKey: queryKeys.admin.firewallAutomation(),
+    queryFn: firewallService.getAutomation,
+    enabled: options.enabled ?? true,
+    retry: false,
+    refetchInterval: FIREWALL_AUTOMATION_REFETCH_MS,
+  });
+
+export const useUpdateFirewallAutomation = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: FirewallAutomationUpdate) => firewallService.updateAutomation(body),
+    onSuccess: (data) => {
+      queryClient.setQueryData(queryKeys.admin.firewallAutomation(), data);
     },
   });
 };

@@ -5,6 +5,7 @@ import type {
   FirewallAlertRule,
   FirewallAlertsResponse,
   FirewallAuditResponse,
+  FirewallAutomationResponse,
   FirewallBlockListResponse,
   FirewallEventsResponse,
   FirewallBlockResponse,
@@ -259,3 +260,41 @@ export const FIREWALL_APPROVALS: ApprovalItem[] = [
 export const firewallError = (code: string, message: string, details?: unknown) => ({
   detail: { code, message, request_id: 'adm-17-err', ...(details ? { details } : {}) },
 });
+
+// ── firewall-agent: 자동 점검 ────────────────────────────────────────────
+
+export const FIREWALL_AUTOMATION_NOT_SET: FirewallAutomationResponse = {
+  configured: false,
+  reason: 'AGENT_NOT_SET',
+  agent: null,
+  schedules: [],
+  alert_receiver: null,
+};
+
+export const FIREWALL_AUTOMATION_ON: FirewallAutomationResponse = {
+  configured: true,
+  reason: null,
+  agent: { id: 'agent-fw', name: '방화벽 보안 에이전트' },
+  schedules: [
+    {
+      id: 'sch-1',
+      name: '10분 점검',
+      enabled: true,
+      cron_expr: '*/10 * * * *',
+      skip_when_busy: true,
+      next_run_at: '2026-11-24T05:20:00',
+      last_run: {
+        status: 'skipped',
+        skip_reason: 'approval_pending',
+        started_at: '2026-11-24T05:10:00',
+      },
+    },
+  ],
+  alert_receiver: {
+    configured: true,
+    enabled: true,
+    skip_when_busy: true,
+    last_result: 'enqueued',
+    last_received_at: '2026-11-24T05:12:00',
+  },
+};

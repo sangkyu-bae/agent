@@ -6,6 +6,7 @@ import type { JobStatus } from '@/types/backgroundJob';
 const badgeClass = (status: JobStatus): string => {
   if (status === 'success') return 'text-emerald-600';
   if (status === 'failed') return 'text-red-500';
+  if (status === 'skipped') return 'text-zinc-500';
   return 'text-violet-600';
 };
 
@@ -26,6 +27,13 @@ const StatusIcon = ({ status }: { status: JobStatus }) => {
           fill="currentColor"
           d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
         />
+      </svg>
+    );
+  }
+  if (status === 'skipped') {
+    return (
+      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
     );
   }
