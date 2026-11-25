@@ -13,17 +13,21 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.routes import admin_firewall_router
+from src.application.firewall_admin.automation_service import FirewallAutomationService
 from src.application.firewall_admin.control_service import FirewallControlService
 from src.application.firewall_admin.observability_service import (
     FirewallObservabilityService,
 )
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
+from src.infrastructure.firewall_admin.automation_adapter import AutomationAdapter
 from src.infrastructure.firewall_admin.fwctl_client import FwctlClient
 from src.infrastructure.firewall_admin.grafana_client import GrafanaClient
 from src.infrastructure.logging import StructuredLogger
+from src.infrastructure.persistence.database import get_session
 
 # fireware observability/grafana/provisioning/dashboards/firewall-lab.json 의 uid
 DASHBOARD_PATH = "/d/fireware-firewall-lab"
@@ -35,6 +39,9 @@ class FirewallAdminParts:
     observability: FirewallObservabilityService
     fwctl: FwctlClient
     grafana: GrafanaClient
+    # firewall-agent design §4.4 — 자동 점검 대상 보안 에이전트 ("" 이면 미설정)
+    automation_agent_id: str = ""
+    logger: LoggerInterface | None = None
 
 
 _parts: FirewallAdminParts | None = None
@@ -42,7 +49,7 @@ _built = False
 
 
 def build_firewall_admin(settings: Any, logger: LoggerInterface) -> FirewallAdminParts | None:
-    """설정 → 부품. 소비: config.firewall_admin_* 5개."""
+    """설정 → 부품. 소비: config.firewall_admin_* 6개."""
     if not settings.firewall_admin_enabled:
         return None
     try:
@@ -70,6 +77,10 @@ def build_firewall_admin(settings: Any, logger: LoggerInterface) -> FirewallAdmi
             observability=FirewallObservabilityService(grafana, logger=logger),
             fwctl=fwctl,
             grafana=grafana,
+            automation_agent_id=(
+                getattr(settings, "firewall_admin_agent_id", "") or ""
+            ).strip(),
+            logger=logger,
         )
     except Exception as e:  # noqa: BLE001 — 부가 기능 조립 실패가 기동을 막으면 안 된다
         logger.warning("firewall_admin assembly failed — feature disabled", exception=e)
@@ -98,8 +109,27 @@ def wire_firewall_admin(app: FastAPI) -> bool:
     app.dependency_overrides[admin_firewall_router.get_observability_service] = (
         lambda: parts.observability
     )
+    app.dependency_overrides[admin_firewall_router.get_automation_service] = (
+        _automation_factory(parts)
+    )
     app.include_router(admin_firewall_router.router)
     return True
+
+
+def _automation_factory(parts: FirewallAdminParts):
+    """요청 세션 스코프 — 상태 변경은 get_session 의 트랜잭션으로 커밋된다 (DB-001)."""
+    logger = parts.logger or StructuredLogger("firewall_admin")
+
+    def factory(
+        session: AsyncSession = Depends(get_session),
+    ) -> FirewallAutomationService:
+        return FirewallAutomationService(
+            AutomationAdapter(session, logger),
+            agent_id=parts.automation_agent_id,
+            logger=logger,
+        )
+
+    return factory
 
 
 async def close_firewall_admin() -> None:

@@ -106,4 +106,6 @@ def test_I4_default_is_off_and_tokens_empty():
     assert set(defaults) == {
         "firewall_admin_enabled", "firewall_admin_fwctl_url", "firewall_admin_fwctl_token",
         "firewall_admin_grafana_url", "firewall_admin_grafana_token",
+        "firewall_admin_agent_id",  # firewall-agent design §4.4 — 기본 "" (미설정)
     }
+    assert defaults["firewall_admin_agent_id"] == ""

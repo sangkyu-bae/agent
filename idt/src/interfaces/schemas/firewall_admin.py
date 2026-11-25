@@ -5,7 +5,7 @@ Design Ref: firewall-admin-console §4.2, §7 — 응답에 토큰 필드를 두
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, StrictInt, StrictStr
@@ -16,7 +16,12 @@ from src.application.firewall_admin.observability_service import (
     AuditView,
     EventsView,
 )
-from src.domain.firewall_admin.models import BlockList, BlockResult, UnblockResult
+from src.domain.firewall_admin.models import (
+    AutomationState,
+    BlockList,
+    BlockResult,
+    UnblockResult,
+)
 
 AlertStateLiteral = Literal["firing", "pending", "normal", "nodata", "error"]
 
@@ -105,7 +110,8 @@ class BlockResponse(BaseModel):
     @classmethod
     def from_domain(cls, r: BlockResult) -> BlockResponse:
         return cls(
-            ip=r.ip, ttl_seconds=r.ttl_seconds, expires_at=r.expires_at, reason=r.reason,
+            ip=r.ip, ttl_seconds=r.ttl_seconds, expires_at=r.expires_at,
+            reason=r.reason,
             dry_run=r.dry_run, request_id=r.request_id,
         )
 
@@ -237,7 +243,8 @@ class AuditResponse(BaseModel):
             range=v.range,
             items=[
                 AuditRecordResponse(
-                    ts=a.ts, request_id=a.request_id, event=a.event, actor=a.actor, ip=a.ip,
+                    ts=a.ts, request_id=a.request_id, event=a.event, actor=a.actor,
+                    ip=a.ip,
                     ttl_seconds=a.ttl_seconds, reason=a.reason, result=a.result,
                     status=a.status, error_code=a.error_code, dry_run=a.dry_run,
                 )
@@ -246,3 +253,99 @@ class AuditResponse(BaseModel):
             count=len(v.items),
             fetched_at=v.fetched_at,
         )
+
+
+# ── 자동 점검 (firewall-agent design §4.4) ──────────────────────────────
+
+
+def _as_utc(dt: datetime | None) -> datetime | None:
+    """자동 점검 시각(UTC naive)에 +00:00 을 붙인다.
+
+    approval-gate G12 선례.
+    """
+    if dt is None or dt.tzinfo is not None:
+        return dt
+    return dt.replace(tzinfo=UTC)
+
+
+class AutomationRunResponse(BaseModel):
+    status: str
+    skip_reason: str | None
+    started_at: datetime
+
+
+class AutomationScheduleResponse(BaseModel):
+    id: str
+    name: str
+    enabled: bool
+    cron_expr: str | None
+    skip_when_busy: bool
+    next_run_at: datetime | None
+    last_run: AutomationRunResponse | None
+
+
+class AutomationAlertResponse(BaseModel):
+    configured: bool
+    enabled: bool | None
+    skip_when_busy: bool | None
+    last_result: str | None
+    last_received_at: datetime | None
+
+
+class AutomationAgentResponse(BaseModel):
+    id: str
+    name: str
+
+
+class AutomationResponse(BaseModel):
+    configured: bool
+    reason: str | None = None
+    agent: AutomationAgentResponse | None = None
+    schedules: list[AutomationScheduleResponse] = []
+    alert_receiver: AutomationAlertResponse | None = None
+
+    @classmethod
+    def from_domain(cls, state: AutomationState) -> AutomationResponse:
+        snap = state.snapshot
+        if snap is None:
+            return cls(configured=False, reason=state.reason)
+        return cls(
+            configured=True,
+            agent=AutomationAgentResponse(id=snap.agent_id, name=snap.agent_name),
+            schedules=[
+                AutomationScheduleResponse(
+                    id=s.id,
+                    name=s.name,
+                    enabled=s.enabled,
+                    cron_expr=s.cron_expr,
+                    skip_when_busy=s.skip_when_busy,
+                    next_run_at=_as_utc(s.next_run_at),
+                    last_run=(
+                        AutomationRunResponse(
+                            status=s.last_run.status,
+                            skip_reason=s.last_run.skip_reason,
+                            started_at=_as_utc(s.last_run.started_at),
+                        )
+                        if s.last_run
+                        else None
+                    ),
+                )
+                for s in snap.schedules
+            ],
+            alert_receiver=AutomationAlertResponse(
+                configured=snap.alert.configured,
+                enabled=snap.alert.enabled,
+                skip_when_busy=snap.alert.skip_when_busy,
+                last_result=snap.alert.last_result,
+                last_received_at=_as_utc(snap.alert.last_received_at),
+            ),
+        )
+
+
+class AutomationUpdateBody(BaseModel):
+    """둘 다 선택. 보낸 항목만 바꾼다."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    schedule_enabled: bool | None = None
+    alert_enabled: bool | None = None

@@ -14,6 +14,9 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 
+from src.application.firewall_admin.automation_service import (
+    FirewallAutomationService,
+)
 from src.application.firewall_admin.control_service import (
     FirewallControlService,
     admin_request_id,
@@ -35,6 +38,8 @@ from src.interfaces.dependencies.auth import get_current_user, require_role
 from src.interfaces.schemas.firewall_admin import (
     AlertsResponse,
     AuditResponse,
+    AutomationResponse,
+    AutomationUpdateBody,
     BlockListResponse,
     BlockRequestBody,
     BlockResponse,
@@ -105,6 +110,11 @@ def get_control_service() -> FirewallControlService:
 
 
 def get_observability_service() -> FirewallObservabilityService:
+    raise NotImplementedError
+
+
+def get_automation_service() -> FirewallAutomationService:
+    """firewall-agent design §4.4 — 요청 세션 스코프로 조립된다(firewall_admin_di)."""
     raise NotImplementedError
 
 
@@ -220,3 +230,31 @@ async def get_audit(
     except FirewallAdminError as e:
         raise _http(e) from e
     return AuditResponse.from_domain(view)
+
+
+# ── 자동 점검 (firewall-agent design §4.4) ─────────────────────────────
+
+@router.get("/automation", response_model=AutomationResponse)
+async def get_automation(
+    service: FirewallAutomationService = Depends(get_automation_service),
+):
+    """보안 에이전트의 스케줄·알림 수신 상태. 미설정이어도 200 (configured=false)."""
+    return AutomationResponse.from_domain(await service.state())
+
+
+@router.put("/automation", response_model=AutomationResponse)
+async def update_automation(
+    body: AutomationUpdateBody,
+    user: User = Depends(get_current_user),
+    service: FirewallAutomationService = Depends(get_automation_service),
+):
+    """스케줄(전부)·알림 수신을 켜고 끈다. 보낸 항목만 바꾼다."""
+    try:
+        state = await service.update(
+            schedule_enabled=body.schedule_enabled,
+            alert_enabled=body.alert_enabled,
+            admin_user_id=str(user.id),
+        )
+    except FirewallAdminError as e:
+        raise _http(e) from e
+    return AutomationResponse.from_domain(state)

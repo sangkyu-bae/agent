@@ -169,3 +169,51 @@ class AuditQuery:
     ip: str | None
     actor: str | None
     limit: int
+
+
+# ── 자동 점검 (firewall-agent design §4.4) ──────────────────────────────
+# 보안 에이전트(FIREWALL_ADMIN_AGENT_ID)의 스케줄·알림 수신 상태 — 읽은 그대로 옮긴다.
+
+AutomationNotConfiguredReason = Literal["AGENT_NOT_SET", "AGENT_NOT_FOUND"]
+
+
+@dataclass(frozen=True)
+class AutomationRun:
+    status: str  # running | success | failed | skipped
+    skip_reason: str | None
+    started_at: datetime
+
+
+@dataclass(frozen=True)
+class AutomationSchedule:
+    id: str
+    name: str
+    enabled: bool
+    cron_expr: str | None
+    skip_when_busy: bool
+    next_run_at: datetime | None
+    last_run: AutomationRun | None
+
+
+@dataclass(frozen=True)
+class AutomationAlert:
+    configured: bool
+    enabled: bool | None
+    skip_when_busy: bool | None
+    last_result: str | None
+    last_received_at: datetime | None
+
+
+@dataclass(frozen=True)
+class AutomationSnapshot:
+    agent_id: str
+    agent_name: str
+    schedules: tuple[AutomationSchedule, ...]
+    alert: AutomationAlert
+
+
+@dataclass(frozen=True)
+class AutomationState:
+    configured: bool
+    reason: AutomationNotConfiguredReason | None
+    snapshot: AutomationSnapshot | None
