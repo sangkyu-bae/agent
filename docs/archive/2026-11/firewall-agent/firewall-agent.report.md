@@ -72,9 +72,9 @@
 
 | 단계 | 문서 |
 |---|---|
-| Plan | `docs/01-plan/features/firewall-agent.plan.md` v0.2 |
-| Design | `docs/02-design/features/firewall-agent.design.md` v0.6 (실측 §8.4.1) |
-| Check | `docs/03-analysis/firewall-agent.analysis.md` v0.2 |
+| Plan | [firewall-agent.plan.md](firewall-agent.plan.md) v0.2 |
+| Design | [firewall-agent.design.md](firewall-agent.design.md) v0.6 (실측 §8.4.1) |
+| Check | [firewall-agent.analysis.md](firewall-agent.analysis.md) v0.2 |
 | 준비 절차 | `docs/firewall-admin-setup.md` §5-1 |
 | fireware | `docs/detection-policy.md` v0.2, `docs/security-agent-prompt.md`, `docs/runbook.md` |
 

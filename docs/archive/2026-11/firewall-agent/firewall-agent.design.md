@@ -6,7 +6,7 @@
 > **Author**: 배상규
 > **Date**: 2026-11-24
 > **Status**: Check 완료 (v0.6 — M1~M6 구현·실측, 분석 96%)
-> **Planning Doc**: [firewall-agent.plan.md](../../01-plan/features/firewall-agent.plan.md)
+> **Planning Doc**: [firewall-agent.plan.md](firewall-agent.plan.md)
 
 ---
 
