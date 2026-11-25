@@ -2,8 +2,8 @@
 
 > **Feature**: firewall-agent (fireware Phase 4 — 보안 에이전트 자동 판단)
 > **Date**: 2026-11-25
-> **Design**: `docs/02-design/features/firewall-agent.design.md` v0.5 (버전 이력 v0.2~v0.5 의 변경은 승인된 이탈로 본다)
-> **Plan**: `docs/01-plan/features/firewall-agent.plan.md` v0.2
+> **Design**: [firewall-agent.design.md](firewall-agent.design.md) v0.5 (버전 이력 v0.2~v0.5 의 변경은 승인된 이탈로 본다)
+> **Plan**: [firewall-agent.plan.md](firewall-agent.plan.md) v0.2
 > **대상 코드**: sangplusbot worktree `wt/firewall-agent`(idt·idt_front), agent_mcp `mcp-firewall-server`, fireware worktree `log-stack-fwctl` — 세 저장소 모두 미커밋
 > **Match Rate**: 92% (최초) → **96%** (Act-1 후, §8)
 

@@ -16,6 +16,7 @@
 | answer-citation-verification | completed | 93.6% (Check 90.6% → Act-1) | 2026-11-23 | [answer-citation-verification/](answer-citation-verification/) |
 | document-revision | completed | 96.1% (Check 90.3% → Act-1) | 2026-11-23 | [document-revision/](document-revision/) |
 | firewall-admin-console | completed | 97.8% (Check, Minor 4건 수정) | 2026-11-24 | [firewall-admin-console/](firewall-admin-console/) |
+| firewall-agent | completed | 96% (Check 92% → Act-1) | 2026-11-25 | [firewall-agent/](firewall-agent/) |
 
 > 백엔드·프론트 전용 사이클은 `idt/docs/archive/2026-11/`, `idt_front/docs/archive/2026-11/` 에 있다.
 
@@ -92,7 +93,13 @@
 | document-revision | 기존 동작(무관): KB 삭제는 상태값만 `deleted` 로 바꿔 `document_metadata` 행·벡터가 남음 | 기존 결함 | 해당 영역 작업 시 |
 | firewall-admin-console | 켤 때: `FIREWALL_ADMIN_*` 설정 5개 + Grafana Viewer 서비스 계정 토큰. 기본 off 라 설정 없이 배포해도 기존 동작 불변. 절차 `docs/firewall-admin-setup.md` | 운영 설정 | 기능을 켤 때 |
 | firewall-admin-console | 실장비 연결 — TLS, 호출자별 토큰, 대역 차단, 차단 영속화, 감사 장기 보관, 조직 승인 (`docs/firewall-admin-setup.md` §7) | 범위 밖 | 별도 사이클 |
-| firewall-admin-console | fireware Phase 4 — 방화벽 에이전트 프롬프트(`detection-policy.md`), mcp-grafana 등록, 스케줄 실행 | 후속 기능 | 요청 시 |
+| firewall-admin-console | ~~fireware Phase 4 — 방화벽 에이전트 프롬프트(`detection-policy.md`), mcp-grafana 등록, 스케줄 실행~~ → firewall-agent 로 완료(2026-11-25, mcp-grafana 대신 고정 조회 도구) | 후속 기능 | 완료 |
 | firewall-admin-console | `RejectReasonDialog` 를 `components/` 로 이동 — 방화벽 승인 탭이 작업함 페이지 파일을 import (G7) | 구조 소형 | 해당 파일 수정 시 |
 | firewall-admin-console | 기존 동작(무관): 승인 API 가 에이전트 재개까지 동기 대기해 30초를 넘기면 작업함 화면이 오류를 표시(실제로는 처리됨). 방화벽 승인 탭만 "처리됐을 수 있음" 안내로 대응 | 기존 결함 | 승인 영역 작업 시 |
 | firewall-admin-console | 기존 동작(무관): 승인 필요 MCP 도구에 도구 카탈로그 category `action` 을 지정하면 워커에서 빠져 에이전트가 호출하지 못함 → 미분류로 둘 것 | 기존 결함 | 도구 카테고리 작업 시 |
+| **firewall-agent** | **운영 반영: Flyway V098(`agent_schedule.skip_when_busy`, `agent_schedule_run.skip_reason`)·V099(`agent_alert_receiver`, `agent_alert_receipt`) 적용.** 새 설정 4개(`FIREWALL_ADMIN_AGENT_ID`, `ALERT_HOOK_*` 2개, `AGENT_BUSY_RUN_STALE_SECONDS`)는 기본값이 있어 비워도 기존 동작 불변 | 배포 의존 | **배포 전 필수** |
+| **firewall-agent** | **10분 스케줄을 켜기 전 토큰 비용 확인** — 탐지가 없는 빈 회차도 LLM 6회·20~33k 토큰(Sonnet 4.6), 하루 최대 144회. 조회 결과가 비면 짧게 끝나는 실행 경로가 후보 | 비용 | **스케줄 켜기 전** |
+| firewall-agent | SC-2 보안 에이전트의 **스케줄 회차 성공 실행** 실측 — 실측 중 회차는 승인 대기로 건너뜀만 나왔고, 재확인 때 Windows 애플리케이션 제어가 `_kiwipiepy` DLL 을 막아 백엔드 기동 불가 | 확인 | 로컬 백엔드 기동 가능할 때 |
+| firewall-agent | agent_mcp `mcp-firewall-server`(조회 도구 2종 포함) 미커밋 — 디렉터리 전체가 미추적이고 미커밋 `common` 로깅(`install_tool_call_logging`)에 의존해 단독 커밋 불가 | 저장소 정리 | agent_mcp 미커밋 작업 정리 시 |
+| firewall-agent | Sonnet 보고가 "IP 마다 한 줄"(FR-22) 대신 표로 길다 — 판단은 정답. fireware `docs/security-agent-prompt.md` 보고 형식 강화 | 개선 | 요청 시 |
+| firewall-agent | 수신 이력에 작업 링크(G4), 웹훅 본문 크기를 읽기 전에 검사(G9), 자동 점검 두 항목 동시 변경 시 대상 존재 선확인(G11) | 경미 | 해당 영역 작업 시 |
