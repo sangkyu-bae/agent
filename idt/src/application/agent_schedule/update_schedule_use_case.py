@@ -42,6 +42,7 @@ class UpdateScheduleUseCase:
             schedule.instruction = request.instruction
             schedule.timezone = request.timezone
             schedule.enabled = request.enabled
+            schedule.skip_when_busy = request.skip_when_busy
             # spec/tz 변경 여부와 무관하게 항상 재계산 — 안전하며 결과 동일
             schedule.next_run_at = SchedulePolicy.compute_next_run(
                 spec, request.timezone, now

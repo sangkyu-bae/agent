@@ -112,3 +112,16 @@ class ScheduleRunSinkInterface(ABC):
         run_id: str | None = None,
         error_message: str | None = None,
     ) -> None: ...
+
+    @abstractmethod
+    async def on_skipped(
+        self,
+        schedule: AgentSchedule,
+        scheduled_for: datetime,
+        *,
+        reason: str,
+        request_id: str,
+    ) -> None:
+        """바쁨 판정으로 건너뛴 회차 기록 (firewall-agent design §2.2). 시작=종료
+        1행."""
+        ...

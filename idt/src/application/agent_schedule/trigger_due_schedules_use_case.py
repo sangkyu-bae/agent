@@ -11,6 +11,7 @@ from typing import Awaitable, Callable
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.application.agent_automation.busy_checker import AgentBusyChecker
 from src.application.agent_builder.schemas import RunAgentRequest
 from src.application.agent_schedule.schemas import (
     TriggerResponse,
@@ -40,6 +41,7 @@ class TriggerDueSchedulesUseCase:
         sink: ScheduleRunSinkInterface,
         logger: LoggerInterface,
         outbound_dispatcher=None,
+        busy_checker: AgentBusyChecker | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._schedule_repo_builder = schedule_repo_builder
@@ -48,21 +50,27 @@ class TriggerDueSchedulesUseCase:
         self._logger = logger
         # agent-webhook-outbound 훅 ① — optional 주입, 미주입 시 무동작 (FR-16)
         self._outbound_dispatcher = outbound_dispatcher
+        # firewall-agent design §2.2 — skip_when_busy 스케줄만 판정한다. 미주입이면 기존
+        # 동작.
+        self._busy_checker = busy_checker
         self._last_triggered_at: datetime | None = None
         self._last_result: TriggerResponse | None = None
 
     async def execute(self, request_id: str) -> TriggerResponse:
         now = _utc_now()
         claimed = await self._claim(now, request_id)
-        success = 0
+        success = skipped = 0
         for item in claimed:
-            if await self._run_one(item, request_id):
+            if await self._skip_if_busy(item, request_id):
+                skipped += 1
+            elif await self._run_one(item, request_id):
                 success += 1
         result = TriggerResponse(
             claimed=len(claimed),
             success=success,
-            failed=len(claimed) - success,
+            failed=len(claimed) - success - skipped,
             request_id=request_id,
+            skipped=skipped,
         )
         self._last_triggered_at = now
         self._last_result = result
@@ -94,6 +102,43 @@ class TriggerDueSchedulesUseCase:
             async with session.begin():
                 repo = self._schedule_repo_builder(session)
                 return await repo.claim_due(now, request_id)
+
+    async def _skip_if_busy(self, item: ClaimedSchedule, request_id: str) -> bool:
+        """firewall-agent design §2.2 — 바쁘면 실행하지 않고 skipped 이력만 남긴다.
+
+        next_run_at 은 claim 에서 이미 재계산됐다. 건너뜀은 '실행 시도' 가 아니므로
+        last_run_at 은 건드리지 않는다.
+        """
+        schedule = item.schedule
+        if not schedule.skip_when_busy:
+            return False
+        if self._busy_checker is None:
+            self._logger.warning(
+                "skip_when_busy set but busy checker not wired — running",
+                request_id=request_id,
+                schedule_id=schedule.id,
+            )
+            return False
+        verdict = await self._busy_checker.check(schedule.agent_id, request_id)
+        if not verdict.busy:
+            return False
+        try:
+            await self._sink.on_skipped(
+                schedule,
+                item.scheduled_for,
+                reason=verdict.reason or "check_failed",
+                request_id=request_id,
+            )
+        except Exception as e:
+            # analysis G10 — 이력 저장 실패로 틱을 멈추면 같은 틱에 선점된 다른
+            # 스케줄 회차가 사라진다(next_run_at 은 claim 에서 이미 넘어감).
+            self._logger.error(
+                "schedule skip record failed",
+                exception=e,
+                request_id=request_id,
+                schedule_id=schedule.id,
+            )
+        return True
 
     async def _run_one(self, item: ClaimedSchedule, request_id: str) -> bool:
         schedule = item.schedule

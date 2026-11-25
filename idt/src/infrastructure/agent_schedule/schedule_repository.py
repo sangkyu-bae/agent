@@ -46,6 +46,7 @@ def _to_entity(model: AgentScheduleModel) -> AgentSchedule:
         last_run_at=model.last_run_at,
         created_at=model.created_at,
         updated_at=model.updated_at,
+        skip_when_busy=bool(model.skip_when_busy),
     )
 
 
@@ -66,6 +67,7 @@ def _apply_entity(model: AgentScheduleModel, entity: AgentSchedule) -> None:
     model.next_run_at = entity.next_run_at
     model.last_run_at = entity.last_run_at
     model.updated_at = entity.updated_at
+    model.skip_when_busy = entity.skip_when_busy
 
 
 class ScheduleRepository(ScheduleRepositoryInterface):

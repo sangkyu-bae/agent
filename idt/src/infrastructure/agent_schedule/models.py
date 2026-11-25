@@ -33,6 +33,13 @@ class AgentScheduleModel(Base):
     last_run_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    # V098 (firewall-agent design §3.3)
+    skip_when_busy: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        comment="진행 중·승인 대기 건이 있으면 회차 건너뜀",
+    )
 
 
 class AgentScheduleRunModel(Base):
@@ -54,3 +61,7 @@ class AgentScheduleRunModel(Base):
     run_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     request_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    # V098 (firewall-agent design §3.3)
+    skip_reason: Mapped[str | None] = mapped_column(
+        String(32), nullable=True, comment="status=skipped 사유"
+    )

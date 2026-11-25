@@ -79,6 +79,10 @@ class TestToEntity:
         entity = _to_entity(model)
         assert entity.spec.days_of_week == (0, 2)
 
+    def test_maps_skip_when_busy(self):
+        assert _to_entity(_daily_model(skip_when_busy=True)).skip_when_busy is True
+        assert _to_entity(_daily_model(skip_when_busy=False)).skip_when_busy is False
+
 
 class TestSave:
     @pytest.mark.asyncio
@@ -90,6 +94,7 @@ class TestSave:
         added = mock_session.add.call_args[0][0]
         assert isinstance(added, AgentScheduleModel)
         assert added.schedule_type == "daily"
+        assert added.skip_when_busy is False
 
 
 class TestFindById:

@@ -25,6 +25,7 @@ def _to_entity(model: AgentScheduleRunModel) -> ScheduleRun:
         run_id=model.run_id,
         error_message=model.error_message,
         request_id=model.request_id,
+        skip_reason=model.skip_reason,
     )
 
 
@@ -46,6 +47,7 @@ class ScheduleRunRepository(ScheduleRunRepositoryInterface):
             run_id=run.run_id,
             error_message=run.error_message,
             request_id=run.request_id,
+            skip_reason=run.skip_reason,
         )
         self._session.add(model)
         await self._session.flush()

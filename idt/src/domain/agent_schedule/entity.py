@@ -8,7 +8,9 @@ from typing import Literal
 
 from src.domain.agent_schedule.value_objects import ScheduleSpec
 
-RunStatus = Literal["running", "success", "failed"]
+# skipped: firewall-agent design §2.2 — 바쁨 판정으로 실행하지 않은 회차 (skip_reason
+# 동반)
+RunStatus = Literal["running", "success", "failed", "skipped"]
 
 
 @dataclass
@@ -25,6 +27,8 @@ class AgentSchedule:
     last_run_at: datetime | None
     created_at: datetime
     updated_at: datetime
+    # firewall-agent design §3.1 — 진행 중·승인 대기 건이 있으면 회차 건너뜀. 기본 off.
+    skip_when_busy: bool = False
 
 
 @dataclass
@@ -40,3 +44,4 @@ class ScheduleRun:
     run_id: str | None  # ai_run 연결 (AGENT-OBS-001)
     error_message: str | None
     request_id: str
+    skip_reason: str | None = None  # approval_pending | run_in_progress | check_failed

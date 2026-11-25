@@ -50,6 +50,8 @@ class CreateScheduleRequest(BaseModel):
     instruction: str = Field(..., min_length=1, max_length=1900)
     timezone: str = "Asia/Seoul"
     enabled: bool = True
+    # firewall-agent design §3.1 — 진행 중·승인 대기 건이 있으면 회차 건너뜀
+    skip_when_busy: bool = False
 
 
 class UpdateScheduleRequest(CreateScheduleRequest):
@@ -72,6 +74,7 @@ class ScheduleResponse(BaseModel):
     last_run_at: str | None
     created_at: str
     updated_at: str
+    skip_when_busy: bool = False
 
     @classmethod
     def from_entity(cls, entity: AgentSchedule) -> "ScheduleResponse":
@@ -87,6 +90,7 @@ class ScheduleResponse(BaseModel):
             last_run_at=_iso(entity.last_run_at),
             created_at=entity.created_at.isoformat(),
             updated_at=entity.updated_at.isoformat(),
+            skip_when_busy=entity.skip_when_busy,
         )
 
 
@@ -100,6 +104,7 @@ class ScheduleRunResponse(BaseModel):
     session_id: str | None
     run_id: str | None
     error_message: str | None
+    skip_reason: str | None = None
 
     @classmethod
     def from_entity(cls, run: ScheduleRun) -> "ScheduleRunResponse":
@@ -113,6 +118,7 @@ class ScheduleRunResponse(BaseModel):
             session_id=run.session_id,
             run_id=run.run_id,
             error_message=run.error_message,
+            skip_reason=run.skip_reason,
         )
 
 
@@ -121,6 +127,7 @@ class TriggerResponse(BaseModel):
     success: int
     failed: int
     request_id: str
+    skipped: int = 0  # firewall-agent design §2.2 — 바쁨 판정으로 건너뛴 회차
 
 
 class TriggerStatusResponse(BaseModel):
