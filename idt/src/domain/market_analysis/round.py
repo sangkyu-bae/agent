@@ -107,24 +107,33 @@ class Candidate:
     """한투 증권그룹(ST·EF·EN …) — KIS 가 종목 마스터에서 붙인 값. 모르면 None."""
 
 
-# KIS 전 종목 적재의 기본 대상("주식류")과 같다 — 주식·외국주식·예탁증서·리츠
-EQUITY_GROUPS = frozenset({"ST", "FS", "DR", "RT"})
+# 일반 주식만 — 한투 증권그룹 ST. 리츠(RT)·외국주식(FS)·예탁증서(DR)는 뺀다
+# (사용자 결정 2026-11-26: "ETF 같은 건 빼고 일반 주식만")
+EQUITY_GROUPS = frozenset({"ST"})
 SPAC_MARK = "스팩"
 
 
+def is_preferred_code(symbol: str) -> bool:
+    """국내 단축코드 6자리의 끝자리가 0 이 아니면 우선주(1우 5·2우B 7·3우B 9 …).
+    신규 상장 영문 혼합 코드(0088M0)도 보통주는 끝자리가 0 이다."""
+    return len(symbol) == 6 and symbol[-1] != "0"
+
+
 class EquityPolicy:
-    """분석 대상은 주식류만 — ETF·ETN 은 지수를 따라가 재무·기업 분석이 의미가 없다.
+    """분석 대상은 일반 주식(보통주)만 — ETF·ETN 은 지수를 따라가 재무·기업 분석이
+    의미가 없고, 리츠·외국주식·DR·우선주는 사용자 결정으로 뺀다.
 
     실화면 확인(2026-11-26): 거래량 순위 상위가 레버리지·인버스 ETF·ETN 으로 채워졌다.
-    - 한투 증권그룹이 있으면 그것을 따른다(종목 마스터 = 공식 구분)
+    - 한투 증권그룹이 있으면 그것을 따른다(종목 마스터 = 공식 구분) — ST 만
     - 스팩은 한투 그룹이 ST 라 이름(법정 명칭에 '스팩')으로 뺀다
-    - 그룹을 모르면(마스터 장애) 확실한 것만 뺀다: 7자리 Q 코드(ETN)·스팩.
+    - 우선주는 그룹이 ST 라 종목코드 끝자리로 뺀다
+    - 그룹을 모르면(마스터 장애) 확실한 것만 뺀다: 7자리 Q 코드(ETN)·스팩·우선주.
       ETF 는 이름 목록으로 추측하지 않는다 — 브랜드가 계속 늘어 목록이 틀린다
     """
 
     @staticmethod
     def is_equity(symbol: str, name: str, group: str | None) -> bool:
-        if SPAC_MARK in name:
+        if SPAC_MARK in name or is_preferred_code(symbol):
             return False
         if group is not None:
             return group in EQUITY_GROUPS
