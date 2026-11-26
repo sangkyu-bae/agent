@@ -1,8 +1,9 @@
 """애플리케이션 레이어 요청/응답 스키마."""
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, StringConstraints
+from pydantic import BaseModel, Field, StringConstraints, model_validator
+from pydantic.json_schema import SkipJsonSchema
 
 from src.application.document_extractor.schemas import TemplateSlotDto
 from src.application.tool_access.schemas import ExcludedToolInfo, ToolAccessInfo
@@ -331,6 +332,29 @@ class RunAgentRequest(BaseModel):
     # D2: 평가 실행은 conversation_message를 남기지 않는다 — 스윕 1회가
     # 모델 수 × 케이스 수만큼 세션을 만들어 사용자 대화 이력을 오염시킨다.
     persist_conversation: bool = True
+    # stock-analysis-agents DD5: 내부 호출자 전용 참고 자료(섹션 본문·근거).
+    # HTTP 스키마에 노출하지 않는다 — 넘기는 곳은 시장 분석 어댑터뿐
+    # (tests/contracts/test_reference_context_callers). None 이면 기존 동작과
+    # 같다. 마지막 사용자 메시지 뒤에 덧붙는다 (reference_context.py).
+    reference_context: str | None = Field(default=None, max_length=40_000)
+
+
+class RunAgentHttpRequest(RunAgentRequest):
+    """POST /agents/{id}/run 본문 — 내부 전용 reference_context 는 받지 않는다.
+
+    stock-analysis-agents 중간 점검 C1: 이 필드는 프롬프트 가드(query 만 검사)를
+    거치지 않고 프롬프트에 붙으므로, HTTP 로 들어오면 가드 없는 주입 통로가 된다.
+    OpenAPI 에서 빼고, 보내도 버린다 (tests/api/test_run_agent_reference_context_http).
+    """
+
+    reference_context: SkipJsonSchema[None] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_internal_fields(cls, data: Any) -> Any:
+        if isinstance(data, dict) and "reference_context" in data:
+            return {k: v for k, v in data.items() if k != "reference_context"}
+        return data
 
 
 class RunAgentResponse(BaseModel):

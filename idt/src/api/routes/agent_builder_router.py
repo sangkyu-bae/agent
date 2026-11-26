@@ -40,6 +40,7 @@ from src.application.agent_builder.schemas import (
     ListAgentsRequest,
     ListAgentsResponse,
     ListMyAgentsResponse,
+    RunAgentHttpRequest,
     RunAgentRequest,
     RunAgentResponse,
     SubscribeResponse,
@@ -290,7 +291,7 @@ async def update_agent(
 @router.post("/{agent_id}/run", response_model=RunAgentResponse)
 async def run_agent(
     agent_id: str,
-    body: RunAgentRequest,
+    body: RunAgentHttpRequest,
     auth_ctx: AuthContext = Depends(get_auth_context),
     use_case=Depends(get_run_agent_use_case),
 ):
