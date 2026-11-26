@@ -17,6 +17,7 @@
 | document-revision | completed | 96.1% (Check 90.3% → Act-1) | 2026-11-23 | [document-revision/](document-revision/) |
 | firewall-admin-console | completed | 97.8% (Check, Minor 4건 수정) | 2026-11-24 | [firewall-admin-console/](firewall-admin-console/) |
 | firewall-agent | completed | 96% (Check 92% → Act-1) | 2026-11-25 | [firewall-agent/](firewall-agent/) |
+| stock-analysis-agents | completed | 94.6% (Check 94.6% → Act-2, SC 8/8) | 2026-11-26 | [stock-analysis-agents/](stock-analysis-agents/) |
 
 > 백엔드·프론트 전용 사이클은 `idt/docs/archive/2026-11/`, `idt_front/docs/archive/2026-11/` 에 있다.
 
@@ -103,3 +104,7 @@
 | firewall-agent | agent_mcp `mcp-firewall-server`(조회 도구 2종 포함) 미커밋 — 디렉터리 전체가 미추적이고 미커밋 `common` 로깅(`install_tool_call_logging`)에 의존해 단독 커밋 불가 | 저장소 정리 | agent_mcp 미커밋 작업 정리 시 |
 | firewall-agent | Sonnet 보고가 "IP 마다 한 줄"(FR-22) 대신 표로 길다 — 판단은 정답. fireware `docs/security-agent-prompt.md` 보고 형식 강화 | 개선 | 요청 시 |
 | firewall-agent | 수신 이력에 작업 링크(G4), 웹훅 본문 크기를 읽기 전에 검사(G9), 자동 점검 두 항목 동시 변경 시 대상 존재 선확인(G11) | 경미 | 해당 영역 작업 시 |
+| stock-analysis-agents | Minor G3~G9 — 리포트 머리 사실 신호 값(G3), 탭 URL(G4), 체제 경계값 테스트(G5), 판단 파서 NaN·Infinity(G6), server_finder 예외(G7), failed 재시도를 하루 상한에 포함(G8), PUT /settings enabled 기본값(G9) | 경미(G6·G8 은 우선) | 다음 사이클 |
+| stock-analysis-agents | 거래량 순위 상위가 ETF 위주(30 중 주식 6) — KIS 순위 API 제외 조건 스펙 확인 후 적용 | 개선 | KIS 순위 작업 시 |
+| stock-analysis-agents | agent_mcp 변경(KIS `get_index_history`·`group`, mcp-dart-server, mcp-perplexity-server) 미커밋 | 저장소 정리 | agent_mcp 정리 시 |
+| stock-analysis-agents | 배포: 운영 DB V100·V101, MCP 서버 3종 등록·키, `MARKET_ANALYSIS_ENABLED` | 배포 | 운영 반영 시 |
