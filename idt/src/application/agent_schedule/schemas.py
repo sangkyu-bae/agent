@@ -1,5 +1,5 @@
 """agent-schedule application 스키마 (요청/응답 + 도메인 변환)."""
-from datetime import date, datetime, time
+from datetime import UTC, date, datetime, time
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -9,7 +9,14 @@ from src.domain.agent_schedule.value_objects import ScheduleSpec
 
 
 def _iso(dt: datetime | None) -> str | None:
-    return dt.isoformat() if dt is not None else None
+    """DB 는 UTC naive 를 저장한다. 오프셋 없이 보내면 프론트 new Date() 가
+    로컬(KST) 시각으로 읽어 9시간 이르게 보인다 — UTC 임을 붙여 보낸다
+    (승인 API _utc_iso 와 같은 규칙)."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    return dt.isoformat()
 
 
 class ScheduleSpecPayload(BaseModel):
@@ -88,8 +95,8 @@ class ScheduleResponse(BaseModel):
             timezone=entity.timezone,
             next_run_at=_iso(entity.next_run_at),
             last_run_at=_iso(entity.last_run_at),
-            created_at=entity.created_at.isoformat(),
-            updated_at=entity.updated_at.isoformat(),
+            created_at=_iso(entity.created_at),
+            updated_at=_iso(entity.updated_at),
             skip_when_busy=entity.skip_when_busy,
         )
 
@@ -112,8 +119,8 @@ class ScheduleRunResponse(BaseModel):
             id=run.id,
             schedule_id=run.schedule_id,
             status=run.status,
-            scheduled_for=run.scheduled_for.isoformat(),
-            started_at=run.started_at.isoformat(),
+            scheduled_for=_iso(run.scheduled_for),
+            started_at=_iso(run.started_at),
             finished_at=_iso(run.finished_at),
             session_id=run.session_id,
             run_id=run.run_id,
