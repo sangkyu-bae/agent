@@ -5,8 +5,8 @@
 > **Author**: gap-detector (주요 갭은 주 세션에서 코드로 재확인)
 > **Created**: 2026-11-26 (중간) · 2026-11-26 (최종 §11)
 > **Status**: Draft
-> **Design**: ../02-design/features/stock-analysis-agents.design.md (v1.2)
-> **Plan**: ../01-plan/features/stock-analysis-agents.plan.md (v0.1)
+> **Design**: stock-analysis-agents.design.md (v1.2)
+> **Plan**: stock-analysis-agents.plan.md (v0.1)
 
 ---
 

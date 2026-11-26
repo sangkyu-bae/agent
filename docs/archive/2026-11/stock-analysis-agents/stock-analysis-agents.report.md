@@ -80,9 +80,9 @@
 
 | Phase | Document | Status |
 |-------|----------|--------|
-| Plan | [stock-analysis-agents.plan.md](../01-plan/features/stock-analysis-agents.plan.md) | ✅ |
-| Design | [stock-analysis-agents.design.md](../02-design/features/stock-analysis-agents.design.md) v1.3 | ✅ (§7.1~§7.9 구현·실측·Check 기록) |
-| Check | [stock-analysis-agents.analysis.md](../03-analysis/stock-analysis-agents.analysis.md) | ✅ (중간 §1~10, 최종 §11, Act-2 §12) |
+| Plan | [stock-analysis-agents.plan.md](stock-analysis-agents.plan.md) | ✅ |
+| Design | [stock-analysis-agents.design.md](stock-analysis-agents.design.md) v1.3 | ✅ (§7.1~§7.9 구현·실측·Check 기록) |
+| Check | [stock-analysis-agents.analysis.md](stock-analysis-agents.analysis.md) | ✅ (중간 §1~10, 최종 §11, Act-2 §12) |
 | Act | 현재 문서 | ✅ |
 
 ---

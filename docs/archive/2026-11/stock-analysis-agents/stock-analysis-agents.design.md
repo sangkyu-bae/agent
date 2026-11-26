@@ -6,7 +6,7 @@
 > **Author**: 배상규
 > **Date**: 2026-11-26
 > **Status**: Draft (v1.3 — module-1~10 구현·실측·Check 반영. 본문 초기 절과 구현이 다른 곳은 §7.9 가 우선)
-> **Planning Doc**: [stock-analysis-agents.plan.md](../../01-plan/features/stock-analysis-agents.plan.md)
+> **Planning Doc**: [stock-analysis-agents.plan.md](stock-analysis-agents.plan.md)
 
 ---
 
@@ -533,7 +533,7 @@ prefix `/api/v1/market-analysis`. `MARKET_ANALYSIS_ENABLED=false`면 라우터 �
 
 ### 7.9 Check 결과 반영 — Act 수정 + 문서 정합 (2026-11-26, v1.3)
 
-분석: `docs/03-analysis/stock-analysis-agents.analysis.md` §11 (Overall 94.6%, Critical 0). 사용자 결정: Important 2건 수정 + 문서 갱신, Minor 는 기록만.
+분석: `stock-analysis-agents.analysis.md` §11 (Overall 94.6%, Critical 0). 사용자 결정: Important 2건 수정 + 문서 갱신, Minor 는 기록만.
 
 **Act 수정**
 
