@@ -29,6 +29,10 @@ def _price(value: Any) -> Decimal | None:
         price = Decimal(str(value).replace(",", "").replace("원", "").strip())
     except InvalidOperation:
         raise ValueError("price must be a number") from None
+    # NaN 은 비교에서 InvalidOperation(ValueError 아님)을 내 pydantic 밖으로
+    # 새고, Infinity 는 양수라 통과한다 — 비교 전에 유한수만 받는다
+    if not price.is_finite():
+        raise ValueError("price must be finite")
     if price <= 0:
         raise ValueError("price must be positive")
     return price

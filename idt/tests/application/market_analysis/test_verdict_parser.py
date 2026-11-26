@@ -77,6 +77,29 @@ async def test_bad_numbers_are_rejected_not_fixed():
     assert (verdict, mode) == (None, "failed")
 
 
+async def test_non_finite_prices_are_rejected_not_raised():
+    """G6 — "NaN" 은 Decimal 비교에서 InvalidOperation(ArithmeticError)을 내
+    pydantic 이 바꾸지 못하고 새어 나갔고, "Infinity" 는 그대로 통과했다.
+    JSON 의 맨 NaN·Infinity 리터럴(json.loads 가 받아들임)도 같다."""
+    for target in ('"NaN"', '"Infinity"', '"-Infinity"', "NaN", "Infinity"):
+        text = (
+            '```json\n{"score": 8, "decision": "enter", '
+            f'"target_price": {target}, "stop_loss": 9500}}\n```'
+        )
+        ex = FakeExtractor(None)
+        verdict, mode = await parse_buy(text, ex, request_id="r")
+        assert (verdict, mode) == (None, "failed"), target
+
+
+async def test_non_finite_sell_prices_are_rejected():
+    text = (
+        '```json\n{"action": "adjust", "new_stop_loss": "NaN", '
+        '"confidence": 7, "reason": "r"}\n```'
+    )
+    verdict, mode = await parse_sell(text, None, request_id="r")
+    assert (verdict, mode) == (None, "failed")
+
+
 async def test_unknown_period_becomes_none():
     text = (
         '```json\n{"score": 6, "decision": "skip", "investment_period": "초단기"}\n```'
