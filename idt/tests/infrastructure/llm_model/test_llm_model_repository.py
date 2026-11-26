@@ -208,6 +208,32 @@ async def test_update_persists_supports_vision(session: AsyncSession) -> None:
 
 
 @pytest.mark.asyncio
+async def test_update_persists_pricing(session: AsyncSession) -> None:
+    """PATCH /llm-models/{id}/pricing 가 200 을 돌려주고도 DB 에 남지 않던 결함
+    (stock-analysis-agents module-10 실측) — update() 가 단가 3필드를 옮겨야 한다."""
+    from decimal import Decimal
+
+    repo = LlmModelRepository(session, MagicMock())
+    m = _make_model("mp1")
+    await repo.save(m, "req")
+    priced_at = datetime(2026, 11, 26, 8, 0, tzinfo=UTC)
+    updated = LlmModel(
+        **{
+            **m.__dict__,
+            "input_price_per_1k_usd": Decimal("0.00125"),
+            "output_price_per_1k_usd": Decimal("0.010"),
+            "pricing_updated_at": priced_at,
+        }
+    )
+    await repo.update(updated, "req")
+    session.expire_all()  # 같은 세션 identity map 이 아니라 DB 값을 읽는다
+    got = await repo.find_by_id("mp1", "req")
+    assert got.input_price_per_1k_usd == Decimal("0.00125")
+    assert got.output_price_per_1k_usd == Decimal("0.010")
+    assert got.pricing_updated_at is not None
+
+
+@pytest.mark.asyncio
 async def test_seed_marks_vision_capable_defaults(session: AsyncSession) -> None:
     repo = LlmModelRepository(session, MagicMock())
     await seed_default_models(repo, MagicMock(), "req")
