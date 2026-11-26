@@ -189,6 +189,17 @@ async def test_duplicate_and_held_are_recorded_not_analyzed():
     assert [t.symbol for t in pipeline.targets] == ["000003"]
 
 
+async def test_day_cap_uses_attempts_including_failed_g8():
+    """failed 재시도로 하루 상한을 넘기지 않는다 — 예산은 시도 행 수로 센다."""
+    rounds = FakeRounds()
+    rounds.attempts = 49  # 오늘 failed 포함 시도 49, 하루 상한 50
+    runner, rounds, pipeline = _runner(_tools(), rounds=rounds)
+    await _run(runner, rounds)
+    assert len(pipeline.targets) == 1
+    statuses = sorted(i["status"] for i in rounds.items.values())
+    assert statuses == ["done", "over_cap", "over_cap"]
+
+
 async def test_failed_report_and_exception_mark_items_failed_but_round_done():
     runner, rounds, _ = _runner(
         _tools(), pipeline=FakePipeline(fail={"000003"}, raise_on={"000002"})

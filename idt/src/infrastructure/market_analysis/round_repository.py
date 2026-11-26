@@ -13,7 +13,7 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 
 from src.domain.logging.interfaces.logger_interface import LoggerInterface
@@ -36,6 +36,8 @@ from src.infrastructure.market_analysis.repositories import SettingRepository
 # 보는 상태 — failed 는 다음 회차에 다시 시도한다
 _ANALYZED = (ItemStatus.DONE.value, ItemStatus.ANALYZING.value, ItemStatus.QUEUED.value)
 _PENDING = (ItemStatus.QUEUED.value, ItemStatus.ANALYZING.value)
+# 하루 상한 예산(G8) — 토큰을 썼거나 쓸 시도. failed 도 센다
+_ATTEMPTED = (*_ANALYZED, ItemStatus.FAILED.value)
 
 
 def _now() -> datetime:
@@ -179,6 +181,16 @@ class RoundRepository:
         )
         async with self._sf() as session:
             return {row[0] for row in (await session.execute(stmt)).all()}
+
+    async def analysis_attempts(self, *, trade_date: date, request_id: str) -> int:
+        stmt = (
+            select(func.count(MaRoundItemModel.id))
+            .join(MaRoundModel, MaRoundModel.id == MaRoundItemModel.round_id)
+            .where(MaRoundModel.trade_date == trade_date)
+            .where(MaRoundItemModel.status.in_(_ATTEMPTED))
+        )
+        async with self._sf() as session:
+            return int((await session.execute(stmt)).scalar_one() or 0)
 
     async def abandon_running(self, request_id: str) -> int:
         async with self._sf() as session, session.begin():

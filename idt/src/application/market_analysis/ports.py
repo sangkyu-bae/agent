@@ -203,6 +203,11 @@ class RoundStore(Protocol):
         """그 거래일에 이미 분석을 마친(또는 진행 중인) 종목 — 하루 1회 분석 (FR-04)."""
         ...
 
+    async def analysis_attempts(self, *, trade_date: date, request_id: str) -> int:
+        """그 거래일의 분석 시도 행 수(done·analyzing·queued·failed) — 하루 상한
+        예산 (FR-02, G8). 같은 종목이 다시 실패하면 다시 센다."""
+        ...
+
     async def abandon_running(self, request_id: str) -> int:
         """기동 시 회수 — running 회차를 abandoned
         로, 그 회차의 queued/analyzing 종목을 failed 로."""

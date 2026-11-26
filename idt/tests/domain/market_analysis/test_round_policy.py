@@ -95,6 +95,33 @@ def test_day_cap_exhausted():
     assert d.selected == () and [c.symbol for c in d.over_cap] == ["A"]
 
 
+def test_day_cap_counts_failed_attempts_g8():
+    """G8 — failed 종목은 다시 분석할 수 있지만(중복 판정에서 빠짐), 그 시도도
+    토큰을 썼으니 하루 상한 예산에는 들어간다."""
+    d = RoundCapPolicy.decide(
+        [_c("A"), _c("B"), _c("C")],
+        analyzed_today={"X"},  # 끝났거나 진행 중 1
+        attempts_today=49,  # failed 48 포함 시도 49
+        held=set(),
+        max_per_round=20,
+        max_per_day=50,
+    )
+    assert [c.symbol for c in d.selected] == ["A"]
+    assert [c.symbol for c in d.over_cap] == ["B", "C"]
+
+
+def test_failed_symbol_is_retryable_but_spends_day_budget():
+    d = RoundCapPolicy.decide(
+        [_c("F")],
+        analyzed_today=set(),  # F 는 failed 라 중복 아님
+        attempts_today=1,
+        held=set(),
+        max_per_round=20,
+        max_per_day=2,
+    )
+    assert [c.symbol for c in d.selected] == ["F"] and d.duplicate == ()
+
+
 def test_next_slot_today_tomorrow_and_weekend():
     times = ("10:00", "14:00", "18:10")
     # 목 서울 10:05 → 같은 날 14:00 (UTC 05:00)

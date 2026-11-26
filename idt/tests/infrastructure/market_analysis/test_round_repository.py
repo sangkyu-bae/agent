@@ -165,6 +165,37 @@ async def test_analyzed_symbols_excludes_failed_and_waiting_caps(factory):
     )
 
 
+async def test_analysis_attempts_counts_failed_rows_g8(factory):
+    """하루 상한 예산 — 토큰을 쓴(또는 쓸) 행: done·analyzing·queued·failed.
+    같은 종목이 두 번 실패하면 두 번 센다. 대기·중복·보유는 세지 않는다."""
+    repo = RoundRepository(factory, MagicMock())
+    first = await _claim(repo)
+    await repo.add_items(
+        round_id=first,
+        request_id="r",
+        items=[
+            RoundItemDraft("A", "a", (), ItemStatus.DONE.value),
+            RoundItemDraft("F", "f", (), ItemStatus.FAILED.value),
+            RoundItemDraft("D", "d", (), ItemStatus.OVER_CAP.value),
+        ],
+    )
+    second = await _claim(repo, slot="14:00")
+    await repo.add_items(
+        round_id=second,
+        request_id="r",
+        items=[
+            RoundItemDraft("F", "f", (), ItemStatus.FAILED.value),
+            RoundItemDraft("B", "b", (), ItemStatus.QUEUED.value),
+            RoundItemDraft("A", "a", (), ItemStatus.DUPLICATE.value),
+        ],
+    )
+    assert await repo.analysis_attempts(trade_date=DAY, request_id="r") == 4
+    assert (
+        await repo.analysis_attempts(trade_date=date(2026, 11, 27), request_id="r")
+        == 0
+    )
+
+
 async def test_abandon_running_u11(factory):
     repo = RoundRepository(factory, MagicMock())
     rid = await _claim(repo)

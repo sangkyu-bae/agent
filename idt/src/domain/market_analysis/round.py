@@ -177,9 +177,14 @@ class RoundCapPolicy:
         held: set[str],
         max_per_round: int,
         max_per_day: int,
+        attempts_today: int = 0,
     ) -> CapDecision:
         """D6 '신호 종목 전부' + FR-02 사고 방지
-        상한. 넘친 종목은 버리지 않고 over_cap 으로 남긴다."""
+        상한. 넘친 종목은 버리지 않고 over_cap 으로 남긴다.
+
+        중복 판정은 `analyzed_today`(끝났거나 진행 중) — failed 종목은 다시
+        분석할 수 있다. 하루 예산은 `attempts_today`(failed 포함 시도 행 수)로
+        센다: 실패한 시도도 토큰을 썼다 (G8)."""
         duplicate = tuple(c for c in signaled if c.symbol in analyzed_today)
         held_items = tuple(
             c for c in signaled if c.symbol in held and c.symbol not in analyzed_today
@@ -190,7 +195,8 @@ class RoundCapPolicy:
             if c.symbol not in analyzed_today and c.symbol not in held
         ]
         rest.sort(key=lambda c: (-len(c.signals), -(c.volume or 0), c.symbol))
-        cap = max(0, min(max_per_round, max_per_day - len(analyzed_today)))
+        spent = max(len(analyzed_today), attempts_today)
+        cap = max(0, min(max_per_round, max_per_day - spent))
         return CapDecision(
             selected=tuple(rest[:cap]),
             over_cap=tuple(rest[cap:]),
