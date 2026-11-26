@@ -142,7 +142,6 @@ def test_equity_policy_uses_kis_group_first():
     from src.domain.market_analysis.round import EquityPolicy
 
     assert EquityPolicy.is_equity("005930", "삼성전자", "ST")
-    assert EquityPolicy.is_equity("088980", "맥쿼리인프라", "RT")
     assert not EquityPolicy.is_equity("252670", "KODEX 200선물인버스2X", "EF")
     assert not EquityPolicy.is_equity(
         "Q530107", "삼성 인버스 2X 코스닥150 선물 ETN", "EN"
@@ -161,3 +160,22 @@ def test_equity_policy_without_group_drops_only_what_is_certain():
     # 그룹을 모르면 ETF 는 확실히 알 수 없어 남긴다 (이름 목록으로 추측하지 않는다)
     assert EquityPolicy.is_equity("252670", "KODEX 200선물인버스2X", None)
     assert EquityPolicy.is_equity("005930", "삼성전자", None)
+    # 우선주는 그룹을 몰라도 코드 끝자리로 뺀다
+    assert not EquityPolicy.is_equity("005935", "삼성전자우", None)
+
+
+def test_common_stock_only_excludes_reits_foreign_dr_and_preferred():
+    """사용자 결정(2026-11-26): 일반 주식(보통주)만 분석한다 — 리츠(RT)·외국주식(FS)·
+    예탁증서(DR) 그룹과 우선주(종목코드 끝자리 ≠ 0)를 뺀다."""
+    from src.domain.market_analysis.round import EquityPolicy
+
+    assert not EquityPolicy.is_equity("088980", "맥쿼리인프라", "RT")
+    assert not EquityPolicy.is_equity("900140", "엘브이엠씨홀딩스", "FS")
+    assert not EquityPolicy.is_equity("950010", "평산차업 KDR", "DR")
+    # 우선주: 1우(5)·2우B(7)·3우B(9) 등은 ST 그룹이어도 뺀다
+    assert not EquityPolicy.is_equity("005935", "삼성전자우", "ST")
+    assert not EquityPolicy.is_equity("005387", "현대차2우B", "ST")
+    assert not EquityPolicy.is_equity("003559", "대교우B", "ST")
+    # 신규 상장 영문 혼합 코드도 끝자리가 0 이면 보통주
+    assert EquityPolicy.is_equity("0088M0", "신규상장보통주", "ST")
+    assert EquityPolicy.is_equity("000660", "SK하이닉스", "ST")

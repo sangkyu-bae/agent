@@ -39,15 +39,15 @@ def _rank(kind_symbols):
 async def test_collect_unions_rankings_and_condition_search():
     tools = FakeTools()
     tools.payloads["get_rankings"] = _rank(
-        {"volume": ["000001", "000002"], "fluctuation": ["000002", "000003"]}
+        {"volume": ["000010", "000020"], "fluctuation": ["000020", "000030"]}
     )
     tools.payloads["run_condition_search"] = {
         "seq": "0",
-        "hits": [{"symbol": "000004", "name": "조건종목", "volume": 7}],
+        "hits": [{"symbol": "000040", "name": "조건종목", "volume": 7}],
     }
     candidates = await collect_candidates(tools, SETTING, request_id="r")
-    assert list(candidates) == ["000001", "000002", "000003", "000004"]
-    assert candidates["000004"].name == "조건종목"
+    assert list(candidates) == ["000010", "000020", "000030", "000040"]
+    assert candidates["000040"].name == "조건종목"
     kinds = [c[2]["kind"] for c in tools.calls if c[1] == "get_rankings"]
     assert kinds == ["volume", "fluctuation"]
     assert all(c[2]["limit"] == 30 for c in tools.calls if c[1] == "get_rankings")
@@ -55,10 +55,10 @@ async def test_collect_unions_rankings_and_condition_search():
 
 async def test_collect_survives_a_failed_source():
     tools = FakeTools()
-    tools.payloads["get_rankings"] = _rank({"volume": ["000001"], "fluctuation": []})
+    tools.payloads["get_rankings"] = _rank({"volume": ["000010"], "fluctuation": []})
     tools.fail.add("run_condition_search")
     candidates = await collect_candidates(tools, SETTING, request_id="r")
-    assert list(candidates) == ["000001"]
+    assert list(candidates) == ["000010"]
 
 
 async def test_scan_chunks_by_30_and_groups_signals_per_symbol():

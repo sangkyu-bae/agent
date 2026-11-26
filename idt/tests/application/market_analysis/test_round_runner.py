@@ -31,8 +31,8 @@ SETTING = dataclasses.replace(
 
 
 def _tools(
-    symbols=("000001", "000002", "000003"),
-    signaled=("000001", "000002", "000003"),
+    symbols=("000010", "000020", "000030"),
+    signaled=("000010", "000020", "000030"),
     index_day="2026-11-26",
 ):
     tools = FakeTools()
@@ -142,7 +142,7 @@ async def test_happy_path_caps_and_records():
     statuses = sorted(i["status"] for i in rounds.items.values())
     assert statuses == ["done", "done", "over_cap"]
     # 거래량 많은 순 → 000003, 000002 가 분석된다
-    assert {t.symbol for t in pipeline.targets} == {"000003", "000002"}
+    assert {t.symbol for t in pipeline.targets} == {"000030", "000020"}
     t = pipeline.targets[0]
     assert t.provisional is True and t.round_id == 1 and t.trade_date == TODAY
     assert "KOSPI" in t.market_context and "4697.51" in t.market_context
@@ -157,7 +157,7 @@ async def test_close_round_targets_are_not_provisional_unless_signal_says_so():
         "signals": {
             "gap": [
                 {
-                    "symbol": "000001",
+                    "symbol": "000010",
                     "direction": "up",
                     "provisional": False,
                     "values": {},
@@ -179,14 +179,14 @@ async def test_holiday_skips_without_analysis_u8():
 
 async def test_duplicate_and_held_are_recorded_not_analyzed():
     rounds = FakeRounds()
-    rounds.analyzed = {"000001"}
+    rounds.analyzed = {"000010"}
     runner, rounds, pipeline = _runner(
-        _tools(), rounds=rounds, held=FakeHeld({"000002"})
+        _tools(), rounds=rounds, held=FakeHeld({"000020"})
     )
     await _run(runner, rounds)
     by_symbol = {i["symbol"]: i["status"] for i in rounds.items.values()}
-    assert by_symbol == {"000001": "duplicate", "000002": "held", "000003": "done"}
-    assert [t.symbol for t in pipeline.targets] == ["000003"]
+    assert by_symbol == {"000010": "duplicate", "000020": "held", "000030": "done"}
+    assert [t.symbol for t in pipeline.targets] == ["000030"]
 
 
 async def test_day_cap_uses_attempts_including_failed_g8():
@@ -202,7 +202,7 @@ async def test_day_cap_uses_attempts_including_failed_g8():
 
 async def test_failed_report_and_exception_mark_items_failed_but_round_done():
     runner, rounds, _ = _runner(
-        _tools(), pipeline=FakePipeline(fail={"000003"}, raise_on={"000002"})
+        _tools(), pipeline=FakePipeline(fail={"000030"}, raise_on={"000020"})
     )
     r = await _run(runner, rounds)
     assert r["status"] == "done"
@@ -212,8 +212,8 @@ async def test_failed_report_and_exception_mark_items_failed_but_round_done():
         for i in rounds.items.values()
         if i["status"] == "failed"
     }
-    assert errors["000002"].startswith("PIPELINE_ERROR")
-    assert errors["000003"] == "REPORT_FAILED"
+    assert errors["000020"].startswith("PIPELINE_ERROR")
+    assert errors["000030"] == "REPORT_FAILED"
 
 
 async def test_missing_configuration_fails_round():
@@ -249,7 +249,7 @@ async def test_after_report_hook_runs_and_its_failure_is_contained():
 
     runner, rounds, _ = _runner(_tools(), hook=hook)
     r = await _run(runner, rounds)
-    assert sorted(seen) == ["000002", "000003"]
+    assert sorted(seen) == ["000020", "000030"]
     assert r["status"] == "done" and r["counts"].analyzed == 2
 
 
