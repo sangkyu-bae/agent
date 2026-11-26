@@ -1,7 +1,7 @@
 """background-jobs 요청/응답 DTO (Design §4-5)."""
-from datetime import datetime
+from datetime import UTC, datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer
 
 from src.application.agent_schedule.schemas import (
     ScheduleResponse,
@@ -175,3 +175,12 @@ class MyScheduleRunResponse(BaseModel):
     finished_at: datetime | None
     session_id: str | None
     error_message: str | None
+
+    @field_serializer("scheduled_for", "started_at", "finished_at")
+    def _utc(self, value: datetime | None) -> str | None:
+        """DB 의 UTC naive 를 오프셋과 함께 보낸다(스케줄 응답 _iso 와 같은 규칙)."""
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=UTC)
+        return value.isoformat()
