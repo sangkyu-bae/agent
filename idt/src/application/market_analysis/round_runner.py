@@ -182,6 +182,9 @@ class RoundRunner:
             held=await self._held.held_symbols(request_id),
             max_per_round=setting.max_per_round,
             max_per_day=setting.max_per_day,
+            attempts_today=await self._rounds.analysis_attempts(
+                trade_date=trade_date, request_id=request_id
+            ),
         )
         drafts = [
             *(self._draft(c, ItemStatus.QUEUED) for c in decision.selected),

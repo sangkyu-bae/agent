@@ -181,6 +181,7 @@ class FakeRounds:
         self.keys: set[tuple] = set()
         self.items: dict[int, dict] = {}
         self.analyzed: set[str] = set()
+        self.attempts: int = 0
         self.abandoned = 0
 
     async def try_claim(self, *, trade_date, slot, kind, trigger, request_id):
@@ -243,6 +244,9 @@ class FakeRounds:
 
     async def analyzed_symbols(self, *, trade_date, request_id):
         return set(self.analyzed)
+
+    async def analysis_attempts(self, *, trade_date, request_id):
+        return self.attempts
 
     async def abandon_running(self, request_id):
         n = 0
