@@ -124,6 +124,11 @@ class LlmModelRepository(LlmModelRepositoryInterface):
             row.supports_vision = model.supports_vision
             row.model_kind = model.model_kind
             row.price_per_image_usd = model.price_per_image_usd
+            # 단가 변경 API(UpdateLlmModelPricingUseCase)가 이 경로로 저장한다 —
+            # 빠지면 응답만 바뀌고 DB 는 그대로라 ai_run 비용이 0 으로 남는다
+            row.input_price_per_1k_usd = model.input_price_per_1k_usd
+            row.output_price_per_1k_usd = model.output_price_per_1k_usd
+            row.pricing_updated_at = model.pricing_updated_at
             row.updated_at = model.updated_at
             await self._session.flush()
             return model

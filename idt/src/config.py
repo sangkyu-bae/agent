@@ -435,6 +435,15 @@ class Settings(BaseSettings):
     # 소비: firewall_admin_di._automation_factory() → FirewallAutomationService(agent_id=).
     firewall_admin_agent_id: str = ""
 
+    # stock-analysis-agents §15: 시장 분석 모듈. 킬스위치 기본 off — false 면 조립하지 않고
+    # /api/v1/market-analysis/* 라우터가 없다(404). 자동 분석 on/off 는 DB 설정(화면)이다.
+    # 소비: src/api/market_analysis_di.py build_market_analysis().
+    market_analysis_enabled: bool = False
+    # 회차 실행기(lifespan task) — 모듈이 켜졌을 때만 의미가 있다. 여러 인스턴스 중 일부만
+    # 회차를 돌리고 싶을 때 false 로 둔다(회차는 DB UNIQUE 로 1회만 실행된다, design DD6).
+    # 소비: market_analysis_di.build_market_analysis() → MarketAnalysisParts.ticker_enabled.
+    market_analysis_ticker_enabled: bool = True
+
     # Answer Citation Verification (answer-citation-verification Design §10.1)
     # 답변 [n] 인용 + 근거 판정 같은 호출로 검증 + 칩 인용 표시. 킬스위치 기본 off —
     # false 면 검색 머리말·답변 프롬프트·판정 호출·칩 payload 가 모두 기존과 같다.

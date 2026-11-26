@@ -31,6 +31,15 @@ from src.api.source_viewer_di import (
 # firewall-admin-console §9.2 — 방화벽 관리 조립 접근자. 기능 제거 시 이 import 와
 # wire·close 호출 각 1곳을 지운다. 끄기만 할 때는 FIREWALL_ADMIN_ENABLED=false(기본).
 from src.api.firewall_admin_di import close_firewall_admin, wire_firewall_admin
+# stock-analysis-agents §2.1 — 시장 분석 조립 접근자. 기능 제거 시 이 import, wire 호출,
+# _market_analysis_platform, lifespan 의 start/close 각 1줄을 지운다.
+# 끄기만 할 때는 MARKET_ANALYSIS_ENABLED=false(기본).
+from src.api.market_analysis_di import (
+    MarketAnalysisPlatform,
+    close_market_analysis,
+    start_market_analysis,
+    wire_market_analysis,
+)
 # answer-citation-verification §9.2 S11 — 인용 검증 조립 접근자.
 # 기능 제거 시 이 import 와 주입 3곳(labeler·service·enricher)을 지운다.
 # 끄기만 할 때는 ANSWER_CITATION_ENABLED=false.
@@ -3778,6 +3787,61 @@ def _build_approval_executor(app_logger):
     )
 
 
+def _market_analysis_platform(create_uc_factory, build_run_agent_uc):
+    """stock-analysis-agents §4 — 시장 분석 어댑터가 쓰는 플랫폼 의존성.
+
+    wire_market_analysis 가 모듈이 켜졌을 때만 부른다
+    (꺼져 있으면 아무것도 만들지 않는다).
+    MCP 직접 호출은 승인 집행기와 같은 코어(build_execution_client + 신원 헤더),
+    실행자 인증은 백그라운드 워커와 같은 assemble_user_auth_context 를 쓴다.
+    """
+    from src.infrastructure.approval.mcp_executor import build_execution_client
+    from src.infrastructure.config.approval_execution_config import (
+        ApprovalExecutionConfig,
+    )
+    from src.infrastructure.mcp_registry.session_scoped_repository import (
+        SessionScopedMcpServerRepository,
+    )
+    from src.infrastructure.web_search.tavily_tool import TavilySearchTool
+
+    app_logger = get_app_logger()
+    session_factory = get_session_factory()
+    server_repo = SessionScopedMcpServerRepository(
+        session_factory=session_factory, logger=app_logger, cipher=_mcp_cipher()
+    )
+    timeout = ApprovalExecutionConfig().get_timeout()
+    identity_headers = _identity_headers(app_logger)
+    tavily: list = []
+
+    def news_search(**kwargs):
+        if not tavily:
+            tavily.append(TavilySearchTool())
+        return tavily[0].search(**kwargs)
+
+    async def assemble(user_id: str, request_id: str):
+        return await assemble_user_auth_context(
+            session_factory, user_id, request_id, app_logger
+        )
+
+    return MarketAnalysisPlatform(
+        session_factory=session_factory,
+        run_agent_uc_builder=build_run_agent_uc,
+        create_agent_uc_builder=lambda session: create_uc_factory(session),
+        auth_ctx_assembler=assemble,
+        mcp_server_finder=server_repo.find_by_id,
+        mcp_client_factory=lambda registration, subject_user_id, request_id: (
+            build_execution_client(
+                registration, timeout=timeout, logger=app_logger,
+                header_provider=identity_headers.for_registration(
+                    registration, subject_user_id, request_id
+                ),
+            )
+        ),
+        news_search=news_search,
+        utility_llm_provider=get_utility_llm_provider(),
+    )
+
+
 def create_approval_factories(build_run_agent_uc):
     """approval-gate DI (Design §2.1 / §4).
 
@@ -6287,12 +6351,18 @@ async def lifespan(app: FastAPI):
     if _background_job_worker is not None:
         _background_job_worker.start()
 
+    # stock-analysis-agents DD6: 회차 실행기 (모듈·실행기 플래그가 꺼져 있으면 no-op)
+    start_market_analysis()
+
     # graph-rag-foundation §2.1: Neo4j 스키마 멱등 생성 (wire 안 했으면 no-op)
     from src.api.graph_rag_di import close_graph_rag, start_graph_rag
 
     await start_graph_rag()
 
     yield
+
+    # stock-analysis-agents DD6: 실행 중 회차 취소 (다음 기동의 recover 가 회수)
+    await close_market_analysis()
 
     # background-jobs D7: 루프·활성 job 취소 + failed 마킹 시도 (reconcile 이중 방어)
     if _background_job_worker is not None:
@@ -6912,6 +6982,11 @@ def create_app() -> FastAPI:
     wire_source_viewer(app, kb_uc_factory=_kb_uc_factory, get_session=get_session)
     # firewall-admin-console §6.3 — 킬스위치 on 일 때만 /api/v1/admin/firewall/* 등록
     wire_firewall_admin(app)
+    # stock-analysis-agents §5 — 킬스위치 on 일 때만
+    # /api/v1/market-analysis/* 등록 + 회차 조립
+    wire_market_analysis(
+        app, lambda: _market_analysis_platform(_create_uc, _build_run_agent_uc)
+    )
     # KB 문서 삭제 DI (kb-document-management)
     _kb_delete_factory = create_kb_document_delete_factory(_kb_uc_factory)
     app.dependency_overrides[get_delete_kb_document_use_case] = _kb_delete_factory

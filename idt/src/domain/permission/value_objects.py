@@ -19,6 +19,9 @@ class PermissionCode(str, Enum):
     CREATE_AGENT = "CREATE_AGENT"
     MANAGE_USERS = "MANAGE_USERS"
     MANAGE_PERMISSIONS = "MANAGE_PERMISSIONS"
+    # stock-analysis-agents DD10 — 시드는 V101 (role 기본 권한에는 넣지 않는다: 부여자만 본다)
+    MARKET_ANALYSIS_VIEW = "MARKET_ANALYSIS_VIEW"
+    MARKET_ANALYSIS_MANAGE = "MARKET_ANALYSIS_MANAGE"
 
     @property
     def label_ko(self) -> str:
@@ -35,4 +38,6 @@ _LABELS_KO: dict[PermissionCode, str] = {
     PermissionCode.CREATE_AGENT:          "에이전트 생성",
     PermissionCode.MANAGE_USERS:          "사용자 관리",
     PermissionCode.MANAGE_PERMISSIONS:    "권한 관리",
+    PermissionCode.MARKET_ANALYSIS_VIEW:   "시장 분석 열람",
+    PermissionCode.MARKET_ANALYSIS_MANAGE: "시장 분석 관리",
 }

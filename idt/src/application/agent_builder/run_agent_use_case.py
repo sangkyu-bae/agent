@@ -30,6 +30,7 @@ from src.application.agent_builder.search_pipeline import (
     is_worker_output,
     split_draft_output,
 )
+from src.application.agent_builder.reference_context import attach_reference_context
 from src.application.agent_builder.supervisor_nodes import build_initial_state
 from src.application.agent_builder.workflow_compiler import WorkflowCompiler
 from src.application.agent_run.auth_context import (
@@ -1053,6 +1054,10 @@ class RunAgentUseCase:
             request.session_id is not None,
         )
         messages = self._attach_turn_images(messages, request, llm_model)
+        # stock-analysis-agents DD5: 내부 호출자 opt-in 참고 자료 (None 이면 그대로)
+        messages = attach_reference_context(
+            messages, getattr(request, "reference_context", None)
+        )
 
         workflow = agent.to_workflow_definition()
         workflow = await self._inject_attached_skills(workflow, agent, request_id)

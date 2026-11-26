@@ -74,6 +74,26 @@ def image_blocks(msg: Any) -> list[dict]:
     return [b for b in content if _is_image_block(b)]
 
 
+def append_to_last_user(messages: list[dict], text: str) -> list[dict]:
+    """마지막 사용자 메시지 뒤에 텍스트를 덧붙인 **새 목록** (원본 불변).
+
+    content 가 블록 목록이면 텍스트 블록을 끝에 더하고,
+    문자열이면 빈 줄 하나 뒤에 잇는다. 사용자 메시지가 없으면 원본을
+    그대로 돌려준다 (stock-analysis-agents DD5 reference_context).
+    """
+    users = [i for i, m in enumerate(messages) if m.get("role") == "user"]
+    index = users[-1] if users else None
+    if index is None:
+        return messages
+    last = messages[index]
+    content = _raw_content(last)
+    if isinstance(content, list):
+        new_content: Any = [*content, {"type": "text", "text": text}]
+    else:
+        new_content = f"{content or ''}\n\n{text}"
+    return [*messages[:index], {**last, "content": new_content}, *messages[index + 1 :]]
+
+
 def redact_messages(messages: list) -> list:
     """messages 복사본 — 각 content 의 이미지 블록을 마커로 치환 (저장·로그 직렬화용).
 

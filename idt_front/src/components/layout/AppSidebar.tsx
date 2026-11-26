@@ -11,9 +11,11 @@ import {
   Plus,
   Sparkles,
   Store,
+  TrendingUp,
   Wrench,
   type LucideProps,
 } from 'lucide-react';
+import { useMarketAnalysisAccess } from '@/hooks/useMarketAnalysis';
 import { useLayoutStore } from '@/store/layoutStore';
 import { cn } from '@/utils/cn';
 import AgentList from '@/components/layout/sidebar/AgentList';
@@ -108,6 +110,7 @@ const AppSidebar = ({
   const collapsed = useLayoutStore((s) => s.isSidebarCollapsed);
   const toggleSidebar = useLayoutStore((s) => s.toggleSidebar);
   const setSidebarCollapsed = useLayoutStore((s) => s.setSidebarCollapsed);
+  const marketAccess = useMarketAnalysisAccess();
 
   const handleNavClick = (item: NavItem) => {
     if (item.id === 'super') {
@@ -184,6 +187,16 @@ const AppSidebar = ({
             onClick={() => handleNavClick(item)}
           />
         ))}
+        {/* stock-analysis-agents §9.1 — 보기 권한이 있을 때만 (모듈이 꺼져 있으면 404 → 숨김) */}
+        {marketAccess.data?.can_view && (
+          <SidebarItem
+            label="시장 분석"
+            icon={TrendingUp}
+            collapsed={collapsed}
+            isActive={location.pathname.startsWith('/market-analysis')}
+            onClick={() => navigate('/market-analysis')}
+          />
+        )}
       </nav>
 
       {/* (e) 에이전트 목록 — 접힌 상태에서는 아이콘 1개로 대체(클릭 시 펼침) */}

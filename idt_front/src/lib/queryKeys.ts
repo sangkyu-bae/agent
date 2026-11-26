@@ -466,4 +466,24 @@ export const queryKeys = {
     original: (kbId: string, documentId: string) =>
       [...queryKeys.sourceViewer.all, 'original', kbId, documentId] as const,
   },
+
+  // ── Market Analysis (stock-analysis-agents §9) ─────────
+  marketAnalysis: {
+    all: ['marketAnalysis'] as const,
+    access: () => [...queryKeys.marketAnalysis.all, 'access'] as const,
+    dashboard: () => [...queryKeys.marketAnalysis.all, 'dashboard'] as const,
+    positions: (params: { status: string; page: number }) =>
+      [...queryKeys.marketAnalysis.all, 'positions', params] as const,
+    position: (id: number) => [...queryKeys.marketAnalysis.all, 'position', id] as const,
+    decisions: (params: { kind: string; decision: string; page: number }) =>
+      [...queryKeys.marketAnalysis.all, 'decisions', params] as const,
+    reports: (params: { symbol?: string; date?: string; page: number }) =>
+      [...queryKeys.marketAnalysis.all, 'reports', params] as const,
+    report: (id: number) => [...queryKeys.marketAnalysis.all, 'report', id] as const,
+    insights: () => [...queryKeys.marketAnalysis.all, 'insights'] as const,
+    rounds: (page: number) => [...queryKeys.marketAnalysis.all, 'rounds', page] as const,
+    round: (id: number) => [...queryKeys.marketAnalysis.all, 'round', id] as const,
+    settings: () => [...queryKeys.marketAnalysis.all, 'settings'] as const,
+    roleAgents: () => [...queryKeys.marketAnalysis.all, 'roleAgents'] as const,
+  },
 } as const;

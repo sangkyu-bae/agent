@@ -8,7 +8,8 @@ class MCPRegistrationPolicy:
     """MCP 서버 등록 유효성 정책."""
 
     MAX_NAME_LENGTH = 255
-    MAX_DESCRIPTION_LENGTH = 2000
+    # TEXT 컬럼(65,535바이트) 안 — utf8mb4 4바이트 x 10,000자 = 40,000바이트
+    MAX_DESCRIPTION_LENGTH = 10000
     MAX_ENDPOINT_LENGTH = 512
     ALLOWED_SCHEMES = {"http", "https"}
     ALLOWED_TRANSPORTS = {"sse", "streamable_http"}

@@ -430,4 +430,23 @@ export const API_ENDPOINTS = {
   ADMIN_EVAL_RECENT_NEGATIVE: '/api/v1/admin/eval/recent-negative',
   ADMIN_EVAL_NEGATIVE_DRILLDOWN: (messageId: number) =>
     `/api/v1/admin/eval/negative/${messageId}/drilldown`,
+
+  // ── Market Analysis (stock-analysis-agents §5.1) ───────
+  // 백엔드 MARKET_ANALYSIS_ENABLED=false 면 전 경로 404 (메뉴는 /access 로 판단)
+  MARKET_ANALYSIS_ACCESS: '/api/v1/market-analysis/access',
+  MARKET_ANALYSIS_DASHBOARD: '/api/v1/market-analysis/dashboard',
+  MARKET_ANALYSIS_POSITIONS: '/api/v1/market-analysis/positions',
+  MARKET_ANALYSIS_POSITION: (id: number) => `/api/v1/market-analysis/positions/${id}`,
+  MARKET_ANALYSIS_DECISIONS: '/api/v1/market-analysis/decisions',
+  MARKET_ANALYSIS_REPORTS: '/api/v1/market-analysis/reports',
+  MARKET_ANALYSIS_REPORT: (id: number) => `/api/v1/market-analysis/reports/${id}`,
+  MARKET_ANALYSIS_INSIGHTS: '/api/v1/market-analysis/insights',
+  MARKET_ANALYSIS_PRINCIPLE: (id: number) => `/api/v1/market-analysis/principles/${id}`,
+  MARKET_ANALYSIS_ROUNDS: '/api/v1/market-analysis/rounds',
+  MARKET_ANALYSIS_ROUND: (id: number) => `/api/v1/market-analysis/rounds/${id}`,
+  MARKET_ANALYSIS_RUN_NOW: '/api/v1/market-analysis/rounds/run-now',
+  MARKET_ANALYSIS_SETTINGS: '/api/v1/market-analysis/settings',
+  MARKET_ANALYSIS_SETTINGS_ENABLED: '/api/v1/market-analysis/settings/enabled',
+  MARKET_ANALYSIS_ROLE_AGENTS: '/api/v1/market-analysis/role-agents',
+  MARKET_ANALYSIS_BOOTSTRAP: '/api/v1/market-analysis/bootstrap-agents',
 } as const;

@@ -55,5 +55,13 @@ class TestValidateDescription:
     def test_rejects_whitespace_only(self):
         assert MCPRegistrationPolicy.validate_description("  ") is False
 
+    def test_accepts_long_tool_guide(self):
+        # 도구 안내가 긴 서버(KIS registration.json 2,534자)도 그대로 등록된다
+        assert MCPRegistrationPolicy.validate_description("a" * 2534) is True
+
+    def test_accepts_up_to_max(self):
+        assert MCPRegistrationPolicy.MAX_DESCRIPTION_LENGTH == 10000
+        assert MCPRegistrationPolicy.validate_description("가" * 10000) is True
+
     def test_rejects_too_long(self):
-        assert MCPRegistrationPolicy.validate_description("a" * 2001) is False
+        assert MCPRegistrationPolicy.validate_description("a" * 10001) is False

@@ -36,6 +36,13 @@ class TestPermissionCodeMembers:
     def test_manage_permissions_exists(self):
         assert PermissionCode.MANAGE_PERMISSIONS.value == "MANAGE_PERMISSIONS"
 
+    def test_market_analysis_codes_exist(self):
+        """stock-analysis-agents DD10 — 시장 분석 열람·관리 (V101 시드와 동기화)."""
+        assert PermissionCode.MARKET_ANALYSIS_VIEW.value == "MARKET_ANALYSIS_VIEW"
+        assert PermissionCode.MARKET_ANALYSIS_MANAGE.value == "MARKET_ANALYSIS_MANAGE"
+        assert PermissionCode.MARKET_ANALYSIS_VIEW.label_ko == "시장 분석 열람"
+        assert PermissionCode.MARKET_ANALYSIS_MANAGE.label_ko == "시장 분석 관리"
+
     def test_enum_is_str(self):
         """PermissionCode는 str을 상속해야 ai_run_* 등 외부 모듈과 비교 가능."""
         assert PermissionCode.USE_RAG_SEARCH == "USE_RAG_SEARCH"

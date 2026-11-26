@@ -41,6 +41,7 @@ import KnowledgeArticlePage from '@/pages/KnowledgeArticlePage';
 import AgentRunDetailPage from '@/pages/AgentRunDetailPage';
 import UsageMePage from '@/pages/UsageMePage';
 import JobsPage from '@/pages/JobsPage';
+import MarketAnalysisPage from '@/pages/MarketAnalysisPage';
 import SettingsPage from '@/pages/SettingsPage';
 import AdminLayout from '@/components/layout/AdminLayout';
 import { useInitAuth } from '@/hooks/useAuth';
@@ -86,6 +87,8 @@ const App = () => (
           <Route path="/usage" element={<UsageMePage />} />
           {/* background-jobs: 작업함 (내 작업 + 스케줄 실행 이력) */}
           <Route path="/jobs" element={<JobsPage />} />
+          {/* stock-analysis-agents: 시장 분석 (권한·모듈 off 는 페이지가 안내) */}
+          <Route path="/market-analysis" element={<MarketAnalysisPage />} />
           {/* agent-memory: AI 메모리 관리 */}
           <Route path="/settings" element={<SettingsPage />} />
         </Route>
