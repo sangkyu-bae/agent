@@ -2,6 +2,7 @@
 import { http, HttpResponse } from 'msw';
 import { API_ENDPOINTS } from '@/constants/api';
 import type {
+  IndexChartResponse,
   MarketAnalysisAccessResponse,
   MarketAnalysisDashboardResponse,
   MarketAnalysisPage,
@@ -312,10 +313,40 @@ export const MA_ROLE_AGENTS: RoleAgentsResponse = {
   ],
 };
 
+// market-index-ytd-chart §4.2 — 올해 시장 차트
+export const MA_INDEX_CHART: IndexChartResponse = {
+  year: 2026,
+  series: {
+    KOSPI: {
+      base_date: '2026-01-02',
+      base_close: 2500,
+      points: [
+        { date: '2026-01-02', close: 2500, rate: 0, provisional: false },
+        { date: '2026-11-26', close: 2590, rate: 3.6, provisional: false },
+        { date: '2026-11-27', close: 2601.1, rate: 4.04, provisional: true },
+      ],
+    },
+    KOSDAQ: {
+      base_date: '2026-01-02',
+      base_close: 700,
+      points: [
+        { date: '2026-01-02', close: 700, rate: 0, provisional: false },
+        { date: '2026-11-26', close: 690, rate: -1.43, provisional: false },
+        { date: '2026-11-27', close: 691.6, rate: -1.2, provisional: true },
+      ],
+    },
+  },
+  regimes: [{ date: '2026-11-26', value: 'strong_bear' }],
+  source_status: 'ok',
+  source_error: null,
+  as_of: '2026-11-27T02:00:00Z',
+};
+
 /** 페이지 전체를 그릴 때 쓰는 기본 핸들러 묶음 — 테스트가 필요한 것만 server.use 로 덮어쓴다 */
 export const marketAnalysisHandlers = (access: MarketAnalysisAccessResponse = MA_ACCESS_MANAGER) => [
   http.get(`*${API_ENDPOINTS.MARKET_ANALYSIS_ACCESS}`, () => HttpResponse.json(access)),
   http.get(`*${API_ENDPOINTS.MARKET_ANALYSIS_DASHBOARD}`, () => HttpResponse.json(MA_DASHBOARD)),
+  http.get(`*${API_ENDPOINTS.MARKET_ANALYSIS_INDEX_CHART}`, () => HttpResponse.json(MA_INDEX_CHART)),
   http.get(`*${API_ENDPOINTS.MARKET_ANALYSIS_POSITIONS}`, ({ request }) =>
     HttpResponse.json(
       new URL(request.url).searchParams.get('status') === 'closed'

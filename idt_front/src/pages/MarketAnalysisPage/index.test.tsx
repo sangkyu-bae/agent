@@ -2,7 +2,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { http, HttpResponse } from 'msw';
+import { delay, http, HttpResponse } from 'msw';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { server } from '@/__tests__/mocks/server';
 import { createWrapper } from '@/__tests__/mocks/wrapper';
@@ -12,6 +12,7 @@ import {
   MA_ACCESS_NONE,
   MA_ACCESS_VIEWER,
   MA_DASHBOARD_OFF,
+  MA_INDEX_CHART,
   MA_ROLE_AGENTS,
   MA_SETTINGS,
   marketAnalysisHandlers,
@@ -119,6 +120,94 @@ describe('대시보드 (L2 #2)', () => {
     expect(screen.getByText('+6.40%')).toBeInTheDocument();
     expect(screen.getByText('하락')).toBeInTheDocument(); // bear
     expect(screen.getByText('14 · 0 · 1')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /누적 수익률/ })).toBeInTheDocument();
+  });
+});
+
+describe('올해 시장 카드 (market-index-ytd-chart §5.4)', () => {
+  const chart = (body: unknown, status = 200) =>
+    http.get(`*${API_ENDPOINTS.MARKET_ANALYSIS_INDEX_CHART}`, () => HttpResponse.json(body, { status }));
+  const EMPTY_SERIES = { base_date: null, base_close: null, points: [] };
+
+  it('지수별 최신 등락률·미확정·차트를 보인다', async () => {
+    use();
+    renderPage();
+    const card = await screen.findByRole('region', { name: '올해 시장' });
+    expect(await within(card).findByText('KOSPI +4.04%')).toBeInTheDocument();
+    expect(within(card).getByText('KOSDAQ -1.20%')).toBeInTheDocument();
+    expect(within(card).getByText('(11/27 미확정)')).toBeInTheDocument();
+    expect(within(card).getByRole('img', { name: '올해 KOSPI·KOSDAQ 등락률' })).toBeInTheDocument();
+    expect(within(card).getByText(/연초 첫 거래일 종가 대비 등락률입니다/)).toBeInTheDocument();
+  });
+
+  it('stale 이면 저장 데이터로 그리고 마지막 확정일로 안내한다 (G-M6)', async () => {
+    use(MA_ACCESS_MANAGER, chart({ ...MA_INDEX_CHART, source_status: 'stale', source_error: 'SERVER_UNAVAILABLE' }));
+    renderPage();
+    const card = await screen.findByRole('region', { name: '올해 시장' });
+    // 11/27 은 미확정 점이라 저장 데이터 기준일이 아니다
+    expect(await within(card).findByText(/최신 시세를 받지 못해 11\/26까지의 저장 데이터로 표시합니다/)).toBeInTheDocument();
+    expect(within(card).getByRole('img', { name: '올해 KOSPI·KOSDAQ 등락률' })).toBeInTheDocument();
+  });
+
+  it('한쪽 지수만 데이터가 있으면 빠진 지수를 밝힌다 (G-I1)', async () => {
+    use(
+      MA_ACCESS_MANAGER,
+      chart({
+        ...MA_INDEX_CHART,
+        series: { KOSPI: MA_INDEX_CHART.series.KOSPI, KOSDAQ: EMPTY_SERIES },
+        source_status: 'unavailable',
+        source_error: 'RATE_LIMITED',
+      }),
+    );
+    renderPage();
+    const card = await screen.findByRole('region', { name: '올해 시장' });
+    expect(await within(card).findByText('KOSDAQ 시세를 받지 못했습니다. 잠시 후 다시 확인하세요.')).toBeInTheDocument();
+    expect(within(card).getByText('KOSPI +4.04%')).toBeInTheDocument();
+    expect(within(card).getByRole('img', { name: '올해 KOSPI·KOSDAQ 등락률' })).toBeInTheDocument();
+  });
+
+  it('차트를 불러오는 동안 로딩 문구 (G-M5)', async () => {
+    use(
+      MA_ACCESS_MANAGER,
+      http.get(`*${API_ENDPOINTS.MARKET_ANALYSIS_INDEX_CHART}`, async () => {
+        await delay('infinite');
+        return HttpResponse.json(MA_INDEX_CHART);
+      }),
+    );
+    renderPage();
+    const card = await screen.findByRole('region', { name: '올해 시장' });
+    expect(within(card).getByText('지수 흐름을 불러오는 중…')).toBeInTheDocument();
+  });
+
+  it('unavailable 이면 KIS 설정 안내', async () => {
+    use(
+      MA_ACCESS_MANAGER,
+      chart({
+        ...MA_INDEX_CHART,
+        series: { KOSPI: EMPTY_SERIES, KOSDAQ: EMPTY_SERIES },
+        source_status: 'unavailable',
+        source_error: 'KIS_NOT_CONFIGURED',
+      }),
+    );
+    renderPage();
+    const card = await screen.findByRole('region', { name: '올해 시장' });
+    expect(await within(card).findByText('지수 시세를 받을 수 없습니다. KIS 서버 설정을 확인하세요.')).toBeInTheDocument();
+    expect(within(card).queryByRole('img')).not.toBeInTheDocument();
+  });
+
+  it('올해 봉이 아직 없으면 빈 상태', async () => {
+    use(MA_ACCESS_MANAGER, chart({ ...MA_INDEX_CHART, series: { KOSPI: EMPTY_SERIES, KOSDAQ: EMPTY_SERIES }, regimes: [] }));
+    renderPage();
+    const card = await screen.findByRole('region', { name: '올해 시장' });
+    expect(await within(card).findByText('올해 첫 거래일 이후에 표시됩니다.')).toBeInTheDocument();
+  });
+
+  it('차트 조회가 실패해도 대시보드 나머지는 보인다', async () => {
+    use(MA_ACCESS_MANAGER, chart({ detail: { code: 'MA_UNAVAILABLE', message: '준비 안 됨' } }, 503));
+    renderPage();
+    const card = await screen.findByRole('region', { name: '올해 시장' });
+    expect(await within(card).findByRole('alert')).toBeInTheDocument();
+    expect(screen.getByText('보유 종목')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: /누적 수익률/ })).toBeInTheDocument();
   });
 });

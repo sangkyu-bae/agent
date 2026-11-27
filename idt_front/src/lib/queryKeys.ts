@@ -472,6 +472,7 @@ export const queryKeys = {
     all: ['marketAnalysis'] as const,
     access: () => [...queryKeys.marketAnalysis.all, 'access'] as const,
     dashboard: () => [...queryKeys.marketAnalysis.all, 'dashboard'] as const,
+    indexChart: () => [...queryKeys.marketAnalysis.all, 'indexChart'] as const,
     positions: (params: { status: string; page: number }) =>
       [...queryKeys.marketAnalysis.all, 'positions', params] as const,
     position: (id: number) => [...queryKeys.marketAnalysis.all, 'position', id] as const,

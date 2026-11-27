@@ -7,7 +7,8 @@ import { server } from '@/__tests__/mocks/server';
 import { createWrapper } from '@/__tests__/mocks/wrapper';
 import { API_ENDPOINTS } from '@/constants/api';
 import { ApiError } from '@/services/api/ApiError';
-import { useMarketAnalysisAccess, useRunNow } from './useMarketAnalysis';
+import { MA_INDEX_CHART } from '@/__tests__/mocks/marketAnalysisMocks';
+import { useIndexChart, useMarketAnalysisAccess, useRunNow } from './useMarketAnalysis';
 
 beforeAll(() => server.listen());
 afterEach(() => server.resetHandlers());
@@ -53,5 +54,17 @@ describe('useRunNow', () => {
     expect(err).toBeInstanceOf(ApiError);
     expect((err as ApiError).code).toBe('MA_ROUND_RUNNING');
     expect((err as ApiError).status).toBe(409);
+  });
+});
+
+describe('useIndexChart', () => {
+  it('올해 지수 차트를 조회한다', async () => {
+    server.use(
+      http.get(`*${API_ENDPOINTS.MARKET_ANALYSIS_INDEX_CHART}`, () => HttpResponse.json(MA_INDEX_CHART)),
+    );
+    const { result } = renderHook(() => useIndexChart(), { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.series.KOSPI.points).toHaveLength(3);
+    expect(result.current.data?.source_status).toBe('ok');
   });
 });

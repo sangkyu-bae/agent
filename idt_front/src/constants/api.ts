@@ -435,6 +435,7 @@ export const API_ENDPOINTS = {
   // 백엔드 MARKET_ANALYSIS_ENABLED=false 면 전 경로 404 (메뉴는 /access 로 판단)
   MARKET_ANALYSIS_ACCESS: '/api/v1/market-analysis/access',
   MARKET_ANALYSIS_DASHBOARD: '/api/v1/market-analysis/dashboard',
+  MARKET_ANALYSIS_INDEX_CHART: '/api/v1/market-analysis/index-chart',
   MARKET_ANALYSIS_POSITIONS: '/api/v1/market-analysis/positions',
   MARKET_ANALYSIS_POSITION: (id: number) => `/api/v1/market-analysis/positions/${id}`,
   MARKET_ANALYSIS_DECISIONS: '/api/v1/market-analysis/decisions',

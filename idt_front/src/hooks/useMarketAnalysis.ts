@@ -3,6 +3,7 @@ import { queryKeys } from '@/lib/queryKeys';
 import { marketAnalysisService } from '@/services/marketAnalysisService';
 import { ApiError } from '@/services/api/ApiError';
 import {
+  INDEX_CHART_STALE_MS,
   MARKET_ANALYSIS_PAGE_SIZE,
   MARKET_ANALYSIS_ROUNDS_REFETCH_MS,
   type MarketAnalysisAccessResponse,
@@ -44,6 +45,20 @@ export const useMarketDashboard = (enabled = true) =>
     queryFn: marketAnalysisService.getDashboard,
     enabled,
     retry: false,
+  });
+
+/**
+ * 올해 KOSPI·KOSDAQ 등락률 (market-index-ytd-chart §5.3).
+ * 대시보드와 따로 불러 첫 조회의 연초 적재가 대시보드를 막지 않게 한다.
+ * 백엔드 장중 봉 캐시(5분)와 같은 주기로 다시 묻는다.
+ */
+export const useIndexChart = (enabled = true) =>
+  useQuery({
+    queryKey: queryKeys.marketAnalysis.indexChart(),
+    queryFn: marketAnalysisService.getIndexChart,
+    enabled,
+    retry: false,
+    staleTime: INDEX_CHART_STALE_MS,
   });
 
 export const useMarketPositions = (status: 'open' | 'closed', page: number) =>
