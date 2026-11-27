@@ -15,6 +15,7 @@ import {
   formatKst,
   formatUsd,
   marketAnalysisErrorMessage,
+  roundKindAt,
   rowProps,
   translateSkipReason,
 } from '@/utils/marketAnalysis';
@@ -187,7 +188,7 @@ const RoundsTab = ({ canManage, onOpenReport }: RoundsTabProps) => {
       <ConfirmDialog
         isOpen={confirm}
         title="지금 회차 실행"
-        description="자동 분석 스위치와 관계없이 장 마감 회차를 한 번 실행합니다. 상한은 그대로 적용되고 에이전트 비용이 듭니다."
+        description={`자동 분석 스위치와 관계없이 지금 시각(서울) 기준 ${ROUND_KIND_LABELS[roundKindAt(new Date())]} 회차를 한 번 실행합니다. 상한은 그대로 적용되고 에이전트 비용이 듭니다.`}
         confirmLabel="실행"
         variant="info"
         isPending={runNow.isPending}
@@ -200,7 +201,7 @@ const RoundsTab = ({ canManage, onOpenReport }: RoundsTabProps) => {
           setConfirm(false);
           runNow.reset();
         }}
-        onConfirm={() => runNow.mutate('close', { onSuccess: () => setConfirm(false) })}
+        onConfirm={() => runNow.mutate(undefined, { onSuccess: () => setConfirm(false) })}
       />
     </div>
   );

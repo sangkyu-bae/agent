@@ -152,7 +152,7 @@ export const useMarketRound = (id: number | null) =>
 export const useRunNow = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (kind: 'intraday' | 'close') => marketAnalysisService.runNow(kind),
+    mutationFn: () => marketAnalysisService.runNow(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.marketAnalysis.all });
     },

@@ -232,7 +232,9 @@ class RoleAgentsBody(BaseModel):
 
 
 class RunNowBody(BaseModel):
-    kind: RoundKind = RoundKind.CLOSE
+    # 생략하면 서버가 서울 시각으로 정한다 (15:30 이후 장마감, 그 전 장중).
+    # 예전 기본값 CLOSE 는 장중 수동 회차를 장마감으로 돌렸다 (2026-11-27).
+    kind: RoundKind | None = None
 
 
 def _invalid_setting(e: InvalidSettingError) -> HTTPException:

@@ -8,6 +8,7 @@ import dataclasses
 from datetime import datetime
 from unittest.mock import MagicMock
 
+import pytest
 from src.application.market_analysis.scheduler import RoundScheduler
 from src.domain.market_analysis.round import SkipReason
 from src.domain.market_analysis.setting import MarketAnalysisSetting
@@ -147,6 +148,21 @@ async def test_run_now_ignores_switch_and_claims_manual_slot():
         RoundTrigger.MANUAL,
         RoundKind.CLOSE,
     )
+
+
+@pytest.mark.parametrize(
+    ("now", "kind"),
+    [(THU_1005, RoundKind.INTRADAY), (THU_1815, RoundKind.CLOSE)],
+    ids=["10:05-intraday", "18:15-close"],
+)
+async def test_run_now_without_kind_follows_the_clock(now, kind):
+    """2026-11-27: 11:38 수동 회차가 장마감으로 돌아 장중 값을 확정값처럼 다뤘다.
+    종류를 안 주면 자동 회차와 같은 규칙(15:30 기준)으로 정한다."""
+    s, rounds, runner = _scheduler(now=now)
+    rid = await s.run_now(None, "r")
+    await s.wait_idle()
+    assert rounds.rounds[rid]["kind"] is kind
+    assert runner.calls[0][2] is kind
 
 
 async def test_run_now_is_refused_while_a_round_runs_or_same_minute_twice():

@@ -4,6 +4,7 @@ import type { MarketAnalysisSettings } from '@/types/marketAnalysis';
 import {
   formatRate,
   marketAnalysisErrorMessage,
+  roundKindAt,
   settingFieldErrors,
   translateSkipReason,
   withinPeriod,
@@ -83,5 +84,17 @@ describe('formatSignalValues', () => {
     expect(formatSignalValues(undefined)).toBe('');
     expect(signalArrow('down')).toBe('↓');
     expect(signalArrow(undefined)).toBe('');
+  });
+});
+
+describe('roundKindAt — 서울 15:30 기준 (자동 회차와 같은 규칙)', () => {
+  it.each([
+    ['2026-11-27T02:38:00Z', 'intraday'], // 서울 11:38
+    ['2026-11-27T06:29:00Z', 'intraday'], // 15:29
+    ['2026-11-27T06:30:00Z', 'close'], // 15:30
+    ['2026-11-27T09:15:00Z', 'close'], // 18:15
+    ['2026-11-26T15:30:00Z', 'intraday'], // 다음 날 00:30
+  ])('%s → %s', (iso, kind) => {
+    expect(roundKindAt(new Date(iso))).toBe(kind);
   });
 });

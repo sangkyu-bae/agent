@@ -48,7 +48,7 @@ describe('useRunNow', () => {
       ),
     );
     const { result } = renderHook(() => useRunNow(), { wrapper: createWrapper() });
-    result.current.mutate('close');
+    result.current.mutate();
     await waitFor(() => expect(result.current.isError).toBe(true));
     const err = result.current.error;
     expect(err).toBeInstanceOf(ApiError);
