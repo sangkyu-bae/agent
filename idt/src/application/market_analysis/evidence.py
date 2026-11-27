@@ -27,6 +27,12 @@ NEWS_DAYS = 7
 NEWS_MAX = 5
 RESEARCH_MAX = 8
 DISCLOSURE_DAYS = 30
+# KIS get_investor_flow 의 *_net_amount 단위 — 실측(2026-11-27): amount/(qty×close)
+# 중앙값 0.9986e-6(587표본) → 백만 원. 에이전트가 "-143 단위"·"-55억 추정"처럼 추측했다
+INVESTOR_UNIT_NOTE = (
+    "[단위 investor] *_net_qty 는 주(株), *_net_amount 는 백만 원 단위다 "
+    "(예: -143 은 -1억 4,300만 원). 단위를 추정하지 않는다."
+)
 
 
 @dataclass(frozen=True)
@@ -251,5 +257,7 @@ def render_evidence(
             computed = _render_financial_changes(outcome)
             if computed:
                 parts.append(computed)
+        if key is EvidenceKey.INVESTOR:
+            parts.append(INVESTOR_UNIT_NOTE)
         parts.append(f"{label}\n{_clip(_body(outcome), per_item)}")
     return _clip("\n\n".join(parts), total)
