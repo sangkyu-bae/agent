@@ -11,12 +11,17 @@ source_refs:
   - idt/src/infrastructure/intent/adapter.py:1-14 (선행 사이클 — 겸용 + 3층 방어가 확장에 실패한 기록)
   - idt/tests/infrastructure/prompt_composer/test_adapter.py:93-115 (필드 집합 동등 비교 테스트)
   - docs/archive/2026-08/prompt-composer/prompt-composer.design.md (§1.3 · §2.4 P2/P3)
+  - docs/archive/2026-11/stock-analysis-agents/stock-analysis-agents.report.md (§1.4 SC-3, §6.2~6.3 — LLM 산술 오차 4/44 → 코드 계산 후 0/13) (v2)
+  - 커밋 61efbe8 + idt/src/application/market_analysis/verdict_parser.py _price (v2 — Decimal NaN·Infinity)
+  - idt/src/application/market_analysis/judgement.py (v2 — 진입 여부는 결정론 게이트가 재계산)
 confidence: 0.85
-version: 1
+version: 2
 created: 2026-08-18
-updated: 2026-08-18
-verified_at: 7c3ffdd
+updated: 2026-11-27
+verified_at: bcf64b0
 ---
+
+> v2 (2026-11-27): §6(파생 수치는 코드가 계산), §7(LLM 숫자의 비유한수 검증) 추가 — stock-analysis-agents 실측. 에이전트 갱신이라 approved → draft 강등.
 
 # LLM 출력 신뢰 경계 — 계산 필드는 스키마에서 빼고, 금지는 코드가 집행한다
 
@@ -90,6 +95,23 @@ assert set(_PromptDraft.model_fields) == {"purpose", "roles", "tool_guides", "pr
 "이 필드를 LLM에게 보여도 되는가"를 강제로 한 번 생각하게 된다.
 (개별 필드 부재 테스트는 실패 메시지를 읽기 쉽게 하는 보조로 함께 두면 좋다.)
 
+### 6. 파생 수치(증감률·비율·괴리)는 LLM에게 계산시키지 않는다 (v2)
+
+stock-analysis-agents 실측: 근거 블록에 **원값만** 주고 "근거에 없는 수치 금지"를 지시하자, 근거 없는 수치는
+973개 중 0개였지만 LLM이 증감률을 **직접 계산하다 44건 중 4건 틀렸다.** 재무 증감을 코드가 계산해 근거 블록에
+넣자(Act-2 G1) 재실측 13건 오차 0. "지어내지 마라"와 "계산하지 마라"는 다른 문제이고, 후자는 지시로 막히지 않는다.
+
+같은 계열: 매수 판단 에이전트의 목표가·손절가는 **입력일 뿐**이고, 진입 여부는 판단 시점 시세로 결정론 게이트가
+손익비·손절폭을 다시 계산해 정한다.
+
+### 7. LLM이 낸 숫자를 `Decimal`로 받으면 `NaN`·`Infinity`를 먼저 거른다 (v2)
+
+- `Decimal("NaN") <= 0`은 `InvalidOperation`을 던진다. 이것은 `ArithmeticError`이고 **`ValueError`가 아니라서**
+  pydantic `field_validator` 안에서 나도 `ValidationError`로 바뀌지 않고 검증 경로 밖으로 샌다.
+- `Decimal("Infinity")`는 양수라 `> 0` 검사를 통과한다.
+- 해결(`verdict_parser._price`): 파싱 직후 `if not price.is_finite(): raise ValueError` → 그다음에 범위 비교.
+  호출자는 파싱 실패를 보수적 기본값(매수 skip·매도 hold)으로 내린다.
+
 ## 이전 안을 버린 이유 (ADR)
 
 - **버린 안**: LLM 스키마와 도메인 결과 객체를 겸용하고, 호출측이 오염 가능 필드를
@@ -111,9 +133,13 @@ assert set(_PromptDraft.model_fields) == {"purpose", "roles", "tool_guides", "pr
    반드시 짝으로 넣는다.** 프롬프트만 있는 규칙은 규칙이 아니다.
 5. 관측 필드(`dropped_*`, `unknown_*`)는 응답·저장 스키마에 남긴다 — 프롬프트가
    실제로 통하는지는 이 값의 분포로만 사후 확인할 수 있다.
+6. (v2) LLM 입력에 넣을 수치 중 **원값에서 계산되는 것은 코드가 미리 계산해 넣는다.** 판단·결정에 쓰는 숫자는
+   LLM 값을 그대로 쓰지 말고 코드가 다시 계산한다.
+7. (v2) LLM 숫자를 `Decimal`로 받는 검증기는 비교 전에 `is_finite()`를 둔다(`float`도 `math.isfinite`).
 
 ## 관련 문서
 
 - 실패를 어디까지 흡수할지: `backend/patterns/degradation-vs-failure-boundary.md`
 - 계약을 테스트로 못박는 법: `backend/patterns/ast-source-contract-tests.md`
 - 탈착형 이음매(§3은 이 문서로 대체됨): `backend/patterns/detachable-module-seam.md`
+- 시장 분석 판단 파서·결정론 게이트(v2): `backend/market-analysis/overview.md`
