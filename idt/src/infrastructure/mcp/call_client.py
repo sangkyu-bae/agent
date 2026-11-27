@@ -149,17 +149,19 @@ class MCPCallClient:
             connected = False
             started = time.perf_counter()
             try:
-                async with MCPClientFactory.create_session(
-                    self._config,
-                    request_id,
-                    timeout=self._timeout,
-                    auth=self._auth,
-                    header_provider=header_provider,
-                ) as session:
-                    connected = True
-                    result = await asyncio.wait_for(
-                        operation(session), timeout=self._timeout.total
-                    )
+                # total 은 호출 한 건 전체(연결·initialize·실행·세션 정리)의 상한이다.
+                # SSE 는 서버 ping 으로 읽기 타임아웃이 안 걸려 initialize 가 응답을
+                # 잃으면 영영 기다렸다 (2026-11-27 시장 분석 회차가 끝나지 않음).
+                async with asyncio.timeout(self._timeout.total):
+                    async with MCPClientFactory.create_session(
+                        self._config,
+                        request_id,
+                        timeout=self._timeout,
+                        auth=self._auth,
+                        header_provider=header_provider,
+                    ) as session:
+                        connected = True
+                        result = await operation(session)
                 elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
                 self._logger.info(
                     "MCP call completed", elapsed_ms=elapsed_ms, **log_extra
