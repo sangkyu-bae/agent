@@ -26,13 +26,25 @@ source_refs:
   - idt/docs/archive/2026-11/image-generation-tool/image-generation-tool.report.md (V081)
   - idt/docs/archive/2026-11/agent-token-limit/agent-token-limit.report.md (V085, G-3 머지 순서)
   - 99b1512(#94, V085) · 3f7749c(#95, V084) 머지 순서
+  - idt/db/migration/V086~V091 (v7 — graph-rag-foundation, PR #113 7b4113d)
+  - idt/src/infrastructure/graph_rag/settings_reader.py (v7 — 설정 읽기 실패 = 닫힌 기본값)
+  - idt/src/application/graph_rag/hooks.py GraphDeletionHook (v7 — 단계 무관 실행)
+  - idt/db/migration/V092~V101 (v8 — 파일 헤더 주석 + ORM 매핑 grep, 2026-11-27)
+  - idt/src/infrastructure/llm_model/models.py · doc_browse/models.py · persistence/models/knowledge_base.py · agent_schedule/models.py (v8 — V092·V095·V096·V098 매핑 확인)
+  - idt/src/application/grounding_judge_setting/provider.py (v8 — V094 조회 실패 시 env 폴백)
+  - idt/src/config.py answer_citation_enabled·market_analysis_enabled 기본 False (v8)
+  - docs/archive/2026-11/claude-agent-e2e-fixes · answer-citation-verification · document-revision · firewall-agent · stock-analysis-agents 보고서 (v8 — V092~V101 배포 메모)
 confidence: 0.85
-version: 6
+version: 8
 created: 2026-07-21
-updated: 2026-11-14
-verified_at: 2fc45c5
+updated: 2026-11-27
+verified_at: bcf64b0
 ---
 
+> v8 (2026-11-27): **V092~V101 10건 추가**(claude-agent-e2e-fixes·answer-citation-verification·document-revision·firewall-agent·stock-analysis-agents). V092·V095·V096·V098은 ORM 매핑 컬럼이라 기능과 무관하게 핵심 경로가 깨진다. v7과 함께 재승인 대기.
+>
+> v7 (2026-11-21): **V086~V091 6건 추가**(graph-rag-foundation). 전부 그래프 모듈 전용 신규 테이블이고 코어 경로는 읽지 않는다. 에이전트 갱신이라 approved → draft 강등.
+>
 > v6 (2026-11-14): **V080~V085 6건 추가**(2026-10 중순~11). 판정 방식은 v5와 동일. V083은 **배포 절차 전제(MCP 전체 동기화)**가 있는 첫 시드다. 에이전트 갱신이라 approved → draft 강등.
 >
 > v5 (2026-10-13): **V063~V079 17건 추가**(2026-08 말~2026-10). 신규 행의 "요구하는 기능"은 SQL 파일 헤더 주석,
@@ -45,7 +57,7 @@ verified_at: 2fc45c5
 기능 코드는 머지됐지만 마이그레이션이 배포 환경에 적용되지 않으면 런타임에서 깨진다.
 어떤 기능이 어느 V버전을 요구하는지가 PDCA 아카이브에 흩어져 있어 배포 시 확인이 어렵다.
 
-## 검증된 사실 — 미적용 시 깨지는 최근 마이그레이션 (V046~V085)
+## 검증된 사실 — 미적용 시 깨지는 최근 마이그레이션 (V046~V101)
 
 | V | 내용 | 요구하는 기능 | 미적용 시 |
 |---|---|---|---|
@@ -101,15 +113,47 @@ verified_at: 2fc45c5
 | V084 | `kb_default_setting` 단일 행(고정 id 시드, `default_embedding_model_id` 소프트 참조) | agent-kb-quick-setup (빌더 원스톱 KB) | 설정 조회 실패. 적용해도 **NULL이면 KB 자동 생성이 422**(조용한 폴백 없음) → 배포 후 관리자가 `/admin/kb-defaults`에서 기본 임베딩 모델 1회 설정 |
 | V085 | `agent_definition.token_limit` INT NOT NULL DEFAULT 50000 (8000~500000은 도메인 검증, 단위는 글자수÷4 추정치) | agent-token-limit | 모델 매핑 컬럼 — **`agent_definition` 조회 = 거의 모든 에이전트 경로 SQL 에러** — **배포 전 필수**. `agent_definition`은 create_all 생성 테이블이라([[erd-agent]]) 신규 DB는 컬럼이 이미 생기고 기존 DB만 ALTER가 필요 |
 
+### V086~V091 (v7 추가, 2026-11 graph-rag-foundation)
+
+| V | 변경 | 요구하는 기능 | 미적용 시 |
+|---|------|--------------|-----------|
+| V086 | `graph_rag_setting` 단일 행(고정 id 시드, 기본 stage off) | Graph RAG 전역 설정 | 설정 캐시 리더가 읽기 실패를 **닫힌 기본값(off)** 으로 흡수 → 그래프 기능만 꺼짐. 관리자 그래프 화면 설정 API 오류 |
+| V087 | `graph_rag_stage_change` | 노출 단계 변경 이력 | 단계 변경(`POST /stage`) 실패 |
+| V088 | `graph_extraction_job` | 추출 잡 | 수동 추출·잡 조회 실패, 기동 시 끊긴 잡 정리 경고 |
+| V089 | `graph_resolution_decision` | 판정 기록·검토 큐 | 추출 청크 쓰기 실패, 검토 큐 오류 |
+| V090 | `graph_topic` | 문서 주제 | 주제 분류 실패(경고 후 계속), 주제 탭 오류 |
+| V091 | `graph_document_topic` | 문서↔주제 연결 | 주제 분류 실패. 또 **문서 삭제 훅이 단계와 무관하게 이 테이블을 지우므로** 문서 삭제마다 경고 로그(삭제 자체는 성공 — 코어가 훅 예외를 삼킴) |
+
+- 6건 모두 FK 없는 신규 테이블이고 ORM 매핑은 그래프 모듈 전용이라 **코어(에이전트·KB·채팅) 경로는 미적용이어도 깨지지 않는다**. 그래도 stage를 off 밖으로 바꾸기 전에는 6건 전부 필요하다.
+- 마이그레이션과 별개로 그래프를 켜려면 환경변수 `GRAPH_BACKEND=neo4j`·`NEO4J_URI`·`NEO4J_PASSWORD`와 neo4j 드라이버(extra `graph`) 설치가 필요하다([[failure-and-ops]]).
+
+### V092~V101 (v8 추가, 2026-11 하순)
+
+| V | 변경 | 요구하는 기능 | 미적용 시 |
+|---|------|--------------|-----------|
+| V092 | `llm_model.max_output_tokens` INT NULL(NULL=provider 기본값, Anthropic은 서버 설정 16000) | claude-agent-e2e-fixes (응답 출력 한도) | 모델 매핑 컬럼 — **`llm_model` 조회 자체가 깨짐**(V064·V081과 동형) — **배포 전 필수** |
+| V093 | `ai_answer_citation` 신규 테이블(실행당 1행, run_id 소프트 참조) | answer-citation-verification (`ANSWER_CITATION_ENABLED` 기본 off) | 스위치를 켠 뒤 인용 저장·재조회 실패. 꺼 두면 영향 없음 |
+| V094 | `grounding_judge_setting` 단일 행(고정 id 시드, NULL=env `GROUNDING_JUDGE_MODEL`) | 근거 판정 모델 관리자 설정 | 판정 모델 공급자가 조회 실패를 **env 공급자로 폴백**(예외 안 올림) → 판정은 계속 돎. 관리자 설정 카드·API만 오류 |
+| V095 | `document_metadata` 개정 컬럼 10개 + 인덱스 3개(기존 행은 v1·active·synced로 백필) | document-revision | 모델 매핑 컬럼(`doc_browse` ORM) — **KB 문서 목록·콘텐츠 조회 SQL 에러** — **배포 전 필수** |
+| V096 | `knowledge_base.revision_mode` 기본 `suggest` | document-revision (auto는 후속) | 모델 매핑 컬럼 — **`knowledge_base` 조회 = KB 경로 전부 SQL 에러** — **배포 전 필수** |
+| V097 | `document_revision_check` 신규 테이블(문서 FK 없음 — 삭제 후에도 로그 보존) | document-revision 사전 점검·수동 연결·되돌리기 | 개정 판정 로그 저장 실패 |
+| V098 | `agent_schedule.skip_when_busy`(기본 0) + `agent_schedule_run.skip_reason` | firewall-agent (승인 대기·진행 중이면 회차 건너뜀) | 모델 매핑 컬럼 — **스케줄 조회와 워커 30초 tick의 due 조회가 SQL 에러**(워커 기본 on이라 스케줄 기능을 안 써도 로그가 쌓임) — **배포 전 필수** |
+| V099 | `agent_alert_receiver`(에이전트당 1개, 토큰 sha256만) + `agent_alert_receipt`(수신 이력), 둘 다 FK CASCADE | firewall-agent 알림 수신(Alertmanager 웹훅) | 라우터는 무조건 등록되므로 수신 설정 화면·`/alert-hooks` 수신 호출이 실패. DDL은 `DEFAULT CHARSET=utf8mb4`만 쓰고 COLLATE 생략(V071과 같은 방식) |
+| V100 | `ma_*` 13테이블(설정·역할 에이전트·회차·리포트·판단·포지션·저널·원칙 등) | stock-analysis-agents (`MARKET_ANALYSIS_ENABLED` 기본 off — 끄면 라우터 미등록) | 꺼 두면 영향 없음. 켜면 회차·조회 API 전부 실패 |
+| V101 | 권한 `MARKET_ANALYSIS_VIEW/MANAGE` 시드 + `ma_setting` 기본 행(자동 분석 enabled=0) | stock-analysis-agents | 권한 행이 없어 사용자에게 열람 권한을 부여할 수 없다(role 기본 권한에도 넣지 않음 — 부여받은 사용자와 admin만 봄). 설정 기본 행도 없음 → **V100과 한 세트로 켜기 전에 적용** |
+
+- V095·V096은 같은 사이클의 V093·V094 뒤 번호다. 운영 적용 순서는 Flyway 번호 순서 그대로면 된다(보고서 §8 "Flyway 순서 확인").
+- V100·V101과 별개로 시장 분석을 켜려면 MCP 서버 3종(KIS·DART·Perplexity) 등록과 키가 필요하다(stock-analysis-agents 보고서 §4.1).
+
 **V084/V085 머지 순서 역전**: master에는 V085(#94, 2026-11-05 17:13:55)가 V084(#95, 17:14:15)보다 20초 먼저 머지됐다. 두 머지 사이 상태로 운영 배포된 적이 없다면 무관하지만, V085만 먼저 적용된 환경이 있으면 Flyway 기본 설정(outOfOrder 끔)에서는 V084가 적용되지 않는다 — 그 경우 outOfOrder 또는 수동 적용 필요. 운영 적용 절차(Flyway 사용 여부)는 아직 미확인(보고서 G-3).
 
-공통: V046~V085는 전부 additive(컬럼 추가·신규 테이블·시드)라 **역방향 호환** — 먼저 적용해도 구버전 코드가 깨지지 않는다. 신규 테이블/FK는 CHARSET/COLLATE 미명시 원칙을 따른다 ([[mysql-fk-collation]]).
+공통: V046~V101은 전부 additive(컬럼 추가·신규 테이블·시드)라 **역방향 호환** — 먼저 적용해도 구버전 코드가 깨지지 않는다. 신규 테이블/FK는 CHARSET/COLLATE 미명시 원칙을 따른다 ([[mysql-fk-collation]]).
 
-**"적용해도 조용한" 것과 "적용 안 하면 즉시 터지는" 것의 구분**: V054(모델에 컬럼 존재)와 V060(워커 기본 on)은 미적용 시 **기능을 안 써도** 터진다. (v5) V063~V079 중 **컬럼 추가 12건은 전부 ORM 모델에 매핑돼 있어 같은 유형**이다 — 특히 V064(`llm_model`)·V069/V072(`tool_catalog`)·V070(백그라운드 워커)·V076(`users`)·V079(`ai_run_step`)는 기능과 무관하게 앱 핵심 경로가 깨진다. 신규 테이블 5건(V065~V067·V071)과 시드 1건(V073)은 해당 기능 사용 시에만 터진다.
+**"적용해도 조용한" 것과 "적용 안 하면 즉시 터지는" 것의 구분**: V054(모델에 컬럼 존재)와 V060(워커 기본 on)은 미적용 시 **기능을 안 써도** 터진다. (v5) V063~V079 중 **컬럼 추가 12건은 전부 ORM 모델에 매핑돼 있어 같은 유형**이다 — 특히 V064(`llm_model`)·V069/V072(`tool_catalog`)·V070(백그라운드 워커)·V076(`users`)·V079(`ai_run_step`)는 기능과 무관하게 앱 핵심 경로가 깨진다. 신규 테이블 5건(V065~V067·V071)과 시드 1건(V073)은 해당 기능 사용 시에만 터진다. (v8) V092~V101 중 **V092·V095·V096·V098 4건이 이 "안 써도 터지는" 유형**이다.
 
 ## 다음에 적용하는 법
 
-1. 배포 전 대상 환경에서 flyway 이력(또는 `SHOW TABLES`/`SHOW COLUMNS`)으로 **V085**까지 적용됐는지 확인한다.
+1. 배포 전 대상 환경에서 flyway 이력(또는 `SHOW TABLES`/`SHOW COLUMNS`)으로 **V101**까지 적용됐는지 확인한다.
    V083 직전에 MCP 전체 동기화, 적용 뒤 관리자 기본 임베딩 모델 설정(V084)까지가 한 세트다.
    로컬은 flyway 이력 없이 SQL을 직접 실행해 온 환경이라(V079 보고서) "로컬에서 됐다"가 운영 적용의 증거가 아니다.
 2. 새 기능 사이클이 마이그레이션을 추가하면 이 표에 한 줄 추가한다 (기능명 + 미적용 시 증상).

@@ -14,16 +14,21 @@ source_refs:
   - 커밋 49b2f41 (AsyncMock이 가린 function_node_ids 회귀 → C0) — v3
   - idt/tests/api/test_runtime_tool_factory_wiring.py (배선 계약 테스트) — v3
   - idt/docs/04-report/approval-gate-run-termination.report.md (§6.1 — 단위 초록 상태에서 L3가 결함 2건) — v3
+  - docs/archive/2026-11/stock-analysis-agents/stock-analysis-agents.analysis.md (G2 — MSW 목 소문자 'holiday'가 서버 대문자 값 불일치를 가림) — v4
+  - 커밋 8bb4c3c (LlmModelRepository.update()가 단가 3필드를 옮기지 않아 PATCH 200인데 DB 미저장) — v4
+  - docs/archive/2026-11/stock-analysis-agents/stock-analysis-agents.report.md (§6.2~6.3) — v4
 confidence: 0.85
-version: 3
+version: 4
 created: 2026-08-14
-updated: 2026-10-06
+updated: 2026-11-27
 reviewer: 배상규
-verified_at: ae12fc4
+verified_at: bcf64b0
 ---
 
 # 거짓 초록 — 통과했는데 검증되지 않은 품질 게이트
 
+> v4 (2026-11-27): §4(c) 목 enum 값 불일치, §7(쓰기 API 200은 저장 증거가 아니다) 추가. 에이전트 갱신이라 approved → draft 강등.
+>
 > v3 (2026-10-06): §6(모킹·앱 싱글톤 배선이 런타임 경로를 가림) 추가. 제목의 "4종" 제거.
 > 에이전트 갱신이므로 approved → draft 강등 (재승인 필요).
 
@@ -99,7 +104,13 @@ prompt-composer 사이클이 이 방식으로 SC-01(회귀 0건)을 **byte-ident
 설계 가정대로 만들었기 때문에 테스트는 전부 통과했다. 실제 코드
 (`tool_registry.py:83-90`)를 정독해서야 발견됐다.
 
+**(c) 목의 enum 값을 손으로 적음** (v4)
+시장 분석 건너뜀 사유는 서버가 `DISABLED·WEEKEND·HOLIDAY·BUSY`(대문자)를 보내는데, 화면 라벨 키와
+MSW 목이 둘 다 소문자 `'holiday'`였다. 테스트는 통과했고 실화면에는 원래 코드가 그대로 보였다(G2).
+목과 라벨이 **같은 틀린 가정을 공유**하면 테스트는 그 가정을 검증하지 못한다.
+
 > **관행**: MSW 핸들러는 **대응 훅의 `select`/응답 타입을 먼저 확인**하고 작성한다.
+> 목의 enum 문자열은 서버 StrEnum 값에서 복사하고, 가능하면 프론트 타입의 같은 상수에서 만든다.
 > 데이터 형태를 다루는 로직의 픽스처는 **실제 데이터 표본 1건**에서 뜬다.
 
 ### 5. 커버리지는 Check가 아니라 Do 종료 조건이어야 한다
@@ -128,6 +139,16 @@ subagent-context-scope 조사 중 **서브에이전트 런타임이 운영에서
   `session_factory()` 로 새 세션을 열어 위임) 어댑터를 main.py에서 주입한다 — 기존 7종+ 선례.
 - "런타임 위임은 범위 외"로 넘긴 경로는 아무도 실행하지 않는다 — 이월 시 **L3 실런 항목**으로 백로그에 명시.
 
+### 7. 쓰기 API의 200은 저장의 증거가 아니다 (v4)
+
+`PATCH /llm-models/{id}/pricing`이 200과 바뀐 값을 돌려줬지만 `LlmModelRepository.update()`가 단가 3필드를
+행에 옮기지 않아 **DB에는 남지 않았다**(커밋 8bb4c3c). 저장소 `update()`는 행을 다시 읽지 않고 **입력 도메인 객체를 그대로 반환**하므로(`return model`), 응답은
+저장 여부와 무관하게 맞아 보였다. 같은 실측에서 공급사 응답 모델명이 날짜 붙은 스냅샷명(`gpt-5.1-2025-11-13`)이라
+등록명과 매핑되지 않아 실행 비용이 0으로 남는 결함도 겹쳐 있었다(`ModelNameResolver`가 날짜 꼬리를 떼고 다시 찾도록 수정).
+
+- 저장소 `update()`가 필드를 하나씩 옮기는 구현이면, 도메인에 필드를 추가할 때 `update()`도 같이 고쳐야 하고
+  테스트는 **저장 후 새 세션으로 다시 읽어** 확인해야 잡힌다.
+
 ## 다음에 적용하는 법
 
 1. Plan에서 품질 기준마다 **측정 범위(변경 파일 / 전역)** 를 명시한다.
@@ -142,6 +163,7 @@ subagent-context-scope 조사 중 **서브에이전트 런타임이 운영에서
 7. (v3) 새 노드·워커 유형은 **컴파일 그래프 실제 실행 테스트**를, 앱 싱글톤의 선택 의존성은
    **배선 계약 테스트**를 기본으로 둔다. 기존 경로에 처음 의존하는 기능이면 **module-1 전에 실런 스모크**로
    전제부터 확인한다 (기존 기능이 동작한다고 가정하지 말 것).
+8. (v4) 쓰기 API 실측·테스트는 **"응답 확인 → DB(또는 GET) 재조회"** 2단계로 한다.
 
 ## 관련 문서
 

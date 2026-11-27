@@ -20,14 +20,24 @@ source_refs:
   - idt/src/api/main.py get_prompt_guard() + run_agent_use_case.py·general_chat/use_case.py 가드 배선 (v5, 커밋 ded7e74)
   - idt/src/application/agent_run/step_tracking.py (v5 — parent_step_id·depth, monotonic latency, V079)
   - idt/src/infrastructure/parser/extension_routing_parser.py + parser/hwp/ (v5 — .hwp/.hwpx 라우팅, 커밋 02677d0)
+  - idt/src/domain/extension_hooks/ + idt/src/api/graph_rag_di.py (v6 — 확장 훅 4슬롯, wire_graph_rag, PR #113 7b4113d)
+  - idt/src/application/rag_agent/tools.py _merge_supplemental (v6 — 보조 검색 가중 RRF)
+  - idt/src/api/firewall_admin_di.py · market_analysis_di.py · main.py wire_*/start/close 호출부 (v7 — 독립 모듈 2종, PR #131·#137)
+  - idt/src/infrastructure/market_analysis/ticker.py (v7 — 모듈 자체 틱 루프 DD6)
+  - idt/src/application/agent_alert/receive_alert_use_case.py · agent_automation/busy_checker.py (v7 — 알림 수신 경로·바쁨 판정, PR #133)
+  - docs/archive/2026-11/firewall-admin-console · firewall-agent · stock-analysis-agents 보고서 (v7)
 confidence: 0.9
-version: 5
+version: 7
 created: 2026-07-23
-updated: 2026-10-13
+updated: 2026-11-27
 reviewer: 배상규
-verified_at: 3b6353b
+verified_at: bcf64b0
 ---
 
+> v7 (2026-11-27): §2(e)에 **알림 수신(Alertmanager) 경로와 스케줄 건너뜀**, §2(g) **기본 off 독립 모듈 2종**(firewall_admin·market_analysis) 추가, 적용법 6에 예외 1건. v6과 함께 재승인 대기. 다른 절은 재검증하지 않았다.
+>
+> v6 (2026-11-21): §2(c)에 **보조 검색(supplemental) 결합 지점**, §2(f) **Graph RAG 확장 훅 경로**(업로드 후 비동기 추출·대화 중 보조 검색·삭제 훅) 추가, 적용법 8번. 에이전트 갱신이므로 approved → draft 강등. 다른 절은 재검증하지 않았다.
+>
 > v5 (2026-10-13): §2(a)(b)에 **prompt guard 검사 지점**(그래프 생성 전, LLM 분기 전), §2(b) RunTracker에
 > step 계층·latency(V079), §2(d) 파서 라우팅에 한글(.hwp/.hwpx) 추가. 에이전트 갱신이므로 approved → draft 강등 → 2026-10-13 재승인(배상규).
 > 다른 절은 v4(ae12fc4) 기준 그대로이며 이번에 재검증하지 않았다.
@@ -118,6 +128,9 @@ agent_builder_router → RunAgentUseCase
 라우팅:     /api/v1/retrieval (routed) — 카드/섹션/문서 3계층 요약 기반, 독립 opt-in
 ```
 - 멀티쿼리는 하이브리드를 **감싸는** 상위 그래프다. 검색 개선 작업 시 어느 층을 고치는지 먼저 정할 것.
+- (v6) **보조 검색 결합은 하이브리드 내부가 아니라 RAG 도구(`InternalDocumentSearchTool`) 최종 결과**에서
+  일어난다: 단일/멀티쿼리 결과에 `supplemental` 슬롯 공급자(현재 그래프) 결과를 가중 RRF(`merge_many`)로
+  한 번 더 합친다. 라우팅 결과에는 합치지 않는다. 상세 [[retrieval-path]].
 - 인증 필터는 ES(쿼리 절)·Qdrant(SearchFilter) **양 축 대칭**으로 걸어야 한다
   (한쪽만 걸면 0건 — rag-auth-filter-fix 선례).
 
@@ -142,8 +155,44 @@ lifespan 워커 싱글턴(BackgroundJobWorker)
   └─ tick 30s: 스케줄 트리거 (single-flight, 외부 cron 불필요)
 ```
 - **요청→응답 모델을 벗어나는 유일한 경로**다. 브로커·cron 프로세스는 없다.
+  (v7: 예외 1건 — §2(g) market_analysis는 자기 틱 루프를 갖는다.)
 - `background_worker_enabled` 기본 **True** (성장 루프 플래그들과 반대).
-- 상세: [[db-queue-inprocess-worker]]
+- (v7) **잡을 만드는 입구가 3개**다: 채팅·API 등록, 스케줄 tick, **알림 수신**
+  `POST /api/v1/alert-hooks/agents/{agent_id}`(Alertmanager 웹훅 형식, Bearer 토큰 sha256 해시 대조).
+  수신 UseCase는 실행하지 않고 잡만 등록하며, 인증 뒤에는 깨진 본문·꺼짐·중복도 **202 + 이력 1행**으로 받는다
+  (Grafana는 실패 응답을 재전송하므로). 결과값: enqueued·duplicate·resolved_only·disabled·skipped_busy·invalid_payload.
+- (v7) 스케줄(`skip_when_busy`, 기본 off)과 알림 수신(기본 on)은 같은 `AgentBusyChecker`로
+  "승인 대기·실행 중이면 건너뜀"을 판정한다. 조회 실패는 바쁨(`check_failed`)으로 본다(fail-closed).
+- 상세: [[db-queue-inprocess-worker]], 테이블은 [[erd-execution-triggers]]
+
+**(f) Graph RAG — 확장 훅으로 붙은 부가 모듈** (v6 추가, 기본 off)
+```
+코어는 domain/extension_hooks 레지스트리 슬롯 4개만 호출 (None이면 즉시 반환, 예외는 삼킴)
+  post_ingest  : KB 업로드 완료 → 조건 충족 시 추출 잡 INSERT + asyncio.create_task (외부 큐 없음)
+                 → ES에서 청크 재조회 → 주제 분류 → 규칙/LLM 추출 → 판정 → MySQL 판정 기록 → Neo4j
+  supplemental : RAG 도구 → 그래프 검색(기존 검색과 동시 시작, 6초 하드 상한) → 가중 RRF
+  deletion     : 문서 삭제 후 → MySQL 주제·판정 정리 → Neo4j 문서 그래프 정리
+  exposure     : 에이전트 저장 시 비노출 사용자의 use_graph 제거
+조립: api/graph_rag_di.py wire_graph_rag + lifespan start/close_graph_rag (main.py 3줄)
+```
+- 실행 조건은 `use_graph` AND 대화 라우트 grant AND 노출 단계(off/admin_only/general) 3중 게이트.
+  웹훅·스케줄·백그라운드 잡은 grant가 없어 그래프 검색을 쓰지 않는다.
+- 저장소가 하나 더 늘어난다: Neo4j(엔티티·관계·청크 참조) + MySQL V086~V091. 청크 본문 원본은 여전히 ES.
+- 입구 문서: [[overview]] (backend/graph-rag/overview.md).
+
+**(g) 기본 off 독립 모듈 — 조립 파일 1개로 붙는 기능** (v7 추가)
+```
+main.py ── wire_firewall_admin(app) / close_firewall_admin()          ← api/firewall_admin_di.py
+       └── wire_market_analysis(app, platform_factory) / start / close ← api/market_analysis_di.py
+FIREWALL_ADMIN_ENABLED=false   → 조립 안 함, 라우터 미등록(404). 켰는데 URL·토큰 없음 → configured=false
+MARKET_ANALYSIS_ENABLED=false  → 조립 안 함, 플랫폼 의존성도 안 만듦. TICKER_ENABLED=false면 회차만 정지
+조립 실패 → warning 1회, 그 기능만 없음 — 앱 기동은 계속
+```
+- 둘 다 **코어가 모듈을 import하지 않는다**(AST 계약 테스트). Graph RAG(f)가 코어 슬롯에 끼는 방식이라면,
+  (g)는 코어를 **호출하는 쪽**이다: firewall_admin은 fwctl·Grafana를 직접 부르고 승인 API는 무변경,
+  market_analysis는 포트 Protocol 뒤에서 `RunAgentUseCase`·MCP 도구를 쓴다.
+- market_analysis는 코어에 내부 전용 입력 `reference_context` 1개를 열었고 HTTP 본문에서는 버린다 — 상세 [[market-analysis/overview]].
+- firewall_admin은 마이그레이션 0(이력은 fwctl 감사 로그), market_analysis는 `ma_*` 13테이블(V100·V101).
 
 ### 3. 성장 루프 배선 (평가 → 메모리/위키 환류)
 
@@ -173,12 +222,17 @@ POST eval → SubmitFeedbackUseCase (application/eval/use_cases.py)
 5. **성장 루프에 새 소비자 추가 시** `_kickoff_feedback_fanout`에 enabled 가드 + kickoff 패턴으로
    편승한다 (Q/A 복원 공유, 독립 opt-in env 플래그 신설).
 6. **오래 걸리는 작업·주기 실행은 (e) 큐에 편승**한다 — 새 브로커/cron 도입 금지.
+   (v7) 예외: 에이전트 실행이 아닌 모듈 전용 주기 작업은 워커에 등록 체계가 없어 lifespan 태스크로 둔 선례가 있다(market_analysis DD6) — 다중 인스턴스 1회 실행은 DB UNIQUE 선점으로 보장할 것.
 7. **실험적 모듈을 기존 경로에 끼울 때는 optional 협력자 + `None` 킬스위치**로
    ([[detachable-module-seam]]). 미주입 = 기능이 없던 상태가 되도록.
+8. (v6) **업로드 후처리·삭제 후처리·보조 검색 공급자를 추가할 때는 `extension_hooks` 슬롯**을 쓴다.
+   슬롯당 owner 하나(충돌 시 기동 실패)라 두 번째 공급자는 슬롯 설계부터 — [[extension-hooks-boundary]].
 
 ## 관련 문서
 
 - 라우터별 책임: `backend/api/router-map.md`
-- 테이블 상세: `backend/db/erd-*.md` 4종
+- 테이블 상세: `backend/db/erd-*.md` (v6: Graph RAG는 `erd-graph-rag.md`)
+- Graph RAG 모듈: `backend/graph-rag/*.md`
+- 시장 분석 모듈: `backend/market-analysis/overview.md` (v7)
 - 화면에서 본 절단면: `frontend/screens/*.md` 5종
 - 사실 기준점(수치·버전): `docs/SOURCE-OF-TRUTH.md`

@@ -12,13 +12,20 @@ source_refs:
   - idt/src/application/agent_builder/action_pipeline.py (_assemble_arguments, _schema_without — 본문 키 제외)
   - idt/src/application/agent_builder/workflow_compiler.py (gated_worker_ids·sub_agent_worker_ids 조건부 간선)
   - idt/tests/application/agent_builder/test_gated_run_termination.py, test_gated_compile.py
+  - idt/src/domain/agent_builder/policies.py GatedCategoryPolicy.promote (v2 — 암묵 승격 implicit=True)
+  - idt/src/application/agent_builder/workflow_compiler.py (v2 — action 노드 None 시 암묵은 react 폴백, 명시는 failed_worker_ids)
+  - docs/archive/2026-11/firewall-admin-console/firewall-admin-console.analysis.md · report.md (§4.1, §6.2 — block_ip에 action 지정 시 워커 제외) (v2)
+  - docs/firewall-admin-setup.md (5-3 "카테고리는 미분류로 둔다") (v2)
+  - docs/archive/2026-11/firewall-admin-console/firewall-admin-console.design.md (v0.5 — 승인 API가 재개까지 기다려 30초 초과) (v2)
 confidence: 0.85
-version: 1
+version: 2
 created: 2026-10-06
-updated: 2026-10-06
+updated: 2026-11-27
 reviewer: 배상규
-verified_at: ae12fc4
+verified_at: bcf64b0
 ---
+
+> v2 (2026-11-27): §6(본문 인자 없는 승인 도구에 `action` 명시 금지), §7(승인 API 응답 지연) 추가. 에이전트 갱신이라 approved → draft 강등.
 
 # 승인 게이트 런 계약
 
@@ -70,6 +77,23 @@ verified_at: ae12fc4
   (`grounded=false` 는 정보 부족이라 재시도 안 함). L3 3/3, 재시도 0회.
 - 본문 키는 `draft_arg_key`(기존 필드 재사용, 스키마 변경 0)로 지정한다 — 빌더 UI에 `본문 인자` 입력.
 
+### 6. 본문 인자가 없는 승인 필요 도구에 `action` 카테고리를 **명시**하면 워커가 사라진다 (v2)
+
+- 승격 경로와 명시 경로의 실패 처리가 다르다(`workflow_compiler.py`):
+  - **미분류·search·collect + 승인 필요** → `GatedCategoryPolicy.promote`가 `("action", implicit=True)`로 승격.
+    본문 키를 정할 수 없으면(초안 작성 노드 생성 실패) **react + 게이트로 폴백**한다.
+  - **관리자가 `action`을 명시** → 같은 실패에서 **워커를 격리**(`failed_worker_ids`, fail-closed)한다. 그래프에서 워커가 빠진다.
+- 실측(firewall-admin-console, `block_ip`): 차단 도구는 IP·TTL만 받고 초안 본문 인자가 없다. `action`을 지정하자 워커가
+  실행에서 빠졌고, 에이전트는 **호출하지 않은 도구를 호출했다고 답했다**. 미분류로 바꾸자 react + 게이트로 정상 승인 요청이 올라왔다.
+- 규칙: 승인 필요 MCP 도구는 **본문(초안)으로 보낼 인자가 있을 때만 `action`**(`draft_arg_key` 지정)으로, 그 외에는 **카테고리를 미분류로 둔다**.
+
+### 7. 승인 API는 재개까지 기다린다 — 30초를 넘길 수 있다 (v2)
+
+- 승인 결정 API는 승인 후 에이전트 재개·도구 집행이 끝날 때까지 응답을 잡고 있어 30초를 넘길 수 있다.
+  프론트는 응답을 못 받으면(status 0) 실패로 단정하지 말고 "처리됐을 수 있음"으로 안내한 뒤 **목록을 다시 조회**한다
+  (firewall-admin-console 승인 탭, 실건 승인에서 발견).
+- 승인 즉시 응답 + 재개 비동기 분리는 후속 후보(Medium)로 남아 있다. 바뀌면 이 절을 갱신한다.
+
 ## 다음에 적용하는 법
 
 1. 부작용 도구를 다루는 새 노드/워커 유형을 추가하면 `effective_gate` 경로를 타는지, 그리고
@@ -79,6 +103,9 @@ verified_at: ae12fc4
 4. 프롬프트 계층 변경은 **L3 최소 3회**를 Do 완료 조건에 넣는다(단위 테스트 전부 초록 상태에서 L3가 결함 2건을 드러냈다).
 5. LLM 제약은 지시문보다 **입력·스키마에서 불가능하게 만드는 쪽**을 기본으로 한다
    ([LLM 출력 신뢰 경계](llm-output-trust-boundary.md)와 같은 방향).
+6. (v2) 승인 필요 도구를 등록할 때 본문 인자가 없으면 카테고리는 **미분류**. "에이전트가 도구를 호출했다는데 승인 요청이 없다"면
+   먼저 그 도구의 카테고리가 `action`인지 본다.
+7. (v2) 승인·거절 버튼의 응답 처리에 **타임아웃 = 미확정** 분기를 둔다.
 
 ## 관련 문서
 

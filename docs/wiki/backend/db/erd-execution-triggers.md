@@ -1,5 +1,5 @@
 ---
-title: 미니 ERD — 실행 트리거·승인 도메인 (agent_schedule/agent_background_job/agent_webhook/approval_request)
+title: 미니 ERD — 실행 트리거·승인 도메인 (agent_schedule/agent_background_job/agent_webhook/agent_alert/approval_request)
 status: approved
 reviewer: 배상규
 source_type: conversation
@@ -12,19 +12,26 @@ source_refs:
   - idt/docs/archive/2026-08/background-jobs/background-jobs.report.md · idt/docs/archive/2026-09/jobs-page-revamp/jobs-page-revamp.report.md
   - idt/docs/archive/2026-08/agent-webhook/agent-webhook.report.md · agent-webhook-outbound/agent-webhook-outbound.report.md
   - idt/docs/04-report/approval-gate.report.md (SC-8 멱등, 이탈 "ORM FK 제거") · approval-gate-phase2-mcp-executor.report.md · approval-edit-before-approve.report.md (SC-3)
+  - idt/db/migration/V098__alter_agent_schedule_add_skip_when_busy.sql · V099__create_agent_alert_receiver.sql (v2)
+  - idt/src/infrastructure/agent_alert/models.py · agent_schedule/models.py (v2 — skip_when_busy·skip_reason 매핑)
+  - idt/src/application/agent_alert/receive_alert_use_case.py · agent_automation/busy_checker.py (v2 — 결과값·중복·바쁨 판정)
+  - docs/archive/2026-11/firewall-agent/firewall-agent.report.md (§1.5 결정 — Bearer 해시, 건너뜀 기본 off) (v2)
+  - 커밋 012d6b1 (v2 — 스케줄 응답 UTC 오프셋)
 confidence: 0.85
-version: 1
+version: 2
 created: 2026-10-13
-updated: 2026-10-13
-verified_at: 3b6353b
+updated: 2026-11-27
+verified_at: bcf64b0
 ---
+
+> v2 (2026-11-27): V098(스케줄 건너뜀)·V099(알림 수신 2테이블) 반영, UTC naive 응답 직렬화 주의 추가. 에이전트 갱신이라 approved → draft 강등.
 
 > 읽는 시점: **에이전트를 "지금 채팅" 외의 경로로 실행시키는 기능(스케줄·백그라운드 잡·웹훅·승인 후 재개)을
 > 추가·수정하기 전**, 작업함/알림 벨 집계를 건드릴 때, 승인 요청의 상태 전이·멱등을 다룰 때.
 > 런타임 계약(게이트 직후 END·결정적 답변)은 [[approval-gate-run-contract]], 워커·claim 메커니즘은 [[db-queue-inprocess-worker]]가 주인이다 — 여기는 **테이블 계약**만.
 
-6테이블 전부 `agent_definition`에 CASCADE로 매달린다(에이전트 삭제 = 트리거·이력 전부 삭제). 실행 결과는 `run_id`로 `ai_run`을 **소프트 참조**한다([[erd-agent-run]] 각주 2).
-실선=DDL 실제 FK, 점선=소프트 참조. 모든 DATETIME은 **UTC naive**(V071 주석 — schedule·background_job 관례 동일).
+8테이블 전부 `agent_definition`에 CASCADE로 매달린다(v2: `agent_alert_receipt`는 receiver를 거쳐 간접)(에이전트 삭제 = 트리거·이력 전부 삭제). 실행 결과는 `run_id`로 `ai_run`을 **소프트 참조**한다([[erd-agent-run]] 각주 2).
+실선=DDL 실제 FK, 점선=소프트 참조. 모든 DATETIME은 **UTC naive**(V071 주석 — schedule·background_job 관례 동일). 응답으로 내보낼 때는 오프셋을 붙인다 — [[utc-naive-datetime-serialization]](v2).
 
 ```mermaid
 erDiagram
@@ -34,6 +41,9 @@ erDiagram
     agent_definition ||--o| agent_webhook : "agent_id (CASCADE, UQ=1:1)"
     agent_definition ||--o{ agent_webhook_delivery : "agent_id (CASCADE — webhook 아님)"
     agent_definition ||--o{ approval_request : "agent_id (CASCADE, DDL만)"
+    agent_definition ||--o| agent_alert_receiver : "agent_id (CASCADE, UQ=1:1)"
+    agent_alert_receiver ||--o{ agent_alert_receipt : "receiver_id (CASCADE)"
+    agent_background_job |o..o{ agent_alert_receipt : "job_id (soft)"
     ai_run |o..o{ agent_schedule_run : "run_id (soft)"
     ai_run |o..o{ agent_background_job : "run_id (soft)"
     ai_run |o..o{ agent_webhook_delivery : "run_id (soft)"
@@ -49,12 +59,14 @@ erDiagram
         bool enabled
         string timezone "기본 Asia/Seoul"
         datetime next_run_at "UTC, due 판정 키 idx(enabled,next_run_at)"
+        bool skip_when_busy "V098 기본 0"
     }
     agent_schedule_run {
         string id PK
         string schedule_id FK
         string agent_id "비정규화 — 스케줄 삭제 후 추적용"
-        string status "running|success|failed"
+        string status "running|success|failed|skipped(V098)"
+        string skip_reason "V098 approval_pending|run_in_progress|check_failed"
         datetime scheduled_for "원래 예정 시각"
         string session_id "생성된 대화 세션(soft)"
         string run_id "soft"
@@ -90,6 +102,27 @@ erDiagram
         string trigger_source "schedule|webhook"
         bool success "재시도 소진 후 판정"
         int attempts "1~4"
+    }
+    agent_alert_receiver {
+        string id PK
+        string agent_id FK "UQ — 에이전트당 1개"
+        string user_id "설정자 = 실행 신원"
+        bool enabled "기본 0"
+        bool skip_when_busy "기본 1 (스케줄과 반대)"
+        string token_hash "Bearer sha256 hex — 평문 저장 안 함"
+        string token_hint "끝 4자"
+        string instruction_prefix "지침문 앞 문구, 300자"
+    }
+    agent_alert_receipt {
+        string id PK
+        string receiver_id FK
+        string agent_id "비정규화"
+        string group_key_hash "groupKey sha256"
+        string fingerprints_hash "발화 fingerprint 집합 sha256"
+        int firing_count
+        string result "enqueued|duplicate|resolved_only|disabled|skipped_busy|invalid_payload"
+        string job_id "soft → agent_background_job"
+        datetime received_at "UTC, idx(receiver_id,group_key_hash,received_at)"
     }
     approval_request {
         string id PK
@@ -133,6 +166,21 @@ erDiagram
 - **시크릿은 평문 저장이 결정**이다(D2: HMAC 서명 재계산에 원문 필요, 해시와 양립 불가; `mcp_server_registry` api_key 보관과 동급). 응답·로그에는 `secret_hint`(끝 4자)만. 유출 대응은 rotate.
 - `agent_webhook_delivery`의 FK는 `agent_webhook`이 아니라 `agent_definition`이다 — **채널 삭제·재발급 후에도 발송 이력이 남는다**. 불변 레코드(INSERT only), `url`은 발송 시점 스냅샷.
 - `enabled=false`는 inbound를 **404**로 숨긴다(401/403 아님).
+
+### agent_schedule 건너뜀 (V098, v2)
+- `skip_when_busy=1`이면 같은 에이전트에 **승인 대기·진행 중 실행**이 있을 때 회차를 실행하지 않고 `status=skipped` + `skip_reason` 이력만 남긴다. 기본 0이라 기존 스케줄 동작은 그대로다.
+- `agent_schedule_run.status`는 원래 VARCHAR(10)이라 `skipped`를 컬럼 변경 없이 담는다.
+- 판정은 알림 수신과 공용인 `AgentBusyChecker`가 하며, **조회 예외는 바쁨(`check_failed`)** 으로 본다(fail-closed). 건너뜀 기록이 실패해도 같은 tick의 다른 스케줄은 계속 돈다(firewall-agent G10).
+- 새 에이전트 저장 시 대기 스케줄 POST 본문에도 `skip_when_busy`를 넣어야 한다(G1 — 빠뜨리면 기본 0으로 저장됐다).
+
+### agent_alert_receiver / agent_alert_receipt (V099, v2)
+- **토큰은 sha256 해시만 저장**한다 — `agent_webhook.secret` 평문 저장(HMAC 재계산용)과 반대 결정이다. Grafana 연락처는 HMAC 서명을 보내지 못하고 Bearer 헤더만 보내므로 원문이 필요 없다. 평문 토큰은 최초 생성·재발급 응답에서만 1회 나간다(`UpsertAlertReceiverResponse.token`).
+- 설정 없음·토큰 불일치는 둘 다 401로 같게 응답한다 — 어떤 에이전트에 수신 설정이 있는지 드러내지 않는다. `agent_webhook`의 `enabled=false`→404와 다른 규칙이다.
+- 인증 뒤에는 모든 경우를 **202 + receipt 1행**으로 받는다(Grafana 재전송 루프 방지). `result`가 그 판정이다.
+- 중복 판정은 `(receiver_id, group_key_hash, received_at)` 인덱스 모양대로 "같은 groupKey + 같은 fingerprint 집합이 설정 시간 창 안에 있었나"다. 발화 없이 resolved만 온 묶음은 `resolved_only`로 실행하지 않는다.
+- `skip_when_busy` 기본값이 **receiver는 1, schedule은 0**이다 — 알림은 같은 IP 요청이 쌓이기 쉬워 기본으로 막는다.
+- 실행 신원은 `user_id`(설정자)이고, 실제 실행은 등록된 백그라운드 잡을 `BackgroundJobWorker`가 한다(수신 UseCase는 실행하지 않음).
+- DDL은 `DEFAULT CHARSET=utf8mb4`만 쓰고 COLLATE 생략(approval_request와 같은 방식, 로컬 적용 확인).
 
 ### approval_request (V071, V074, V078)
 - **ORM에 `agent_id` FK가 없는 건 의도**다(모델 주석: 공유 metadata가 `agent_definition`→`departments` FK까지 연쇄 요구해 sqlite 통합 테스트 91건 붕괴). DDL에는 CASCADE FK가 있다 — 에이전트 삭제 시 대기 중 승인도 사라진다.
