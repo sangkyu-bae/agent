@@ -650,17 +650,27 @@ def _mcp_cipher() -> SecretCipher | None:
     return SecretCipher(key) if key else None
 
 
-def _identity_headers(logger) -> IdentityHeaderProviderFactory:
+def _identity_headers(
+    logger, *, user_cache_ttl: float | None = None
+) -> IdentityHeaderProviderFactory:
     """mcp-identity-header §2.1 — 도구를 실제로 '실행'하는 경로에만 주입한다.
 
     일반 채팅(MCPToolCache)은 도구를 전 사용자 공용 키로 캐시하므로 주입하지
     않는다 — 사용자별 공급자가 캐시되면 신원이 섞인다. 그 경로의 신원 서버
     도구는 배선 오류로 실패하고 헤더 없이 나가지 않는다.
     """
+    user_reader = SessionScopedUserReader(
+        session_factory=get_session_factory(), logger=logger
+    )
+    if user_cache_ttl is not None:
+        # 시장 분석만 — 호출마다 실행자를 다시 읽지 않는다 (lookup_cache 참고)
+        from src.infrastructure.market_analysis.adapters.lookup_cache import (
+            CachedUserReader,
+        )
+
+        user_reader = CachedUserReader(user_reader, ttl_seconds=user_cache_ttl)
     return IdentityHeaderProviderFactory(
-        user_reader=SessionScopedUserReader(
-            session_factory=get_session_factory(), logger=logger
-        ),
+        user_reader=user_reader,
         signer=HmacIdentityTokenSigner(),
         logger=logger,
     )
@@ -3799,6 +3809,10 @@ def _market_analysis_platform(create_uc_factory, build_run_agent_uc):
     from src.infrastructure.config.approval_execution_config import (
         ApprovalExecutionConfig,
     )
+    from src.infrastructure.market_analysis.adapters.lookup_cache import (
+        DEFAULT_TTL_SECONDS,
+        CachedServerFinder,
+    )
     from src.infrastructure.mcp_registry.session_scoped_repository import (
         SessionScopedMcpServerRepository,
     )
@@ -3810,7 +3824,10 @@ def _market_analysis_platform(create_uc_factory, build_run_agent_uc):
         session_factory=session_factory, logger=app_logger, cipher=_mcp_cipher()
     )
     timeout = ApprovalExecutionConfig().get_timeout()
-    identity_headers = _identity_headers(app_logger)
+    # 회차 안에서 MCP 호출마다 서버 등록·실행자를 다시 읽지 않는다 (DB 풀 대기)
+    identity_headers = _identity_headers(
+        app_logger, user_cache_ttl=DEFAULT_TTL_SECONDS
+    )
     tavily: list = []
 
     def news_search(**kwargs):
@@ -3828,7 +3845,9 @@ def _market_analysis_platform(create_uc_factory, build_run_agent_uc):
         run_agent_uc_builder=build_run_agent_uc,
         create_agent_uc_builder=lambda session: create_uc_factory(session),
         auth_ctx_assembler=assemble,
-        mcp_server_finder=server_repo.find_by_id,
+        mcp_server_finder=CachedServerFinder(
+            server_repo.find_by_id, ttl_seconds=DEFAULT_TTL_SECONDS
+        ),
         mcp_client_factory=lambda registration, subject_user_id, request_id: (
             build_execution_client(
                 registration, timeout=timeout, logger=app_logger,
