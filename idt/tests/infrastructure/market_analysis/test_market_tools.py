@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from decimal import Decimal
 from types import SimpleNamespace
@@ -118,9 +119,116 @@ async def test_server_lookup_failure_is_an_outcome_not_an_exception_g7():
 
 
 async def test_transport_failure_is_an_outcome_not_an_exception():
-    tools, _ = _tools(FakeClient(fail=TimeoutError("slow")))
+    tools, _ = _tools(FakeClient(fail=ConnectionError("refused")))
     out = await _call(tools)
     assert out.is_error and out.error_code == "TOOL_CALL_FAILED"
+    assert out.text.startswith("ConnectionError: refused")
+
+
+async def test_timeout_is_its_own_code():
+    """호출 전체 상한(MCPCallClient total) 초과는 TOOL_TIMEOUT 으로 구분한다."""
+    tools, _ = _tools(FakeClient(fail=TimeoutError()))
+    out = await _call(tools)
+    assert out.is_error and out.error_code == "TOOL_TIMEOUT"
+    assert "TimeoutError" in out.text
+
+
+async def test_exception_group_records_the_inner_cause():
+    """MCP SDK 는 anyio TaskGroup 안에서 돌아 원인이 ExceptionGroup 으로 감싸인다.
+    근거에는 껍데기가 아닌 안쪽 예외를 남긴다 (2026-11-27 지씨지놈 근거 3건)."""
+    nested = ExceptionGroup(
+        "unhandled errors in a TaskGroup",
+        [ExceptionGroup("inner", [ConnectionError("peer closed")])],
+    )
+    tools, _ = _tools(FakeClient(fail=nested))
+    out = await _call(tools)
+    assert out.error_code == "TOOL_CALL_FAILED"
+    assert out.text.startswith("ConnectionError: peer closed")
+    assert "ExceptionGroup" not in out.text
+
+
+async def test_exception_group_wrapping_timeout_is_a_timeout():
+    group = ExceptionGroup("tg", [TimeoutError()])
+    tools, _ = _tools(FakeClient(fail=group))
+    out = await _call(tools)
+    assert out.error_code == "TOOL_TIMEOUT"
+
+
+class _GatedClient:
+    """동시에 몇 개가 call_tool 안에 있는지 센다."""
+
+    def __init__(self):
+        self.active = 0
+        self.peak = 0
+        self.release = asyncio.Event()
+
+    async def call_tool(self, name, arguments, request_id=None):
+        self.active += 1
+        self.peak = max(self.peak, self.active)
+        try:
+            await self.release.wait()
+            return SimpleNamespace(content="{}", is_error=False)
+        finally:
+            self.active -= 1
+
+
+def _gated_tools(client, limit: int):
+    async def find(server_id, request_id):
+        return SimpleNamespace(id=server_id, is_active=True)
+
+    return PlatformMarketTools(
+        server_finder=find,
+        client_factory=lambda *a: client,
+        news_search=lambda **k: "",
+        logger=MagicMock(),
+        max_concurrent_per_server=limit,
+    )
+
+
+async def _call_on(tools, server_id):
+    return await tools.call(
+        source=ToolSource.KIS,
+        server_id=server_id,
+        tool="get_quote",
+        args={"symbol": "005930"},
+        run_as_user_id="7",
+        request_id="r",
+    )
+
+
+async def test_concurrent_calls_to_one_server_are_capped():
+    """2026-11-27: 종목 2개 × 서버당 호출 4개가 한꺼번에 SSE 세션을 열어 연결 실패가
+    났다. 같은 서버로 동시에 여는 세션 수를 제한한다."""
+    client = _GatedClient()
+    tools = _gated_tools(client, limit=2)
+    tasks = [asyncio.ensure_future(_call_on(tools, "kis-1")) for _ in range(6)]
+    for _ in range(20):
+        await asyncio.sleep(0)
+    assert client.active == 2
+    client.release.set()
+    outs = await asyncio.gather(*tasks)
+    assert client.peak == 2
+    assert all(not o.is_error for o in outs)
+
+
+async def test_cap_is_per_server():
+    client = _GatedClient()
+    tools = _gated_tools(client, limit=1)
+    tasks = [
+        asyncio.ensure_future(_call_on(tools, sid)) for sid in ("kis-1", "dart-1")
+    ]
+    for _ in range(20):
+        await asyncio.sleep(0)
+    assert client.active == 2  # 서버가 다르면 서로 기다리지 않는다
+    client.release.set()
+    await asyncio.gather(*tasks)
+
+
+async def test_slot_is_released_after_failure():
+    tools = _gated_tools(FakeClient(fail=ConnectionError("x")), limit=1)
+    for _ in range(3):  # 실패가 자리를 잡고 있으면 두 번째부터 영영 멈춘다
+        out = await asyncio.wait_for(_call_on(tools, "kis-1"), 1)
+        assert out.error_code == "TOOL_CALL_FAILED"
 
 
 async def test_non_json_text_is_kept_as_text():
