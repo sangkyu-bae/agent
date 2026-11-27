@@ -47,19 +47,40 @@ class FakeChecker:
         return agent_id in self.agents
 
 
-def _update(checker=None):
+def _update(checker=None, current=READY):
     writer = FakeWriter()
     uc = UpdateSettingsUseCase(
-        writer=writer, checker=checker or FakeChecker(), logger=MagicMock()
+        reader=FakeSettings(current),
+        writer=writer,
+        checker=checker or FakeChecker(),
+        logger=MagicMock(),
     )
     return uc, writer
 
 
 async def test_update_saves_valid_setting():
-    uc, writer = _update()
+    uc, writer = _update(current=dataclasses.replace(READY, enabled=True))
     s = dataclasses.replace(READY, enabled=True, dart_server_id="dart-1")
     assert await uc.execute(s, updated_by="3", request_id="r") == s
     assert writer.saved == [(s, "3")]
+
+
+async def test_update_never_changes_the_switch_g9():
+    """G9 — 설정 저장은 스위치를 바꾸지 않는다(스위치는 PUT /settings/enabled 만).
+    오래 열어 둔 폼이 다른 곳에서 켠 스위치를 조용히 끄던 경로를 막는다."""
+    on = dataclasses.replace(READY, enabled=True)
+    uc, writer = _update(current=on)
+    stale_form = dataclasses.replace(READY, enabled=False, max_per_round=5)
+    saved = await uc.execute(stale_form, updated_by="3", request_id="r")
+    assert saved.enabled is True and saved.max_per_round == 5
+    assert writer.saved[0][0].enabled is True
+
+    off = dataclasses.replace(READY, enabled=False)
+    uc2, writer2 = _update(current=off)
+    saved2 = await uc2.execute(
+        dataclasses.replace(READY, enabled=True), updated_by="3", request_id="r"
+    )
+    assert saved2.enabled is False  # 저장으로 켜지지도 않는다
 
 
 async def test_update_reports_every_field_and_saves_nothing():
@@ -84,8 +105,9 @@ async def test_update_reports_every_field_and_saves_nothing():
 
 
 async def test_enabling_requires_kis_and_run_as_user():
-    uc, _ = _update()
-    s = dataclasses.replace(MarketAnalysisSetting.defaults(), enabled=True)
+    # 스위치가 켜진 상태에서 KIS 서버·실행자를 비우는 저장은 거부한다
+    uc, _ = _update(current=dataclasses.replace(READY, enabled=True))
+    s = MarketAnalysisSetting.defaults()
     with pytest.raises(InvalidSettingError) as e:
         await uc.execute(s, updated_by="3", request_id="r")
     assert set(e.value.errors) == {"kis_server_id", "run_as_user_id"}

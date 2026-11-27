@@ -123,6 +123,7 @@ def test_render_bounds_each_item_and_total():
 
 # ── module-10 실측 G1: 재무 증감 4/44 소오차 → 코드가 미리 계산 ──
 
+
 def _fin_item(account, current, previous, statement="IS"):
     return {
         "statement": statement,
@@ -188,3 +189,40 @@ def test_render_puts_computed_changes_before_raw_financials():
     assert calc_at < raw_at  # 원문이 잘려도 계산값은 남는다
     assert "매출액" in text and "증감액 200" in text and "증감률 20.00%" in text
     assert "직접 계산하지" in text
+
+
+# ── 리포트 표현 보강: 수급 거래대금 단위 (에이전트가 단위를 추측했다) ──
+
+
+def test_render_states_investor_amount_unit():
+    """KIS *_net_amount 는 백만 원 — 실측 amount/(qty×close) 중앙값 0.9986e-6."""
+    payload = {
+        "symbol": "005930",
+        "days": [
+            {
+                "date": "2026-11-26",
+                "close": "9000",
+                "individual_net_qty": -15670,
+                "individual_net_amount": "-143",
+            }
+        ],
+    }
+    text = render_evidence(
+        (EvidenceKey.INVESTOR,),
+        {EvidenceKey.INVESTOR: _ok("get_investor_flow", payload)},
+    )
+    unit_at = text.index("[단위 investor]")
+    raw_at = text.index("[근거 investor · kis:get_investor_flow]")
+    assert unit_at < raw_at
+    assert "백만 원" in text and "추정하지 않는다" in text
+
+
+def test_unit_note_is_absent_when_investor_failed():
+    failed = ToolOutcome(
+        source=ToolSource.KIS,
+        tool="get_investor_flow",
+        is_error=True,
+        error_code="KIS_TIMEOUT",
+    )
+    text = render_evidence((EvidenceKey.INVESTOR,), {EvidenceKey.INVESTOR: failed})
+    assert "[단위 investor]" not in text and "데이터 없음 (KIS_TIMEOUT)" in text

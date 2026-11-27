@@ -1,6 +1,10 @@
 // stock-analysis-agents §9 — 시장 분석 화면 표시용 순수 함수.
 import { ApiError } from '@/services/api/ApiError';
-import { SKIP_REASON_LABELS } from '@/types/marketAnalysis';
+import {
+  SKIP_REASON_LABELS,
+  type MarketAnalysisSettings,
+  type MarketAnalysisSettingsUpdate,
+} from '@/types/marketAnalysis';
 
 const CODE = /^([A-Z][A-Z_]+)(?:\((.*)\))?(?::\s*(.*))?$/;
 
@@ -137,3 +141,21 @@ export const rowProps = (onOpen: () => void, label: string) => ({
   },
   className: 'cursor-pointer hover:bg-surface-muted',
 });
+
+/** 설정 저장 본문 — 스위치(enabled)는 빼고 보낸다. 스위치는 PUT /settings/enabled 만 (G9). */
+export const withoutSwitch = (settings: MarketAnalysisSettings): MarketAnalysisSettingsUpdate => {
+  const body: Partial<MarketAnalysisSettings> = { ...settings };
+  delete body.enabled;
+  return body as MarketAnalysisSettingsUpdate;
+};
+
+const DIRECTION_ARROWS: Record<string, string> = { up: '↑', down: '↓' };
+
+/** 신호 한 건의 값 — scan_signals 가 준 값을 그대로("키 값"), 숫자는 천 단위 구분 (G3). */
+export const formatSignalValues = (values: Record<string, unknown> | undefined): string =>
+  Object.entries(values ?? {})
+    .map(([key, value]) => `${key} ${typeof value === 'number' ? value.toLocaleString('ko-KR') : String(value)}`)
+    .join(', ');
+
+export const signalArrow = (direction: string | undefined): string =>
+  (direction && DIRECTION_ARROWS[direction]) || '';

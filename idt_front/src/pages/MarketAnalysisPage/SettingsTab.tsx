@@ -14,7 +14,7 @@ import {
   SIGNAL_RULES,
   type MarketAnalysisSettings,
 } from '@/types/marketAnalysis';
-import { marketAnalysisErrorMessage, settingFieldErrors } from '@/utils/marketAnalysis';
+import { marketAnalysisErrorMessage, settingFieldErrors, withoutSwitch } from '@/utils/marketAnalysis';
 import RoleAgentTable from './RoleAgentTable';
 import { Card, ErrorBox, Loading } from './parts';
 
@@ -126,11 +126,13 @@ const SettingsForm = ({
   });
 
   const submit = () =>
-    save.mutate({
-      ...form,
-      round_times: splitList(roundTimes),
-      condition_seqs: splitList(conditionSeqs),
-    });
+    save.mutate(
+      withoutSwitch({
+        ...form,
+        round_times: splitList(roundTimes),
+        condition_seqs: splitList(conditionSeqs),
+      }),
+    );
 
   const serverItems = servers.data?.items ?? [];
 

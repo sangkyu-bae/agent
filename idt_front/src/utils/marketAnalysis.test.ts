@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { ApiError } from '@/services/api/ApiError';
+import type { MarketAnalysisSettings } from '@/types/marketAnalysis';
 import {
   formatRate,
   marketAnalysisErrorMessage,
   settingFieldErrors,
   translateSkipReason,
   withinPeriod,
+  withoutSwitch,
+  formatSignalValues,
+  signalArrow,
 } from './marketAnalysis';
 
 describe('translateSkipReason', () => {
@@ -61,5 +65,23 @@ describe('errors', () => {
     expect(marketAnalysisErrorMessage(err, 'x')).toBe('설정 값을 확인하세요.');
     expect(settingFieldErrors(err)).toEqual({ max_per_round: '1~200 사이여야 합니다' });
     expect(marketAnalysisErrorMessage(new Error('?'), '기본')).toBe('기본');
+  });
+});
+
+describe('withoutSwitch', () => {
+  it('설정 저장 본문에서 자동 분석 스위치를 뺀다 (스위치는 별도 API, G9)', () => {
+    const body = withoutSwitch({ enabled: true, max_per_round: 3 } as unknown as MarketAnalysisSettings);
+    expect(body).toEqual({ max_per_round: 3 });
+    expect(body).not.toHaveProperty('enabled');
+  });
+});
+
+describe('formatSignalValues', () => {
+  it('키·값을 그대로, 숫자는 천 단위 구분', () => {
+    expect(formatSignalValues({ ratio: 2.5, avg_volume: 120000 })).toBe('ratio 2.5, avg_volume 120,000');
+    expect(formatSignalValues({ cross: 'golden' })).toBe('cross golden');
+    expect(formatSignalValues(undefined)).toBe('');
+    expect(signalArrow('down')).toBe('↓');
+    expect(signalArrow(undefined)).toBe('');
   });
 });

@@ -104,7 +104,7 @@
 | firewall-agent | agent_mcp `mcp-firewall-server`(조회 도구 2종 포함) 미커밋 — 디렉터리 전체가 미추적이고 미커밋 `common` 로깅(`install_tool_call_logging`)에 의존해 단독 커밋 불가 | 저장소 정리 | agent_mcp 미커밋 작업 정리 시 |
 | firewall-agent | Sonnet 보고가 "IP 마다 한 줄"(FR-22) 대신 표로 길다 — 판단은 정답. fireware `docs/security-agent-prompt.md` 보고 형식 강화 | 개선 | 요청 시 |
 | firewall-agent | 수신 이력에 작업 링크(G4), 웹훅 본문 크기를 읽기 전에 검사(G9), 자동 점검 두 항목 동시 변경 시 대상 존재 선확인(G11) | 경미 | 해당 영역 작업 시 |
-| stock-analysis-agents | Minor G3·G4·G5·G7·G9 — 리포트 머리 사실 신호 값(G3), 탭 URL(G4), 체제 경계값 테스트(G5), server_finder 예외(G7), PUT /settings enabled 기본값(G9). ~~G6 판단 파서 NaN·Infinity~~·~~G8 failed 재시도 하루 상한~~ → fix/market-analysis-guards 에서 해결 | 경미 | 다음 사이클 |
-| stock-analysis-agents | 거래량 순위 상위가 ETF 위주(30 중 주식 6) — KIS 순위 API 제외 조건 스펙 확인 후 적용 | 개선 | KIS 순위 작업 시 |
-| stock-analysis-agents | agent_mcp 변경(KIS `get_index_history`·`group`, mcp-dart-server, mcp-perplexity-server) 미커밋 | 저장소 정리 | agent_mcp 정리 시 |
+| stock-analysis-agents | ~~Minor G3~G9~~ → 모두 해결(G6·G8 fix/market-analysis-guards, G3·G4·G5·G7·G9 fix/market-analysis-minors) | 해결 | — |
+| stock-analysis-agents | ~~거래량 순위 ETF 위주~~ → KIS `get_rankings(stocks_only=true)`(대상 제외 10자리 전부 켬, 실측 거래량 30위 = 주식 30)로 해결. 이 변경은 agent_mcp 쪽이라 미커밋 — 배포 시 KIS 서버를 idt 보다 먼저 올린다 | 배포 순서 | 배포 시 |
+| stock-analysis-agents | agent_mcp 변경(KIS `get_index_history`·`group`, mcp-dart-server, mcp-perplexity-server, `get_rankings` stocks_only) 미커밋 | 저장소 정리 | agent_mcp 정리 시 |
 | stock-analysis-agents | 배포: 운영 DB V100·V101, MCP 서버 3종 등록·키, `MARKET_ANALYSIS_ENABLED` | 배포 | 운영 반영 시 |

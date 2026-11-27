@@ -51,6 +51,9 @@ async def test_collect_unions_rankings_and_condition_search():
     kinds = [c[2]["kind"] for c in tools.calls if c[1] == "get_rankings"]
     assert kinds == ["volume", "fluctuation"]
     assert all(c[2]["limit"] == 30 for c in tools.calls if c[1] == "get_rankings")
+    # 순위를 KIS 쪽에서부터 주식으로 채운다 — 거래량 30위 중 ETF·ETN 24 가 필터에서
+    # 빠져 6개만 남던 문제 (KIS 대상 제외 조건 실측 2026-11-27)
+    assert all(c[2]["stocks_only"] for c in tools.calls if c[1] == "get_rankings")
 
 
 async def test_collect_survives_a_failed_source():

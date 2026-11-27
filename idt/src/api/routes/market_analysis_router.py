@@ -137,7 +137,8 @@ def _found(value: dict[str, Any] | None, what: str) -> dict[str, Any]:
 
 
 class SettingsBody(BaseModel):
-    enabled: bool = False
+    # 하위 호환용으로 받기만 하고 무시한다 — 스위치는 PUT /settings/enabled 만 (G9)
+    enabled: bool | None = None
     round_times: list[str]
     max_per_round: int
     max_per_day: int
@@ -163,7 +164,7 @@ class SettingsBody(BaseModel):
 
     def to_setting(self) -> MarketAnalysisSetting:
         return MarketAnalysisSetting(
-            enabled=self.enabled,
+            enabled=False,  # 유스케이스가 현재 스위치 값으로 바꾼다
             round_times=tuple(self.round_times),
             max_per_round=self.max_per_round,
             max_per_day=self.max_per_day,

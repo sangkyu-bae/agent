@@ -275,7 +275,10 @@ def build_runtime(
         settings=settings_reader,
         roles=roles,
         update_settings=UpdateSettingsUseCase(
-            writer=setting_writer, checker=checker, logger=logger
+            reader=settings_reader,
+            writer=setting_writer,
+            checker=checker,
+            logger=logger,
         ),
         set_enabled=SetEnabledUseCase(
             reader=settings_reader, writer=setting_writer, logger=logger

@@ -208,7 +208,10 @@ export const MA_REPORTS: MarketAnalysisPage<MarketReport> = {
       trade_date: '2026-11-26',
       round_id: 41,
       provisional: true,
-      signals: [{ rule: 'gap' }, { rule: 'volume_spike' }],
+      signals: [
+        { rule: 'gap', direction: 'up', provisional: false, values: { change_pct: 3.1 } },
+        { rule: 'volume_spike', direction: 'up', provisional: true, values: { ratio: 2.5, avg_volume: 120000 } },
+      ],
       regime: 'bull',
       status: 'partial',
       summary: '요약',

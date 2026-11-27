@@ -81,7 +81,9 @@ async def collect_candidates(
             tools,
             setting,
             "get_rankings",
-            {"kind": kind, "limit": setting.ranking_limit},
+            # stocks_only: KIS 대상 제외 조건으로 ETF·ETN 등을 순위에서 미리 뺀다 —
+            # 안 그러면 거래량 30위 중 24 가 ETF·ETN 이라 아래 필터 뒤 6개만 남았다
+            {"kind": kind, "limit": setting.ranking_limit, "stocks_only": True},
             request_id,
         )
         add((payload or {}).get("entries") if isinstance(payload, dict) else None)

@@ -312,6 +312,9 @@ export interface MarketAnalysisSettings {
   perplexity_server_id: string | null;
 }
 
+/** PUT /settings 본문 — 자동 분석 스위치는 PUT /settings/enabled 만 바꾼다 (G9). */
+export type MarketAnalysisSettingsUpdate = Omit<MarketAnalysisSettings, 'enabled'>;
+
 export interface RoleAgentRow {
   role: string;
   name: string;
