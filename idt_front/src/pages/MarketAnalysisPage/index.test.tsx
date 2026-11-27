@@ -181,6 +181,34 @@ describe('올해 시장 카드 (market-index-ytd-chart §5.4)', () => {
     expect(within(card).getByText('지수 흐름을 불러오는 중…')).toBeInTheDocument();
   });
 
+  it('대시보드를 기다리는 동안에도 차트를 따로 불러 그린다 (G-M4)', async () => {
+    use(
+      MA_ACCESS_MANAGER,
+      http.get(`*${API_ENDPOINTS.MARKET_ANALYSIS_DASHBOARD}`, async () => {
+        await delay('infinite');
+        return HttpResponse.json({});
+      }),
+    );
+    renderPage();
+    const card = await screen.findByRole('region', { name: '올해 시장' });
+    expect(await within(card).findByText('KOSPI +4.04%')).toBeInTheDocument();
+    expect(screen.getByText('불러오는 중…')).toBeInTheDocument();
+    expect(screen.queryByText('보유 종목')).not.toBeInTheDocument();
+  });
+
+  it('대시보드 조회가 실패해도 차트 카드는 보인다 (G-M4)', async () => {
+    use(
+      MA_ACCESS_MANAGER,
+      http.get(`*${API_ENDPOINTS.MARKET_ANALYSIS_DASHBOARD}`, () =>
+        HttpResponse.json({ detail: { code: 'MA_UNAVAILABLE', message: '준비 안 됨' } }, { status: 503 }),
+      ),
+    );
+    renderPage();
+    const card = await screen.findByRole('region', { name: '올해 시장' });
+    expect(await within(card).findByText('KOSPI +4.04%')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+  });
+
   it('unavailable 이면 KIS 설정 안내', async () => {
     use(
       MA_ACCESS_MANAGER,

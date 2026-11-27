@@ -8,6 +8,7 @@ import {
   ROUND_KIND_LABELS,
   ROUND_SKIP_LABELS,
   ROUND_STATUS_LABELS,
+  type MarketAnalysisDashboardResponse,
 } from '@/types/marketAnalysis';
 import { formatKst, formatRate, formatUsd, rateTone } from '@/utils/marketAnalysis';
 import { cn } from '@/utils/cn';
@@ -96,17 +97,29 @@ const IndexYtdCard = () => {
   );
 };
 
+// market-index-ytd-chart G-M4 — 차트 카드는 대시보드 조회를 기다리지 않고 같이 요청·표시한다.
+// 대시보드가 로딩 중이거나 실패해도 카드는 그대로 보인다.
 const DashboardTab = ({ onOpenRounds }: DashboardTabProps) => {
   const query = useMarketDashboard();
-  if (query.isLoading) return <Loading />;
-  if (query.isError) return <ErrorBox error={query.error} fallback="대시보드를 불러오지 못했습니다." />;
   const d = query.data;
-  if (!d) return null;
-  const k = d.kpi;
-  const round = d.last_round;
+
+  let summary;
+  if (query.isLoading) summary = <Loading />;
+  else if (query.isError) summary = <ErrorBox error={query.error} fallback="대시보드를 불러오지 못했습니다." />;
+  else if (d) summary = <KpiGrid d={d} />;
 
   return (
     <div className="space-y-5">
+      {summary}
+      <IndexYtdCard />
+      {d && !query.isError && <DashboardDetails d={d} onOpenRounds={onOpenRounds} />}
+    </div>
+  );
+};
+
+const KpiGrid = ({ d }: { d: MarketAnalysisDashboardResponse }) => {
+  const k = d.kpi;
+  return (
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Kpi label="보유 종목" value={`${k.open_positions}종목`} />
         <Kpi label="슬롯 사용" value={`${k.used_slots}/${k.slot_count}`} />
@@ -124,9 +137,19 @@ const DashboardTab = ({ onOpenRounds }: DashboardTabProps) => {
           value={d.regime ? (REGIME_LABELS[d.regime.value] ?? d.regime.value) : '데이터 없음'}
         />
       </div>
+  );
+};
 
-      <IndexYtdCard />
-
+const DashboardDetails = ({
+  d,
+  onOpenRounds,
+}: {
+  d: MarketAnalysisDashboardResponse;
+  onOpenRounds: () => void;
+}) => {
+  const round = d.last_round;
+  return (
+    <>
       <Card title="누적 수익률">
         {d.equity.length > 0 ? (
           <EquityChart points={d.equity} />
@@ -182,7 +205,7 @@ const DashboardTab = ({ onOpenRounds }: DashboardTabProps) => {
           <Empty>아직 실행한 회차가 없습니다.</Empty>
         )}
       </Card>
-    </div>
+    </>
   );
 };
 

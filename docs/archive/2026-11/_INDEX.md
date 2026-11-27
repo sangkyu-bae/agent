@@ -110,6 +110,6 @@
 | stock-analysis-agents | agent_mcp 변경(KIS `get_index_history`·`group`, mcp-dart-server, mcp-perplexity-server, `get_rankings` stocks_only) 미커밋 | 저장소 정리 | agent_mcp 정리 시 |
 | stock-analysis-agents | 배포: 운영 DB V100·V101, MCP 서버 3종 등록·키, `MARKET_ANALYSIS_ENABLED` | 배포 | 운영 반영 시 |
 | **market-index-ytd-chart** | **배포: 운영 DB V100·V101 다음 V102** (`ma_index_daily`) | 배포 의존 | **배포 전 필수** |
-| market-index-ytd-chart | 차트 카드가 대시보드 조회 성공 뒤 그려져 요청이 늦고, 대시보드 실패 시 카드도 안 보임 (G-M4) | 화면 소형 | 후속 소형 사이클 |
+| market-index-ytd-chart | ~~차트 카드가 대시보드 조회 성공 뒤 그려져 요청이 늦고, 대시보드 실패 시 카드도 안 보임 (G-M4)~~ → fix/market-index-card-order 로 해결 | 해결 | — |
 | market-index-ytd-chart | 범례 순서 KOSPI→KOSDAQ 화면 확인, 1440 정확 폭, 커버리지 측정 | 확인 | 다음 시장 분석 화면 작업 때 |
 | market-index-ytd-chart | KIS 지수 값이 하루 ±12~18% 움직인 날이 있음(KIS 원본 그대로 저장). 데이터 원천(모의/실전) 확인 | 데이터 점검 | 운영 반영 전 |
