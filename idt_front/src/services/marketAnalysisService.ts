@@ -6,6 +6,7 @@ import type {
   MarketAnalysisDashboardResponse,
   MarketAnalysisPage,
   MarketAnalysisSettings,
+  MarketAnalysisSettingsUpdate,
   MarketDecision,
   MarketInsightsResponse,
   MarketPosition,
@@ -86,7 +87,7 @@ export const marketAnalysisService = {
     authApiClient
       .get<MarketAnalysisSettings>(API_ENDPOINTS.MARKET_ANALYSIS_SETTINGS)
       .then((r) => r.data),
-  putSettings: (body: MarketAnalysisSettings) =>
+  putSettings: (body: MarketAnalysisSettingsUpdate) =>
     authApiClient
       .put<MarketAnalysisSettings>(API_ENDPOINTS.MARKET_ANALYSIS_SETTINGS, body)
       .then((r) => r.data),

@@ -76,7 +76,19 @@ class PlatformMarketTools:
                 "TOOL_NOT_ALLOWED", f"허용되지 않은 도구: {source.value}:{tool}"
             )
 
-        registration = await self._find(server_id, request_id)
+        try:
+            registration = await self._find(server_id, request_id)
+        except Exception as e:  # noqa: BLE001 — 조회 실패도 값으로 (포트 계약, G7)
+            self._logger.warning(
+                "market_analysis server lookup failed",
+                exception=e,
+                request_id=request_id,
+                server_id=server_id,
+            )
+            return fail(
+                "SERVER_UNAVAILABLE",
+                f"MCP 서버 조회 실패: {type(e).__name__}: {str(e)[:200]}",
+            )
         if registration is None or not getattr(registration, "is_active", False):
             return fail("SERVER_UNAVAILABLE", f"MCP 서버를 쓸 수 없습니다: {server_id}")
 

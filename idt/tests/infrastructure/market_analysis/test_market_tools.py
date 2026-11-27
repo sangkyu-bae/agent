@@ -98,6 +98,25 @@ async def test_tool_error_keeps_the_server_code():
     assert "한도 초과" in out.text
 
 
+async def test_server_lookup_failure_is_an_outcome_not_an_exception_g7():
+    """G7 — 레지스트리 조회(DB) 예외도 포트 계약대로 값으로 돌려준다."""
+
+    async def broken_find(server_id, request_id):
+        raise ConnectionError("db down")
+
+    client = FakeClient()
+    tools = PlatformMarketTools(
+        server_finder=broken_find,
+        client_factory=lambda *a: client,
+        news_search=lambda **k: "",
+        logger=MagicMock(),
+    )
+    out = await _call(tools)
+    assert out.is_error and out.error_code == "SERVER_UNAVAILABLE"
+    assert "ConnectionError" in out.text
+    assert client.calls == []
+
+
 async def test_transport_failure_is_an_outcome_not_an_exception():
     tools, _ = _tools(FakeClient(fail=TimeoutError("slow")))
     out = await _call(tools)

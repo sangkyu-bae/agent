@@ -3,7 +3,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { http, HttpResponse } from 'msw';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { server } from '@/__tests__/mocks/server';
 import { createWrapper } from '@/__tests__/mocks/wrapper';
 import { API_ENDPOINTS } from '@/constants/api';
@@ -22,11 +22,18 @@ beforeAll(() => server.listen());
 afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
+// 현재 주소를 보이게 해 탭·상세가 URL 에 실리는지 확인한다 (G4)
+const LocationProbe = () => {
+  const location = useLocation();
+  return <output data-testid="location">{location.pathname + location.search}</output>;
+};
+
 // 페이지 안의 Link(빌더 이동)에 라우터가 필요하다
-const renderPage = () =>
+const renderPage = (entry = '/market-analysis') =>
   render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[entry]}>
       <MarketAnalysisPage />
+      <LocationProbe />
     </MemoryRouter>,
     { wrapper: createWrapper() },
   );
@@ -38,6 +45,31 @@ const use = (access = MA_ACCESS_MANAGER, ...overrides: Parameters<typeof server.
 const openTab = async (user: ReturnType<typeof userEvent.setup>, name: string) => {
   await user.click(await screen.findByRole('tab', { name }));
 };
+
+describe('탭·리포트 주소 (G4)', () => {
+  it('탭을 누르면 주소에 탭이 실리고, 리포트를 열면 리포트 번호도 실린다', async () => {
+    const user = userEvent.setup();
+    server.use(...marketAnalysisHandlers());
+    renderPage();
+    await openTab(user, '리포트');
+    expect(screen.getByTestId('location')).toHaveTextContent('/market-analysis?tab=reports');
+    await user.click(await screen.findByRole('button', { name: 'SK하이닉스 리포트' }));
+    expect(screen.getByTestId('location')).toHaveTextContent('tab=reports&report=11');
+  });
+
+  it('주소로 바로 들어오면 그 탭·리포트를 연다 (새로고침·링크 공유)', async () => {
+    server.use(...marketAnalysisHandlers());
+    renderPage('/market-analysis?tab=reports&report=11');
+    expect(await screen.findByText('머리 사실 (도구 결과 그대로)')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '리포트' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('모르는 탭 값이면 대시보드', async () => {
+    server.use(...marketAnalysisHandlers());
+    renderPage('/market-analysis?tab=nope');
+    expect(await screen.findByRole('tab', { name: '대시보드' })).toHaveAttribute('aria-selected', 'true');
+  });
+});
 
 describe('공통 (L2 #1)', () => {
   it('면책 띠와 자동 분석 상태 칩을 보인다', async () => {
@@ -142,6 +174,21 @@ describe('리포트 (L2 #4)', () => {
     expect(screen.getByText('기술적 분석')).toBeInTheDocument();
     expect(screen.getByText('오류')).toBeInTheDocument();
     expect(screen.getByText('get_financials')).toBeInTheDocument();
+  });
+
+  it('머리 사실에 신호 값·방향·미확정을 보인다 (G3)', async () => {
+    const user = userEvent.setup();
+    server.use(...marketAnalysisHandlers());
+    renderPage();
+    await openTab(user, '리포트');
+    await user.click(await screen.findByRole('button', { name: 'SK하이닉스 리포트' }));
+    const gap = await screen.findByText(/갭 ↑/);
+    expect(gap).toHaveTextContent('change_pct 3.1');
+    const spike = screen.getByText(/거래량 급증 ↑/);
+    expect(spike).toHaveTextContent('ratio 2.5');
+    expect(spike).toHaveTextContent('avg_volume 120,000');
+    expect(spike).toHaveTextContent('미확정');
+    expect(gap).not.toHaveTextContent('미확정');
   });
 });
 
@@ -262,6 +309,8 @@ describe('설정 (L2 #5·#6)', () => {
     await user.click(screen.getByRole('button', { name: '설정 저장' }));
     expect(await screen.findByText('1~200 사이여야 합니다')).toBeInTheDocument();
     expect(sent).toMatchObject({ round_times: ['09:30', '15:40'], kis_server_id: MA_SETTINGS.kis_server_id });
+    // 스위치는 PUT /settings/enabled 만 바꾼다 — 설정 저장 본문에는 싣지 않는다 (G9)
+    expect(sent).not.toHaveProperty('enabled');
   });
 
   it('역할 매핑 표: 미지정 표시와 기본 에이전트 만들기', async () => {

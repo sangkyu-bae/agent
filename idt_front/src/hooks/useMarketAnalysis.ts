@@ -6,7 +6,7 @@ import {
   MARKET_ANALYSIS_PAGE_SIZE,
   MARKET_ANALYSIS_ROUNDS_REFETCH_MS,
   type MarketAnalysisAccessResponse,
-  type MarketAnalysisSettings,
+  type MarketAnalysisSettingsUpdate,
   type PrinciplePatchRequest,
 } from '@/types/marketAnalysis';
 
@@ -162,7 +162,7 @@ const useInvalidateSettings = () => {
 export const useSaveSettings = () => {
   const invalidate = useInvalidateSettings();
   return useMutation({
-    mutationFn: (body: MarketAnalysisSettings) => marketAnalysisService.putSettings(body),
+    mutationFn: (body: MarketAnalysisSettingsUpdate) => marketAnalysisService.putSettings(body),
     onSuccess: invalidate,
   });
 };

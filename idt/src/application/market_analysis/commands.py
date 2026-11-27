@@ -56,13 +56,18 @@ def _needs_for_enabled(setting: MarketAnalysisSetting) -> dict[str, str]:
 
 
 class UpdateSettingsUseCase:
+    """설정 저장. 자동 분석 스위치는 바꾸지 않는다 — 스위치는 SetEnabledUseCase 만.
+    오래 열어 둔 폼의 enabled 가 다른 곳에서 바꾼 스위치를 덮어쓰지 않게 한다 (G9)."""
+
     def __init__(
         self,
         *,
+        reader: SettingReader,
         writer: SettingWriter,
         checker: ReferenceChecker,
         logger: LoggerInterface,
     ) -> None:
+        self._reader = reader
         self._writer = writer
         self._checker = checker
         self._logger = logger
@@ -70,6 +75,8 @@ class UpdateSettingsUseCase:
     async def execute(
         self, setting: MarketAnalysisSetting, *, updated_by: str, request_id: str
     ) -> MarketAnalysisSetting:
+        current = await self._reader.get(request_id)
+        setting = replace(setting, enabled=current.enabled)
         errors = SettingValidationPolicy.validate(setting)
         errors.update(_needs_for_enabled(setting))
         for field in _SERVER_FIELDS:

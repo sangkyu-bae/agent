@@ -45,6 +45,39 @@ def test_regime_strong_bull_and_strong_bear():
     assert down.regime is Regime.STRONG_BEAR
 
 
+def _tail(a: str, b: str, c: str) -> list[Decimal]:
+    """60봉: 앞 40봉 a, 다음 19봉 b, 마지막 c.
+    closes[-21] = a 라 R20 = c/a − 1, MA20 = (19b + c)/20, MA60 = (40a + 19b + c)/60."""
+    return [D(a)] * 40 + [D(b)] * 19 + [D(c)]
+
+
+@pytest.mark.parametrize(
+    ("closes", "expected", "why"),
+    [
+        # R20 = +5% 정확히 — 강세 기준은 이상(>=)
+        (_tail("100", "104", "105"), Regime.STRONG_BULL, "R20=+5 경계"),
+        (_tail("100", "104", "104.99"), Regime.BULL, "R20=+4.99"),
+        # R20 = −5% 정확히 — 강약세 기준은 이하(<=)
+        (_tail("100", "96", "95"), Regime.STRONG_BEAR, "R20=-5 경계"),
+        (_tail("100", "96", "95.01"), Regime.BEAR, "R20=-4.99"),
+        # C = MA20 — 위도 아래도 아니라 중립(R20 +3% 여도)
+        (_tail("100", "103", "103"), Regime.NEUTRAL, "C=MA20"),
+        # MA20 = MA60, C 위 — 강세는 MA20 > MA60 엄격이라 강세 아님, 상승(>=)
+        (_tail("100", "99", "119"), Regime.BULL, "MA20=MA60, C>MA20, R20=+19"),
+        # MA20 = MA60, C 아래 — 하락은 MA20 < MA60 엄격이라 중립
+        (_tail("100", "101", "81"), Regime.NEUTRAL, "MA20=MA60, C<MA20, R20=-19"),
+    ],
+)
+def test_regime_boundaries_u5(closes, expected, why):
+    """G5 — Design §13.2 U5 경계값 (기존엔 봉 부족·5단계 일반값만)."""
+    assert RegimePolicy.decide(closes).regime is expected, why
+
+
+def test_regime_boundary_fixture_values_are_exact():
+    r = RegimePolicy.decide(_tail("100", "99", "119"))
+    assert (r.ma20, r.ma60, r.r20) == (D("100.00"), D("100.00"), D("19.00"))
+
+
 def test_regime_bull_bear_neutral():
     assert RegimePolicy.decide(_closes(100, 0.1)).regime is Regime.BULL  # +2%
     assert RegimePolicy.decide(_closes(100, -0.1)).regime is Regime.BEAR

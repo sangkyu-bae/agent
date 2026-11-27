@@ -1,8 +1,8 @@
 // Design Ref: stock-analysis-agents §9.1 — 면책 띠 + 자동 분석 상태 칩 + 탭 8개.
 // 권한은 GET /access 로만 판단한다(can_view 없으면 "권한이 없습니다"). 쓰기 버튼은 can_manage 일 때만.
 // 다른 서비스로 떼어낼 때는 이 폴더 + marketAnalysis{Service,Mocks}·useMarketAnalysis·types 만 옮긴다.
-import { useState } from 'react';
 import { Info } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import Tabs from '@/components/ui/Tabs';
 import Badge from '@/components/ui/Badge';
 import { useMarketAnalysisAccess, useMarketDashboard } from '@/hooks/useMarketAnalysis';
@@ -36,16 +36,28 @@ const SwitchChip = () => {
   );
 };
 
+const isTab = (value: string | null): value is MarketAnalysisTab =>
+  value !== null && (MARKET_ANALYSIS_TABS as readonly string[]).includes(value);
+
 const MarketAnalysisPage = () => {
   const access = useMarketAnalysisAccess();
-  const [tab, setTab] = useState<MarketAnalysisTab>('dashboard');
-  // 다른 탭에서 리포트 상세로 건너갈 때 쓴다 (포지션 상세·회차 상세 → 리포트)
-  const [reportId, setReportId] = useState<number | null>(null);
+  // 탭·리포트 상세는 주소에 둔다 — 새로고침·링크 공유에도 같은 화면 (§9.1·§15, G4)
+  const [params, setParams] = useSearchParams();
+  const rawTab = params.get('tab');
+  const tab: MarketAnalysisTab = isTab(rawTab) ? rawTab : 'dashboard';
+  const rawReport = Number(params.get('report'));
+  const reportId =
+    tab === 'reports' && Number.isInteger(rawReport) && rawReport > 0 ? rawReport : null;
 
-  const openReport = (id: number) => {
-    setReportId(id);
-    setTab('reports');
+  const go = (next: MarketAnalysisTab, report: number | null = null) => {
+    const search = new URLSearchParams({ tab: next });
+    if (report !== null) search.set('report', String(report));
+    setParams(search);
   };
+  const setTab = (next: MarketAnalysisTab) => go(next);
+  const setReportId = (id: number | null) => go('reports', id);
+  // 다른 탭에서 리포트 상세로 건너갈 때 쓴다 (포지션 상세·회차 상세 → 리포트)
+  const openReport = (id: number) => go('reports', id);
 
   if (access.isLoading) {
     return <p className="py-16 text-center text-sm text-fg-muted">불러오는 중…</p>;

@@ -11,7 +11,13 @@ import {
   SECTION_ROLE_LABELS,
   SIGNAL_RULE_LABELS,
 } from '@/types/marketAnalysis';
-import { formatKst, formatUsd, translateSkipReason } from '@/utils/marketAnalysis';
+import {
+  formatKst,
+  formatSignalValues,
+  formatUsd,
+  signalArrow,
+  translateSkipReason,
+} from '@/utils/marketAnalysis';
 import { BackButton, Card, Empty, ErrorBox, Loading } from './parts';
 
 interface ReportDetailProps {
@@ -55,13 +61,21 @@ const ReportDetail = ({ id, onBack }: ReportDetailProps) => {
         ) : (
           <Empty>데이터 없음</Empty>
         )}
-        <div className="mt-3 flex flex-wrap gap-1">
-          {r.signals.map((s, i) => (
-            <Badge key={`${s.rule}-${i}`} tone="brand">
-              {SIGNAL_RULE_LABELS[s.rule ?? ''] ?? s.rule}
-            </Badge>
-          ))}
-        </div>
+        {/* 신호 값은 scan_signals 결과 그대로 (Design §9.4 머리 사실 "신호 값", G3) */}
+        <ul className="mt-3 space-y-1 text-sm">
+          {r.signals.map((s, i) => {
+            const values = formatSignalValues(s.values);
+            return (
+              <li key={`${s.rule}-${i}`} className="flex flex-wrap items-center gap-2">
+                <Badge tone="brand">
+                  {SIGNAL_RULE_LABELS[s.rule ?? ''] ?? s.rule} {signalArrow(s.direction)}
+                  {values && <span className="ml-1 font-normal tabular-nums">{values}</span>}
+                  {s.provisional && <span className="ml-1 font-normal">· 미확정</span>}
+                </Badge>
+              </li>
+            );
+          })}
+        </ul>
       </Card>
 
       <Card title="핵심 요약">
