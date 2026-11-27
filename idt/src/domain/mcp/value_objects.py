@@ -23,7 +23,8 @@ class MCPTimeoutConfig(BaseModel):
 
     connect: 연결/HTTP 요청 타임아웃
     read: SSE/스트림 읽기 타임아웃
-    total: 단일 호출 전체 상한 (호출 코어에서 wait_for로 강제)
+    total: 단일 호출 전체 상한 — 연결·초기화·실행·세션 정리를 모두 포함
+        (호출 코어에서 asyncio.timeout 으로 강제)
     """
 
     connect: float = Field(default=30.0, gt=0, description="연결/HTTP 요청 타임아웃")

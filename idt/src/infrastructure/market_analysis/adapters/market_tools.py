@@ -29,6 +29,11 @@ from src.domain.market_analysis.tool_policy import (
 ServerFinder = Callable[[str, str], Awaitable[Any]]
 ClientFactory = Callable[[Any, str, str], Any]
 
+# 서버 하나에 동시에 여는 MCP 세션 수. 2026-11-27 회차에서 종목 2개 × 호출 4개가
+# 한꺼번에 SSE 세션을 열어 연결 단계 실패가 났다. 실측상 서버는 요청을 거의 하나씩
+# 처리해 동시 세션을 늘려도 빨라지지 않는다.
+DEFAULT_MAX_CONCURRENT_PER_SERVER = 3
+
 
 class PlatformMarketTools:
     def __init__(
@@ -38,11 +43,20 @@ class PlatformMarketTools:
         client_factory: ClientFactory,
         news_search: Callable[..., str],
         logger: LoggerInterface,
+        max_concurrent_per_server: int = DEFAULT_MAX_CONCURRENT_PER_SERVER,
     ) -> None:
         self._find = server_finder
         self._client_factory = client_factory
         self._news_search = news_search
         self._logger = logger
+        self._slot_limit = max(1, max_concurrent_per_server)
+        self._slots: dict[str, asyncio.Semaphore] = {}
+
+    def _slot(self, server_id: str) -> asyncio.Semaphore:
+        slot = self._slots.get(server_id)
+        if slot is None:
+            slot = self._slots[server_id] = asyncio.Semaphore(self._slot_limit)
+        return slot
 
     async def call(
         self,
@@ -94,7 +108,8 @@ class PlatformMarketTools:
 
         try:
             client = self._client_factory(registration, run_as_user_id, request_id)
-            result = await client.call_tool(tool, args, request_id)
+            async with self._slot(server_id):
+                result = await client.call_tool(tool, args, request_id)
         except Exception as e:  # noqa: BLE001 — 전송 실패도 값으로 돌려준다
             self._logger.warning(
                 "market_analysis tool call failed",
@@ -102,7 +117,10 @@ class PlatformMarketTools:
                 request_id=request_id,
                 tool=f"{source}:{tool}",
             )
-            return fail("TOOL_CALL_FAILED", f"{type(e).__name__}: {str(e)[:200]}")
+            cause = _root_cause(e)
+            timed_out = isinstance(cause, TimeoutError)
+            code = "TOOL_TIMEOUT" if timed_out else "TOOL_CALL_FAILED"
+            return fail(code, f"{type(cause).__name__}: {str(cause)[:200]}")
 
         text = str(getattr(result, "content", "") or "")
         if getattr(result, "is_error", False):
@@ -149,6 +167,14 @@ class PlatformMarketTools:
             payload=_json_or_none(text),
             text=text,
         )
+
+
+def _root_cause(exc: BaseException) -> BaseException:
+    """MCP SDK 는 anyio TaskGroup 안에서 돌아 원인이 ExceptionGroup 으로 감싸인다.
+    근거에 껍데기 이름만 남으면 원인을 알 수 없다 — 첫 안쪽 예외까지 내려간다."""
+    while isinstance(exc, BaseExceptionGroup) and exc.exceptions:
+        exc = exc.exceptions[0]
+    return exc
 
 
 def _json_or_none(text: str) -> Any:
