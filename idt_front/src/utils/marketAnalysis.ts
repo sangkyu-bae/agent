@@ -85,6 +85,18 @@ export const formatKstTime = (iso: string | null | undefined): string => {
   });
 };
 
+/** 지금 수동 실행하면 서버가 정할 회차 종류 — 서울 15:30 이후 장 마감, 그 전 장중
+ * (백엔드 RoundSchedulePolicy.kind_for 와 같은 규칙). 확인창 문구에만 쓴다. */
+export const roundKindAt = (now: Date): 'intraday' | 'close' => {
+  const hhmm = now.toLocaleTimeString('en-GB', {
+    timeZone: 'Asia/Seoul',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  return hhmm >= '15:30' ? 'close' : 'intraday';
+};
+
 const ERROR_MESSAGES: Record<string, string> = {
   MA_FORBIDDEN: '시장 분석 권한이 없습니다.',
   MA_NOT_FOUND: '대상을 찾을 수 없습니다.',

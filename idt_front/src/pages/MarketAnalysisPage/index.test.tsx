@@ -16,6 +16,8 @@ import {
   MA_SETTINGS,
   marketAnalysisHandlers,
 } from '@/__tests__/mocks/marketAnalysisMocks';
+import { ROUND_KIND_LABELS } from '@/types/marketAnalysis';
+import { roundKindAt } from '@/utils/marketAnalysis';
 import MarketAnalysisPage from './index';
 
 beforeAll(() => server.listen());
@@ -239,6 +241,27 @@ describe('실행 현황', () => {
     await user.click(await screen.findByRole('button', { name: '실행' }));
     expect(await screen.findByText('실행 중인 회차가 있습니다. 끝난 뒤 다시 시도하세요.')).toBeInTheDocument();
     expect(calls).toBe(1);
+  });
+
+  it('지금 실행은 종류를 보내지 않고 서버가 시각으로 정한다, 확인창에 그 종류를 보여준다', async () => {
+    const user = userEvent.setup();
+    const bodies: unknown[] = [];
+    server.use(
+      ...marketAnalysisHandlers(),
+      http.post(`*${API_ENDPOINTS.MARKET_ANALYSIS_RUN_NOW}`, async ({ request }) => {
+        bodies.push(await request.json());
+        return HttpResponse.json({ round_id: 77 }, { status: 202 });
+      }),
+    );
+    renderPage();
+    await openTab(user, '실행 현황');
+    await screen.findByText('휴장');
+    await user.click(screen.getByRole('button', { name: '지금 실행' }));
+    const label = ROUND_KIND_LABELS[roundKindAt(new Date())];
+    expect(await screen.findByText(new RegExp(`${label} 회차를 한 번 실행합니다`))).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '실행' }));
+    expect(await screen.findByText('회차 #77를 시작했습니다.')).toBeInTheDocument();
+    expect(bodies).toEqual([{}]);
   });
 
   it('view 에게는 지금 실행 버튼이 없다', async () => {

@@ -88,19 +88,22 @@ class RoundScheduler:
             actions.append((due.slot, "started"))
         return actions
 
-    async def run_now(self, kind: RoundKind, request_id: str) -> int | None:
+    async def run_now(self, kind: RoundKind | None, request_id: str) -> int | None:
         """수동 회차 (module-8 `POST /rounds/run-now`). 자동 스위치·주말과 무관하고
         상한·휴장 판정은 회차 실행기가 그대로 적용한다. 실행 중인 회차가 있거나
-        같은 분에 이미 수동 회차가 있으면 None (호출자가 409)."""
+        같은 분에 이미 수동 회차가 있으면 None (호출자가 409).
+        종류를 안 주면 자동 회차와 같은 규칙(서울 15:30 기준)으로 정한다."""
         if self.running or await self._rounds.any_running(
             exclude_id=None, request_id=request_id
         ):
             return None
         setting = await self._settings.get(request_id)
         now_kst = RoundSchedulePolicy.to_kst(self._now_utc())
+        slot = now_kst.strftime("%H:%M")
+        kind = kind or RoundSchedulePolicy.kind_for(slot)
         round_id = await self._rounds.try_claim(
             trade_date=now_kst.date(),
-            slot=now_kst.strftime("%H:%M"),
+            slot=slot,
             kind=kind,
             trigger=RoundTrigger.MANUAL,
             request_id=request_id,

@@ -172,7 +172,7 @@ class RunNowUseCase:
         self._logger = logger
 
     async def execute(
-        self, kind: RoundKind, *, requested_by: str, request_id: str
+        self, kind: RoundKind | None, *, requested_by: str, request_id: str
     ) -> int:
         round_id = await self._scheduler.run_now(kind, request_id)  # type: ignore[attr-defined]
         if round_id is None:

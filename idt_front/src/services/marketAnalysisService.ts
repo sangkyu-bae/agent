@@ -79,9 +79,10 @@ export const marketAnalysisService = {
     authApiClient
       .get<MarketRoundDetail>(API_ENDPOINTS.MARKET_ANALYSIS_ROUND(id))
       .then((r) => r.data),
-  runNow: (kind: 'intraday' | 'close') =>
+  // 종류는 보내지 않는다 — 서버가 서울 시각으로 정한다 (15:30 이후 장 마감)
+  runNow: () =>
     authApiClient
-      .post<RunNowResponse>(API_ENDPOINTS.MARKET_ANALYSIS_RUN_NOW, { kind })
+      .post<RunNowResponse>(API_ENDPOINTS.MARKET_ANALYSIS_RUN_NOW, {})
       .then((r) => r.data),
   getSettings: () =>
     authApiClient

@@ -273,6 +273,13 @@ def test_role_agent_errors():
     assert res.status_code == 422 and res.json()["detail"]["roles"] == ["chef"]
 
 
+def test_run_now_without_kind_lets_the_server_decide():
+    client, api = _client()
+    res = client.post(f"{BASE}/rounds/run-now", json={})
+    assert res.status_code == 202
+    assert api.run_now.execute.call_args.args[0] is None
+
+
 def test_principle_errors_and_run_now_busy():
     api = _api()
     api.set_principle_active.execute = AsyncMock(side_effect=PrincipleNotFoundError(9))
