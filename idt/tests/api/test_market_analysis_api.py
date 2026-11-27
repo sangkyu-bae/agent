@@ -37,6 +37,7 @@ BASE = "/api/v1/market-analysis"
 PAGE = {"items": [], "total": 0, "page": 1, "size": 20}
 VIEW_GETS = [
     "/dashboard",
+    "/index-chart",
     "/positions",
     "/positions/1",
     "/decisions",
@@ -48,6 +49,28 @@ VIEW_GETS = [
     "/settings",
     "/role-agents",
 ]
+INDEX_CHART = {
+    "year": 2026,
+    "series": {
+        "KOSPI": {
+            "base_date": "2026-01-02",
+            "base_close": 2500.0,
+            "points": [
+                {
+                    "date": "2026-01-02",
+                    "close": 2500.0,
+                    "rate": 0.0,
+                    "provisional": False,
+                }
+            ],
+        },
+        "KOSDAQ": {"base_date": None, "base_close": None, "points": []},
+    },
+    "regimes": [{"date": "2026-11-26", "value": "strong_bear"}],
+    "source_status": "stale",
+    "source_error": "SERVER_UNAVAILABLE",
+    "as_of": "2026-11-27T02:00:00Z",
+}
 SETTINGS_BODY = {
     "enabled": False,
     "round_times": ["10:00", "14:00", "18:10"],
@@ -128,6 +151,7 @@ def _api():
             )
         ),
         run_now=SimpleNamespace(execute=AsyncMock(return_value=41)),
+        index_chart=SimpleNamespace(chart=AsyncMock(return_value=INDEX_CHART)),
     )
 
 
@@ -293,3 +317,12 @@ def test_runtime_unavailable_is_503():
     client, _ = _client(api=None)
     res = client.get(f"{BASE}/dashboard")
     assert res.status_code == 503 and res.json()["detail"]["code"] == "MA_UNAVAILABLE"
+
+
+def test_index_chart_returns_service_payload():
+    # market-index-ytd-chart §4.2 — KIS 실패도 200 + source_status
+    client, api = _client()
+    res = client.get(f"{BASE}/index-chart")
+    assert res.status_code == 200
+    assert res.json() == INDEX_CHART
+    api.index_chart.chart.assert_awaited_once()

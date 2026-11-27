@@ -34,6 +34,7 @@ from src.application.market_analysis.commands import (
     SetRoleAgentsUseCase,
     UpdateSettingsUseCase,
 )
+from src.application.market_analysis.index_chart import IndexChartService
 from src.application.market_analysis.journal import JournalWriter
 from src.application.market_analysis.judgement import BuyJudgement
 from src.application.market_analysis.performance import PerformanceRecorder
@@ -63,6 +64,9 @@ from src.infrastructure.market_analysis.adapters.references import (
 )
 from src.infrastructure.market_analysis.adapters.structured import (
     PlatformStructuredExtractor,
+)
+from src.infrastructure.market_analysis.index_daily_repository import (
+    IndexDailyRepository,
 )
 from src.infrastructure.market_analysis.journal_repository import (
     JournalRepository,
@@ -123,6 +127,7 @@ class MarketAnalysisRuntime:
     set_enabled: SetEnabledUseCase
     set_role_agents: SetRoleAgentsUseCase
     run_now: RunNowUseCase
+    index_chart: IndexChartService
 
 
 _parts: MarketAnalysisParts | None = None
@@ -287,6 +292,14 @@ def build_runtime(
             roles=roles, checker=checker, logger=logger
         ),
         run_now=RunNowUseCase(scheduler=scheduler, logger=logger),
+        # market-index-ytd-chart §2.1 — 조회 때 꼬리 적재
+        index_chart=IndexChartService(
+            settings=settings_reader,
+            store=IndexDailyRepository(sf, logger),
+            tools=tools,
+            logger=logger,
+            now_utc=_utcnow,
+        ),
     )
 
 

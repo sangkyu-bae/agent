@@ -631,3 +631,32 @@ class MaPrincipleModel(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, comment="수정 시각 (UTC)"
     )
+
+
+class MaIndexDailyModel(Base):
+    """market-index-ytd-chart Design §3.3 — 확정 일봉만, (지수, 거래일) 덮어쓰기."""
+
+    __tablename__ = "ma_index_daily"
+    __table_args__ = {"comment": "시장 분석 지수 확정 일봉"}
+
+    index_code: Mapped[str] = mapped_column(
+        String(8), primary_key=True, comment="지수 (KOSPI·KOSDAQ)"
+    )
+    trade_date: Mapped[date] = mapped_column(
+        Date, primary_key=True, comment="거래일 (KST)"
+    )
+    open_price: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2), nullable=False, comment="시가"
+    )
+    high_price: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2), nullable=False, comment="고가"
+    )
+    low_price: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2), nullable=False, comment="저가"
+    )
+    close_price: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2), nullable=False, comment="종가"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, comment="적재 시각 (UTC)"
+    )

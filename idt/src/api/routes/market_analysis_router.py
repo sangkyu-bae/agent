@@ -249,6 +249,17 @@ async def get_dashboard(
     return await _api(api).queries.dashboard(_rid())
 
 
+@router.get("/index-chart")
+async def get_index_chart(
+    _user: User = Depends(require_view), api: Any = Depends(get_market_analysis_api)
+) -> dict[str, Any]:
+    """market-index-ytd-chart §4 — KOSPI·KOSDAQ YTD 등락률.
+
+    KIS 실패도 200 + source_status.
+    """
+    return await _api(api).index_chart.chart(_rid())
+
+
 @router.get("/positions")
 async def list_positions(
     status_: Literal["open", "closed"] = Query("open", alias="status"),

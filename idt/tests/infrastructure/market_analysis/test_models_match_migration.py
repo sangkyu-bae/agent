@@ -1,7 +1,8 @@
-"""ORM 모델 ↔ V100 DDL 일치 — 테이블·컬럼·COMMENT
+"""ORM 모델 ↔ V100·V102 DDL 일치 — 테이블·컬럼·COMMENT
 가 같아야 한다 (idt/CLAUDE.md DDL 규칙).
 
-stock-analysis-agents design §3.3. 두 곳을 따로 고치다 어긋나는 것을 막는다.
+stock-analysis-agents design §3.3, market-index-ytd-chart design §3.3.
+두 곳을 따로 고치다 어긋나는 것을 막는다.
 """
 
 import re
@@ -10,14 +11,14 @@ from pathlib import Path
 from src.infrastructure.market_analysis import models  # noqa: F401 — 메타데이터 등록
 from src.infrastructure.persistence.models.base import Base
 
-_DDL = (
-    Path(__file__).resolve().parents[3]
-    / "db"
-    / "migration"
-    / "V100__create_market_analysis_tables.sql"
+_MIGRATION = Path(__file__).resolve().parents[3] / "db" / "migration"
+_DDLS = (
+    _MIGRATION / "V100__create_market_analysis_tables.sql",
+    _MIGRATION / "V102__create_ma_index_daily.sql",
 )
 
 EXPECTED_TABLES = {
+    "ma_index_daily",
     "ma_setting",
     "ma_role_agent",
     "ma_round",
@@ -37,7 +38,8 @@ EXPECTED_TABLES = {
 def _ddl_tables() -> dict[str, dict]:
     sql = "\n".join(
         line
-        for line in _DDL.read_text(encoding="utf-8").splitlines()
+        for ddl in _DDLS
+        for line in ddl.read_text(encoding="utf-8").splitlines()
         if not line.lstrip().startswith("--")
     )
     tables: dict[str, dict] = {}
