@@ -105,6 +105,7 @@ def test_api_dependency_points_at_runtime_or_none(monkeypatch):
     runtime = provide()
     assert runtime is di.get_runtime()
     assert runtime.queries is not None and runtime.run_now is not None
+    assert runtime.index_chart is not None
 
     def broken():
         raise RuntimeError("platform down")

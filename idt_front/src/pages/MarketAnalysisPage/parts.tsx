@@ -28,13 +28,19 @@ export const Card = ({
   children,
   className,
   actions,
+  label,
 }: {
   title?: ReactNode;
   children: ReactNode;
   className?: string;
   actions?: ReactNode;
+  /** 있으면 영역 이름(region)으로 읽힌다 */
+  label?: string;
 }) => (
-  <section className={cn('rounded-xl border border-border bg-surface p-4 shadow-sm', className)}>
+  <section
+    aria-label={label}
+    className={cn('rounded-xl border border-border bg-surface p-4 shadow-sm', className)}
+  >
     {(title || actions) && (
       <div className="mb-3 flex items-center justify-between gap-3">
         {title && <h2 className="text-base font-semibold text-fg">{title}</h2>}

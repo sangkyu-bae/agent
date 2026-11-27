@@ -2,6 +2,7 @@ import authApiClient from '@/services/api/authClient';
 import { API_ENDPOINTS } from '@/constants/api';
 import type {
   BootstrapResponse,
+  IndexChartResponse,
   MarketAnalysisAccessResponse,
   MarketAnalysisDashboardResponse,
   MarketAnalysisPage,
@@ -30,6 +31,11 @@ export const marketAnalysisService = {
   getDashboard: () =>
     authApiClient
       .get<MarketAnalysisDashboardResponse>(API_ENDPOINTS.MARKET_ANALYSIS_DASHBOARD)
+      .then((r) => r.data),
+  // market-index-ytd-chart §4 — 첫 조회는 연초분 적재로 몇 초 걸릴 수 있다
+  getIndexChart: () =>
+    authApiClient
+      .get<IndexChartResponse>(API_ENDPOINTS.MARKET_ANALYSIS_INDEX_CHART)
       .then((r) => r.data),
   listPositions: (params: { status: 'open' | 'closed'; page: number; size: number }) =>
     authApiClient

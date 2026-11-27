@@ -94,6 +94,50 @@ export interface MarketAnalysisDashboardResponse {
   last_round: MarketRound | null;
 }
 
+// ── 올해 시장 (market-index-ytd-chart §4.2) ─────────────────────────────────
+// 백엔드 application/market_analysis/index_chart.py 와 1:1. 등락률은 연초 첫 봉 종가 대비 %.
+
+export const MARKET_INDEXES = ['KOSPI', 'KOSDAQ'] as const;
+export type MarketIndex = (typeof MARKET_INDEXES)[number];
+
+export const INDEX_SOURCE_STATUSES = ['ok', 'stale', 'unavailable'] as const;
+export type IndexSourceStatus = (typeof INDEX_SOURCE_STATUSES)[number];
+
+export interface IndexChartPoint {
+  date: string;
+  close: number;
+  rate: number;
+  provisional: boolean;
+}
+
+export interface IndexChartSeries {
+  base_date: string | null;
+  base_close: number | null;
+  points: IndexChartPoint[];
+}
+
+export interface IndexChartResponse {
+  year: number;
+  series: Record<MarketIndex, IndexChartSeries>;
+  regimes: { date: string; value: string }[];
+  source_status: IndexSourceStatus;
+  source_error: string | null;
+  as_of: string;
+}
+
+/** 차트 한 행 — 두 지수를 날짜로 합친 것 (utils/marketIndexChart.ts) */
+export interface IndexChartRow {
+  date: string;
+  kospi: number | null;
+  kosdaq: number | null;
+  kospi_close: number | null;
+  kosdaq_close: number | null;
+  provisional: boolean;
+  regime: string | null;
+}
+
+export const INDEX_CHART_STALE_MS = 5 * 60_000;
+
 // ── 포지션 · 판단 · 저널 ───────────────────────────────────────────────────
 
 export interface MarketPosition {

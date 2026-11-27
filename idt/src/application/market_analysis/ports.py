@@ -24,6 +24,7 @@ from src.domain.market_analysis.account import (
     Position,
     RegimeResult,
 )
+from src.domain.market_analysis.index_chart import IndexBar
 from src.domain.market_analysis.principle import (
     ClosedPosition,
     DecisionSummary,
@@ -451,3 +452,26 @@ class QueryStore(Protocol):
     async def recent_journals(
         self, limit: int, request_id: str
     ) -> list[dict[str, Any]]: ...
+
+
+class IndexDailyStore(Protocol):
+    """market-index-ytd-chart §3.4.
+
+    ma_index_daily 읽기·덮어쓰기, ma_market_regime 읽기.
+    """
+
+    async def last_date(self, index: str, since: date, request_id: str) -> date | None:
+        """since 이후 저장된 마지막 거래일."""
+        ...
+
+    async def upsert(self, bars: list[IndexBar], request_id: str) -> int:
+        """확정 봉만 덮어써 저장, 저장한 수."""
+        ...
+
+    async def bars(
+        self, index: str, start: date, end: date, request_id: str
+    ) -> list[IndexBar]: ...
+
+    async def regimes(
+        self, start: date, end: date, request_id: str
+    ) -> list[tuple[date, str]]: ...
